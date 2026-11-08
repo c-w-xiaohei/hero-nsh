@@ -6,7 +6,7 @@ import { openScenario } from "../../helpers/open-scenario";
 // and asserts the data-slot and BEM block class names, which D18 drops and the
 // TextField unit owns. The description text is the one visible assertion that
 // survives, so the scenario renders the Description alone.
-test("T-001 exposes data-slot and BEM block inside TextField", async () => {
+test("T-001 shows the description text", async () => {
   const app = await openScenario("description/basic");
   expect(app.shows("text:Visible to other users")).toBe(true);
 });
