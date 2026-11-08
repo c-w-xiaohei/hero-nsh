@@ -26,8 +26,8 @@ function lastLayout(app: App, group: string, index: number): Layout {
 const ACCENT_FOREGROUND = "#fcfcfcff";
 const ACCENT_SOFT_FOREGROUND = "#1e63aeff";
 
+// heroui/packages/react/tests/components/button-group/button-group.test.tsx:13
 test("T-014 renders with role=group and both children", async () => {
-  // heroui/packages/react/tests/components/button-group/button-group.test.tsx:13
   const app = await openScenario("button-group/default");
 
   expect(app.shows("role:group")).toBe(true);
@@ -35,8 +35,8 @@ test("T-014 renders with role=group and both children", async () => {
   expect(app.shows("role:button[Two]")).toBe(true);
 });
 
+// heroui/packages/react/tests/components/button-group/button-group.test.tsx:27
 test("T-015 exposes the orientation through the main-axis layout", async () => {
-  // heroui/packages/react/tests/components/button-group/button-group.test.tsx:27
   const app = await openScenario("button-group/orientation");
   await app.waitUntil(() => layouts(app).length >= 4);
 
@@ -49,16 +49,16 @@ test("T-015 exposes the orientation through the main-axis layout", async () => {
   expect(verticalSecond.y).toBeGreaterThan(verticalFirst.y);
 });
 
+// heroui/packages/react/tests/components/button-group/button-group.test.tsx:49
 test("T-016 renders a Separator once inside the group", async () => {
-  // heroui/packages/react/tests/components/button-group/button-group.test.tsx:49
   const app = await openScenario("button-group/separator");
 
   expect(app.shows("id:separator")).toBe(true);
   expect(app.count("id:separator")).toBe(1);
 });
 
+// heroui/packages/react/tests/components/button-group/button-group.test.tsx:64
 test("T-017 inherits the group size and variant on a direct Button child", async () => {
-  // heroui/packages/react/tests/components/button-group/button-group.test.tsx:64
   // Width 500 keeps the md: breakpoint (768 pt) off, so size="sm" is h-9 = 36 pt.
   const app = await openScenario("button-group/inherit", { width: 500 });
   await app.waitUntil(() => layouts(app).length >= 1);
@@ -67,15 +67,15 @@ test("T-017 inherits the group size and variant on a direct Button child", async
   expect(app.spanStyle("text:Save").color).toBe(ACCENT_SOFT_FOREGROUND);
 });
 
+// heroui/packages/react/tests/components/button-group/button-group.test.tsx:77
 test("T-018 inherits isDisabled on a direct Button child", async () => {
-  // heroui/packages/react/tests/components/button-group/button-group.test.tsx:77
   const app = await openScenario("button-group/disabled");
 
   expect(app.enabled("role:button[Save]")).toBe(false);
 });
 
+// heroui/packages/react/tests/components/button-group/button-group.test.tsx:87
 test("T-019 child Button props override the group defaults", async () => {
-  // heroui/packages/react/tests/components/button-group/button-group.test.tsx:87
   const app = await openScenario("button-group/override");
   const style = app.spanStyle("text:Override");
 
@@ -84,8 +84,8 @@ test("T-019 child Button props override the group defaults", async () => {
   expect(style.fontSize).not.toBe(14);
 });
 
+// heroui/packages/react/tests/components/button-group/button-group.test.tsx:103
 test("T-020 nested non-direct Buttons still mount and take presses", async () => {
-  // heroui/packages/react/tests/components/button-group/button-group.test.tsx:103
   // Partial port: NSH cannot tell a direct child from a nested one, so inheritance
   // reaches nested Buttons too (registered difference). The structural and press
   // assertions are kept; the two "no inheritance" assertions are dropped.
@@ -97,8 +97,8 @@ test("T-020 nested non-direct Buttons still mount and take presses", async () =>
   expect(callsOf(app, "onPress")).toHaveLength(1);
 });
 
+// heroui/packages/react/tests/components/button-group/button-group.test.tsx:118
 test("T-021 supports pressing grouped buttons", async () => {
-  // heroui/packages/react/tests/components/button-group/button-group.test.tsx:118
   const app = await openScenario("button-group/press");
 
   await app.press("role:button[Save]");

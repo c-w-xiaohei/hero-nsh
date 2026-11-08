@@ -12,15 +12,15 @@ import { openScenario } from "../../helpers/open-scenario";
  * role exposure, Tab stops, enabled() and a refused press.
  */
 
+// kobalte/packages/core/src/button/button.test.tsx:65
 test("T-027 exposes role=button when it is not a native button", async () => {
-  // kobalte/packages/core/src/button/button.test.tsx:65
   const app = await openScenario("button/basic");
 
   expect(app.shows("role:button[Save]")).toBe(true);
 });
 
+// kobalte/packages/core/src/button/button.test.tsx:89
 test("T-029 is a Tab stop when it is not a native button", async () => {
-  // kobalte/packages/core/src/button/button.test.tsx:89
   const app = await openScenario("button/tab-order", { platform: "web" });
 
   await app.keyboard.press("tab");
@@ -29,8 +29,8 @@ test("T-029 is a Tab stop when it is not a native button", async () => {
   expect(callsOf(app, "focus:Second")).toHaveLength(1);
 });
 
+// kobalte/packages/core/src/button/button.test.tsx:113
 test("T-031 is not a Tab stop when it is disabled", async () => {
-  // kobalte/packages/core/src/button/button.test.tsx:113
   const app = await openScenario("button/tab-order-disabled", { platform: "web" });
 
   await app.keyboard.press("tab");
@@ -40,8 +40,8 @@ test("T-031 is not a Tab stop when it is disabled", async () => {
   expect(callsOf(app, "focus:Third")).toHaveLength(1);
 });
 
+// kobalte/packages/core/src/button/button.test.tsx:125
 test("T-032 is disabled when disabled and it is a native button", async () => {
-  // kobalte/packages/core/src/button/button.test.tsx:125
   const app = await openScenario("button/disabled");
 
   expect(app.enabled("role:button[Save]")).toBe(false);
@@ -50,8 +50,8 @@ test("T-032 is disabled when disabled and it is a native button", async () => {
   });
 });
 
+// kobalte/packages/core/src/button/button.test.tsx:151
 test("T-034 is disabled when disabled and it is not a native button nor input", async () => {
-  // kobalte/packages/core/src/button/button.test.tsx:151
   // NSH's single View has no native tag to be one or the other; the contract is
   // the same as T-032 and asserted the same way.
   const app = await openScenario("button/disabled");
@@ -62,15 +62,15 @@ test("T-034 is disabled when disabled and it is not a native button nor input", 
   });
 });
 
+// kobalte/packages/core/src/button/button.test.tsx:164
 test("T-035 is enabled by default", async () => {
-  // kobalte/packages/core/src/button/button.test.tsx:164
   const app = await openScenario("button/basic");
 
   expect(app.enabled("role:button[Save]")).toBe(true);
 });
 
+// kobalte/packages/core/src/button/button.test.tsx:174
 test("T-036 is not enabled when disabled", async () => {
-  // kobalte/packages/core/src/button/button.test.tsx:174
   const app = await openScenario("button/disabled");
 
   expect(app.enabled("role:button[Save]")).toBe(false);
