@@ -27,16 +27,23 @@ export const buttonVariants = tv({
     // R-018 … R-025. The CSS custom properties disappear; every variant names
     // its background, foreground and hover / pressed backgrounds directly.
     variant: {
+      // R-018
       primary: "bg-accent text-accent-foreground hover:bg-accent-hover active:bg-accent-hover",
+      // R-019
       secondary:
         "bg-default text-accent-soft-foreground hover:bg-default-hover active:bg-default-hover",
+      // R-020: no foreground class, so the text stays the inherited currentColor.
       tertiary: "bg-default hover:bg-default-hover active:bg-default-hover",
+      // R-021
       ghost: "bg-transparent text-default-foreground hover:bg-default active:bg-default",
-      // R-022 borders are written per logical side; R-023 mixes the hover
-      // background the same 60% as the CSS color-mix().
+      // R-021 background / foreground; R-022 borders are written per logical
+      // side; R-023 mixes the hover background the same 60% as the CSS
+      // color-mix().
       outline:
         "bg-transparent text-default-foreground border-t border-b border-s border-e border-border hover:bg-default/60 active:bg-default",
+      // R-024
       danger: "bg-danger text-danger-foreground hover:bg-danger-hover active:bg-danger-hover",
+      // R-025
       "danger-soft":
         "bg-danger-soft text-danger-soft-foreground hover:bg-danger-soft-hover active:bg-danger-soft-hover",
     },
