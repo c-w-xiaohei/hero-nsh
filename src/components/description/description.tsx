@@ -1,4 +1,4 @@
-import { cleanup, split, Text } from "nsh";
+import { cleanup, computed, split, Text } from "nsh";
 import type { JSX, TextProps } from "nsh";
 
 import { DescriptionContext } from "./context";
@@ -50,20 +50,26 @@ export function DescriptionRoot(props: DescriptionRootProps): JSX.Element {
   // so the values below close over this one.
   const field = DescriptionContext();
 
-  // Read once, in the body: each read of `props.children` builds the children
-  // again, so registration and placement below must share this one value
-  // (research 4.1, 4.6). Only a plain string can be registered; dynamic or
-  // non-string children render but stay unregistered (port sheet §8).
-  const children = local.children;
+  // One read of `props.children`, shared by registration and placement: each
+  // read builds new native views (research 4.1, 4.6). Wrapping it in
+  // `computed` keeps the getter live, so `<Description>{msg()}</Description>`
+  // still updates; a plain capture would freeze it. Only a plain string can be
+  // registered; dynamic or non-string children render but stay unregistered
+  // (port sheet §8).
+  const children = computed(() => local.children);
 
   // Registration side effect (port sheet §2): when a field root can take it,
   // report this description's text so the field can hint its control. The
-  // accessor reads the captured value, never `props.children` again.
+  // accessor reads the shared computed value, never `props.children` again.
   const registerDescription = field?.registerDescription;
 
   if (registerDescription) {
     cleanup(
-      registerDescription(() => (typeof children === "string" ? children : undefined)),
+      registerDescription(() => {
+        const value = children();
+
+        return typeof value === "string" ? value : undefined;
+      }),
     );
   }
 
@@ -85,7 +91,7 @@ export function DescriptionRoot(props: DescriptionRootProps): JSX.Element {
       // caller's own value wins, as HeroUI forwards `rest` last.
       focusable={local.focusable ?? false}
     >
-      {children}
+      {children()}
     </Text>
   );
 }
