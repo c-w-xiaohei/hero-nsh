@@ -1,0 +1,28 @@
+{
+  "name": "hero-nsh",
+  "version": "0.0.0",
+  "description": "HeroUI v3 components for NSH, written in TSX.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "repository": { "type": "git", "url": "git+https://github.com/c-w-xiaohei/hero-nsh.git" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme.json": "./theme/hero-nsh.theme.json"
+  },
+  "files": ["src", "theme"],
+  "scripts": {
+    "check": "nsh check harness",
+    "test": "nsh test harness",
+    "test:web": "nsh test harness --target web",
+    "test:windows": "nsh test harness --target windows"
+  },
+  "dependencies": {
+    "@internationalized/date": "3.12.4",
+    "@internationalized/number": "3.6.9",
+    "tailwind-variants": "4.0.1"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}

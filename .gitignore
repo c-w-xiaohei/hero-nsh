@@ -1,0 +1,8 @@
+tmp/
+.nsh/
+node_modules/
+.out/
+target/
+harness/.gen/
+harness/class-check.gen.tsx
+.openchamber/

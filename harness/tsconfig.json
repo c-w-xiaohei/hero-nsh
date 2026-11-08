@@ -1,0 +1,14 @@
+{
+  "extends": "./.nsh/tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "nsh": ["./.nsh/types/nsh/index.d.ts"],
+      "nsh/*": ["./.nsh/types/nsh/*.d.ts"],
+      "@heroui/react": ["../src/index.ts"],
+      "@scenario/stage": ["./stage.tsx"],
+      "@scenario/probe": ["./probe.ts"],
+      "*": ["./.nsh/types/*.d.ts"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "../src/**/*.ts", "../src/**/*.tsx", "../scenarios/**/*.ts", "../scenarios/**/*.tsx"]
+}

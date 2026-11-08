@@ -1,0 +1,15 @@
+hero-nsh
+Copyright 2026 hero-nsh contributors
+
+hero-nsh is a port of HeroUI v3 (https://github.com/heroui-inc/heroui) to NSH.
+HeroUI is licensed under the Apache License, Version 2.0, Copyright 2025 NextUI Inc.
+
+Portions of the state and encapsulation logic are adapted from:
+
+- Kobalte (https://github.com/kobaltedev/kobalte), MIT License,
+  Copyright (c) 2024 jer3m01 <jer3m01@jer3m01.com>.
+- React Spectrum, React Aria and React Stately
+  (https://github.com/adobe/react-spectrum), Apache License, Version 2.0,
+  Copyright Adobe.
+- Corvu (https://github.com/corvudev/corvu), MIT License,
+  Copyright (c) 2023-2025 Jasmin Noetzli.

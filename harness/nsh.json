@@ -1,0 +1,13 @@
+{
+  "name": "hero-nsh-harness",
+  "id": "com.heronsh.harness",
+  "version": "0.0.0",
+  "build": 1,
+  "resolve": {
+    "alias": {
+      "@heroui/react": "../src/index.ts",
+      "@scenario/stage": "./stage.tsx",
+      "@scenario/probe": "./probe.ts"
+    }
+  }
+}

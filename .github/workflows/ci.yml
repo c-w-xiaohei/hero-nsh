@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    env:
+      NSH_VERSION: v0.4.0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install nsh
+        run: |
+          curl -fsSL https://nsh.dev/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: nsh test harness --junit junit.xml
+      - run: pnpm test:web
+      - name: Distribution smoke test
+        run: |
+          pnpm pack --pack-destination "$RUNNER_TEMP"
+          app="$RUNNER_TEMP/consumer"
+          mkdir -p "$app"
+          cd "$app"
+          printf '{"name":"consumer","version":"0.0.0","private":true}\n' > package.json
+          pnpm add "$RUNNER_TEMP"/hero-nsh-*.tgz
+          printf '{"name":"consumer","id":"com.heronsh.consumer","version":"0.0.0","build":1}\n' > nsh.json
+          printf '{"extends":"./.nsh/tsconfig.json","include":["**/*.ts","**/*.tsx"]}\n' > tsconfig.json
+          cat > App.tsx <<'TSX'
+          import { mount, Text } from "nsh";
+          import { HERO_NSH_VERSION } from "hero-nsh";
+
+          mount(() => <Text>{HERO_NSH_VERSION}</Text>);
+          TSX
+          nsh check .
+          echo 'expect(app.texts()).toContain("0.0.0");' | nsh test App.tsx
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: junit-ubuntu
+          path: junit.xml
+          if-no-files-found: ignore
