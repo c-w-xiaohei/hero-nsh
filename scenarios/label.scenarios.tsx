@@ -21,7 +21,7 @@ function Basic() {
 function Required() {
   return (
     <Stage>
-      <Label isRequired>Email Address</Label>
+      <Label isRequired>Required</Label>
     </Stage>
   );
 }
@@ -37,7 +37,7 @@ function Disabled() {
 function Invalid() {
   return (
     <Stage>
-      <Label isInvalid>Password</Label>
+      <Label isInvalid>Invalid</Label>
     </Stage>
   );
 }
