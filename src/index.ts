@@ -4,3 +4,4 @@ export * from "./primitives";
 export * from "./components/label";
 export * from "./components/description";
 export * from "./components/field-error";
+export * from "./components/button";
