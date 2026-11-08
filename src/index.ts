@@ -1,3 +1,4 @@
 export const HERO_NSH_VERSION = "0.0.0";
 
 export * from "./primitives";
+export * from "./components/field-error";
