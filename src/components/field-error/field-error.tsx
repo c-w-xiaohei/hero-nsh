@@ -126,11 +126,11 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
     validationDetails,
   };
 
-  // Single read of `children`, outside the branches that need it: every read
-  // builds the native views again (research 4.1, 4.6). A render prop is called
-  // once, with the accessors (D17); a function with no parameter is a reactive
-  // child binding and is handed to `Text` untouched.
-  const children = local.children;
+  // One reactive read of `children` (common rules): a plain capture would
+  // freeze `<FieldError>{signal()}</FieldError>`. Every consumer reads this
+  // computed, so the source prop is evaluated once per render and the strings /
+  // elements it returns are reused instead of built again.
+  const children = computed(() => local.children);
 
   // R-002 / R-005 / R-013: the block's padding and color, and the toggle
   // field's overrides, all come from the field type. One owner per property:
@@ -142,48 +142,45 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
     "text-muted": isToggle(),
   });
 
-  // Resolves the message each time it is shown, as upstream resolves children
-  // during render. The render prop is called with the accessors (D17); the tree
-  // it returns follows them, so a validity change needs no second call. A
-  // function with no parameter is a reactive child binding, not a render prop,
-  // and is handed to `Text` as it is.
-  //
   // Upstream's `defaultChildren`: only when no children were given does the
-  // joined validation errors text stand in; zero errors mean nothing to show,
-  // and the second null gate (`FieldError.tsx:67`) then renders no `Text`.
-  const resolveChildren = (): JSX.Element => {
-    if (typeof children === "function" && children.length >= 1) {
-      return untracked(() => (children as FieldErrorRenderProp)(renderProps));
-    }
-
-    if (children != null) {
-      return children as JSX.Element;
-    }
-
+  // joined validation errors text stand in; zero errors mean nothing to show
+  // (React Aria `FieldError.tsx:62-63`).
+  const fallbackMessage = computed<string | undefined>(() => {
     const errors = validationErrors();
 
     return errors.length > 0 ? errors.join(" ") : undefined;
+  });
+
+  // The message body: it re-reads `children` inside the binding, so a signal
+  // child updates the text in place instead of rebuilding the native view.
+  // With no child, the fallback error text takes its place.
+  const message = (): JSX.Element => {
+    const child = children();
+
+    // A one-parameter function child is a render prop and is resolved where it
+    // shows; anything else here is already a message.
+    return child != null ? (child as JSX.Element) : fallbackMessage();
   };
 
   // The text reported to the field: a string child can be read out, a render
   // prop or an element child is opaque, and the fallback error text is exactly
   // what the message shows. It never calls the render prop.
   const resolveErrorMessage = (): string | undefined => {
-    if (typeof children === "string") {
-      return children;
+    const child = children();
+
+    if (typeof child === "string") {
+      return child;
     }
 
-    if (typeof children === "number") {
-      return String(children);
+    if (typeof child === "number") {
+      return String(child);
     }
 
-    if (children != null) {
+    if (child != null) {
       return undefined;
     }
 
-    const errors = validationErrors();
-
-    return errors.length > 0 ? errors.join(" ") : undefined;
+    return fallbackMessage();
   };
 
   // Registration (port sheet §2): while the message is shown, the visible text
@@ -216,29 +213,46 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
     return typeof value === "function" ? value(renderProps) : value;
   });
 
+  const renderMessage = (content: () => JSX.Element) => (
+    <Text
+      {...rest}
+      ref={local.ref}
+      nativeID={local.id ?? local.nativeID}
+      class={fieldErrorVariants({ className: className() })}
+      classList={classList()}
+      style={style()}
+      // A `<span>` is not a keyboard focus stop upstream; a pressable Text
+      // would become one in NSH. A caller's own `focusable` wins.
+      focusable={local.focusable ?? false}
+    >
+      {content()}
+    </Text>
+  );
+
   // The function child builds the message only while it shows: a plain child
   // would be constructed in the body even for a valid field, freezing a render
-  // prop's `null` before the field turns invalid (research 4.1).
+  // prop's `null` before the field turns invalid (research 4.1). The render
+  // prop is called once per show, with the accessors (D17).
   return (
     <If when={isInvalid()}>
       {() => {
-        const message = resolveChildren();
+        const child = children();
 
-        return message == null ? null : (
-          <Text
-            {...rest}
-            ref={local.ref}
-            nativeID={local.id ?? local.nativeID}
-            class={fieldErrorVariants({ className: className() })}
-            classList={classList()}
-            style={style()}
-            // A `<span>` is not a keyboard focus stop upstream; a pressable
-            // Text would become one in NSH. A caller's own `focusable` wins.
-            focusable={local.focusable ?? false}
-          >
-            {message}
-          </Text>
-        );
+        if (typeof child === "function" && child.length >= 1) {
+          const rendered = untracked(() =>
+            (child as FieldErrorRenderProp)(renderProps),
+          );
+
+          return rendered == null ? null : renderMessage(() => rendered);
+        }
+
+        // The second null gate (React Aria `FieldError.tsx:67`): an invalid
+        // field with no message renders nothing at all, not an empty `Text`.
+        if (child == null && fallbackMessage() == null) {
+          return null;
+        }
+
+        return renderMessage(message);
       }}
     </If>
   );
