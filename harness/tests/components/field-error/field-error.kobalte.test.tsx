@@ -11,7 +11,7 @@ import { callsOf } from "../../helpers/calls";
  * unit yet; `id` maps to nativeID, which nsh/test cannot read.
  */
 function openCase(name: string, params: Record<string, string | number | boolean> = {}) {
-  return open("./fixtures.tsx", {
+  return open("../../../field-error.fixtures.tsx", {
     platform: "windows",
     width: 1024,
     height: 768,

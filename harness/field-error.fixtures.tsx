@@ -1,14 +1,20 @@
 import { host, mount, Text, View } from "nsh";
 import { FieldError } from "@heroui/react";
 import { probe } from "@scenario/probe";
-import { FieldErrorContext } from "../../../../src/components/field-error/context";
+import { FieldErrorContext } from "../src/components/field-error/context";
 
 /*
- * NSH-only fixture (port sheet 4b), not a shared scenario: FieldError renders
- * nothing without a field root, the same as React Aria Components, and every
- * field root (TextField, Checkbox, Switch, Radio ...) belongs to another unit.
- * The context below plays the field root's part, so this unit can be observed
- * on its own.
+ * NSH-only fixture for the FieldError unit (port sheet 4b), not a shared
+ * scenario: FieldError renders nothing without a field root, the same as React
+ * Aria Components, and every field root (TextField, Checkbox, Switch, Radio ...)
+ * belongs to another unit. The context below plays the field root's part, so
+ * this unit can be observed on its own.
+ *
+ * It sits next to harness/nsh.json on purpose. NSH takes the entry's own
+ * directory as the app's root, so an entry under harness/tests/... finds no
+ * nsh.json: the `@heroui/react` alias does not resolve and the build drops the
+ * class tokens. A file here keeps the alias (the public entry is what is
+ * tested) and the theme.
  *
  * host.params.case picks the field state:
  *   invalid      invalid, error text as children (the default)

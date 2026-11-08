@@ -7,7 +7,7 @@ import { expect, open, test } from "nsh/test";
  * fixture, which supplies FieldErrorContext directly.
  */
 function openCase(name: string, params: Record<string, string | number | boolean> = {}) {
-  return open("./fixtures.tsx", {
+  return open("../../../field-error.fixtures.tsx", {
     platform: "windows",
     width: 1024,
     height: 768,
