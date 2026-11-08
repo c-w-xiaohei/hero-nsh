@@ -14,9 +14,10 @@ import { labelVariants } from "./label.styles";
  * text host props.
  *
  * The DOM-only members of the upstream props (`htmlFor`, `form`,
- * `elementType`, `slot`) and `id` are accepted so that code written against
- * HeroUI keeps compiling; see the port sheet §1 and §8 for what they can and
- * cannot do here.
+ * `elementType`, `slot`, `render`) and `id` are accepted so that code written
+ * against HeroUI keeps compiling; see the port sheet §1 and §8 for what they
+ * can and cannot do here. `ref` comes from `TextProps` and reaches the root
+ * `Text`, as `ComponentPropsWithRef` does upstream.
  */
 export interface LabelRootProps
   extends Omit<TextProps, "children" | "class"> {
@@ -40,6 +41,9 @@ export interface LabelRootProps
   /** Accepted, no effect: NSH has no slot collection. */
   slot?: string;
 
+  /** Accepted, no effect: NSH has no DOM render function to replace the element. */
+  render?: unknown;
+
   /** Shows the asterisk. Appearance only, as upstream: it writes no accessibility state. */
   isRequired?: boolean;
 
@@ -57,10 +61,13 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
     "style",
     "id",
     "nativeID",
+    "ref",
+    "focusable",
     "htmlFor",
     "form",
     "elementType",
     "slot",
+    "render",
     "isRequired",
     "isDisabled",
     "isInvalid",
@@ -116,6 +123,7 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
   return (
     <Text
       {...rest}
+      ref={local.ref}
       nativeID={local.id ?? local.nativeID}
       style={local.style}
       class={labelVariants({
@@ -125,8 +133,10 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
         isRequired: isRequired(),
       })}
       // A `<label>` is not a keyboard focus stop upstream; without this a
-      // pressable Text would become one (Tab moves between pressables).
-      focusable={false}
+      // pressable Text would become one (Tab moves between pressables). A
+      // caller's own `focusable` still wins: HeroUI forwards whatever `rest`
+      // carries to the element.
+      focusable={local.focusable ?? false}
       onPress={onPress}
     >
       {local.children}
