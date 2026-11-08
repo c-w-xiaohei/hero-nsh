@@ -1,4 +1,4 @@
-import { Text } from "nsh";
+import { signal, Text, View } from "nsh";
 import { Button, ButtonGroup } from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
@@ -7,9 +7,10 @@ import type { Component } from "./types";
 /*
  * Shared scenarios for Button and ButtonGroup, written with HeroUI's API only.
  *
- * Two of them are split scenarios (SOP 3.3.3, port sheet 4b):
- *   button/icon-only  the NSH side draws no svg and has no descendant selector, so the
- *                     glyphs carry their own size classes (R-011 / R-014);
+ * Split scenarios (SOP 3.3.3, port sheet 4b):
+ *   button/icon-only.split, button/sizes.split  the NSH side draws no svg and has no
+ *     descendant selector, so icons carry their own size classes (R-011 / R-014):
+ *     size-5 sm:size-4 for md / lg, size-4 for sm;
  *   button/render-props  the render prop receives accessors instead of booleans (D17).
  */
 
@@ -76,17 +77,56 @@ function FullWidth() {
   );
 }
 
-function IconOnly() {
+/*
+ * The NSH side of a split icon scenario: no svg and no descendant selector, so an
+ * icon carries its own size classes (R-011 / R-014): size-5 sm:size-4 for md / lg,
+ * size-4 for sm. A View stands in for the svg; the reference package draws its own.
+ */
+function Icon(props: { size: "sm" | "md" | "lg" }) {
+  return (
+    <View
+      class={
+        props.size === "sm"
+          ? "size-4 rounded-sm bg-accent-foreground"
+          : "size-5 sm:size-4 rounded-sm bg-accent-foreground"
+      }
+    />
+  );
+}
+
+function IconOnlySplit() {
   return (
     <Stage>
       <Button isIconOnly aria-label="Add small" size="sm">
-        +
+        <Icon size="sm" />
       </Button>
       <Button isIconOnly aria-label="Add medium" size="md">
-        +
+        <Icon size="md" />
       </Button>
       <Button isIconOnly aria-label="Add large" size="lg">
-        +
+        <Icon size="lg" />
+      </Button>
+    </Stage>
+  );
+}
+
+function SizesSplit() {
+  return (
+    <Stage>
+      <Button size="sm">Small</Button>
+      <Button size="sm">
+        <Icon size="sm" />
+        Small with icon
+      </Button>
+      <Button size="md">Medium</Button>
+      <Button size="md">
+        <Icon size="md" />
+        Medium with icon
+      </Button>
+      <Button size="lg">Large</Button>
+      <Button size="lg">
+        <Icon size="lg" />
+        Large with icon
       </Button>
     </Stage>
   );
@@ -155,7 +195,18 @@ function CustomClass() {
 function RenderProps() {
   return (
     <Stage>
-      <Button>{({ isPressed }) => <Text>{isPressed() ? "Pressed" : "Save"}</Text>}</Button>
+      <Button>{({ isPressed }) => (isPressed() ? "Pressed" : "Save")}</Button>
+    </Stage>
+  );
+}
+
+function Counter() {
+  const count = signal(0);
+  return (
+    <Stage>
+      <Button testID="counter-button" onPress={() => count.update((value) => value + 1)}>
+        Save {count()}
+      </Button>
     </Stage>
   );
 }
@@ -373,14 +424,16 @@ export const buttonScenarios: Record<string, Component> = {
   "button/basic": Basic,
   "button/variants": Variants,
   "button/sizes": Sizes,
+  "button/sizes.split": SizesSplit,
   "button/full-width": FullWidth,
-  "button/icon-only": IconOnly,
+  "button/icon-only.split": IconOnlySplit,
   "button/disabled": Disabled,
   "button/pending": Pending,
   "button/hover": Hover,
   "button/focus": Focus,
   "button/custom-class": CustomClass,
   "button/render-props": RenderProps,
+  "button/counter": Counter,
   "button/press": Press,
   "button/tab-order": TabOrder,
   "button/tab-order-disabled": TabOrderDisabled,

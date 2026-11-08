@@ -24,8 +24,9 @@ test("T-029 is a Tab stop when it is not a native button", async () => {
   const app = await openScenario("button/tab-order", { platform: "web" });
 
   await app.keyboard.press("tab");
-  await app.keyboard.press("tab");
+  expect(callsOf(app, "focus:First")).toHaveLength(1);
 
+  await app.keyboard.press("tab");
   expect(callsOf(app, "focus:Second")).toHaveLength(1);
 });
 

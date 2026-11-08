@@ -141,3 +141,24 @@ test("T-013 supports render-prop children for press state", async () => {
   await app.drop();
   expect(app.shows("text:Save")).toBe(true);
 });
+
+// heroui/packages/styles/components/button.css:30-32
+test("X-001 keeps focus-visible through a keyboard activation", async () => {
+  const app = await openScenario("button/focus", { platform: "web" });
+
+  await app.keyboard.press("tab");
+  expect(app.shows("text:Focus visible")).toBe(true);
+
+  await app.keyboard.press("enter");
+  expect(app.shows("text:Focus visible")).toBe(true);
+});
+
+test("X-002 keeps dynamic children live across a press", async () => {
+  const app = await openScenario("button/counter");
+  const shown = () => app.texts().join(" ").replace(/\s+/g, " ").trim();
+
+  expect(shown()).toContain("Save 0");
+
+  await app.press("id:counter-button");
+  expect(shown()).toContain("Save 1");
+});
