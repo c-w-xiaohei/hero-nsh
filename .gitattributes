@@ -1,0 +1,2 @@
+src/index.ts merge=union
+scenarios/index.ts merge=union

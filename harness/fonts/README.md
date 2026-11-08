@@ -10,14 +10,4 @@ The screenshot comparison in the port SOP needs both sides to load the same font
   they were renamed to the single family `Inter` so NSH's `font-weight` selects each face.
 - `theme/hero-nsh.theme.json` sets `font-sans` to `Inter, system-ui, sans-serif`.
 
-The files register with the app when they are imported for their side effect. The harness entry
-does not import them yet; a scenario or the entry adds
-
-```ts
-import "../fonts/Inter-Regular.woff2";
-import "../fonts/Inter-Medium.woff2";
-import "../fonts/Inter-SemiBold.woff2";
-import "../fonts/Inter-Bold.woff2";
-```
-
-before text is drawn.
+`harness/App.tsx` imports the four files for their side effect, which registers them.
