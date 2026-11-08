@@ -1,4 +1,4 @@
-import { host, mount, Text, View } from "nsh";
+import { host, mount, signal, Text, View } from "nsh";
 import { FieldError } from "@heroui/react";
 import { probe } from "@scenario/probe";
 import { FieldErrorContext } from "../src/components/field-error/context";
@@ -27,6 +27,9 @@ import { FieldErrorContext } from "../src/components/field-error/context";
  *   readonly     invalid and readOnly
  *   with-id      invalid with id="foo"
  *   custom-id    invalid with a custom id
+ *   transition   invalid with no children; a press sets validationErrors to
+ *                ["late error"], the next press clears them (the error text
+ *                comes from the RAC fallback, `validationErrors.join(" ")`)
  *
  * host.params.message overrides the error text, so the Kobalte cases that say
  * "ErrorMessage" keep their upstream wording.
@@ -36,11 +39,17 @@ function Fixture() {
   const name = String(host.params.case ?? "invalid");
   const message = String(host.params.message ?? "Enter a valid email");
   const invalid = name !== "valid";
+  const transition = name === "transition";
+  const lateErrors = signal<readonly string[]>([]);
   const registered = probe("field-error.registered");
   const id = name === "with-id" ? "foo" : name === "custom-id" ? "custom-form-control-id" : undefined;
   const state = {
     isInvalid: () => invalid,
-    validationErrors: () => (invalid && name !== "empty" ? [message] : []),
+    validationErrors: () => {
+      if (transition) return lateErrors();
+
+      return invalid && name !== "empty" ? [message] : [];
+    },
     isToggleField: () => name === "toggle",
     registerErrorMessage: (text: () => string | undefined) => {
       const value = text();
@@ -54,7 +63,19 @@ function Fixture() {
   return (
     <View class="flex-col gap-2 p-4">
       <FieldErrorContext.Provider value={state}>
-        {name === "empty" ? (
+        {transition ? (
+          <View class="flex-col gap-2">
+            <FieldError id={id} />
+            <View
+              testID="set-late-error"
+              role="button"
+              class="p-2"
+              onPress={() => lateErrors.set(lateErrors().length === 0 ? ["late error"] : [])}
+            >
+              <Text>toggle late error</Text>
+            </View>
+          </View>
+        ) : name === "empty" ? (
           <FieldError id={id} />
         ) : (
           <FieldError id={id}>

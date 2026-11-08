@@ -108,3 +108,52 @@ test("T-016 should add 'data-readonly' attribute on error message when form cont
 
   expect(app.shows("text:ErrorMessage")).toBe(true);
 });
+
+// heroui/packages/styles/components/field-error.css:19-26
+// No upstream row: the CSS maps `.checkbox > .field-error` / `.switch > ...` /
+// `.radio > ...` to `text-muted` and no inline padding. The port sheet R-009
+// turns the ancestor selectors into `isToggleField` on the field context, so
+// the observable half is the tone. theme/hero-nsh.theme.json light: muted
+// oklch(0.5517 0.0138 285.94) is #71717aff, danger oklch(0.6532 0.2328 25.74)
+// is #ff383cff. Padding has no nsh/test query (spanStyle reports text only).
+test("X-001 paints a toggle field's error muted, not danger", async () => {
+  const toggle = await openCase("toggle", { message: "ErrorMessage" });
+
+  expect(toggle.spanStyle("text:ErrorMessage").color).toBe("#71717aff");
+
+  const input = await openCase("invalid", { message: "ErrorMessage" });
+
+  expect(input.spanStyle("text:ErrorMessage").color).toBe("#ff383cff");
+  expect(toggle.spanStyle("text:ErrorMessage").color).not.toBe(
+    input.spanStyle("text:ErrorMessage").color,
+  );
+});
+
+// react-spectrum/packages/react-aria-components/src/FieldError.tsx:67
+// No upstream row: the second null gate. With isInvalid true, no children and
+// no validationErrors the message element is not rendered at all, so nothing
+// from this unit reaches the screen.
+test("X-002 renders nothing when invalid with no children and no validation errors", async () => {
+  const app = await openCase("empty");
+
+  expect(app.shows("text:Enter a valid email")).toBe(false);
+  expect(app.texts()).toEqual([]);
+});
+
+// react-spectrum/packages/react-aria-components/src/FieldError.tsx:62-67
+// No upstream row: the default children are `validationErrors.join(" ")`, and
+// an error message follows the field's errors as they change. The fixture has
+// no children, so the error text comes from that fallback; each press flips
+// validationErrors between [] and ["late error"].
+test("X-003 shows a late validation error once it appears and removes it once cleared", async () => {
+  const app = await openCase("transition");
+
+  expect(app.shows("text:late error")).toBe(false);
+
+  await app.press("id:set-late-error");
+  expect(app.shows("text:late error")).toBe(true);
+
+  await app.press("id:set-late-error");
+  expect(app.shows("text:late error")).toBe(false);
+});
+
