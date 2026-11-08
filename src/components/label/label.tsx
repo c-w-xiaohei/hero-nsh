@@ -99,8 +99,10 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
   );
 
   // The single read of `children` (research 4.1, 4.6): a read builds new native
-  // views, so the value is cached in a computed and both the field
-  // registration below and the placement in the root `Text` share it.
+  // views, so the value is cached in a computed that both the field
+  // registration below and the placement in the root `Text` share. It must stay
+  // a computed, not a plain `const`: `<Label>{value()}</Label>` has to follow
+  // `value`, while a captured plain value would freeze the text.
   const children = computed(() => local.children);
 
   // Registration side effect (port sheet §2): when a field root can take it,
