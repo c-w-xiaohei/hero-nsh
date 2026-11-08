@@ -31,9 +31,41 @@ export interface FieldErrorRenderProps {
   validationDetails: Accessor<unknown>;
 }
 
+/**
+ * What a `children` function receives besides the field state: upstream's
+ * `defaultChildren` (React Aria `utils.tsx:204-217`), the text the component
+ * shows when no children are given. Per D17 it is an accessor here, so a field
+ * whose errors change updates the tree the function built.
+ */
+export interface FieldErrorChildrenRenderProps extends FieldErrorRenderProps {
+  /** The joined validation errors, or `undefined` when there are none. */
+  defaultChildren: Accessor<JSX.Element | undefined>;
+}
+
+/**
+ * What a `className` function receives (React Aria `utils.tsx:181-183`): the
+ * field state plus the class the element carries without `className`. Upstream
+ * that default is React Aria's `react-aria-FieldError`; D18 drops BEM names, so
+ * here it is the variant base the element really has.
+ */
+export interface FieldErrorClassNameRenderProps extends FieldErrorRenderProps {
+  /** The default class string, before `className` is appended. */
+  defaultClassName: string | undefined;
+}
+
+/**
+ * What a `style` function receives (React Aria `utils.tsx:184-186`). FieldError
+ * passes no default style upstream, so this is an empty object; it stays on the
+ * type because callers may spread it (`style: { ...defaultStyle, color }`).
+ */
+export interface FieldErrorStyleRenderProps extends FieldErrorRenderProps {
+  /** The base style: `{}`, since the component has none. */
+  defaultStyle: StyleProp<TextStyle>;
+}
+
 /** The render-prop form of `children` (a function with at least one parameter, research V7). */
 export type FieldErrorRenderProp = (
-  renderProps: FieldErrorRenderProps,
+  renderProps: FieldErrorChildrenRenderProps,
 ) => JSX.Element;
 
 /* -------------------------------------------------------------------------------------------------
@@ -63,12 +95,12 @@ export interface FieldErrorRootProps
   /** Appended after the variant classes; function form gets the same accessors. */
   className?:
     | string
-    | ((renderProps: FieldErrorRenderProps) => string | undefined);
+    | ((renderProps: FieldErrorClassNameRenderProps) => string | undefined);
 
   /** Style of the message; function form gets the same accessors. */
   style?:
     | StyleProp<TextStyle>
-    | ((renderProps: FieldErrorRenderProps) => StyleProp<TextStyle>);
+    | ((renderProps: FieldErrorStyleRenderProps) => StyleProp<TextStyle>);
 
   /** A DOM id upstream; maps to `nativeID`, the name other elements refer to. */
   id?: string;
@@ -151,6 +183,34 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
     return errors.length > 0 ? errors.join(" ") : undefined;
   });
 
+  // The two null gates (React Aria `FieldError.tsx:47,67`) as one reactive
+  // condition: the field is invalid, and there is something to show — a child,
+  // or the fallback errors. It must live in `when`: `<If>`'s function child is
+  // untracked, so a gate read there is frozen at the first show (upstream
+  // recomputes both every render, `FieldError.tsx:62-69`). Reading the shared
+  // `children` through its computed keeps the single read of the prop.
+  const visible = computed(
+    () => isInvalid() && (children() != null || fallbackMessage() != null),
+  );
+
+  // The three function forms each get their own upstream default (React Aria
+  // `utils.tsx:255-267`): `children` gets `defaultChildren`, `className` gets
+  // `defaultClassName`, `style` gets `defaultStyle`.
+  const childrenRenderProps: FieldErrorChildrenRenderProps = {
+    ...renderProps,
+    defaultChildren: fallbackMessage,
+  };
+
+  const classNameRenderProps: FieldErrorClassNameRenderProps = {
+    ...renderProps,
+    defaultClassName: fieldErrorVariants.base,
+  };
+
+  const styleRenderProps: FieldErrorStyleRenderProps = {
+    ...renderProps,
+    defaultStyle: {},
+  };
+
   // The message body: it re-reads `children` inside the binding, so a signal
   // child updates the text in place instead of rebuilding the native view.
   // With no child, the fallback error text takes its place.
@@ -204,13 +264,13 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
   const className = computed(() => {
     const value = local.className;
 
-    return typeof value === "function" ? value(renderProps) : value;
+    return typeof value === "function" ? value(classNameRenderProps) : value;
   });
 
   const style = computed(() => {
     const value = local.style;
 
-    return typeof value === "function" ? value(renderProps) : value;
+    return typeof value === "function" ? value(styleRenderProps) : value;
   });
 
   const renderMessage = (content: () => JSX.Element) => (
@@ -234,22 +294,25 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
   // prop's `null` before the field turns invalid (research 4.1). The render
   // prop is called once per show, with the accessors (D17).
   return (
-    <If when={isInvalid()}>
+    <If when={visible()}>
       {() => {
         const child = children();
 
         if (typeof child === "function" && child.length >= 1) {
           const rendered = untracked(() =>
-            (child as FieldErrorRenderProp)(renderProps),
+            (child as FieldErrorRenderProp)(childrenRenderProps),
           );
 
-          return rendered == null ? null : renderMessage(() => rendered);
-        }
+          // Upstream falls back to `defaultChildren` when the render prop
+          // returns nothing (`children: computedChildren ?? defaultChildren`,
+          // React Aria `utils.tsx:277`), then runs the second null gate.
+          if (rendered == null) {
+            return fallbackMessage() == null
+              ? null
+              : renderMessage(() => fallbackMessage());
+          }
 
-        // The second null gate (React Aria `FieldError.tsx:67`): an invalid
-        // field with no message renders nothing at all, not an empty `Text`.
-        if (child == null && fallbackMessage() == null) {
-          return null;
+          return renderMessage(() => rendered);
         }
 
         return renderMessage(message);
