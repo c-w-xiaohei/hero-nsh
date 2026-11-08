@@ -23,7 +23,7 @@
  * should only show for keyboard navigation.
  */
 
-import { type Accessor, computed, signal } from "nsh";
+import { type Accessor, computed, type PressEvent, signal } from "nsh";
 
 /** How the user last interacted: `null` until the first interaction this owner saw. */
 export type InteractionModality = "keyboard" | "pointer" | null;
@@ -82,6 +82,19 @@ export interface InteractionModalityState {
 
   /** Goes back to the default modality, as a closed layer does. */
   reset: () => void;
+}
+
+/**
+ * Whether a press came from the keyboard (Return / Space activation) instead of
+ * a pointer. React Aria's `useFocusVisible` sets the modality from the event
+ * that caused it (`react-spectrum/packages/react-aria/src/interactions/
+ * useFocusVisible.ts:86-100`); NSH's `PressEvent` has no `pointerType`, but a
+ * keyboard activation reports `pagePosition` exactly `{ x: 0, y: 0 }` while a
+ * real pointer press reports where it happened (measured headless and in
+ * Chrome, research section 10 V4).
+ */
+export function isKeyboardPress(event: PressEvent): boolean {
+  return event.pagePosition.x === 0 && event.pagePosition.y === 0;
 }
 
 /**

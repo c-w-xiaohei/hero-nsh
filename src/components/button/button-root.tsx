@@ -11,7 +11,10 @@ import type {
 import { cleanup, computed, effect, reduceMotion, signal, View } from "nsh";
 import type { Accessor } from "nsh";
 
-import { createInteractionModality } from "../../primitives/create-interaction-modality";
+import {
+  createInteractionModality,
+  isKeyboardPress,
+} from "../../primitives/create-interaction-modality";
 import { ButtonGroupContext } from "./button-group-context";
 import { buttonGroupItemClasses } from "./button-group-classes";
 import { buttonVariants, type ButtonVariants } from "./button.styles";
@@ -74,6 +77,9 @@ export interface ButtonRootProps extends ButtonVariants, AriaProps, GlobalDomPro
   onHoverStart?: (e: NshMouseEvent) => void;
   onHoverEnd?: (e: NshMouseEvent) => void;
   onHoverChange?: (isHovered: boolean) => void;
+  /** NSH host mouse events, chained beside the internal hover tracking. */
+  onMouseEnter?: (e: NshMouseEvent) => void;
+  onMouseLeave?: (e: NshMouseEvent) => void;
   onFocus?: () => void;
   onBlur?: () => void;
   /** React Aria DOM / form props: accepted for API parity, no effect in NSH. */
@@ -170,15 +176,17 @@ export function ButtonRoot(props: ButtonRootProps) {
 
   const isBlocked = () => isDisabled() || isPending();
 
-  // V4: Return and Space activation fire `onPress` / `onPressDown` on a view,
-  // so a press alone does not prove a pointer. A mouse press implies the
-  // pointer is over the button, which `onMouseEnter` already recorded in
-  // `isHovered`; keyboard activation leaves the modality alone and keeps
-  // `isFocusVisible` true (R-006). Hover by itself is not a press and does not
-  // change the modality, so moving the mouse over a focused button keeps its
-  // ring.
-  const notePointerPress = () => {
-    if (isHovered()) {
+  // V4: Return and Space activation fire the same press handlers a pointer
+  // press does, and `PressEvent` carries no `pointerType`; `isKeyboardPress`
+  // reads the reported position instead. React Aria sets the modality from the
+  // event that caused it (`useFocusVisible.ts:86-100`), so a keyboard
+  // activation keeps the keyboard modality (and the ring, R-006) and any other
+  // press switches to the pointer one. Never infer this from hover: a hovered
+  // button activated by Enter is still a keyboard interaction.
+  const notePress = (event: PressEvent) => {
+    if (isKeyboardPress(event)) {
+      modality.setKeyboardModality();
+    } else {
       modality.setPointerModality();
     }
   };
@@ -188,7 +196,7 @@ export function ButtonRoot(props: ButtonRootProps) {
       return;
     }
 
-    notePointerPress();
+    notePress(event);
     props.onPress?.(event);
   };
 
@@ -197,7 +205,7 @@ export function ButtonRoot(props: ButtonRootProps) {
       return;
     }
 
-    notePointerPress();
+    notePress(event);
     isPressed.set(true);
     props.onPressStart?.(event);
     props.onPressDown?.(event);
@@ -228,6 +236,8 @@ export function ButtonRoot(props: ButtonRootProps) {
   };
 
   const handleMouseEnter = (event: NshMouseEvent) => {
+    props.onMouseEnter?.(event);
+
     // RAC's useHover is off while disabled or pending.
     if (isBlocked() || isHovered()) {
       return;
@@ -239,6 +249,8 @@ export function ButtonRoot(props: ButtonRootProps) {
   };
 
   const handleMouseLeave = (event: NshMouseEvent) => {
+    props.onMouseLeave?.(event);
+
     if (!isHovered()) {
       return;
     }
