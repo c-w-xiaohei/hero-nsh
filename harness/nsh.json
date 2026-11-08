@@ -3,6 +3,50 @@
   "id": "com.heronsh.harness",
   "version": "0.0.0",
   "build": 1,
+  "theme": "../theme/hero-nsh.theme.json",
+  "tailwind": {
+    "radius": {
+      "xs": 2,
+      "sm": 4,
+      "md": 6,
+      "lg": 8,
+      "xl": 12,
+      "2xl": 16,
+      "3xl": 24,
+      "4xl": 32,
+      "field": 12
+    },
+    "shadow": {
+      "surface": "0 2px 4px 0 rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.06), 0 0 1px 0 rgba(0, 0, 0, 0.06)",
+      "overlay": "0 2px 8px 0 rgba(0, 0, 0, 0.06), 0 -6px 12px 0 rgba(0, 0, 0, 0.03), 0 14px 28px 0 rgba(0, 0, 0, 0.08)",
+      "field": "0 2px 4px 0 rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.06), 0 0 1px 0 rgba(0, 0, 0, 0.06)",
+      "surface-dark": "0 0 0 0 transparent inset",
+      "overlay-dark": "0 0 1px 0 rgba(255, 255, 255, 0.3) inset",
+      "field-dark": "0 0 0 0 transparent inset"
+    },
+    "ease": {
+      "smooth": [0.25, 0.1, 0.25, 1],
+      "in-quad": [0.55, 0.085, 0.68, 0.53],
+      "in-cubic": [0.55, 0.055, 0.675, 0.19],
+      "in-quart": [0.895, 0.03, 0.685, 0.22],
+      "in-quint": [0.755, 0.05, 0.855, 0.06],
+      "in-expo": [0.95, 0.05, 0.795, 0.035],
+      "in-circ": [0.6, 0.04, 0.98, 0.335],
+      "out-quad": [0.25, 0.46, 0.45, 0.94],
+      "out-cubic": [0.215, 0.61, 0.355, 1],
+      "out-quart": [0.165, 0.84, 0.44, 1],
+      "out-quint": [0.23, 1, 0.32, 1],
+      "out-expo": [0.19, 1, 0.22, 1],
+      "out-circ": [0.075, 0.82, 0.165, 1],
+      "out-fluid": [0.32, 0.72, 0, 1],
+      "in-out-quad": [0.455, 0.03, 0.515, 0.955],
+      "in-out-cubic": [0.645, 0.045, 0.355, 1],
+      "in-out-quart": [0.77, 0, 0.175, 1],
+      "in-out-quint": [0.86, 0, 0.07, 1],
+      "in-out-expo": [1, 0, 0, 1],
+      "in-out-circ": [0.785, 0.135, 0.15, 0.86]
+    }
+  },
   "resolve": {
     "alias": {
       "@heroui/react": "../src/index.ts",
