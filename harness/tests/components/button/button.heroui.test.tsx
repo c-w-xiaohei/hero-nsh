@@ -1,0 +1,143 @@
+import { expect, test } from "nsh/test";
+import { callsOf } from "../../helpers/calls";
+import { openScenario } from "../../helpers/open-scenario";
+
+/*
+ * HeroUI 3.2.7 regression cases for Button, per port sheet 4b (T-001 … T-013).
+ * Every case keeps its upstream file:line and title.
+ *
+ * Class strings and data-* attributes are not projected by NSH (D18), so the
+ * cases that asserted them assert the effect a user can observe instead:
+ * resolved span colors, callbacks recorded through probe(), enabled().
+ */
+
+// Resolved on the harness theme (hero-nsh.theme.json):
+// accent-soft-foreground #1e63aeff, red-500 #fb2c36ff.
+const ACCENT_SOFT_FOREGROUND = "#1e63aeff";
+const RED_500 = "#fb2c36ff";
+
+test("T-001 renders with role and accessible name", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:27
+  const app = await openScenario("button/basic");
+
+  expect(app.shows("role:button[Save]")).toBe(true);
+});
+
+test("T-003 exposes the variant through the resolved text color", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:41
+  const app = await openScenario("button/variants");
+
+  expect(app.spanStyle("text:Secondary").color).toBe(ACCENT_SOFT_FOREGROUND);
+});
+
+test("T-004 lets a string className win over the variant classes", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:49
+  const app = await openScenario("button/custom-class");
+
+  expect(app.spanStyle("text:Custom").color).toBe(RED_500);
+});
+
+test("T-005 supports testID passthrough", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:62
+  const app = await openScenario("button/basic");
+
+  expect(app.shows("id:save-btn")).toBe(true);
+});
+
+test("T-006 supports hover state", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:68
+  const app = await openScenario("button/hover");
+
+  expect(callsOf(app, "onHoverStart")).toHaveLength(0);
+
+  await app.hover("role:button[Save]");
+  expect(callsOf(app, "onHoverStart")).toHaveLength(1);
+
+  await app.hover("role:button[Other]");
+  expect(callsOf(app, "onHoverEnd")).toHaveLength(1);
+});
+
+test("T-007 supports press state", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:81
+  const app = await openScenario("button/press");
+
+  expect(callsOf(app, "onPressDown")).toHaveLength(0);
+
+  await app.dragAndHold("role:button[Save]", { x: 0, y: 0 });
+  expect(callsOf(app, "onPressDown")).toHaveLength(1);
+  expect(callsOf(app, "onPressChange")).toEqual([[true]]);
+
+  await app.drop();
+  expect(callsOf(app, "onPressUp")).toHaveLength(1);
+  expect(callsOf(app, "onPressChange")).toEqual([[true], [false]]);
+});
+
+test("T-008 calls onPress on click", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:94
+  const app = await openScenario("button/press");
+
+  await app.press("role:button[Save]");
+
+  expect(callsOf(app, "onPress")).toHaveLength(1);
+});
+
+test("T-009 supports focus-visible via keyboard", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:103
+  const app = await openScenario("button/focus", { platform: "web" });
+
+  expect(app.shows("text:Save")).toBe(true);
+
+  await app.keyboard.press("tab");
+  expect(callsOf(app, "onFocus")).toHaveLength(1);
+  expect(app.shows("text:Focus visible")).toBe(true);
+
+  await app.keyboard.press("tab");
+  expect(callsOf(app, "onBlur")).toHaveLength(1);
+  expect(app.shows("text:Save")).toBe(true);
+});
+
+test("T-010 supports disabled state and blocks press", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:117
+  const app = await openScenario("button/disabled");
+
+  expect(app.enabled("role:button[Save]")).toBe(false);
+  await expect(app.press("role:button[Save]")).rejects.toMatchObject({
+    code: "ERR_NSH_TEST_DISABLED",
+  });
+  expect(callsOf(app, "onPress")).toHaveLength(0);
+});
+
+test("T-011 exposes no hover state when disabled", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:134
+  const app = await openScenario("button/disabled");
+
+  await app.hover("role:button[Save]");
+  expect(callsOf(app, "onHoverStart")).toHaveLength(0);
+});
+
+test("T-012 supports keyboard activation with Enter and Space", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:142
+  const app = await openScenario("button/press", { platform: "web" });
+
+  await app.keyboard.press("tab");
+  expect(callsOf(app, "onFocus")).toHaveLength(1);
+
+  await app.keyboard.press("enter");
+  expect(callsOf(app, "onPress")).toHaveLength(1);
+
+  await app.keyboard.press("space");
+  expect(callsOf(app, "onPress")).toHaveLength(2);
+});
+
+test("T-013 supports render-prop children for press state", async () => {
+  // heroui/packages/react/tests/components/button/button.test.tsx:158
+  const app = await openScenario("button/render-props");
+
+  expect(app.shows("text:Save")).toBe(true);
+
+  await app.dragAndHold("role:button[Save]", { x: 0, y: 0 });
+  expect(app.shows("text:Pressed")).toBe(true);
+
+  await app.drop();
+  expect(app.shows("text:Save")).toBe(true);
+});
