@@ -40,6 +40,7 @@ export function DescriptionRoot(props: DescriptionRootProps): JSX.Element {
     "style",
     "id",
     "nativeID",
+    "focusable",
     "elementType",
     "slot",
   ] as const);
@@ -49,19 +50,20 @@ export function DescriptionRoot(props: DescriptionRootProps): JSX.Element {
   // so the values below close over this one.
   const field = DescriptionContext();
 
+  // Read once, in the body: each read of `props.children` builds the children
+  // again, so registration and placement below must share this one value
+  // (research 4.1, 4.6). Only a plain string can be registered; dynamic or
+  // non-string children render but stay unregistered (port sheet §8).
+  const children = local.children;
+
   // Registration side effect (port sheet §2): when a field root can take it,
-  // report this description's text so the field can hint its control. Read
-  // lazily, on the field's request, so the body never touches `children`
-  // twice; only a plain string can be registered (port sheet §8).
+  // report this description's text so the field can hint its control. The
+  // accessor reads the captured value, never `props.children` again.
   const registerDescription = field?.registerDescription;
 
   if (registerDescription) {
     cleanup(
-      registerDescription(() => {
-        const children = local.children;
-
-        return typeof children === "string" ? children : undefined;
-      }),
+      registerDescription(() => (typeof children === "string" ? children : undefined)),
     );
   }
 
@@ -79,10 +81,11 @@ export function DescriptionRoot(props: DescriptionRootProps): JSX.Element {
           .join(" "),
       })}
       // A `<span>` is not a keyboard focus stop upstream; without this a
-      // pressable Text would become one (Tab moves between pressables).
-      focusable={false}
+      // pressable Text would become one (Tab moves between pressables). The
+      // caller's own value wins, as HeroUI forwards `rest` last.
+      focusable={local.focusable ?? false}
     >
-      {local.children}
+      {children}
     </Text>
   );
 }
