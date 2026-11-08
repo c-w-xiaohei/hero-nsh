@@ -162,3 +162,26 @@ test("X-002 keeps dynamic children live across a press", async () => {
   await app.press("id:counter-button");
   expect(shown()).toContain("Save 1");
 });
+
+// react-spectrum/packages/react-aria/src/interactions/useFocusVisible.ts:86-100
+test("X-003 a pointer press on the focused button clears focus-visible", async () => {
+  const app = await openScenario("button/focus", { platform: "web" });
+
+  await app.keyboard.press("tab");
+  expect(app.shows("text:Focus visible")).toBe(true);
+
+  await app.press("id:focus-button");
+  expect(app.shows("text:Focus visible")).toBe(false);
+});
+
+// react-spectrum/packages/react-aria/src/interactions/useFocusVisible.ts:86-100
+test("X-004 keeps focus-visible when Enter follows pointer hover and Tab", async () => {
+  const app = await openScenario("button/focus", { platform: "web" });
+
+  await app.hover("id:focus-button");
+  await app.keyboard.press("tab");
+  expect(app.shows("text:Focus visible")).toBe(true);
+
+  await app.keyboard.press("enter");
+  expect(app.shows("text:Focus visible")).toBe(true);
+});
