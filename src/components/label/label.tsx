@@ -98,17 +98,23 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
     () => local.isInvalid === true || field?.isInvalid?.() === true,
   );
 
+  // The single read of `children` (research 4.1, 4.6): a read builds new native
+  // views, so the value is cached in a computed and both the field
+  // registration below and the placement in the root `Text` share it.
+  const children = computed(() => local.children);
+
   // Registration side effect (port sheet §2): when a field root can take it,
-  // report this label's text so the field can name its control with it. Read
-  // lazily, on the field's request, so the body never touches `children` twice.
+  // report this label's text so the field can name its control with it. Only a
+  // string child has a usable accessible name; anything else renders but is
+  // not registered (port sheet §1 and §8).
   const registerLabel = field?.registerLabel;
 
   if (registerLabel) {
     cleanup(
       registerLabel(() => {
-        const children = local.children;
+        const value = children();
 
-        return typeof children === "string" ? children : undefined;
+        return typeof value === "string" ? value : undefined;
       }),
     );
   }
@@ -139,7 +145,7 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
       focusable={local.focusable ?? false}
       onPress={onPress}
     >
-      {local.children}
+      {children()}
       {/* R-002: `.label--required`'s `::after` asterisk, as a real nested Text. */}
       <If when={isRequired()}>
         <Text class="ms-0.5 text-danger">*</Text>
