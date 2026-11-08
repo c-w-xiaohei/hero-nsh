@@ -16,6 +16,16 @@ export function renderChildren(node: JSX.Element): JSX.Element {
     return <Text>{node}</Text>;
   }
 
+  // A zero-argument function is NSH's reactive child: the compiler wraps a
+  // dynamic sibling, including one beside static text, in one. Calling it here
+  // keeps the read inside the tracked children expression at the placement, so
+  // a signal in `<Button>Save {count()}</Button>` still updates, and a string
+  // or number result can take the `<Text>` path instead of reaching the View
+  // bare (a string directly inside a View is not shown).
+  if (typeof node === "function") {
+    return renderChildren(node());
+  }
+
   if (Array.isArray(node)) {
     return node.map((child) => renderChildren(child)) as unknown as JSX.Element;
   }

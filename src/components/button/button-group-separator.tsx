@@ -3,11 +3,15 @@ import { computed, View } from "nsh";
 
 import { ButtonGroupContext } from "./button-group-context";
 import { renderChildren } from "./children";
+import { type AriaProps, type DataProps, type GlobalDomProps } from "./dom-props";
 
-export interface ButtonGroupSeparatorProps {
+export interface ButtonGroupSeparatorProps extends AriaProps, DataProps, GlobalDomProps {
   children?: JSX.Element;
   className?: string;
   style?: StyleProp<ViewStyle>;
+  /** A `span`'s role: accepted for parity, no effect beyond the hidden state. */
+  role?: string;
+  title?: string;
   id?: string;
   testID?: string;
   nativeID?: string;

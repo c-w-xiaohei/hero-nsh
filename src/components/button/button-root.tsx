@@ -16,6 +16,7 @@ import { ButtonGroupContext } from "./button-group-context";
 import { buttonGroupItemClasses } from "./button-group-classes";
 import { buttonVariants, type ButtonVariants } from "./button.styles";
 import { renderChildren } from "./children";
+import { type AriaProps, type GlobalDomProps } from "./dom-props";
 import { toAccessibilityRole } from "./roles";
 
 /** The live state HeroUI hands to render-prop children, `className` and `style`. */
@@ -28,7 +29,7 @@ export interface ButtonRenderProps {
   isPending: Accessor<boolean>;
 }
 
-export interface ButtonRootProps extends ButtonVariants {
+export interface ButtonRootProps extends ButtonVariants, AriaProps, GlobalDomProps {
   children?: JSX.Element | ((values: ButtonRenderProps) => JSX.Element);
   className?: string | ((values: ButtonRenderProps) => string);
   style?: StyleProp<ViewStyle> | ((values: ButtonRenderProps) => StyleProp<ViewStyle>);
@@ -169,12 +170,25 @@ export function ButtonRoot(props: ButtonRootProps) {
 
   const isBlocked = () => isDisabled() || isPending();
 
+  // V4: Return and Space activation fire `onPress` / `onPressDown` on a view,
+  // so a press alone does not prove a pointer. A mouse press implies the
+  // pointer is over the button, which `onMouseEnter` already recorded in
+  // `isHovered`; keyboard activation leaves the modality alone and keeps
+  // `isFocusVisible` true (R-006). Hover by itself is not a press and does not
+  // change the modality, so moving the mouse over a focused button keeps its
+  // ring.
+  const notePointerPress = () => {
+    if (isHovered()) {
+      modality.setPointerModality();
+    }
+  };
+
   const handlePress = (event: PressEvent) => {
     if (isBlocked()) {
       return;
     }
 
-    modality.setPointerModality();
+    notePointerPress();
     props.onPress?.(event);
   };
 
@@ -183,7 +197,7 @@ export function ButtonRoot(props: ButtonRootProps) {
       return;
     }
 
-    modality.setPointerModality();
+    notePointerPress();
     isPressed.set(true);
     props.onPressStart?.(event);
     props.onPressDown?.(event);
@@ -287,9 +301,11 @@ export function ButtonRoot(props: ButtonRootProps) {
     content: JSX.Element | ((values: ButtonRenderProps) => JSX.Element),
   ) => {
     // D17: a function that takes arguments is the HeroUI render prop; a
-    // zero-argument function is an NSH reactive child and passes through.
+    // zero-argument function is an NSH reactive child. HeroUI renders the
+    // render prop's result as a React node, so a string or number result must
+    // become Text here just like static children do.
     if (typeof content === "function" && content.length >= 1) {
-      return (content as (values: ButtonRenderProps) => JSX.Element)(renderProps);
+      return renderChildren((content as (values: ButtonRenderProps) => JSX.Element)(renderProps));
     }
 
     return renderChildren(content as JSX.Element);

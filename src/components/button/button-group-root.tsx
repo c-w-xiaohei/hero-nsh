@@ -20,6 +20,7 @@ import {
   type ButtonGroupOrientation,
 } from "./button-group.styles";
 import type { ButtonSize, ButtonVariant } from "./button.styles";
+import { type AriaProps, type GlobalDomProps } from "./dom-props";
 import { toAccessibilityRole } from "./roles";
 
 /** The live state HeroUI hands to a group's `className` and `style`. */
@@ -31,7 +32,7 @@ export interface ButtonGroupRenderProps {
   isInvalid: Accessor<boolean>;
 }
 
-export interface ButtonGroupRootProps {
+export interface ButtonGroupRootProps extends AriaProps, GlobalDomProps {
   children?: JSX.Element;
   className?: string | ((values: ButtonGroupRenderProps) => string);
   style?: StyleProp<ViewStyle> | ((values: ButtonGroupRenderProps) => StyleProp<ViewStyle>);
@@ -44,6 +45,8 @@ export interface ButtonGroupRootProps {
   isReadOnly?: boolean;
   role?: "group" | "region" | "presentation";
   id?: string;
+  /** React Aria's slot collection prop: accepted for parity, no effect. */
+  slot?: string;
   "aria-label"?: string;
   "aria-hidden"?: boolean;
   /** Reads as `isDisabled` when `true`, as React Aria's Group does. */
