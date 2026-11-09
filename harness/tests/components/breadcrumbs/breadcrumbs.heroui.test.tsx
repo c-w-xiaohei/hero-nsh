@@ -29,11 +29,13 @@ test("T-002 renders each item as a link", async () => {
 
   expect(app.count("role:link")).toBe(3);
 
-  await app.press("role:link[Home]");
-  await app.press("role:link[Products]");
-
   // `href` is not readable in NSH; the observable contract is the URL the app
-  // opens, which only absolute URLs produce (Link §8).
+  // opens, which only absolute URLs produce (Link §8). One assertion per
+  // upstream href assertion, so each link is checked on its own press.
+  await app.press("role:link[Home]");
+  expect(app.openedUrls()).toEqual(["https://heroui.com/docs"]);
+
+  await app.press("role:link[Products]");
   expect(app.openedUrls()).toEqual([
     "https://heroui.com/docs",
     "https://heroui.com/components",
