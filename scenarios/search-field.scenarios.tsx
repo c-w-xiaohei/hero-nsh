@@ -33,6 +33,31 @@ import type { Component } from "./types";
  * the `isEmpty` render prop it is derived from.
  */
 
+/* The accessor objects the probe functions read (D17; the shapes are port sheet §1.2 / 1.3 / 1.4). */
+type RootValues = {
+  isEmpty: () => boolean;
+  isDisabled: () => boolean;
+  isInvalid: () => boolean;
+  isReadOnly: () => boolean;
+  isRequired: () => boolean;
+};
+
+type GroupValues = {
+  isHovered: () => boolean;
+  isFocusWithin: () => boolean;
+  isFocusVisible: () => boolean;
+  isDisabled: () => boolean;
+  isInvalid: () => boolean;
+};
+
+type InputValues = {
+  isHovered: () => boolean;
+  isFocused: () => boolean;
+  isFocusVisible: () => boolean;
+  isDisabled: () => boolean;
+  isInvalid: () => boolean;
+};
+
 function Basic() {
   return (
     <Stage>
@@ -98,7 +123,7 @@ function EmptySplit() {
         defaultValue="hero"
         onChange={probe("onChange")}
         onClear={probe("onClear")}
-        className={(values) => {
+        className={(values: RootValues) => {
           record({
             isEmpty: values.isEmpty(),
             isDisabled: values.isDisabled(),
@@ -182,7 +207,7 @@ function FocusSplit() {
       <SearchField name="search">
         <Label>Search</Label>
         <SearchField.Group
-          className={(values) => {
+          className={(values: GroupValues) => {
             groupRecord({
               isHovered: values.isHovered(),
               isFocusWithin: values.isFocusWithin(),
@@ -199,7 +224,7 @@ function FocusSplit() {
             placeholder="Search..."
             onFocus={probe("onFocus")}
             onBlur={probe("onBlur")}
-            className={(values) => {
+            className={(values: InputValues) => {
               inputRecord({
                 isHovered: values.isHovered(),
                 isFocused: values.isFocused(),
