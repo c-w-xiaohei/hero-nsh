@@ -24,6 +24,11 @@ import { tv } from "tailwind-variants";
 export const searchFieldVariants = tv({
   slots: {
     // R-001: `.search-field` → `@apply flex flex-col gap-1`.
+    // R-002 is a context rule, written in `search-field-root.tsx` (the
+    // Description is hidden through `DescriptionContext.partClass`).
+    // R-003 is deleted: `.search-field [data-slot="label"] { @apply w-fit }`
+    // has no visible effect in NSH — a `Text` takes its content width, and the
+    // column layout never stretches it (the same ruling as Select R-003).
     base: "flex flex-col gap-1",
     /*
      * R-005: `.search-field__group` → `relative inline-flex h-9 items-center
@@ -54,6 +59,11 @@ export const searchFieldVariants = tv({
     /*
      * R-015: `.search-field__input` → `flex-1 rounded-none border-0
      * bg-transparent px-3 py-2 text-base shadow-none outline-none sm:text-sm`.
+     * R-016 is deleted: `::-webkit-search-cancel-button` /
+     * `::-webkit-search-decoration` have no NSH counterpart — there is no
+     * `type="search"` and the native input draws no cancel button (§8).
+     * R-017 / R-018 are part registrations, written in the group and read by the
+     * input (the `:has()` padding rules).
      * R-019 is deleted: `:focus` / `:focus-visible` → `outline-none` is already
      * in this string, and the input has no second outline source.
      * R-020 is deleted: the `:-webkit-autofill` block covers the browser's UA
