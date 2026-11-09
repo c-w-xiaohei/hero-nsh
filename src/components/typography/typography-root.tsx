@@ -1,4 +1,4 @@
-import { computed, split, Text } from "nsh";
+import { computed, split, Text, View } from "nsh";
 import type { AccessibilityRole, JSX, TextProps, ViewRef } from "nsh";
 
 import { textProps } from "./typography-dom-props";
@@ -218,18 +218,34 @@ export function renderTypography(
         });
   });
 
-  // R-010 / R-030: upstream `<code>` is an inline element, so its background,
-  // radius and padding cover the characters. NSH's root `Text` is a block, while
-  // a nested `Text` is an inline span; the code box is that span, which also
-  // makes `app.spanStyle` report the background (port sheet §6.5).
+  // R-010 / R-030: upstream `<code>` is an inline element
+  // (`typography.css:117-119`: `rounded-md bg-default px-1.5 py-0.5 font-mono
+  // text-sm text-foreground`), so its 6pt / 2pt padding, background and radius
+  // cover the characters. NSH has two pieces for that, and the code box needs
+  // both:
   //
-  // The span takes the `base` slot of `type: "code"` and then the resolved
-  // `color` dimension. The table declares `type` before `color`, as
-  // `typography.css` does (`.typography--code` at 117 before
-  // `.typography--color-muted` at 141), so the later color class wins over the
-  // code's own `text-foreground`: `color="muted"` reaches the code box as it
-  // does upstream. A Code that only inherits a muted Paragraph keeps its own
-  // default `color="default"`, hence `text-foreground`.
+  // - The padded surface is a `View` placed inside the root `Text`, which NSH
+  //   lays out as an inline attachment at its content size (text.md, "Inline
+  //   attachments"). Padding on a nested `Text` is ignored: a span takes only
+  //   `backgroundColor` / `borderRadius` from its view style, and its box is
+  //   the font's ascent to descent (text.md, "Span backgrounds").
+  // - The characters keep a nested `Text` (a span) carrying the same classes,
+  //   because `app.spanStyle` reports a background only for a nested text's
+  //   `backgroundColor`; on the attachment's own text root it is that view's
+  //   background instead.
+  //
+  // Both nodes take the table's `base` output for `type: "code"`: each honors
+  // the declarations that apply to it (padding / background / radius on the
+  // `View`, font / size / color and the span background on the `Text`), and the
+  // pixels a declaration paints are the same on either node. The inner `Text`
+  // sits one level deeper than the attachment's text root for the span rule.
+  //
+  // The table declares `type` before `color`, as `typography.css` does
+  // (`.typography--code` at 117 before `.typography--color-muted` at 141), so
+  // the later color class wins over the code's own `text-foreground`:
+  // `color="muted"` reaches the code box as it does upstream. A Code that only
+  // inherits a muted Paragraph keeps its own default `color="default"`, hence
+  // `text-foreground`.
   const inlineCodeClasses = computed(() =>
     typographyVariants({ color: local.color, type: "code" }).base({
       className: local.className,
@@ -260,9 +276,17 @@ export function renderTypography(
       style={isCode() ? undefined : local.style}
     >
       {isCode() ? (
-        <Text class={inlineCodeClasses()} style={local.style}>
-          {children()}
-        </Text>
+        // `align-text-bottom` puts the box's bottom on the parent's descent
+        // line, so the 2pt padding below the glyphs hangs under the baseline as
+        // it does for a CSS inline block (the default `baseline` alignment
+        // would lift the code by padding + descent).
+        <View class={`${inlineCodeClasses()} align-text-bottom`}>
+          <Text>
+            <Text class={inlineCodeClasses()} style={local.style}>
+              {children()}
+            </Text>
+          </Text>
+        </View>
       ) : (
         children()
       )}
