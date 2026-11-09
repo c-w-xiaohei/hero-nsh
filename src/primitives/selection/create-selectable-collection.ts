@@ -34,9 +34,18 @@
  * - A key that moves the focused key also marks the collection focused.
  *   Kobalte's collection only hears keys while something inside it already has
  *   the focus, an invariant NSH cannot guarantee: there is no bubbling key
- *   event, and a component binds its keys globally through `keymap`. A
- *   component that keeps keys bound while the collection is closed must gate
- *   them itself (ListBox binds them while it is mounted and enabled).
+ *   event, and a component binds its keys through `keymap`.
+ *
+ * - KEYMAP OWNERSHIP. NSH keeps only the newest binding per keystroke
+ *   (`keymap.bind` replaces an equal one), so bindings must be scoped, never
+ *   global. A component binds the collection's keys only while the collection
+ *   is focused (or, with virtual focus, while the owning input is focused),
+ *   unbinds when that focus leaves, and unbinds when it unmounts.
+ *   `createKeymapScope` does exactly this: pass `isActive: () => manager
+ *   .isFocused()` plus the bindings, and it re-binds on focus and drops them on
+ *   blur/unmount. Never pass `when: "always"`: that would let a list steal the
+ *   letters and arrows a text field needs, and two mounted lists would fight
+ *   over the newest binding.
  * - `autoFocus` runs in an effect after the first render, because NSH's render
  *   pass must not request focus (research section 4.6); `deferAutoFocus` is
  *   therefore meaningless and dropped. With no item key to focus, it calls the
@@ -123,6 +132,16 @@ export interface CreateSelectableCollectionProps {
 
   /** The writing direction of the collection (default `"ltr"`). */
   direction?: Accessor<"ltr" | "rtl" | undefined>;
+
+  /**
+   * Where focus enters when the collection gains it while no item holds the
+   * focused key: its first item (default) or its last, as Kobalte chose from
+   * whether Tab came from before or after the collection. NSH's focus event
+   * has no related target, so the component says it: use `"end"` when the
+   * focus came from a control after the collection (Shift+Tab into a list
+   * placed after the controls it belongs to).
+   */
+  enterFrom?: Accessor<"start" | "end" | undefined>;
 }
 
 export interface SelectableCollectionState {
@@ -358,8 +377,11 @@ export function createSelectableCollection(
     if (manager.focusedKey() == null) {
       // Kobalte picks the first or last key by comparing the previous focus's
       // position in the DOM. NSH focus events have no related target, so the
-      // collection always starts at its first item, or at a selected one.
-      const key = manager.firstSelectedKey() ?? delegate.getFirstKey?.();
+      // caller says which end it came from through `enterFrom`.
+      const fromEnd = props.enterFrom?.() === "end";
+      const key = fromEnd
+        ? manager.lastSelectedKey() ?? delegate.getLastKey?.()
+        : manager.firstSelectedKey() ?? delegate.getFirstKey?.();
 
       if (key != null) {
         manager.setFocusedKey(key);

@@ -24,12 +24,24 @@
 import type { Accessor } from "nsh";
 
 import type { Collection, CollectionNode, ItemLayout } from "../collection";
-import type { KeyboardDelegate, StringCollator } from "../selection";
+import type {
+  DisabledBehavior,
+  KeyboardDelegate,
+  StringCollator,
+} from "../selection";
 import { defaultStringCollator } from "../selection";
 
 export interface ListKeyboardDelegateOptions {
   /** Locale-aware comparison for typeahead (default: `defaultStringCollator`). */
   collator?: Accessor<StringCollator | undefined>;
+
+  /**
+   * How disabled items behave (default `"all"`). With `"selection"` they stay
+   * in the keyboard order (arrows, Home/End, page keys and typeahead) even
+   * though they cannot be selected, as react-aria's `ListKeyboardDelegate`
+   * does for menus.
+   */
+  disabledBehavior?: Accessor<DisabledBehavior | undefined>;
 
   /** One item's reported frame, from `createCollectionLayout().getItemLayout`. */
   getItemLayout?: (key: string) => ItemLayout | undefined;
@@ -53,13 +65,28 @@ export class ListKeyboardDelegate implements KeyboardDelegate {
     this.options = options;
   }
 
+  /**
+   * Whether the keyboard may land on this node. Sections are never landed on.
+   * A disabled item is skipped with `disabledBehavior: "all"`, but stays in
+   * the order with `"selection"` (its selection is refused elsewhere).
+   */
+  private isNavigable(node: CollectionNode | undefined): boolean {
+    if (!node || node.type !== "item") {
+      return false;
+    }
+
+    if (this.options.disabledBehavior?.() === "selection") {
+      return true;
+    }
+
+    return !node.disabled;
+  }
+
   getKeyBelow(key: string) {
     let keyAfter = this.collection().getKeyAfter(key);
 
     while (keyAfter != null) {
-      const item = this.collection().getItem(keyAfter);
-
-      if (item && item.type === "item" && !item.disabled) {
+      if (this.isNavigable(this.collection().getItem(keyAfter))) {
         return keyAfter;
       }
 
@@ -71,9 +98,7 @@ export class ListKeyboardDelegate implements KeyboardDelegate {
     let keyBefore = this.collection().getKeyBefore(key);
 
     while (keyBefore != null) {
-      const item = this.collection().getItem(keyBefore);
-
-      if (item && item.type === "item" && !item.disabled) {
+      if (this.isNavigable(this.collection().getItem(keyBefore))) {
         return keyBefore;
       }
 
@@ -85,9 +110,7 @@ export class ListKeyboardDelegate implements KeyboardDelegate {
     let key = this.collection().getFirstKey();
 
     while (key != null) {
-      const item = this.collection().getItem(key);
-
-      if (item && item.type === "item" && !item.disabled) {
+      if (this.isNavigable(this.collection().getItem(key))) {
         return key;
       }
 
@@ -99,9 +122,7 @@ export class ListKeyboardDelegate implements KeyboardDelegate {
     let key = this.collection().getLastKey();
 
     while (key != null) {
-      const item = this.collection().getItem(key);
-
-      if (item && item.type === "item" && !item.disabled) {
+      if (this.isNavigable(this.collection().getItem(key))) {
         return key;
       }
 

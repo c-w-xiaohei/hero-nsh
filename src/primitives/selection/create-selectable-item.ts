@@ -15,36 +15,46 @@
  *
  * - Kobalte attaches `onPointerDown`, `onPointerUp`, `onClick`, `onKeyDown`,
  *   `onMouseDown` and `onFocus` to the item element and moves focus with the
- *   element's `focus()`. NSH views have no key or mouse-down event, so this
- *   primitive returns `onPress` (wire it to a view's `onPress`), `onKeyDown`
- *   (wire it to a key command for the item that currently has the focused key),
- *   and `onFocus` / `onBlur` (wire them to the same view). Focus movement stays
- *   in the component: it watches `isFocused` and calls its own ref's `focus()`.
+ *   element's `focus()`. NSH views have no key or mouse-down event of their
+ *   own, so this primitive returns `onPressDown`, `onPressUp` and `onPress`
+ *   (wire them to the view's same-named props), `onKeyDown` (wire it to a key
+ *   command for the item that currently has the focused key), and `onFocus` /
+ *   `onBlur`. Focus movement stays in the component: it watches `isFocused`
+ *   and calls its own ref's `focus()`.
  *
- * - Kobalte selects on mouse down, then distinguishes press-up, click and
- *   touch with `pointerType`, `button` and `allowsDifferentPressOrigin`. NSH
- *   delivers one press after the press completed (`onPress`; `onPressDown` and
- *   `onPressUp` carry no button), so selection happens once, on `onPress`, and
- *   `shouldSelectOnPressUp` / `allowsDifferentPressOrigin` no longer have
- *   anything to move between. They are dropped rather than kept dead.
+ * - PRESS ORDER. Kobalte's `onSelect` runs on pointer down for a mouse, on
+ *   pointer up when `shouldSelectOnPressUp && allowsDifferentPressOrigin`, and
+ *   on click otherwise; touch always goes through click. NSH's press payload
+ *   gives neither `button` nor `pointerType` nor press origin, so this port
+ *   keeps the two behaviors that matter and drops the extra knob:
+ *     `shouldSelectOnPressUp: false` (default, react-aria's ListBox default):
+ *       a mouse press activates on `onPressDown`; `onPress` then does nothing
+ *       for a pointer, so one physical press activates once;
+ *     `shouldSelectOnPressUp: true` (react-aria passes it for draggable
+ *       lists, so a drag can start instead of selecting): activation moves to
+ *       `onPressUp`.
+ *   Keyboard activation stays in `onPress` (NSH reports Return/Space on a
+ *   focused view as a press with `pagePosition {0, 0}`), and `onPress()` with
+ *   no event is treated as that click.
+ *
+ * - A mouse press on a disabled item must do nothing and a press on an enabled
+ *   one focuses it. In the DOM the browser focuses it before the click; an NSH
+ *   press does not move the keyboard focus, so `onPressDown` records the item
+ *   as the focused key itself and the component focuses the view from
+ *   `isFocused`. Virtual focus is the exception, exactly as in Kobalte's
+ *   `onFocus` early return: the owning input keeps the focus.
+ *
+ * - `onAction` is React Aria's item action (a ListBox row reports it on the
+ *   press release, even when selection is `"none"` or an item is disabled
+ *   under `disabledBehavior: "selection"`). Selection and action are separate
+ *   halves: with press-down selection the action still waits for the release.
+ *   It is optional; without it the item is selection-only.
  *
  * - `PressEvent` has no `pointerType`, so a touch press cannot be detected
  *   here. The owner reports it with the `pointerType` accessor (a phone can
  *   pass `"touch"` from `platform.desktop === false`); its only effect is
  *   Kobalte's: in multiple mode a touch press toggles, because touch has no
  *   modifier keys. Without it a press behaves like a mouse click.
- *
- * - A DOM click focuses the item before it activates it; an NSH press does not
- *   move the keyboard focus at all. `onPress` therefore records the item as
- *   the focused key itself (unless the collection uses virtual focus), so a
- *   click and a `focusable` item end up in the same state as upstream. The
- *   component then focuses the view from `isFocused`.
- *
- * - `onKeyDown` exists for a component that routes keys itself (a combobox
- *   whose input keeps the focus, a menu opened from a key command). Do not
- *   wire both `onPress` and `onKeyDown` to the same activation of a focused
- *   item: NSH already reports Return and Space on a focused view as a press
- *   with `pagePosition { x: 0, y: 0 }`, which `onPress` handles.
  *
  * - `tabIndex` becomes `focusable`: NSH's views take part in the Tab order
  *   through the `focusable` prop, not an index. Only the item that holds the
@@ -82,17 +92,26 @@ export interface CreateSelectableItemProps {
   shouldUseVirtualFocus?: Accessor<boolean | undefined>;
 
   /**
+   * Whether activation waits for the press to be released. `false` (default)
+   * activates on `onPressDown`; `true` activates on `onPressUp`.
+   */
+  shouldSelectOnPressUp?: Accessor<boolean | undefined>;
+
+  /**
    * What pressed the item, when the owner knows. A touch press toggles in
    * multiple mode; `undefined` behaves like a mouse.
    */
   pointerType?: Accessor<SelectionPointerType>;
+
+  /** Called when the item is activated (press, Return or Space), including disabled-but-focusable items. */
+  onAction?: () => void;
 }
 
 export interface SelectableItemState {
   /** Whether the item is selected. */
   isSelected: Accessor<boolean>;
 
-  /** Whether the item is disabled, by itself or by the collection. */
+  /** Whether the item is disabled, by itself or by the collection (`disabledBehavior` included). */
   isDisabled: Accessor<boolean>;
 
   /** Whether the item may be selected at all (not disabled, selection not `"none"`). */
@@ -104,7 +123,13 @@ export interface SelectableItemState {
   /** Whether this item is the collection's Tab stop (Kobalte's `tabIndex === 0`). */
   focusable: Accessor<boolean>;
 
-  /** Wire to the item view's `onPress`. */
+  /** Wire to the item view's `onPressDown`: activates a press that selects on down. */
+  onPressDown: (event?: PressEvent) => void;
+
+  /** Wire to the item view's `onPressUp`: activates a press that selects on up. */
+  onPressUp: (event?: PressEvent) => void;
+
+  /** Wire to the item view's `onPress`: keyboard activation (Return/Space). */
   onPress: (event?: PressEvent) => void;
 
   /** Wire to a key command; only Enter and Space do anything. */
@@ -133,13 +158,25 @@ export function createSelectableItem(
   const manager = () => props.selectionManager();
   const key = () => props.key();
   const shouldUseVirtualFocus = () => !!props.shouldUseVirtualFocus?.();
+  const shouldSelectOnPressUp = () => !!props.shouldSelectOnPressUp?.();
 
   const isSelected = () => manager().isSelected(key());
 
-  const isDisabled = () =>
-    !!props.disabled?.() || manager().isDisabled(key());
+  /** The item's own disabled prop, which `disabledBehavior` also governs. */
+  const isDisabledByProps = () => !!props.disabled?.();
 
-  const allowsSelection = () => !isDisabled() && manager().canSelectItem(key());
+  /**
+   * Whether the item is inert for focus and action. `"selection"` keeps every
+   * disabled item reachable, whether it is disabled by the collection or by
+   * its own prop; it only refuses the selection.
+   */
+  const isDisabled = () =>
+    manager().disabledBehavior() === "selection"
+      ? false
+      : isDisabledByProps() || manager().isDisabled(key());
+
+  const allowsSelection = () =>
+    !isDisabledByProps() && !isDisabled() && manager().canSelectItem(key());
 
   // Kobalte's `onSelect`: shifts extend, the toggle modifier (and touch)
   // toggles, everything else replaces the selection.
@@ -168,54 +205,93 @@ export function createSelectableItem(
     }
   };
 
+  /**
+   * The focused key follows a pointer press, because an NSH press does not
+   * move the keyboard focus. Virtual focus never does this: the owning input
+   * keeps the focus and only reads `focusedKey`.
+   */
+  const focusItem = () => {
+    if (shouldUseVirtualFocus()) {
+      return;
+    }
+
+    manager().setFocused(true);
+    manager().setFocusedKey(key());
+  };
+
+  /** The selection half of an activation; a disabled item cannot be selected. */
+  const select = (modifiers?: SelectionModifiers) => {
+    if (isDisabled() || !allowsSelection()) {
+      return;
+    }
+
+    if (modifiers && isNonContiguousSelectionModifier(modifiers)) {
+      manager().toggleSelection(key());
+    } else {
+      selectWithEvent(modifiers);
+    }
+  };
+
+  /**
+   * The action half. React Aria reports it on the press release (a click),
+   * while the selection can happen on press down; a truly disabled item does
+   * nothing, but one disabled only for selection still acts.
+   */
+  const fireAction = () => {
+    if (isDisabled()) {
+      return;
+    }
+
+    props.onAction?.();
+  };
+
+  const onPressDown = (event?: PressEvent) => {
+    // A keyboard activation has no press-down; it arrives at `onPress`.
+    if (event && isKeyboardPress(event)) {
+      return;
+    }
+
+    if (!isDisabled()) {
+      focusItem();
+    }
+
+    if (!shouldSelectOnPressUp()) {
+      select(event ? modifiersFromPress(event) : undefined);
+    }
+  };
+
+  const onPressUp = (event?: PressEvent) => {
+    if (event && isKeyboardPress(event)) {
+      return;
+    }
+
+    if (shouldSelectOnPressUp()) {
+      select(event ? modifiersFromPress(event) : undefined);
+    }
+  };
+
   const onPress = (event?: PressEvent) => {
-    const isKeyboard = event != null && isKeyboardPress(event);
-
-    // In the DOM a pointer press focuses the item before the click. An NSH
-    // press does not move the keyboard focus, so the item records itself as
-    // the focused key; the component watches `isFocused` and focuses its ref.
-    // This happens even in selection mode `"none"`, where a click still
-    // focuses the row (its `onFocus` would say the same).
-    if (!isKeyboard && !isDisabled()) {
-      manager().setFocused(true);
-      manager().setFocusedKey(key());
-    }
-
-    if (!allowsSelection()) {
+    if (event && !isKeyboardPress(event)) {
+      // A pointer press selected on down or up; the release is the action.
+      fireAction();
       return;
     }
 
-    if (isKeyboard) {
-      const modifiers = modifiersFromPress(event!);
-
-      if (isNonContiguousSelectionModifier(modifiers)) {
-        manager().toggleSelection(key());
-      } else {
-        selectWithEvent(modifiers);
-      }
-
-      return;
-    }
-
-    selectWithEvent(event ? modifiersFromPress(event) : undefined);
+    // Keyboard activation (or a caller with no event): selection and action.
+    const modifiers = event ? modifiersFromPress(event) : undefined;
+    select(modifiers);
+    fireAction();
   };
 
   const onKeyDown = (keyName: string, modifiers: SelectionModifiers = {}) => {
-    if (!allowsSelection()) {
-      return;
-    }
-
     const normalized = normalizeKeyName(keyName);
 
     if (normalized !== "enter" && normalized !== "space") {
       return;
     }
 
-    if (isNonContiguousSelectionModifier(modifiers)) {
-      manager().toggleSelection(key());
-    } else {
-      selectWithEvent(modifiers);
-    }
+    select(modifiers);
+    fireAction();
   };
 
   const onFocus = () => {
@@ -228,13 +304,15 @@ export function createSelectableItem(
   };
 
   const onBlur = () => {
-    if (shouldUseVirtualFocus() || isDisabled()) {
+    if (shouldUseVirtualFocus()) {
       return;
     }
 
-    // Every item reports its own blur. Moving between two items fires the old
-    // item's blur and then the new item's focus, so the collection ends up
-    // focused; leaving the collection leaves it blurred.
+    // Not gated on `isDisabled`: an item can become disabled while it holds
+    // the focus, and losing that focus must still clear the collection's
+    // focused state. Every item reports its own blur; moving between two items
+    // fires the old item's blur and then the new item's focus, so the
+    // collection ends up focused.
     manager().setFocused(false);
   };
 
@@ -254,6 +332,8 @@ export function createSelectableItem(
     allowsSelection,
     isFocused,
     focusable,
+    onPressDown,
+    onPressUp,
     onPress,
     onKeyDown,
     onFocus,

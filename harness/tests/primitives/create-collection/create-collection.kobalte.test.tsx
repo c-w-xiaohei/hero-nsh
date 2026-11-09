@@ -36,6 +36,10 @@ type Collected = {
   indexes: string[];
   disabled: string[];
   sectionCount: number;
+  otherCount: number;
+  otherSize: number;
+  sectionCountAfterOther: number;
+  collidingKeys: string[];
   flat: { type: string; key: string; textValue: string }[];
 };
 
@@ -121,10 +125,25 @@ describe("ListCollection", () => {
 });
 
 describe("getItemCount", () => {
-  test("is not confused by a fresh collection of the same shape", async () => {
+  test("counts each collection separately, even with the other one cached", async () => {
     const result = await collected();
-    // `flat` has no sections at all, so the count and the node list agree.
-    expect(result.flat).toHaveLength(3);
-    expect(result.sectionedSize).toBe(6);
+
+    expect(result.sectionCount).toBe(4);
+    expect(result.otherCount).toBe(2);
+    expect(result.otherSize).toBe(2);
+    // The first collection's count survives the second call unchanged.
+    expect(result.sectionCountAfterOther).toBe(4);
+  });
+});
+
+describe("generated section keys", () => {
+  test("a generated key moves aside instead of taking an item's key", async () => {
+    const result = await collected();
+
+    expect(result.collidingKeys).toEqual([
+      "section:\u0000nsh-section:0:0#2",
+      "item:x",
+      "item:\u0000nsh-section:0:0",
+    ]);
   });
 });

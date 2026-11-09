@@ -18,7 +18,12 @@
 
 import { platform } from "nsh";
 
-import { Selection, type SelectionModifiers, type StringCollator } from "./types";
+import {
+  Selection,
+  type SelectionModifiers,
+  type SelectionValue,
+  type StringCollator,
+} from "./types";
 
 /** Whether the app runs on an Apple platform (Kobalte's `isAppleDevice` / `isMac`). */
 export function isApplePlatform(): boolean {
@@ -28,20 +33,42 @@ export function isApplePlatform(): boolean {
 /**
  * Ctrl + Arrow Up/Down has a system-wide meaning on macOS, so Alt is used
  * there instead; on Windows and Linux Alt + Space does, so Control is used.
+ *
+ * The web target cannot tell which OS the browser runs on (`platform.os` is
+ * `"web"`, and a browser on a Mac reports the Mac's keys through `platform`),
+ * so there either modifier is accepted: `alt` or `control`.
  */
 export function isNonContiguousSelectionModifier(
   modifiers: SelectionModifiers = {},
 ): boolean {
+  if (platform.os === "web") {
+    return !!(modifiers.alt || modifiers.control);
+  }
+
   return isApplePlatform() ? !!modifiers.alt : !!modifiers.control;
 }
 
-/** The "toggle one item" modifier: Command on Apple platforms, Control elsewhere. */
+/**
+ * The "toggle one item" modifier: Command on Apple platforms, Control
+ * elsewhere. On the web either `platform` (Command / Super) or `control` is
+ * accepted, because the host cannot reveal the browser's OS.
+ */
 export function isCtrlKeyPressed(modifiers: SelectionModifiers = {}): boolean {
+  if (platform.os === "web") {
+    return !!(modifiers.platform || modifiers.control);
+  }
+
   return isApplePlatform() ? !!modifiers.platform : !!modifiers.control;
 }
 
-export function convertSelection(selection: Iterable<string>): Selection {
-  return new Selection(selection);
+/**
+ * `"all"` stays a sentinel: only a manager with a collection can resolve it to
+ * the collection's selectable keys.
+ */
+export function convertSelection(
+  selection: SelectionValue,
+): Selection | "all" {
+  return selection === "all" ? "all" : new Selection(selection);
 }
 
 export function isSameSelection(

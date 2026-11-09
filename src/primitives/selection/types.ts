@@ -22,6 +22,28 @@ import type { Accessor } from "nsh";
 
 export type SelectionMode = "none" | "single" | "multiple";
 export type SelectionBehavior = "toggle" | "replace";
+
+/**
+ * How a disabled item behaves. `"all"` (the default): it takes no press, no
+ * focus and no action, and keyboard navigation steps over it. `"selection"`:
+ * it stays focusable, is reachable by arrows, Home/End, the page keys and
+ * typeahead, and still reports its action, but it cannot be selected. This is
+ * react-aria's `disabledBehavior`, used by menus for disabled entries that a
+ * screen reader must still be able to reach.
+ */
+export type DisabledBehavior = "all" | "selection";
+
+/**
+ * A selection input: every key (`"all"`), or an iterable of keys.
+ *
+ * A plain string is iterable, so `selectedKeys: "apple"` would otherwise
+ * type-check and be read as the keys `"a"`, `"p"`, `"p"`, `"l"`, `"e"`. The
+ * `charAt?: never` clause rejects a string (which always has `charAt`) while
+ * accepting arrays, Sets and any other iterable; a `string` typed as
+ * `Iterable<string>` still passes, because that type carries no `charAt`.
+ */
+export type SelectionValue = "all" | (Iterable<string> & { charAt?: never });
+
 export type FocusStrategy = "first" | "last";
 
 /**
@@ -72,14 +94,14 @@ export interface MultipleSelection {
   /** Whether the collection allows empty selection. */
   disallowEmptySelection?: Accessor<boolean | undefined>;
 
-  /** The currently selected keys in the collection (controlled). */
-  selectedKeys?: Accessor<Iterable<string> | undefined>;
+  /** The currently selected keys in the collection (controlled), or `"all"`. */
+  selectedKeys?: Accessor<SelectionValue | undefined>;
 
-  /** The initial selected keys in the collection (uncontrolled). */
-  defaultSelectedKeys?: Accessor<Iterable<string> | undefined>;
+  /** The initial selected keys in the collection (uncontrolled), or `"all"`. */
+  defaultSelectedKeys?: Accessor<SelectionValue | undefined>;
 
-  /** Handler that is called when the selection changes. */
-  onSelectionChange?: (keys: Set<string>) => void;
+  /** Handler that is called when the selection changes; `"all"` when every key was chosen. */
+  onSelectionChange?: (keys: Set<string> | "all") => void;
 }
 
 /**
@@ -144,11 +166,17 @@ export interface MultipleSelectionState extends FocusState {
   /** Whether the collection allows empty selection. */
   disallowEmptySelection: Accessor<boolean>;
 
-  /** The currently selected keys in the collection. */
-  selectedKeys: Accessor<Set<string>>;
+  /** How disabled items behave (default `"all"`). */
+  disabledBehavior: Accessor<DisabledBehavior>;
 
-  /** Sets the selected keys in the collection. */
-  setSelectedKeys(keys: Set<string>): void;
+  /**
+   * The currently selected keys in the collection, or the `"all"` sentinel
+   * (resolved against the collection only by `SelectionManager`).
+   */
+  selectedKeys: Accessor<Set<string> | "all">;
+
+  /** Sets the selected keys in the collection, or `"all"`. */
+  setSelectedKeys(keys: Set<string> | "all"): void;
 }
 
 export interface MultipleSelectionManager extends FocusState {
@@ -158,10 +186,13 @@ export interface MultipleSelectionManager extends FocusState {
   /** The selection behavior for the collection. */
   selectionBehavior(): SelectionBehavior;
 
+  /** How disabled items behave. */
+  disabledBehavior(): DisabledBehavior;
+
   /** Whether the collection allows empty selection. */
   disallowEmptySelection(): boolean | undefined;
 
-  /** The currently selected keys in the collection. */
+  /** The currently selected keys in the collection, resolved from `"all"`. */
   selectedKeys(): Set<string>;
 
   /** Whether the selection is empty. */
@@ -191,8 +222,8 @@ export interface MultipleSelectionManager extends FocusState {
   /** Replaces the selection with only the given key. */
   replaceSelection(key: string): void;
 
-  /** Replaces the selection with the given keys. */
-  setSelectedKeys(keys: Iterable<string>): void;
+  /** Replaces the selection with the given keys, or with every selectable key for `"all"`. */
+  setSelectedKeys(keys: SelectionValue): void;
 
   /** Selects all items in the collection. */
   selectAll(): void;

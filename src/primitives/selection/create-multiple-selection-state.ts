@@ -20,6 +20,7 @@ import { type Accessor, computed, effect, signal } from "nsh";
 
 import { createControllableSelectionSignal } from "./create-controllable-selection-signal";
 import {
+  type DisabledBehavior,
   type MultipleSelection,
   type MultipleSelectionState,
   Selection,
@@ -33,6 +34,9 @@ export interface CreateMultipleSelectionStateProps extends MultipleSelection {
 
   /** Whether onSelectionChange should fire even if the new set of keys is the same as the last. */
   allowDuplicateSelectionEvents?: Accessor<boolean | undefined>;
+
+  /** How disabled items behave (default `"all"`). */
+  disabledBehavior?: Accessor<DisabledBehavior | undefined>;
 }
 
 /**
@@ -47,17 +51,17 @@ export function createMultipleSelectionState(
   const setFocused = (value: boolean) => isFocused.set(value);
   const setFocusedKey = (key?: string) => focusedKey.set(key);
 
-  const selectedKeysProp = computed(() => {
+  const selectedKeysProp = computed<Selection | "all" | undefined>(() => {
     const selection = props.selectedKeys?.();
 
     if (selection != null) {
       return convertSelection(selection);
     }
 
-    return selection;
+    return undefined;
   });
 
-  const defaultSelectedKeys = computed(() => {
+  const defaultSelectedKeys = computed<Selection | "all">(() => {
     const defaultSelection = props.defaultSelectedKeys?.();
 
     if (defaultSelection != null) {
@@ -82,12 +86,26 @@ export function createMultipleSelectionState(
 
   const selectionMode = () => props.selectionMode?.() ?? "none";
   const disallowEmptySelection = () => props.disallowEmptySelection?.() ?? false;
+  const disabledBehavior = () => props.disabledBehavior?.() ?? "all";
 
-  const setSelectedKeys = (keys: Set<string>) => {
-    if (
-      props.allowDuplicateSelectionEvents?.() ||
-      !isSameSelection(keys, selectedKeys())
-    ) {
+  const setSelectedKeys = (keys: Set<string> | "all") => {
+    const current = selectedKeys();
+
+    if (props.allowDuplicateSelectionEvents?.()) {
+      _setSelectedKeys(keys);
+      return;
+    }
+
+    // `"all"` cannot be compared key by key here: without a collection this
+    // state cannot know which keys that means, so it compares the sentinel.
+    if (keys === "all") {
+      if (current !== "all") {
+        _setSelectedKeys(keys);
+      }
+      return;
+    }
+
+    if (current === "all" || !isSameSelection(keys, current)) {
       _setSelectedKeys(keys);
     }
   };
@@ -101,6 +119,7 @@ export function createMultipleSelectionState(
     if (
       props.selectionBehavior?.() === "replace" &&
       selectionBehavior() === "toggle" &&
+      selection !== "all" &&
       selection.size === 0
     ) {
       setSelectionBehavior("replace");
@@ -115,6 +134,7 @@ export function createMultipleSelectionState(
   return {
     selectionMode,
     disallowEmptySelection,
+    disabledBehavior,
     selectionBehavior,
     setSelectionBehavior,
     isFocused,

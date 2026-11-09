@@ -80,7 +80,13 @@ export function createSingleSelectListState(
     disallowEmptySelection: () => true,
     allowDuplicateSelectionEvents: () => true,
     selectedKeys,
-    onSelectionChange: (keys: Set<string>) => {
+    onSelectionChange: (keys: Set<string> | "all") => {
+      // A single-select list never produces the `"all"` sentinel: its
+      // selectedKeys input is a one-element array.
+      if (keys === "all") {
+        return;
+      }
+
       const key = keys.values().next().value;
       if (key === undefined) {
         return;

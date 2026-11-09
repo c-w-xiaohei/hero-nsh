@@ -21,13 +21,17 @@ import { Selection } from "./types";
  * Creates a simple reactive `Selection` state with a getter, setter and a
  * fallback value of an empty selection, that can be controlled with `value`
  * and `onChange` props.
+ *
+ * The value may also be the `"all"` sentinel: a manager resolves it against
+ * its collection, because a state without a collection cannot know which keys
+ * exist.
  */
 export function createControllableSelectionSignal(
-  props: CreateControllableSignalProps<Selection>,
+  props: CreateControllableSignalProps<Selection | "all">,
 ) {
   const [_value, setValue] = createControllableSignal(props);
 
-  const value: Accessor<Selection> = () => _value() ?? new Selection();
+  const value: Accessor<Selection | "all"> = () => _value() ?? new Selection();
 
   return [value, setValue] as const;
 }

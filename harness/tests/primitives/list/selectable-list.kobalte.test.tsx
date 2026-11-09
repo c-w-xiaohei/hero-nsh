@@ -3,7 +3,8 @@
  * or `src/list/create-selectable-list.ts` (checked at commit 675b4a11f4).
  * These are behavioral tests of the real design this port uses: a rendered
  * list of NSH views, item registration from `onLayout`, keyboard commands
- * forwarded from `keymap`, and focus moved through view refs.
+ * bound by `createKeymapScope` only while the list has the focus, and focus
+ * moved through view refs.
  *
  * The upstream behavior comes from:
  *   packages/core/src/selection/create-selectable-collection.ts
@@ -13,10 +14,6 @@
  *   packages/core/src/list/list-keyboard-delegate.ts
  * and their React Aria sources (`useSelectableCollection`, `useSelectableItem`,
  * `useTypeSelect`, `useSelectableList`, `ListKeyboardDelegate`).
- *
- * The DOM-only upstream pieces are documented in the source headers instead of
- * being tested here: pointerdown vs click selection, `pointerType`, Tab walking
- * and `scrollIntoView` queries.
  */
 
 import { describe, expect, test } from "nsh/test";
@@ -39,10 +36,17 @@ function lastState(app: App): ListSnapshot | undefined {
     : undefined;
 }
 
-async function waitForLayout(app: App): Promise<void> {
+async function waitForLayout(app: App, items = 6, sections = 0): Promise<void> {
   await app.waitUntil(
-    () => new Set(callsOf(app, "item-layout").map((call) => call[0])).size >= 6,
+    () => new Set(callsOf(app, "item-layout").map((call) => call[0])).size >= items,
   );
+  if (sections > 0) {
+    await app.waitUntil(
+      () =>
+        new Set(callsOf(app, "section-layout").map((call) => call[0])).size >=
+        sections,
+    );
+  }
   await app.waitUntil(() => callsOf(app, "container-layout").length > 0);
 }
 
@@ -55,6 +59,12 @@ async function openList(params: Params = {}): Promise<App> {
   await app.waitUntil(() => lastState(app) !== undefined);
   await waitForLayout(app);
   return app;
+}
+
+/** Focuses the list itself; focus-in picks the first (or last selected) item. */
+async function focusList(app: App): Promise<void> {
+  await app.press("id:focus-container");
+  await app.waitUntil(() => lastState(app)?.isFocused === true);
 }
 
 async function press(app: App, key: string): Promise<void> {
@@ -71,7 +81,9 @@ async function waitFocused(app: App, key: string | null): Promise<void> {
 
 describe("arrow navigation", () => {
   test("ArrowDown with no focused key starts at the first item", async () => {
-    const app = await openList();
+    const app = await openList({ autoFocus: "container" });
+    await app.waitUntil(() => lastState(app)?.isFocused === true);
+    expect(await focusedKey(app)).toBeNull();
 
     await press(app, "down");
     await waitFocused(app, "apple");
@@ -84,7 +96,7 @@ describe("arrow navigation", () => {
       behavior: "toggle",
     });
 
-    await press(app, "down");
+    await focusList(app);
     await waitFocused(app, "apple");
 
     await press(app, "down");
@@ -100,7 +112,7 @@ describe("arrow navigation", () => {
   test("Home and End jump to the first and last enabled item", async () => {
     const app = await openList({ disabled: "apple,date", behavior: "toggle" });
 
-    await press(app, "home");
+    await focusList(app);
     await waitFocused(app, "apricot");
 
     await press(app, "end");
@@ -110,6 +122,7 @@ describe("arrow navigation", () => {
   test("focus does not wrap by default", async () => {
     const app = await openList({ behavior: "toggle" });
 
+    await focusList(app);
     await press(app, "end");
     await waitFocused(app, "date");
 
@@ -121,6 +134,7 @@ describe("arrow navigation", () => {
   test("shouldFocusWrap wraps at both ends", async () => {
     const app = await openList({ wrap: true, behavior: "toggle" });
 
+    await focusList(app);
     await press(app, "end");
     await waitFocused(app, "date");
 
@@ -132,7 +146,13 @@ describe("arrow navigation", () => {
   });
 
   test("horizontal orientation maps Right/Left to next/previous", async () => {
-    const app = await openList({ orientation: "horizontal", behavior: "toggle" });
+    const app = await openList({
+      orientation: "horizontal",
+      behavior: "toggle",
+      autoFocus: "container",
+    });
+
+    await app.waitUntil(() => lastState(app)?.isFocused === true);
 
     await press(app, "right");
     await waitFocused(app, "apple");
@@ -145,11 +165,79 @@ describe("arrow navigation", () => {
   });
 });
 
+describe("disabledBehavior", () => {
+  test("selection: disabled items stay reachable by arrows and Home/End", async () => {
+    const app = await openList({
+      disabled: "apricot,banana",
+      disabledBehavior: "selection",
+      behavior: "toggle",
+    });
+
+    await focusList(app);
+    await waitFocused(app, "apple");
+
+    await press(app, "down");
+    await waitFocused(app, "apricot");
+
+    await press(app, "down");
+    await waitFocused(app, "banana");
+
+    await press(app, "down");
+    await waitFocused(app, "blueberry");
+
+    await press(app, "home");
+    await waitFocused(app, "apple");
+
+    await press(app, "end");
+    await waitFocused(app, "date");
+  });
+
+  test("selection: typeahead reaches a disabled item", async () => {
+    const app = await openList({
+      disabled: "banana",
+      disabledBehavior: "selection",
+      behavior: "toggle",
+    });
+
+    await focusList(app);
+    await press(app, "b");
+    await waitFocused(app, "banana");
+  });
+
+  test("selection: a disabled item cannot be selected", async () => {
+    const app = await openList({
+      disabled: "apricot",
+      disabledBehavior: "selection",
+      behavior: "toggle",
+    });
+
+    await app.press("id:row-apricot");
+    await waitFocused(app, "apricot");
+
+    // Focus and action follow the press; the selection does not.
+    expect(lastState(app)?.selected).toEqual([]);
+    expect(lastState(app)?.isFocused).toBe(true);
+  });
+
+  test("all (default): arrows step over disabled items", async () => {
+    const app = await openList({
+      disabled: "apricot",
+      behavior: "toggle",
+    });
+
+    await focusList(app);
+    await waitFocused(app, "apple");
+
+    await press(app, "down");
+    await waitFocused(app, "banana");
+  });
+});
+
 describe("page navigation from reported layouts", () => {
   test("PageDown moves about one viewport down, PageUp back", async () => {
     const app = await openList({ behavior: "toggle" });
 
-    await press(app, "home");
+    await focusList(app);
     await waitFocused(app, "apple");
 
     // Rows are 40pt and the viewport 160pt: the next page starts at blueberry.
@@ -160,9 +248,10 @@ describe("page navigation from reported layouts", () => {
     await waitFocused(app, "apple");
   });
 
-  test("PageDown stops at the last item", async () => {
+  test("PageUp from the end lands about one viewport up", async () => {
     const app = await openList({ behavior: "toggle" });
 
+    await focusList(app);
     await press(app, "end");
     await waitFocused(app, "date");
 
@@ -171,9 +260,43 @@ describe("page navigation from reported layouts", () => {
   });
 });
 
+describe("page navigation across sections", () => {
+  async function openSections(): Promise<App> {
+    const app = await openScenario("primitives/selectable-sections", {
+      platform: "web",
+      clock: {},
+    });
+    await app.waitUntil(() => lastState(app) !== undefined);
+    await waitForLayout(app, 6, 2);
+    return app;
+  }
+
+  test("section origins compose, so a page crosses into the next section", async () => {
+    const app = await openSections();
+
+    // A1-A3 in section A, B1-B3 in section B; each row is 40pt, sections are
+    // 120pt apart in a 160pt viewport. Without section offsets every section
+    // restarts at y=0 and both page keys do nothing.
+    await app.press("id:row-a3");
+    await waitFocused(app, "a3");
+
+    await app.keyboard.press("pagedown");
+    await waitFocused(app, "b3");
+
+    await app.press("id:row-b1");
+    await waitFocused(app, "b1");
+
+    await app.keyboard.press("pageup");
+    await waitFocused(app, "a1");
+  });
+});
+
 describe("typeahead", () => {
   test("a letter moves focus to the matching item, extending the prefix", async () => {
     const app = await openList({ behavior: "toggle" });
+
+    await focusList(app);
+    await waitFocused(app, "apple");
 
     await press(app, "b");
     await waitFocused(app, "banana");
@@ -184,7 +307,8 @@ describe("typeahead", () => {
   });
 
   test("repeating one letter cycles through first-letter matches", async () => {
-    const app = await openList({ behavior: "toggle" });
+    const app = await openList({ autoFocus: "container", behavior: "toggle" });
+    await app.waitUntil(() => lastState(app)?.isFocused === true);
 
     await press(app, "a");
     await waitFocused(app, "apple");
@@ -199,6 +323,7 @@ describe("typeahead", () => {
   test("the prefix resets after 500ms on the manual clock", async () => {
     const app = await openList({ behavior: "toggle" });
 
+    await focusList(app);
     await press(app, "b");
     await waitFocused(app, "banana");
 
@@ -213,7 +338,12 @@ describe("typeahead", () => {
   });
 
   test("disallowTypeAhead leaves the focused key alone", async () => {
-    const app = await openList({ behavior: "toggle", disallowTypeAhead: true });
+    const app = await openList({
+      behavior: "toggle",
+      disallowTypeAhead: true,
+      autoFocus: "container",
+    });
+    await app.waitUntil(() => lastState(app)?.isFocused === true);
 
     await press(app, "d");
     await app.wait(80);
@@ -225,7 +355,7 @@ describe("selection on focus", () => {
   test("replace behavior selects the focused item while navigating", async () => {
     const app = await openList({ behavior: "replace" });
 
-    await press(app, "down");
+    await focusList(app);
     await waitFocused(app, "apple");
     expect(lastState(app)?.selected).toEqual(["apple"]);
 
@@ -237,13 +367,22 @@ describe("selection on focus", () => {
   test("toggle behavior moves focus without selecting", async () => {
     const app = await openList({ behavior: "toggle" });
 
-    await press(app, "down");
+    await focusList(app);
     await waitFocused(app, "apple");
+    expect(lastState(app)?.selected).toEqual([]);
+
+    await press(app, "down");
+    await waitFocused(app, "apricot");
     expect(lastState(app)?.selected).toEqual([]);
   });
 
   test("selectOnFocus=true selects even with toggle behavior", async () => {
-    const app = await openList({ behavior: "toggle", selectOnFocus: true });
+    const app = await openList({
+      behavior: "toggle",
+      selectOnFocus: true,
+      autoFocus: "container",
+    });
+    await app.waitUntil(() => lastState(app)?.isFocused === true);
 
     await press(app, "down");
     await waitFocused(app, "apple");
@@ -283,7 +422,7 @@ describe("pointer presses on items", () => {
     expect(lastState(app)?.selected).toEqual(["cherry"]);
   });
 
-  test("a press focuses the pressed item through the item's focus handler", async () => {
+  test("a press focuses the pressed item through the item's press-down handler", async () => {
     const app = await openList({ behavior: "toggle" });
 
     await app.press("id:row-cherry");
@@ -294,9 +433,7 @@ describe("pointer presses on items", () => {
 
 describe("keyboard activation and shortcuts", () => {
   test("Enter on the focused item selects it", async () => {
-    const app = await openList({ behavior: "toggle" });
-
-    await press(app, "home");
+    const app = await openList({ behavior: "toggle", autoFocus: "first" });
     await waitFocused(app, "apple");
 
     await press(app, "enter");
@@ -307,6 +444,7 @@ describe("keyboard activation and shortcuts", () => {
   test("Control+A selects every enabled item", async () => {
     const app = await openList({ mode: "multiple" });
 
+    await focusList(app);
     await press(app, "ctrl+a");
     await app.waitUntil(() => lastState(app)?.selected.length === 6);
     expect(lastState(app)?.selected).toHaveLength(6);
@@ -315,15 +453,17 @@ describe("keyboard activation and shortcuts", () => {
   test("disallowSelectAll stops Control+A", async () => {
     const app = await openList({ mode: "multiple", disallowSelectAll: true });
 
+    await focusList(app);
+    const before = lastState(app)?.selected;
     await press(app, "ctrl+a");
     await app.wait(80);
-    expect(lastState(app)?.selected).toEqual([]);
+    expect(lastState(app)?.selected).toEqual(before);
   });
 
   test("Shift+ArrowDown extends the selection from the anchor", async () => {
     const app = await openList({ behavior: "replace" });
 
-    await press(app, "home");
+    await focusList(app);
     await waitFocused(app, "apple");
 
     await press(app, "shift+down");
@@ -335,6 +475,7 @@ describe("keyboard activation and shortcuts", () => {
   test("Escape clears the selection when empty selection is allowed", async () => {
     const app = await openList({ behavior: "replace", selected: "apple" });
 
+    await focusList(app);
     await press(app, "escape");
     await app.waitUntil(() => lastState(app)?.selected.length === 0);
     expect(lastState(app)?.selected).toEqual([]);
@@ -347,6 +488,7 @@ describe("keyboard activation and shortcuts", () => {
       disallowEmpty: true,
     });
 
+    await focusList(app);
     await press(app, "escape");
     await app.wait(80);
     expect(lastState(app)?.selected).toEqual(["apple"]);
@@ -392,17 +534,25 @@ describe("autoFocus and the collection's own focus stop", () => {
     await app.waitUntil(() => lastState(app)?.selected.length === 1);
     expect(lastState(app)?.selected).toEqual(["apple"]);
   });
+
+  test("enterFrom 'end' starts at the last item", async () => {
+    const app = await openList({ behavior: "toggle", enterFrom: "end" });
+
+    await app.press("id:focus-container");
+    await waitFocused(app, "date");
+  });
 });
 
 describe("scrolling callback", () => {
-  test("each focused key is handed to the component's scrollToItem", async () => {
-    const app = await openList({ behavior: "toggle" });
+  test("a focused key is handed to the component's scrollToItem exactly once", async () => {
+    const app = await openList({ behavior: "toggle", autoFocus: "container" });
+    await app.waitUntil(() => lastState(app)?.isFocused === true);
 
     await press(app, "down");
     await waitFocused(app, "apple");
     await app.waitUntil(() => callsOf(app, "scroll").length > 0);
 
     const scrolled = callsOf(app, "scroll").map((call) => String(call[0]));
-    expect(scrolled).toContain("apple");
+    expect(scrolled).toEqual(["apple"]);
   });
 });

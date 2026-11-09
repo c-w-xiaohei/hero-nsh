@@ -9,6 +9,7 @@ import {
   createControllableSignal,
   createDisclosureState,
   createInteractionModality,
+  createKeymapScope,
   createListState,
   createMultipleSelectionState,
   createSelectableItem,
@@ -584,20 +585,26 @@ function MultipleSelectionCase() {
   const target = paramString("target") || "banana";
   const disabledKeys = new Set(paramList("disabled"));
   const initialKeys = paramList("selected");
+  const all = paramFlag("all");
+  const disabledBehavior = paramString("disabledBehavior") === "selection"
+    ? "selection"
+    : "all";
 
   const report = probe("result");
   const changes: string[][] = [];
 
-  const controlledKeys = signal<string[]>(initialKeys);
+  const controlledKeys = signal<string[] | "all">(all ? "all" : initialKeys);
 
   const state = createMultipleSelectionState({
     selectionMode: () => mode,
     selectionBehavior: () => behavior,
     disallowEmptySelection: () => disallowEmpty,
     allowDuplicateSelectionEvents: () => allowDuplicate,
+    disabledBehavior: () => disabledBehavior,
     selectedKeys: controlled ? () => controlledKeys() : undefined,
-    defaultSelectedKeys: () => initialKeys,
-    onSelectionChange: (keys) => changes.push(keysOf(keys)),
+    defaultSelectedKeys: () => (all ? "all" : initialKeys),
+    onSelectionChange: (keys) =>
+      changes.push(keys === "all" ? ["all"] : keysOf(keys)),
   });
 
   const collection = createCollection({
@@ -618,6 +625,10 @@ function MultipleSelectionCase() {
     isSelectAll: manager.isSelectAll(),
     firstSelected: manager.firstSelectedKey() ?? null,
     lastSelected: manager.lastSelectedKey() ?? null,
+    rawAll: state.selectedKeys() === "all",
+    disabledBehavior: manager.disabledBehavior(),
+    disabledBanana: manager.isDisabled("banana"),
+    canSelectBanana: manager.canSelectItem("banana"),
     changes: changes.slice(),
   });
 
@@ -656,6 +667,9 @@ function MultipleSelectionCase() {
       case "set-keys":
         manager.setSelectedKeys(paramList("keys"));
         break;
+      case "set-all":
+        manager.setSelectedKeys("all");
+        break;
       case "focus":
         manager.setFocused(true);
         break;
@@ -678,6 +692,9 @@ function MultipleSelectionCase() {
       case "apply":
         controlledKeys.set(changes.length ? changes[changes.length - 1] : []);
         break;
+      case "apply-all":
+        controlledKeys.set("all");
+        break;
     }
 
     report(snapshot());
@@ -698,6 +715,8 @@ function MultipleSelectionCase() {
           "clear",
           "toggle-select-all",
           "set-keys",
+          "set-all",
+          "apply-all",
           "focus",
           "blur",
           "focus-key",
@@ -713,7 +732,11 @@ function MultipleSelectionCase() {
           />
         ))}
       </View>
-      <Text>{`${keysOf(state.selectedKeys()).join(",")}`}</Text>
+      <Text>
+        {state.selectedKeys() === "all"
+          ? "all"
+          : keysOf(state.selectedKeys() as Set<string>).join(",")}
+      </Text>
     </Stage>
   );
 }
@@ -933,6 +956,25 @@ function CollectionCase() {
   const flat = buildNodes({ dataSource: ["one", "two", 3] });
   const collection = new ListCollection(nodes);
 
+  // A second, independent collection: the count cache must key off the
+  // collection it was computed for, not the first one.
+  const otherCollection = new ListCollection(
+    buildNodes({ dataSource: FRUITS.slice(0, 2), getKey: "key" }),
+  );
+
+  // A section without a key in its data gets a generated one; an item may
+  // legitimately carry that very string, so the generated key must move aside.
+  const keyless = [
+    { textValue: "No key", children: [{ key: "x", textValue: "X" }] },
+    { key: "\u0000nsh-section:0:0", textValue: "Collision" },
+  ];
+  const colliding = buildNodes({
+    dataSource: keyless,
+    getKey: "key",
+    getTextValue: "textValue",
+    getSectionChildren: "children",
+  });
+
   const run = () => {
     report({
       nodes: nodes.map((node) => ({
@@ -964,6 +1006,10 @@ function CollectionCase() {
         .filter((node) => node.type === "item")
         .map((node) => `${node.key}:${node.disabled}`),
       sectionCount: getItemCount(collection),
+      otherCount: getItemCount(otherCollection),
+      otherSize: otherCollection.getSize(),
+      sectionCountAfterOther: getItemCount(collection),
+      collidingKeys: colliding.map((node) => `${node.type}:${node.key}`),
       flat: flat.map((node) => ({
         type: node.type,
         key: node.key,
@@ -988,10 +1034,17 @@ function SelectableItemCase() {
   const disallowEmpty = paramFlag("disallowEmpty");
   const pointerType = paramString("pointerType") || "";
   const target = paramString("target") || "banana";
-  const disabled = paramFlag("disabled");
+  const disabledSignal = signal(paramFlag("disabled"));
   const initialKeys = paramList("selected");
+  const virtualFocus = paramFlag("virtualFocus");
+  const pressUp = paramFlag("pressUp");
+  const disabledBehavior = paramString("disabledBehavior") === "selection"
+    ? "selection"
+    : "all";
 
   const report = probe("result");
+  const reportAction = probe("action");
+  const reportSelection = probe("selection");
 
   const list = createListState({
     dataSource: () => FRUITS,
@@ -1000,13 +1053,18 @@ function SelectableItemCase() {
     selectionMode: () => mode,
     selectionBehavior: () => behavior,
     disallowEmptySelection: () => disallowEmpty,
+    disabledBehavior: () => disabledBehavior,
     defaultSelectedKeys: () => initialKeys,
+    onSelectionChange: (keys) =>
+      reportSelection(keys === "all" ? ["all"] : keysOf(keys)),
   });
 
   const item = createSelectableItem({
     selectionManager: list.selectionManager,
     key: () => target,
-    disabled: () => disabled,
+    disabled: () => disabledSignal(),
+    shouldUseVirtualFocus: () => virtualFocus,
+    shouldSelectOnPressUp: () => pressUp,
     pointerType: () =>
       pointerType === "touch"
         ? "touch"
@@ -1015,6 +1073,7 @@ function SelectableItemCase() {
           : pointerType === "mouse"
             ? "mouse"
             : undefined,
+    onAction: () => reportAction(target),
   });
 
   const snapshot = () => {
@@ -1031,37 +1090,68 @@ function SelectableItemCase() {
     };
   };
 
-  const press = (
-    keyboard: boolean,
+  const pointerEvent = (
     modifiers: Partial<PressEvent["modifiers"]> = {},
-  ) => {
-    item.onPress({
-      position: keyboard ? { x: 0, y: 0 } : { x: 4, y: 4 },
-      pagePosition: keyboard ? { x: 0, y: 0 } : { x: 40, y: 40 },
-      modifiers: {
-        control: false,
-        alt: false,
-        shift: false,
-        platform: false,
-        ...modifiers,
-      },
-      clickCount: 1,
-    });
+  ): PressEvent => ({
+    position: { x: 4, y: 4 },
+    pagePosition: { x: 40, y: 40 },
+    modifiers: {
+      control: false,
+      alt: false,
+      shift: false,
+      platform: false,
+      ...modifiers,
+    },
+    clickCount: 1,
+  });
+
+  const keyboardEvent = (
+    modifiers: Partial<PressEvent["modifiers"]> = {},
+  ): PressEvent => ({
+    position: { x: 0, y: 0 },
+    pagePosition: { x: 0, y: 0 },
+    modifiers: {
+      control: false,
+      alt: false,
+      shift: false,
+      platform: false,
+      ...modifiers,
+    },
+    clickCount: 1,
+  });
+
+  const pointerPress = (modifiers: Partial<PressEvent["modifiers"]> = {}) => {
+    const event = pointerEvent(modifiers);
+    item.onPressDown(event);
+    item.onPressUp(event);
+    item.onPress(event);
   };
 
   const run = (action: string) => {
     switch (action) {
       case "press":
-        press(false);
+        pointerPress();
+        break;
+      case "press-down":
+        item.onPressDown(pointerEvent());
+        break;
+      case "press-up":
+        item.onPressUp(pointerEvent());
         break;
       case "press-keyboard":
-        press(true);
+        item.onPress(keyboardEvent());
+        break;
+      case "press-keyboard-alt":
+        item.onPress(keyboardEvent({ alt: true }));
         break;
       case "press-shift":
-        press(false, { shift: true });
+        pointerPress({ shift: true });
         break;
       case "press-ctrl":
-        press(false, { control: true });
+        pointerPress({ control: true });
+        break;
+      case "press-meta":
+        pointerPress({ platform: true });
         break;
       case "enter":
         item.onKeyDown("enter");
@@ -1075,6 +1165,9 @@ function SelectableItemCase() {
       case "focus":
         item.onFocus();
         break;
+      case "disable":
+        disabledSignal.set(true);
+        break;
       case "blur":
         item.onBlur();
         break;
@@ -1087,13 +1180,18 @@ function SelectableItemCase() {
     <Stage>
       {[
         "press",
+        "press-down",
+        "press-up",
         "press-keyboard",
+        "press-keyboard-alt",
         "press-shift",
         "press-ctrl",
+        "press-meta",
         "enter",
         "space",
         "ctrl-enter",
         "focus",
+        "disable",
         "blur",
         "snapshot",
       ].map((action) => (
@@ -1116,6 +1214,7 @@ function ListRow(props: {
   disabled: boolean;
   manager: Accessor<MultipleSelectionManager>;
   list: SelectableListState;
+  sectionKey?: string;
 }) {
   const item = createSelectableItem({
     selectionManager: props.manager,
@@ -1140,11 +1239,19 @@ function ListRow(props: {
       accessibilityState={{ selected: item.isSelected(), disabled: item.isDisabled() }}
       focusable={item.focusable()}
       disabled={item.isDisabled()}
+      onPressDown={item.onPressDown}
+      onPressUp={item.onPressUp}
       onPress={item.onPress}
-      onFocus={item.onFocus}
-      onBlur={item.onBlur}
+      onFocus={() => {
+        probe("row-focus")(props.itemKey);
+        item.onFocus();
+      }}
+      onBlur={() => {
+        probe("row-blur")(props.itemKey);
+        item.onBlur();
+      }}
       onLayout={(e: { bounds: Bounds }) => {
-        props.list.registerItemLayout(props.itemKey, e.bounds);
+        props.list.registerItemLayout(props.itemKey, e.bounds, props.sectionKey);
         probe("item-layout")(props.itemKey);
       }}
       ref={(node: ViewRef) => {
@@ -1176,6 +1283,9 @@ function SelectableListCase() {
         : undefined;
   const disabledKeys = new Set(paramList("disabled"));
   const initialKeys = paramList("selected");
+  const disabledBehavior = paramString("disabledBehavior") === "selection"
+    ? "selection"
+    : "all";
 
   const reportState = probe("state");
   const reportSelection = probe("selection");
@@ -1189,8 +1299,10 @@ function SelectableListCase() {
     selectionMode: () => mode,
     selectionBehavior: () => behavior,
     disallowEmptySelection: () => disallowEmpty,
+    disabledBehavior: () => disabledBehavior,
     defaultSelectedKeys: () => initialKeys,
-    onSelectionChange: (keys) => reportSelection(keysOf(keys)),
+    onSelectionChange: (keys) =>
+      reportSelection(keys === "all" ? ["all"] : keysOf(keys)),
   });
 
   const collection = createSelectableList({
@@ -1206,6 +1318,7 @@ function SelectableListCase() {
       paramString("orientation") === "horizontal" ? "horizontal" : "vertical",
     scrollToItem: (key) => reportScroll(key),
     focusCollection: () => container?.focus(),
+    enterFrom: () => (paramString("enterFrom") === "end" ? "end" : "start"),
   });
 
   let container: ViewRef | undefined;
@@ -1219,36 +1332,30 @@ function SelectableListCase() {
     });
   });
 
-  // NSH has no key event on a view: the app binds the keys and forwards them.
-  for (const key of [
-    "down",
-    "up",
-    "home",
-    "end",
-    "pageup",
-    "pagedown",
-    "left",
-    "right",
-    "a",
-    "b",
-    "c",
-    "d",
-    "l",
-  ]) {
-    keymap.bind(key, () => collection.onKeyDown(key), { when: "always" });
-  }
-  keymap.bind(
-    "ctrl+a",
-    () => collection.onKeyDown("a", { control: true }),
-    { when: "always" },
-  );
-  keymap.bind(
-    "shift+down",
-    () => collection.onKeyDown("down", { shift: true }),
-    { when: "always" },
-  );
-  keymap.bind("escape", () => collection.onKeyDown("escape"), {
-    when: "always",
+  // NSH has no key event on a view. The keys are bound only while this list
+  // has the focus, so a second list or a text field keeps its own keys.
+  const bindings: Record<string, () => void> = {
+    down: () => collection.onKeyDown("down"),
+    up: () => collection.onKeyDown("up"),
+    home: () => collection.onKeyDown("home"),
+    end: () => collection.onKeyDown("end"),
+    pageup: () => collection.onKeyDown("pageup"),
+    pagedown: () => collection.onKeyDown("pagedown"),
+    left: () => collection.onKeyDown("left"),
+    right: () => collection.onKeyDown("right"),
+    a: () => collection.onKeyDown("a"),
+    b: () => collection.onKeyDown("b"),
+    c: () => collection.onKeyDown("c"),
+    d: () => collection.onKeyDown("d"),
+    l: () => collection.onKeyDown("l"),
+    "ctrl+a": () => collection.onKeyDown("a", { control: true }),
+    "shift+down": () => collection.onKeyDown("down", { shift: true }),
+    escape: () => collection.onKeyDown("escape"),
+  };
+
+  createKeymapScope({
+    isActive: () => list.selectionManager().isFocused(),
+    bindings,
   });
 
   return (
@@ -1289,12 +1396,259 @@ function SelectableListCase() {
   );
 }
 
+/* ---- sections: frames in two coordinate spaces ------------------------------ */
+
+const SECTIONS = [
+  {
+    key: "a",
+    textValue: "Section A",
+    children: [
+      { key: "a1", textValue: "A1" },
+      { key: "a2", textValue: "A2" },
+      { key: "a3", textValue: "A3" },
+    ],
+  },
+  {
+    key: "b",
+    textValue: "Section B",
+    children: [
+      { key: "b1", textValue: "B1" },
+      { key: "b2", textValue: "B2" },
+      { key: "b3", textValue: "B3" },
+    ],
+  },
+];
+
+function SectionView(props: {
+  section: { key: string; textValue: string; children: Fruit[] };
+  manager: Accessor<MultipleSelectionManager>;
+  list: SelectableListState;
+}) {
+  let element: ViewRef | undefined;
+
+  cleanup(() => props.list.unregisterSectionLayout(props.section.key));
+
+  return (
+    <View
+      testID={`section-${props.section.key}`}
+      role="group"
+      onLayout={(e: { bounds: Bounds }) => {
+        props.list.registerSectionLayout(props.section.key, e.bounds);
+        probe("section-layout")(props.section.key);
+      }}
+      ref={(node: ViewRef) => {
+        element = node;
+      }}
+      class="flex-col"
+    >
+      <Each of={props.section.children} key={(fruit) => fruit.key}>
+        {(fruit) => (
+          <ListRow
+            itemKey={fruit().key}
+            textValue={fruit().textValue}
+            disabled={false}
+            manager={props.manager}
+            list={props.list}
+            sectionKey={props.section.key}
+          />
+        )}
+      </Each>
+    </View>
+  );
+}
+
+function SectionedListCase() {
+  const list = createListState({
+    dataSource: () => SECTIONS,
+    getKey: () => "key",
+    getTextValue: () => "textValue",
+    getSectionChildren: () => "children",
+    selectionMode: () => "multiple",
+    selectionBehavior: () => "toggle",
+  });
+
+  const collection = createSelectableList({
+    collection: list.collection,
+    selectionManager: list.selectionManager,
+    shouldFocusWrap: () => false,
+    focusCollection: () => container?.focus(),
+  });
+
+  let container: ViewRef | undefined;
+
+  effect(() => {
+    const manager = list.selectionManager();
+    probe("state")({
+      selected: keysOf(manager.selectedKeys()),
+      focusedKey: manager.focusedKey() ?? null,
+      isFocused: manager.isFocused(),
+    });
+  });
+
+  createKeymapScope({
+    isActive: () => list.selectionManager().isFocused(),
+    bindings: {
+      home: () => collection.onKeyDown("home"),
+      end: () => collection.onKeyDown("end"),
+      pageup: () => collection.onKeyDown("pageup"),
+      pagedown: () => collection.onKeyDown("pagedown"),
+    },
+  });
+
+  return (
+    <Stage>
+      <Row
+        id="focus-container"
+        label="focus container"
+        onPress={() => container?.focus()}
+      />
+      <View
+        testID="sections"
+        role="listbox"
+        focusable={collection.focusable()}
+        onFocus={collection.onFocusIn}
+        onBlur={collection.onFocusOut}
+        onLayout={(e: { bounds: Bounds }) => {
+          collection.registerContainerLayout(e.bounds);
+          probe("container-layout")(e.bounds.size.height);
+        }}
+        ref={(node: ViewRef) => {
+          container = node;
+        }}
+        class="h-40 w-64 flex-col"
+      >
+        <Each of={SECTIONS} key={(section) => section.key}>
+          {(section) => (
+            <SectionView
+              section={section()}
+              manager={list.selectionManager}
+              list={collection}
+            />
+          )}
+        </Each>
+      </View>
+    </Stage>
+  );
+}
+
+/* ---- keymap ownership: two lists and a text field --------------------------- */
+
+function ScopedList(props: {
+  id: string;
+  autoFocus: boolean;
+  onReady: (focus: () => void) => void;
+}) {
+  const list = createListState({
+    dataSource: () => FRUITS.slice(0, 3),
+    getKey: () => "key",
+    getTextValue: () => "textValue",
+    selectionMode: () => "multiple",
+    selectionBehavior: () => "toggle",
+  });
+
+  const collection = createSelectableList({
+    collection: list.collection,
+    selectionManager: list.selectionManager,
+    autoFocus: () => props.autoFocus,
+    focusCollection: () => container?.focus(),
+  });
+
+  let container: ViewRef | undefined;
+
+  effect(() => {
+    const manager = list.selectionManager();
+    probe("state")({
+      id: props.id,
+      focusedKey: manager.focusedKey() ?? null,
+      isFocused: manager.isFocused(),
+    });
+  });
+
+  effect(() => {
+    props.onReady(() => container?.focus());
+  });
+
+  createKeymapScope({
+    isActive: () => list.selectionManager().isFocused(),
+    bindings: {
+      down: () => collection.onKeyDown("down"),
+      b: () => collection.onKeyDown("b"),
+    },
+  });
+
+  return (
+    <View
+      testID={`list-${props.id}`}
+      role="listbox"
+      focusable={collection.focusable()}
+      onFocus={collection.onFocusIn}
+      onBlur={collection.onFocusOut}
+      ref={(node: ViewRef) => {
+        container = node;
+      }}
+      class="h-32 w-48 flex-col border border-border"
+    >
+      <Each of={FRUITS.slice(0, 3)} key={(fruit) => fruit.key}>
+        {(fruit) => (
+          <ListRow
+            itemKey={fruit().key}
+            textValue={fruit().textValue}
+            disabled={false}
+            manager={list.selectionManager}
+            list={collection}
+          />
+        )}
+      </Each>
+    </View>
+  );
+}
+
+function KeymapScopeCase() {
+  const focusers: Record<string, (() => void) | undefined> = {};
+
+  return (
+    <Stage>
+      <Row
+        id="focus-a"
+        label="focus a"
+        onPress={() => focusers.a?.()}
+      />
+      <Row
+        id="focus-b"
+        label="focus b"
+        onPress={() => focusers.b?.()}
+      />
+      <Input
+        testID="field"
+        accessibilityLabel="field"
+        onKeyPress={(e: { key: string }) => probe("keypress")(e.key)}
+      />
+      <ScopedList
+        id="a"
+        autoFocus
+        onReady={(focus) => {
+          focusers.a = focus;
+        }}
+      />
+      <ScopedList
+        id="b"
+        autoFocus={false}
+        onReady={(focus) => {
+          focusers.b = focus;
+        }}
+      />
+    </Stage>
+  );
+}
+
 const selectionPrimitiveCases: Record<string, Component> = {
   "primitives/selection": MultipleSelectionCase,
   "primitives/list": ListStateCase,
   "primitives/collection": CollectionCase,
   "primitives/selectable-item": SelectableItemCase,
   "primitives/selectable-list": SelectableListCase,
+  "primitives/selectable-sections": SectionedListCase,
+  "primitives/keymap-scope": KeymapScopeCase,
 };
 
 /* -------------------------------------------------------------------------------------------------

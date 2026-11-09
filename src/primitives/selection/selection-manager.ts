@@ -21,12 +21,14 @@ import type { Accessor } from "nsh";
 
 import type { Collection, CollectionNode } from "../collection";
 import {
+  type DisabledBehavior,
   type MultipleSelectionManager,
   type MultipleSelectionState,
   Selection,
   type SelectionBehavior,
   type SelectionMode,
   type SelectionPointerType,
+  type SelectionValue,
 } from "./types";
 
 /**
@@ -59,6 +61,11 @@ export class SelectionManager implements MultipleSelectionManager {
     return this.state.selectionBehavior();
   }
 
+  /** How disabled items behave. */
+  disabledBehavior(): DisabledBehavior {
+    return this.state.disabledBehavior();
+  }
+
   /** Sets the selection behavior for the collection. */
   setSelectionBehavior(selectionBehavior: SelectionBehavior) {
     this.state.setSelectionBehavior(selectionBehavior);
@@ -86,9 +93,15 @@ export class SelectionManager implements MultipleSelectionManager {
     }
   }
 
-  /** The currently selected keys in the collection. */
+  /**
+   * The currently selected keys in the collection. The `"all"` sentinel is
+   * resolved here, against the keys that can actually be selected right now
+   * (new items are covered while the sentinel is in place).
+   */
   selectedKeys(): Set<string> {
-    return this.state.selectedKeys();
+    const keys = this.state.selectedKeys();
+
+    return keys === "all" ? new Set(this.getAllSelectableKeys()) : keys;
   }
 
   /** Returns whether a key is selected. */
@@ -103,12 +116,12 @@ export class SelectionManager implements MultipleSelectionManager {
       return false;
     }
 
-    return this.state.selectedKeys().has(retrievedKey);
+    return this.selectedKeys().has(retrievedKey);
   }
 
   /** Whether the selection is empty. */
   isEmpty(): boolean {
-    return this.state.selectedKeys().size === 0;
+    return this.selectedKeys().size === 0;
   }
 
   /** Whether all items in the collection are selected. */
@@ -117,7 +130,7 @@ export class SelectionManager implements MultipleSelectionManager {
       return false;
     }
 
-    const selectedKeys = this.state.selectedKeys();
+    const selectedKeys = this.selectedKeys();
 
     return this.getAllSelectableKeys().every((k) => selectedKeys.has(k));
   }
@@ -125,7 +138,7 @@ export class SelectionManager implements MultipleSelectionManager {
   firstSelectedKey(): string | undefined {
     let first: CollectionNode | undefined;
 
-    for (const key of this.state.selectedKeys()) {
+    for (const key of this.selectedKeys()) {
       const item = this.collection().getItem(key);
 
       const isItemBeforeFirst =
@@ -142,7 +155,7 @@ export class SelectionManager implements MultipleSelectionManager {
   lastSelectedKey(): string | undefined {
     let last: CollectionNode | undefined;
 
-    for (const key of this.state.selectedKeys()) {
+    for (const key of this.selectedKeys()) {
       const item = this.collection().getItem(key);
 
       const isItemAfterLast =
@@ -173,7 +186,9 @@ export class SelectionManager implements MultipleSelectionManager {
       return;
     }
 
-    const selectedKeys = this.state.selectedKeys() as Selection;
+    // A resolved copy: extending from the `"all"` sentinel starts with the
+    // keys that can be selected now, and loses the sentinel.
+    const selectedKeys = this.selectedKeys() as Selection;
     const anchorKey = selectedKeys.anchorKey || retrievedToKey;
 
     const selection = new Selection(selectedKeys, anchorKey, retrievedToKey);
@@ -265,7 +280,7 @@ export class SelectionManager implements MultipleSelectionManager {
       return;
     }
 
-    const keys = new Selection(this.state.selectedKeys());
+    const keys = new Selection(this.selectedKeys());
 
     if (keys.has(retrievedKey)) {
       keys.delete(retrievedKey);
@@ -301,9 +316,15 @@ export class SelectionManager implements MultipleSelectionManager {
     this.state.setSelectedKeys(selection);
   }
 
-  /** Replaces the selection with the given keys. */
-  setSelectedKeys(keys: Iterable<string>) {
+  /** Replaces the selection with the given keys, or with every selectable key for `"all"`. */
+  setSelectedKeys(keys: SelectionValue) {
     if (this.selectionMode() === "none") {
+      return;
+    }
+
+    // Keep the sentinel: a later item is selected too, as in React Aria.
+    if (keys === "all") {
+      this.state.setSelectedKeys("all");
       return;
     }
 
@@ -327,7 +348,7 @@ export class SelectionManager implements MultipleSelectionManager {
   /** Selects all items in the collection. */
   selectAll() {
     if (this.selectionMode() === "multiple") {
-      this.state.setSelectedKeys(new Set(this.getAllSelectableKeys()));
+      this.state.setSelectedKeys("all");
     }
   }
 
@@ -335,7 +356,7 @@ export class SelectionManager implements MultipleSelectionManager {
    * Removes all keys from the selection.
    */
   clearSelection() {
-    const selectedKeys = this.state.selectedKeys();
+    const selectedKeys = this.selectedKeys();
 
     if (!this.disallowEmptySelection() && selectedKeys.size > 0) {
       this.state.setSelectedKeys(new Selection());
@@ -375,7 +396,7 @@ export class SelectionManager implements MultipleSelectionManager {
 
   /** Returns whether the current selection is equal to the given selection. */
   isSelectionEqual(selection: Set<string>) {
-    if (selection === this.state.selectedKeys()) {
+    if (selection === this.selectedKeys()) {
       return true;
     }
 
@@ -405,12 +426,23 @@ export class SelectionManager implements MultipleSelectionManager {
       return false;
     }
 
+    // A disabled item is never selectable, whichever `disabledBehavior` says
+    // about its focus and action.
     const item = this.collection().getItem(key);
 
-    return item != null && !item.disabled;
+    return item != null && item.type === "item" && !item.disabled;
   }
 
+  /**
+   * Whether the item is inert: no press, no focus, no action, and keyboard
+   * navigation steps over it. With `disabledBehavior: "selection"` a disabled
+   * item is not inert (it stays focusable); `canSelectItem` still refuses it.
+   */
   isDisabled(key: string) {
+    if (this.state.disabledBehavior() === "selection") {
+      return false;
+    }
+
     const item = this.collection().getItem(key);
 
     return !item || item.disabled;

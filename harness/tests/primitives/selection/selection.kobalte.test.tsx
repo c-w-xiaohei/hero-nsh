@@ -14,8 +14,21 @@
 
 import { describe, expect, test } from "nsh/test";
 import type { App } from "nsh/test";
+import type { CreateMultipleSelectionStateProps } from "@heroui/react";
 import { callsOf } from "../../helpers/calls";
 import { openScenario } from "../../helpers/open-scenario";
+
+/*
+ * Compile-time regression, never executed: a bare string is Iterable<string>,
+ * so without `SelectionValue`'s guard `selectedKeys: "apple"` would type-check
+ * and select the characters 'a', 'p', 'p', 'l', 'e'.
+ */
+function rejectsBareStrings() {
+  const props = {} as CreateMultipleSelectionStateProps;
+  // @ts-expect-error a bare string is not a key collection
+  props.selectedKeys = () => "apple";
+}
+void rejectsBareStrings;
 
 type SelectionResult = {
   selected: string[];
@@ -25,6 +38,10 @@ type SelectionResult = {
   isSelectAll: boolean;
   firstSelected: string | null;
   lastSelected: string | null;
+  rawAll: boolean;
+  disabledBehavior: string;
+  disabledBanana: boolean;
+  canSelectBanana: boolean;
   changes: string[][];
   equals?: boolean;
 };
@@ -251,15 +268,19 @@ describe("SelectionManager", () => {
     const duplicate = await openSelection({
       mode: "multiple",
       allowDuplicate: true,
+      keys: "apple,cherry",
     });
 
-    await act(duplicate, "select-all");
-    const duplicateResult = await act(duplicate, "select-all");
+    await act(duplicate, "set-keys");
+    const duplicateResult = await act(duplicate, "set-keys");
     expect(duplicateResult.changes).toHaveLength(2);
 
-    const quiet = await openSelection({ mode: "multiple" });
-    await act(quiet, "select-all");
-    const quietResult = await act(quiet, "select-all");
+    const quiet = await openSelection({
+      mode: "multiple",
+      keys: "apple,cherry",
+    });
+    await act(quiet, "set-keys");
+    const quietResult = await act(quiet, "set-keys");
     expect(quietResult.changes).toHaveLength(1);
   });
 
@@ -315,6 +336,102 @@ describe("SelectionManager", () => {
     expect(result.equals).toBe(false);
   });
 
+  test("defaultSelectedKeys 'all' selects every selectable key", async () => {
+    const app = await openSelection({
+      mode: "multiple",
+      all: true,
+      disabled: "banana",
+    });
+
+    const result = await act(app, "snapshot");
+    expect(result.selected).toEqual([
+      "apple",
+      "apricot",
+      "blueberry",
+      "cherry",
+      "date",
+    ]);
+    expect(result.rawAll).toBe(true);
+    expect(result.isSelectAll).toBe(true);
+    expect(result.firstSelected).toBe("apple");
+    expect(result.lastSelected).toBe("date");
+  });
+
+  test("controlled selectedKeys 'all' resolves against the collection", async () => {
+    const app = await openSelection({
+      mode: "multiple",
+      all: true,
+      controlled: true,
+      disabled: "banana",
+    });
+
+    const result = await act(app, "snapshot");
+    expect(result.rawAll).toBe(true);
+    expect(result.selected).toEqual([
+      "apple",
+      "apricot",
+      "blueberry",
+      "cherry",
+      "date",
+    ]);
+  });
+
+  test("setSelectedKeys('all') keeps the sentinel and skips disabled keys", async () => {
+    const app = await openSelection({
+      mode: "multiple",
+      disabled: "banana",
+    });
+
+    const result = await act(app, "set-all");
+    expect(result.rawAll).toBe(true);
+    expect(result.selected).toEqual([
+      "apple",
+      "apricot",
+      "blueberry",
+      "cherry",
+      "date",
+    ]);
+    expect(result.changes).toEqual([["all"]]);
+  });
+
+  test("selectAll stores the sentinel, so later items are covered", async () => {
+    const app = await openSelection({
+      mode: "multiple",
+      disabled: "banana",
+    });
+
+    const result = await act(app, "select-all");
+    expect(result.rawAll).toBe(true);
+    expect(result.selected).toHaveLength(5);
+    expect(result.changes).toEqual([["all"]]);
+  });
+
+  test("toggling one key off an 'all' selection materializes the rest", async () => {
+    const app = await openSelection({
+      mode: "multiple",
+      all: true,
+      disabled: "banana",
+      target: "apple",
+    });
+
+    const result = await act(app, "toggle");
+    expect(result.rawAll).toBe(false);
+    expect(result.selected).toEqual([
+      "apricot",
+      "blueberry",
+      "cherry",
+      "date",
+    ]);
+  });
+
+  test("clearSelection clears an 'all' selection", async () => {
+    const app = await openSelection({ mode: "multiple", all: true });
+
+    const result = await act(app, "clear");
+    expect(result.rawAll).toBe(false);
+    expect(result.selected).toEqual([]);
+  });
+
   test("selectionMode none ignores every write", async () => {
     const app = await openSelection({ mode: "none", target: "banana" });
 
@@ -325,5 +442,32 @@ describe("SelectionManager", () => {
 
     expect(result.selected).toEqual([]);
     expect(result.changes).toEqual([]);
+  });
+});
+
+describe("disabledBehavior", () => {
+  test("defaults to all: a disabled key is inert", async () => {
+    const app = await openSelection({
+      mode: "multiple",
+      disabled: "banana",
+    });
+
+    const result = await act(app, "snapshot");
+    expect(result.disabledBehavior).toBe("all");
+    expect(result.disabledBanana).toBe(true);
+    expect(result.canSelectBanana).toBe(false);
+  });
+
+  test("selection: a disabled key is not inert but still not selectable", async () => {
+    const app = await openSelection({
+      mode: "multiple",
+      disabled: "banana",
+      disabledBehavior: "selection",
+    });
+
+    const result = await act(app, "snapshot");
+    expect(result.disabledBehavior).toBe("selection");
+    expect(result.disabledBanana).toBe(false);
+    expect(result.canSelectBanana).toBe(false);
   });
 });

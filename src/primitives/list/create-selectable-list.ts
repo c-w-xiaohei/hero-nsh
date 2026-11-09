@@ -51,12 +51,23 @@ export interface CreateSelectableListProps
 export interface SelectableListState extends SelectableCollectionState {
   /**
    * Reports one item's frame. Wire it inside the item view:
-   * `onLayout={(e) => list.registerItemLayout(key, e.bounds)}`.
+   * `onLayout={(e) => list.registerItemLayout(key, e.bounds)}`. When the item
+   * sits inside a section, pass the section's key too, so the two frames are
+   * composed into collection coordinates (see `collection-layout.ts`).
    */
-  registerItemLayout(key: string, bounds: Bounds): void;
+  registerItemLayout(key: string, bounds: Bounds, sectionKey?: string): void;
 
   /** Forgets an item's frame when its view unmounts. */
   unregisterItemLayout(key: string): void;
+
+  /**
+   * Reports a section's frame, measured in the collection content:
+   * `onLayout={(e) => list.registerSectionLayout(sectionKey, e.bounds)}`.
+   */
+  registerSectionLayout(sectionKey: string, bounds: Bounds): void;
+
+  /** Forgets a section's frame when its view unmounts. */
+  unregisterSectionLayout(sectionKey: string): void;
 
   /**
    * Reports the collection viewport's frame. Wire it to the view that clips
@@ -84,6 +95,7 @@ export function createSelectableList(
       props.keyboardDelegate?.() ??
       new ListKeyboardDelegate(props.collection, {
         collator: () => props.collator?.() ?? defaultStringCollator,
+        disabledBehavior: () => props.selectionManager().disabledBehavior(),
         getItemLayout: layout.getItemLayout,
         getContainerHeight: layout.containerHeight,
         getContentHeight: layout.contentHeight,
@@ -106,12 +118,15 @@ export function createSelectableList(
     focusCollection: props.focusCollection,
     orientation: props.orientation,
     direction: props.direction,
+    enterFrom: props.enterFrom,
   });
 
   return {
     ...state,
     registerItemLayout: layout.setItemLayout,
     unregisterItemLayout: layout.removeItemLayout,
+    registerSectionLayout: layout.setSectionLayout,
+    unregisterSectionLayout: layout.removeSectionLayout,
     registerContainerLayout: layout.setContainerLayout,
     layout,
   };
