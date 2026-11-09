@@ -72,13 +72,18 @@ test("T-048 closes on a press outside the popover", async () => {
 
 // kobalte/packages/core/src/select/select.test.tsx:1811
 // Partial port (port sheet T-053): the visible name reaches the trigger and the
-// placeholder is shown. The two `id` assertions and `aria-labelledby` are
-// dropped; the listbox gets its name from the popover's container context.
+// placeholder is shown. Opened, the listbox carries the same name through the
+// popover's container label. The two `id` assertions and `aria-labelledby` are
+// dropped.
 test("T-053 supports labeling with a visible label", async () => {
   const app = await openCase("items");
 
   expect(app.shows("role:button[Label]")).toBe(true);
   expect(app.shows("text:Placeholder")).toBe(true);
+
+  await select.open(app);
+
+  expect(app.shows("role:listbox[Label]")).toBe(true);
 });
 
 // kobalte/packages/core/src/select/select.test.tsx:1868

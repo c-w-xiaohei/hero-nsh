@@ -37,9 +37,10 @@ import type { Component } from "./types";
  *   select/controlled-open          ControlledOpenState
  *
  * Split scenarios (SOP 3.3.3): the Value render prop takes booleans upstream
- * and accessors here (D17), so `custom-value*` call `isPlaceholder()` and
- * `defaultChildren()`. `state.selectedItems` is the flat facade from port sheet
- * section 1 (an array, not an accessor).
+ * and accessors here (D17), so `custom-value*` read `isPlaceholder()`,
+ * `defaultChildren()` and `state.selectedItems()` inside reactive tree
+ * constructs (`<If>`, `<Each>`): the function body itself runs once,
+ * untracked, so an impermanent `if` there would freeze the branch.
  *
  * Placeholders for units that have not landed in this worktree: Avatar is not
  * in src/components yet, so the user rows draw a plain round View with the
@@ -569,28 +570,33 @@ function CustomValueSplit() {
         <Label>User</Label>
         <Select.Trigger>
           <Select.Value>
-            {({ defaultChildren, isPlaceholder, state }) => {
-              if (isPlaceholder() || state.selectedItems.length === 0) {
-                return defaultChildren();
-              }
-
-              const selectedItems = state.selectedItems;
-
-              if (selectedItems.length > 1) {
-                return <Text>{`${selectedItems.length} users selected`}</Text>;
-              }
-
-              const selectedItem = USERS.find((user) => user.id === selectedItems[0].key);
-
-              if (!selectedItem) {
-                return defaultChildren();
-              }
+            {({ defaultChildren, isPlaceholder, selectedItems }) => {
+              // D17: this function runs once, untracked; the branch must be a
+              // reactive `<If>` reading the accessors, or the value would stay
+              // at whatever it was on the first call.
+              const selectedUser = () => USERS.find((user) => user.id === selectedItems()[0]?.key);
 
               return (
-                <View class="flex items-center gap-2">
-                  <AvatarPlaceholder initial={selectedItem.initial} />
-                  <Text>{selectedItem.name}</Text>
-                </View>
+                <If
+                  else={defaultChildren()}
+                  when={!isPlaceholder() && selectedItems().length > 0}
+                >
+                  <If
+                    else={
+                      <If else={defaultChildren()} when={selectedUser()}>
+                        {(found) => (
+                          <View class="flex items-center gap-2">
+                            <AvatarPlaceholder initial={found().initial} />
+                            <Text>{found().name}</Text>
+                          </View>
+                        )}
+                      </If>
+                    }
+                    when={selectedItems().length > 1}
+                  >
+                    <Text>{`${selectedItems().length} users selected`}</Text>
+                  </If>
+                </If>
               );
             }}
           </Select.Value>
@@ -631,25 +637,32 @@ function CustomValueMultipleSplit() {
         <Label>Users</Label>
         <Select.Trigger>
           <Select.Value className="flex flex-wrap gap-2">
-            {({ defaultChildren, isPlaceholder, state }) => {
-              if (isPlaceholder() || state.selectedItems.length === 0) {
-                return defaultChildren();
-              }
+            {({ defaultChildren, isPlaceholder, selectedItems }) => {
+              // D17: the function is called once; `Each` re-reads the accessor
+              // so a new selection adds or drops a chip.
+              return (
+                <If
+                  else={defaultChildren()}
+                  when={!isPlaceholder() && selectedItems().length > 0}
+                >
+                  <Each key={(item) => item.key} of={selectedItems()}>
+                    {(item) => {
+                      const user = USERS.find((entry) => entry.id === item().key);
 
-              return state.selectedItems.map((selectedItem) => {
-                const user = USERS.find((entry) => entry.id === selectedItem.key);
+                      if (!user) {
+                        return <Text>{item().key}</Text>;
+                      }
 
-                if (!user) {
-                  return <Text>{selectedItem.key}</Text>;
-                }
-
-                return (
-                  <Chip variant="soft">
-                    <AvatarPlaceholder initial={user.initial} />
-                    <Chip.Label>{user.name}</Chip.Label>
-                  </Chip>
-                );
-              });
+                      return (
+                        <Chip variant="soft">
+                          <AvatarPlaceholder initial={user.initial} />
+                          <Chip.Label>{user.name}</Chip.Label>
+                        </Chip>
+                      );
+                    }}
+                  </Each>
+                </If>
+              );
             }}
           </Select.Value>
           <Select.Indicator />

@@ -199,3 +199,39 @@ test("T-013 renders custom children in place of the default icon", async () => {
 
   expect(app.shows("text:×")).toBe(true);
 });
+
+// Review round 1 regression (D17, tmp/heroui-nsh-port-research.md:40,272-273):
+// a Value render prop's function body runs once, untracked, so the
+// custom-value branch must be reactive (`<If>` / `<Each>` reading the
+// accessors). Selecting Bob in the single scene replaces the placeholder with
+// his avatar initial and name; selecting Martha in the multiple scene adds her
+// chip to the two default ones.
+test("X-001 custom value scenes follow the selection", async () => {
+  const single = await openScenario("select/custom-value.split", { clock: {} });
+
+  expect(single.shows("role:button[User]")).toBe(true);
+  expect(single.shows("role:button >> text:Select a user")).toBe(true);
+
+  await single.press("role:button[User]");
+  await single.waitFor("role:listbox");
+  await single.press("text:Bob");
+  await settle(single);
+
+  expect(single.shows("role:button >> text:Bob")).toBe(true);
+  expect(single.shows("role:button >> text:B")).toBe(true);
+  expect(single.shows("role:button >> text:Select a user")).toBe(false);
+
+  const multiple = await openScenario("select/custom-value-multiple.split", {
+    clock: {},
+  });
+
+  expect(multiple.shows("role:button >> text:Bob")).toBe(true);
+  expect(multiple.shows("role:button >> text:Martha")).toBe(false);
+
+  await multiple.press("role:button");
+  await multiple.waitFor("role:listbox");
+  await multiple.press("text:Martha");
+
+  expect(multiple.shows("role:button >> text:Martha")).toBe(true);
+  expect(multiple.shows("role:button >> text:M")).toBe(true);
+});
