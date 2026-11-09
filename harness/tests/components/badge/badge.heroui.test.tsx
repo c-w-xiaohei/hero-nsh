@@ -1,14 +1,18 @@
-import { expect, test } from "nsh/test";
+import { expect, open, test } from "nsh/test";
+import type { App } from "nsh/test";
+import { callsOf } from "../../helpers/calls";
 import { openScenario } from "../../helpers/open-scenario";
 
 /*
- * HeroUI 3.2.7 regression cases for Badge, per port sheet 4b (T-001, T-003).
+ * HeroUI 3.2.7 regression cases for Badge, per port sheet 4b
+ * (T-001, T-003, T-005).
  *
  * T-002, T-004 and T-006 are deleted there: they only assert `data-slot`, BEM
- * class names or a `data-*` attribute, and D18 drops that API surface. T-005 is
- * converted to the `badge/label` screenshot, which the current acceptance does
- * not run. What is left is what a user can observe here: the rendered text and
- * the resolved text color of each color variant.
+ * class names or a `data-*` attribute, and D18 drops that API surface. T-005
+ * asserts the labeled sub-part that carries the label padding; its visible
+ * consequence is measured through onLayout in harness/badge.fixtures.tsx.
+ * The remaining cases read the rendered text and the resolved text color of
+ * each color variant.
  *
  * Resolved on the harness theme (hero-nsh.theme.json):
  * accent-soft-foreground #1e63aeff.
@@ -46,4 +50,46 @@ test("T-003 exposes color BEM modifier", async () => {
   }
 
   expect(new Set([defaultColor, accentColor, successColor, warningColor, dangerColor]).size).toBe(5);
+});
+
+// heroui/packages/react/tests/components/badge/badge.test.tsx:40
+// Rewritten port (port sheet T-005): upstream asserts that the implicit label
+// sub-part (`data-slot="badge-label"`) exists, which is what applies
+// `Badge.Label`'s px-0.5 padding to string children. NSH has no data-slot or
+// computed-padding query, so the fixture measures the same geometry through
+// onLayout around "Hello There", wide enough that `min-w-7` cannot mask the
+// four points of horizontal padding. The implicit label must lay the root out
+// exactly like an explicit Badge.Label, and both must be four points wider than
+// the same label with `px-0`, which drops the padding. A root that does not
+// auto-wrap string children, or a label that loses `px-0.5`, collapses one of
+// those differences.
+type LayoutCall = { name: string; width: number; height: number };
+
+function lastLayout(app: App, name: string): LayoutCall {
+  const calls = callsOf(app, "layout")
+    .map((args) => args[0] as LayoutCall)
+    .filter((call) => call.name === name);
+  const found = calls[calls.length - 1];
+
+  if (!found) throw new Error(`no layout call recorded for ${name}`);
+
+  return found;
+}
+
+test("T-005 renders string children in a labeled sub-part", async () => {
+  const app = await open("../../../badge.fixtures.tsx", {
+    platform: "windows",
+    width: 1024,
+    height: 768,
+  });
+
+  const implicitRoot = lastLayout(app, "implicit-root");
+  const explicitRoot = lastLayout(app, "explicit-root");
+  const explicitLabel = lastLayout(app, "explicit-label");
+  const noPaddingRoot = lastLayout(app, "no-padding-root");
+  const noPaddingLabel = lastLayout(app, "no-padding-label");
+
+  expect(implicitRoot.width).toBe(explicitRoot.width);
+  expect(explicitLabel.width - noPaddingLabel.width).toBe(4);
+  expect(implicitRoot.width - noPaddingRoot.width).toBe(4);
 });
