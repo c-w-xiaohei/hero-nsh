@@ -12,7 +12,7 @@ import type {
 import { renderChildren } from "./children";
 import { joinClassNames } from "./class-names";
 import { LinkContext } from "./context";
-import type { AriaProps, DataProps, GlobalDomProps } from "./dom-props";
+import type { AriaProps, DataProps, DomEventProps, GlobalDomProps } from "./dom-props";
 
 /* -------------------------------------------------------------------------------------------------
  * Default icon
@@ -76,7 +76,11 @@ function DefaultExternalLinkIcon(): JSX.Element {
  * props. `render` and the rest of the DOM-only members are accepted so code
  * written against HeroUI keeps compiling; sheet §1.2 / §8 say what they do.
  */
-export interface LinkIconProps extends AriaProps, DataProps, GlobalDomProps {
+export interface LinkIconProps
+  extends AriaProps,
+    DataProps,
+    GlobalDomProps,
+    DomEventProps {
   /** The icon; absent means the built-in external-link glyph (R-019). */
   children?: JSX.Element;
 

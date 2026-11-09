@@ -20,7 +20,7 @@ import {
 import { renderChildren } from "./children";
 import { joinClassNames } from "./class-names";
 import { LinkContext, type LinkContextValue } from "./context";
-import type { AriaProps, DataProps, GlobalDomProps } from "./dom-props";
+import type { AriaProps, DataProps, DomEventProps, GlobalDomProps } from "./dom-props";
 import { linkVariants, type LinkVariants } from "./link.styles";
 
 /** The live state HeroUI hands to render-prop children, `className` and `style`. */
@@ -47,7 +47,8 @@ export interface LinkRootProps
   extends LinkVariants,
     AriaProps,
     DataProps,
-    GlobalDomProps {
+    GlobalDomProps,
+    DomEventProps {
   children?: JSX.Element | ((values: LinkRenderProps) => JSX.Element);
 
   /** Appended after the variant classes and before `classList`. */
