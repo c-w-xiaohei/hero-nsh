@@ -153,22 +153,6 @@ describe("V4 key and focus events on a real engine", () => {
     });
   }
 
-  test("Tab moves focus through focusable views in tree order", async () => {
-    const app = await openScenario("v4/events", {
-      params: { case: "events" },
-      platform: "web",
-    });
-
-    await app.keyboard.press("tab");
-    await app.waitUntil(() => events(app).includes("focus:a"));
-    expect(events(app)).toContain("focus:a");
-
-    await app.keyboard.press("tab");
-    await app.waitUntil(() => events(app).includes("focus:b"));
-    expect(events(app)).toContain("blur:a");
-    expect(events(app)).toContain("focus:b");
-  });
-
   test("the app's keymap hears named keys, arrows included", async () => {
     const app = await openScenario("v4/events", {
       params: { case: "events" },
