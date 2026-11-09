@@ -33,6 +33,10 @@ export const chipVariants = tv({
     // R-002: `.chip` → `--chip-bg: var(--default)` + `background-color:
     // var(--chip-bg)` → `bg-default`: the local variable disappears and the
     // semantic color class switches with the appearance by itself.
+    // R-003: `.chip` → `--chip-fg: currentColor` + `color: var(--chip-fg)` is
+    // deleted: NSH has no `currentColor` color class, and a text view already
+    // inherits its parent's color; one of the five `color` variants always
+    // applies, so this layer is invisible under every valid input.
     base: "flex w-fit shrink-0 items-center gap-0.5 rounded-2xl bg-default px-2 py-0.5 text-xs leading-5 font-medium",
     // R-004: `.chip__label` → `@apply px-0.5` (2). Only applied while the
     // label sits inside a `Chip`; outside it has no slot class upstream either,
