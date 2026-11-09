@@ -278,3 +278,92 @@ test("T-015 supports intermediate thumb positions without changing its dimension
   expectClose(after.height, thumb.height);
   expectClose(startGap(lastLayout(app, "track"), after, "ltr"), 2);
 });
+
+/* -------------------------------------------------------------------------------------------------
+ * X cases: behaviour the React Aria sources pin down and no upstream HeroUI
+ * test covers (WAI-ARIA toggle contract, D17).
+ * -----------------------------------------------------------------------------------------------*/
+
+// react-aria/src/toggle/useToggle.ts:174-176
+test("X-001 keeps the focus ring off after a pointer press and toggles again with Space", async () => {
+  const app = await openCase("log", {}, { platform: "web" });
+  const control = "role:switch[Enable notifications]";
+
+  await app.keyboard.press("tab");
+  expect(app.shows("text:FocusRing")).toBe(true);
+
+  await app.press(control);
+  expect(app.shows("text:On")).toBe(true);
+  expect(callsOf(app, "onChange")).toEqual([[true]]);
+  expect(app.shows("text:NoRing")).toBe(true);
+
+  await app.keyboard.press("space");
+  expect(app.shows("text:Off")).toBe(true);
+  expect(callsOf(app, "onChange")).toEqual([[true], [false]]);
+});
+
+// react-aria/src/toggle/useToggle.ts:174-184, react-aria/src/form/useFormValidation.ts:91-93
+test("X-002 shows a validation error right after a press and clears it on the next", async () => {
+  const app = await openCase("validation");
+  const control = "role:switch[Enable notifications]";
+  const error = "text:Selected is not allowed";
+
+  expect(app.shows(error)).toBe(false);
+
+  await app.press(control);
+  expect(app.shows("text:On")).toBe(true);
+  expect(app.shows(error)).toBe(true);
+
+  await app.press(control);
+  expect(app.shows("text:Off")).toBe(true);
+  expect(app.shows(error)).toBe(false);
+});
+
+// react-aria-components/src/Switch.tsx:71-77, react-aria/src/toggle/useToggle.ts:119-184
+test("X-003 fires press callbacks for a press on the Content and on the Label", async () => {
+  const app = await openCase("press");
+
+  await app.press("role:switch[Enable notifications]");
+  expect(callsOf(app, "onPressStart")).toHaveLength(1);
+  expect(callsOf(app, "onPressEnd")).toHaveLength(1);
+  expect(callsOf(app, "onPress")).toHaveLength(1);
+  expect(callsOf(app, "onPressChange")).toEqual([[true], [false]]);
+
+  await app.press("text:Enable notifications");
+  expect(callsOf(app, "onPressStart")).toHaveLength(2);
+  expect(callsOf(app, "onPressEnd")).toHaveLength(2);
+  expect(callsOf(app, "onPress")).toHaveLength(2);
+  expect(callsOf(app, "onPressChange")).toEqual([
+    [true],
+    [false],
+    [true],
+    [false],
+  ]);
+});
+
+// D17 (port sheet §1: a Root render prop is called once; accessors drive what it returned)
+test("X-004 calls a Root render prop once across a toggle", async () => {
+  const app = await openCase("render-count");
+  const control = "role:switch[Enable notifications]";
+
+  expect(callsOf(app, "render")).toHaveLength(1);
+
+  await app.press(control);
+  expect(app.shows("text:On")).toBe(true);
+  expect(callsOf(app, "render")).toHaveLength(1);
+});
+
+// react-aria/src/toggle/useToggle.ts:186,223
+test("X-005 keeps a read-only switch out of the pressed state", async () => {
+  const app = await openCase("readonly-selected");
+  const control = "role:switch[Enable notifications]";
+
+  expect(app.shows("text:NotPressed")).toBe(true);
+
+  await app.dragAndHold(control, { x: 0, y: 0 });
+  expect(app.shows("text:NotPressed")).toBe(true);
+  expect(app.shows("text:On")).toBe(true);
+
+  await app.drop();
+  expect(app.shows("text:NotPressed")).toBe(true);
+});
