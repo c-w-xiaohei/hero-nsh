@@ -50,6 +50,7 @@ import type { Component } from "./types";
  *   toggle-button-group/idless.split   group member without an id
  *   toggle-button-group/animals.split  T-028 (dogs / cats / dragons)
  *   toggle-button-group/multi-click.split  T-033
+ *   toggle-button-group/shift-multi.split  X-001 (three members, multiple)
  *   toggle-button-group/click-single.split T-032
  *   toggle-button-group/keyboard-horizontal  T-029
  *   toggle-button-group/keyboard-vertical    T-030
@@ -506,6 +507,27 @@ function MultiClickSplit() {
   );
 }
 
+function ShiftMultiSplit() {
+  return (
+    <Stage>
+      <ToggleButtonGroup
+        selectionMode="multiple"
+        onSelectionChange={(keys) => selectionChanged(keys)}
+      >
+        <ToggleButton id="dogs">
+          {({ isSelected }) => <Text>{isSelected() ? "Dogs on" : "Dogs off"}</Text>}
+        </ToggleButton>
+        <ToggleButton id="cats">
+          {({ isSelected }) => <Text>{isSelected() ? "Cats on" : "Cats off"}</Text>}
+        </ToggleButton>
+        <ToggleButton id="dragons">
+          {({ isSelected }) => <Text>{isSelected() ? "Dragons on" : "Dragons off"}</Text>}
+        </ToggleButton>
+      </ToggleButtonGroup>
+    </Stage>
+  );
+}
+
 function ClickSingleSplit() {
   return (
     <Stage>
@@ -632,6 +654,7 @@ export const toggleButtonScenarios: Record<string, Component> = {
   "toggle-button-group/idless.split": IdlessSplit,
   "toggle-button-group/animals.split": AnimalsSplit,
   "toggle-button-group/multi-click.split": MultiClickSplit,
+  "toggle-button-group/shift-multi.split": ShiftMultiSplit,
   "toggle-button-group/click-single.split": ClickSingleSplit,
   "toggle-button-group/keyboard-horizontal": KeyboardHorizontal,
   "toggle-button-group/keyboard-vertical": KeyboardVertical,

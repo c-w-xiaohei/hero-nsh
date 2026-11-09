@@ -13,14 +13,29 @@ import { openScenario } from "../../helpers/open-scenario";
  * RAC does not express member focus with `tabindex`, and the difference is
  * registered in the port sheet's section 8. T-031 (Home / End) and T-034
  * (focusing the selected item on the first Tab) are deleted in 4b.
+ *
+ * T-029 and T-030 read right after `open`, which on `--target web` can resolve
+ * before the app's first commit: both wait for the first frame on the layout
+ * probes they measure. The wait passes `{ timeout: 15_000 }`, above nsh's own
+ * 10 s app-start budget; it only delays the read, every assertion still runs.
  */
 
 type LayoutCall = { name: string; x: number; y: number; width: number; height: number };
 
+function layoutCalls(app: App): LayoutCall[] {
+  return callsOf(app, "layout").map((args) => args[0] as LayoutCall);
+}
+
+/** Waits until the app's layout pass has reached `names`: an `open` can resolve before the first commit. */
+async function firstFrame(app: App, ...names: string[]): Promise<void> {
+  await app.waitUntil(
+    () => names.every((name) => layoutCalls(app).some((call) => call.name === name)),
+    { timeout: 15_000 },
+  );
+}
+
 function frame(app: App, name: string): LayoutCall {
-  const found = callsOf(app, "layout")
-    .map((args) => args[0] as LayoutCall)
-    .find((call) => call.name === name);
+  const found = layoutCalls(app).find((call) => call.name === name);
 
   if (!found) throw new Error(`no layout call recorded for ${name}`);
 
@@ -37,6 +52,7 @@ test("T-029 allows user to change toggle item via left/right arrow keys with hor
   const app = await openScenario("toggle-button-group/keyboard-horizontal", {
     platform: "web",
   });
+  await firstFrame(app, "horizontal-0", "horizontal-1");
 
   expect(frame(app, "horizontal-1").x).toBeGreaterThan(frame(app, "horizontal-0").x);
 
@@ -62,6 +78,7 @@ test("T-030 allows user to change toggle item via up/down arrow keys with vertic
   const app = await openScenario("toggle-button-group/keyboard-vertical", {
     platform: "web",
   });
+  await firstFrame(app, "kv-0", "kv-1");
 
   expect(frame(app, "kv-1").y).toBeGreaterThan(frame(app, "kv-0").y);
 
