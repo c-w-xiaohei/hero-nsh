@@ -7,6 +7,7 @@ import { buttonScenarios } from "./button.scenarios";
 import { popoverScenarios } from "./popover.scenarios";
 import { switchScenarios } from "./switch.scenarios";
 import { separatorScenarios } from "./separator.scenarios";
+import { surfaceScenarios } from "./surface.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -17,4 +18,5 @@ export const scenarios: Record<string, Component> = {
   ...popoverScenarios,
   ...switchScenarios,
   ...separatorScenarios,
+  ...surfaceScenarios,
 };
