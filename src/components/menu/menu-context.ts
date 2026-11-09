@@ -41,6 +41,13 @@ export interface MenuItemDescriptor {
   ref: () => ViewRef | undefined;
 
   /**
+   * Present when the row opens a submenu (port sheet dropdown §5, first
+   * change): ArrowRight on the focused row calls it instead of moving. Absent
+   * on every other row, which keeps Menu's own ArrowRight behavior.
+   */
+  openSubmenu?: () => void;
+
+  /**
    * The one activation entry: a pointer press, Return / Space on the focused
    * root, and the keymap bindings all arrive here. It runs the selection
    * half, then the action half, then the close decision (port sheet section 5).

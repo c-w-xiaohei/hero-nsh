@@ -210,8 +210,14 @@ export function ButtonRoot(props: ButtonRootProps) {
 
     notePress(event);
     // Before the caller's `onPress`, as PressResponder's handler runs before
-    // the element's own: a disabled Button never reaches this line.
-    overlayTrigger?.toggle();
+    // the element's own: a disabled Button never reaches this line. A root that
+    // owns a press channel (Dropdown) decides what a press does; elsewhere the
+    // press toggles the overlay (dropdown port sheet §5, third change).
+    if (overlayTrigger?.triggerPress) {
+      overlayTrigger.triggerPress(isKeyboardPress(event) ? "keyboard" : "pointer");
+    } else {
+      overlayTrigger?.toggle();
+    }
     // Form sheet §5.2: a submit Button asks the enclosing Form; `button` (the
     // default) and `reset` do nothing, NSH having no native form.
     if (props.type === "submit") {
@@ -251,6 +257,10 @@ export function ButtonRoot(props: ButtonRootProps) {
       return;
     }
 
+    // A held press is the long-press trigger of an overlay root that opens
+    // that way (Dropdown's `longPress`); before the caller's handlers, as
+    // PressResponder's injected `onLongPress` runs before the element's.
+    overlayTrigger?.triggerLongPress?.();
     props.onLongPressStart?.(event);
     props.onLongPress?.(event);
   };

@@ -65,6 +65,22 @@ export interface OverlayTriggerContextValue {
 
   /** The registered trigger, if any. */
   triggerRef: Accessor<ViewRef | undefined>;
+
+  /**
+   * The press channel a trigger part other than the owner can use (dropdown
+   * port sheet §5, second change). A root that needs to tell a keyboard press
+   * from a pointer press, or that opens on something other than a press,
+   * supplies it; `Button` calls it instead of `toggle()` when it is present.
+   * Absent elsewhere, where a press always toggles.
+   */
+  triggerPress?: (source: "keyboard" | "pointer") => void;
+
+  /**
+   * The long-press half of the same channel: a root whose `trigger` mode opens
+   * on a held press (Dropdown's `longPress`) supplies it, and `Button` calls it
+   * when a press is held. Absent elsewhere.
+   */
+  triggerLongPress?: () => void;
 }
 
 export interface CreateOverlayTriggerResult {

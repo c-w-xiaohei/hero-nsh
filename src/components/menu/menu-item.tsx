@@ -115,6 +115,13 @@ export interface MenuItemRootProps<T = unknown> extends MenuItemVariants {
   /** Whether the row's submenu is open; feeds `isOpen` and `accessibilityState.expanded`. */
   "aria-expanded"?: boolean | "true" | "false";
 
+  /**
+   * Registers the row as a submenu trigger for the keyboard (dropdown port
+   * sheet §5, first change): the menu root calls it on ArrowRight while this
+   * row holds the virtual focus. Absent means the row is not a submenu trigger.
+   */
+  openSubmenu?: () => void;
+
   isDisabled?: boolean;
 
   /** Overrides the Section's and the Menu's value for this row (section 1). */
@@ -260,6 +267,7 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     "aria-describedby",
     "aria-haspopup",
     "aria-expanded",
+    "openSubmenu",
     "aria-hidden",
     "isDisabled",
     "variant",
@@ -553,6 +561,9 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     disabled: () => local.isDisabled === true || list.isDisabledKey(key),
     ref: () => node,
     activate,
+    openSubmenu: local.openSubmenu
+      ? () => local.openSubmenu?.()
+      : undefined,
   };
 
   const register = section?.register ?? list.register;
