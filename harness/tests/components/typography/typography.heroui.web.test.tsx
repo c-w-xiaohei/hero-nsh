@@ -1,11 +1,15 @@
-import { expect, test } from "nsh/test";
+import { expect, open, test } from "nsh/test";
+import type { App } from "nsh/test";
 import { inflateSync } from "zlib";
+import { callsOf } from "../../helpers/calls";
 import { openScenario } from "../../helpers/open-scenario";
 
 /*
- * Web-only: X-002 reads the painted chip out of a screenshot. Headless runs
- * draw nothing (`app.screenshot` says so), and the picture has to be measured
- * in points, so the case runs on the web target alone.
+ * Web-only: X-002 reads the painted chip out of a screenshot, and X-003 /
+ * X-004 need real text layout. Headless runs draw nothing (`app.screenshot`
+ * says so), and its text engine does not wrap a paragraph into the lines a
+ * body-sm paragraph has on Chrome, so the geometry cases run on the web
+ * target alone, where Chrome lays the text out as the reference app does.
  *
  * `nsh/test` has no layout query: `spanStyle` reports a span's text style and
  * `bounds` are not exposed. A screenshot is the only channel that sees the
@@ -92,9 +96,10 @@ function decodePng(png: Uint8Array, fraction: number): Shot {
   return { width, height: kept, rgb };
 }
 
-test("X-002 pads the inline code chip by 6 points and 2 points", async () => {
-  // src/components/typography/typography-root.tsx:233-237,262-268
+test("X-002 pads the inline code chip by 6 points and keeps its box at 20 points", async () => {
+  // src/components/typography/typography-root.tsx:249-253,283-287
   // src/components/typography/typography.styles.ts:71
+  // heroui/packages/styles/components/typography.css:117-119
   const app = await openScenario("typography/code-padding", { platform: "web" });
   const shot = decodePng(await app.screenshot(), 0.15);
   /* The screenshot is the 1024 × 768 viewport at the browser's own scale
@@ -156,11 +161,89 @@ test("X-002 pads the inline code chip by 6 points and 2 points", async () => {
   expect(padRight).toBeGreaterThanOrEqual(4);
   expect(padRight).toBeLessThanOrEqual(9);
 
-  /* `py-0.5` = 2 points above and below the `text-sm` line (14 / 20): the box
-   * is 24 tall, where the span background that ignored padding hugged the
-   * glyphs (the bug measured 18). The ink keeps air above and below it too. */
-  expect(boxHeight).toBeGreaterThanOrEqual(23);
-  expect(boxHeight).toBeLessThanOrEqual(25);
+  /* Upstream's inline `<code>` is `text-sm`, a 14 / 20 line box, and its
+   * `py-0.5` lives inside that box rather than on top of it: the painted chip
+   * is the 20-point line, 20–21 in a screenshot. A View attachment that adds
+   * the 2-point padding around the line box measured 24 here, and a span that
+   * ignored padding hugged the glyphs (18). The full block ink keeps air above
+   * and below it. */
+  expect(boxHeight).toBeGreaterThanOrEqual(20);
+  expect(boxHeight).toBeLessThanOrEqual(21);
   expect(padTop).toBeGreaterThanOrEqual(1);
   expect(padBottom).toBeGreaterThanOrEqual(1);
+});
+
+/*
+ * X-003 / X-004 read the laid-out line boxes out of `onTextLayout` in
+ * harness/typography.fixtures.tsx. Three body-sm paragraphs carry the same
+ * copy at the same width: the plain paragraph is the control, the one with
+ * `Typography.Code` is the regression case, and the one with a nested body
+ * `Typography` span proves the probe can see a line grow to body's 28.
+ */
+
+type LineLayout = { text: string; height: number };
+
+function lineHeights(app: App, name: "plain-sm" | "code-sm" | "base-span"): number[] {
+  const calls = callsOf(app, "lines")
+    .map((args) => args[0] as { name: string; lines: LineLayout[] })
+    .filter((call) => call.name === name);
+  const found = calls[calls.length - 1];
+
+  if (!found) throw new Error(`no line layout recorded for ${name}`);
+
+  return found.lines.map((line) => line.height);
+}
+
+function openFixture(): Promise<App> {
+  return open("../../../typography.fixtures.tsx", {
+    platform: "web",
+    width: 1024,
+    height: 768,
+  });
+}
+
+// src/components/typography/typography-root.tsx:249-253,283-287
+// heroui/packages/styles/components/typography.css:117-119 (text-sm = 14 / 20)
+// heroui/packages/styles/components/typography.css:105-107 (body-sm = 14 / 24)
+/*
+ * The chip is a View attachment laid out at its own content size. Removing
+ * `py-0.5` from that View leaves it 20 points tall, inside the paragraph's
+ * 24-point strut, so it must not grow the line. Before the fix the attachment
+ * carried `text-sm`'s line box plus `py-0.5` (24) on top of the code root's
+ * body layout, and the line that held the code measured 28 while the rest
+ * stayed 24.
+ */
+test("X-003 keeps a body-sm line at 24 points beside an inline code", async () => {
+  const app = await openFixture();
+
+  const plain = lineHeights(app, "plain-sm");
+  const withCode = lineHeights(app, "code-sm");
+
+  expect(plain.length).toBeGreaterThanOrEqual(3);
+  for (const height of plain) expect(height).toBe(24);
+
+  expect(withCode.length).toBeGreaterThanOrEqual(3);
+  for (const height of withCode) expect(height).toBe(24);
+});
+
+// src/components/typography/typography-root.tsx:206-219
+// src/components/typography/typography.styles.ts:52-56 (defaultVariants.type)
+/*
+ * Upstream's `<code>` carries only the code declarations: it has no body
+ * class, so it inherits the paragraph's 14 / 24. The port computed the code
+ * root with `typographyVariants`, whose `defaultVariants.type = "body"` added
+ * `text-base leading-7`; the first matched span then resolved to 16, and the
+ * line that held the code grew to 28. The `base-span` case keeps the probe
+ * honest: a nested body span does report 28.
+ */
+test("X-004 lets an inline code inherit the paragraph's font and leading", async () => {
+  const app = await openFixture();
+
+  expect(app.spanStyle("text:typographyVariants").fontSize).toBe(14);
+
+  const withCode = lineHeights(app, "code-sm");
+  for (const height of withCode) expect(height).toBe(24);
+
+  const grown = lineHeights(app, "base-span");
+  expect(Math.max(...grown)).toBe(28);
 });

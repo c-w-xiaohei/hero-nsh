@@ -135,19 +135,21 @@ function CodeColor() {
   );
 }
 
-/* Regression X-002: the inline code box carries upstream's `px-1.5 py-0.5`
- * (`heroui/packages/styles/components/typography.css:117-119`: 6 and 2 points).
- * Four U+2588 FULL BLOCK characters fill their monospace cells, so the painted
- * box's edge minus the glyph ink is the padding itself, with no side bearing
- * left to guess; the reference app draws the same shapes.
+/* Regression X-002: the inline code keeps upstream's `px-1.5`
+ * (`heroui/packages/styles/components/typography.css:117-119`: 6 points each
+ * side). Four U+2588 FULL BLOCK characters fill their monospace cells, so the
+ * painted box's edge minus the glyph ink is the padding itself, with no side
+ * bearing left to guess; the reference app draws the same shapes.
  *
- * The paragraph's line is `leading-7` (28), taller than the chip, so the line
- * never stretches the box: its height is the code's own `text-sm` line (20)
- * plus the two paddings. */
+ * The paragraph is `size="sm"` (`body-sm`, 14 / 24). Upstream puts the inline
+ * `<code>` on the paragraph's line, where its `text-sm` line box is 20 points
+ * tall; `py-0.5` only exists inside that line box, so the painted chip is
+ * 20–21 points and the paragraph's line stays 24 rather than the 24-point
+ * View attachment growing it. */
 function CodePadding() {
   return (
     <Stage>
-      <Typography.Paragraph className="leading-7">
+      <Typography.Paragraph size="sm">
         <Typography.Code>{"████"}</Typography.Code>
       </Typography.Paragraph>
     </Stage>
