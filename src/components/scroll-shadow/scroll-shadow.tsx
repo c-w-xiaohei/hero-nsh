@@ -199,10 +199,17 @@ export function ScrollShadowRoot(props: ScrollShadowRootProps): JSX.Element {
   // laid out on: x 0 is left to right, x = the row's width is right to left.
   // This restores upstream's inherited `:dir(rtl)` (port sheet §8).
   const probedRtl = signal(false);
+  const probeMeasured = signal(false);
   const resolvedDir = computed<"ltr" | "rtl">(() => {
     if (local.dir === "ltr" || local.dir === "rtl") return local.dir;
     return probedRtl() ? "rtl" : "ltr";
   });
+  // The own `dir` names the direction directly; an inherited one is only known
+  // once the probe has laid out. The primitive needs to know which, because a
+  // horizontal offset cannot be read before the direction model is settled.
+  const isDirReady = computed(
+    () => local.dir === "ltr" || local.dir === "rtl" || probeMeasured(),
+  );
 
   const state = createScrollShadow({
     orientation: () => local.orientation,
@@ -211,6 +218,7 @@ export function ScrollShadowRoot(props: ScrollShadowRootProps): JSX.Element {
     visibility: () => local.visibility,
     isEnabled: () => local.isEnabled,
     dir: () => resolvedDir(),
+    isDirReady: () => isDirReady(),
     // A wrapper, not the prop itself: the primitive calls it when a state
     // change happens, and this read then returns the newest prop, as upstream's
     // `onVisibilityChangeRef` does (port sheet 4b, T-014).
@@ -294,7 +302,10 @@ export function ScrollShadowRoot(props: ScrollShadowRootProps): JSX.Element {
               only the mask and `direction` remain inline. */}
           <View
             class="h-0 w-0"
-            onLayout={(event) => probedRtl.set(event.bounds.origin.x > 0.5)}
+            onLayout={(event) => {
+              probedRtl.set(event.bounds.origin.x > 0.5);
+              probeMeasured.set(true);
+            }}
           />
         </If>
         {renderChildren(local.children)}

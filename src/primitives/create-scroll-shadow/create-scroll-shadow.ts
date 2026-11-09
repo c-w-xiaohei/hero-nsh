@@ -48,12 +48,21 @@ export interface CreateScrollShadowProps {
   isEnabled: Accessor<boolean | undefined>;
 
   /**
-   * The root's own layout direction (`"ltr"` / `"rtl"`), which picks the
-   * physical side of the horizontal fade. NSH cannot read an inherited
-   * direction, so only this component's own `dir` reaches the primitive
-   * (port sheet §8). Absent means left to right.
+   * The root's layout direction (`"ltr"` / `"rtl"`), which picks the physical
+   * side of the horizontal fade and the meaning of the horizontal offset. NSH
+   * cannot read an inherited direction, so the component resolves it from its
+   * own `dir` or from the direction probe (port sheet §8). Absent means left
+   * to right.
    */
   dir?: Accessor<"ltr" | "rtl" | "auto" | undefined>;
+
+  /**
+   * Whether `dir` is settled rather than a default guess: `true` when the
+   * component's own `dir` names a direction, or once the direction probe has
+   * laid out. A horizontal offset cannot be interpreted before that. Defaults
+   * to `true`.
+   */
+  isDirReady?: Accessor<boolean>;
 
   /**
    * Called with the new state when the pair (can scroll before, can scroll
@@ -140,6 +149,16 @@ export function createScrollShadow(
   // starts only once a content extent is known (port sheet §2).
   const hasContentSize = signal(false);
 
+  // Whether the host has reported its own offset. NSH's horizontal offset is
+  // the distance from the content's left edge, so a right-to-left view rests at
+  // `x = maxScroll`; the signal's placeholder is `0`. Until the host reports (or
+  // the direction is settled), a horizontal box is at its logical start, whose
+  // `scrollStart` is 0 in both directions. Reading the placeholder as a real
+  // offset would call a resting RTL box "scrolled to the end" and publish a
+  // false start-edge state and mask before the host's first `onScroll`
+  // (review round 1; the upstream layout effect reads the settled `scrollLeft`).
+  const hasOffset = signal(false);
+
   // Upstream measures `scrollTop` and `Math.abs(scrollLeft)`. Vertical offsets
   // are the distance from the top in both directions. A horizontal NSH scroll
   // reports its offset from the content's left edge whether the layout is left
@@ -148,6 +167,14 @@ export function createScrollShadow(
   // to that end there. On the web this replaces the browser's negative
   // `scrollLeft` model that upstream's `Math.abs` corrects for (port sheet §8).
   const rtl = computed(() => props.dir?.() === "rtl");
+
+  const isDirReady = computed(() => props.isDirReady?.() ?? true);
+
+  // The axis offset is only interpretable once the direction model is settled.
+  // Vertical offsets mean the same thing both ways, so only horizontal waits.
+  const isAxisOffsetReady = computed(
+    () => isVertical() || (hasOffset() && isDirReady()),
+  );
 
   const clientSize = computed(() =>
     isVertical() ? viewport().height : viewport().width,
@@ -162,9 +189,13 @@ export function createScrollShadow(
   const maxScroll = computed(() => Math.max(0, contentSize() - clientSize()));
 
   const scrollStart = computed(() => {
-    const x = Math.abs(scroll().x);
-
     if (isVertical()) return scroll().y;
+
+    // Not measured yet: the view is resting at its logical start, whichever
+    // direction it lays out in.
+    if (!isAxisOffsetReady()) return 0;
+
+    const x = Math.abs(scroll().x);
 
     return rtl() ? Math.max(0, maxScroll() - x) : x;
   });
@@ -306,6 +337,7 @@ export function createScrollShadow(
       content.set({ width: event.contentSize.width, height: event.contentSize.height });
       viewport.set({ width: event.size.width, height: event.size.height });
       hasContentSize.set(true);
+      hasOffset.set(true);
     },
 
     onViewportLayout(event) {
