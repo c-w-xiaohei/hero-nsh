@@ -165,7 +165,7 @@ test("T-039 supports 'aria-label'", async () => {
 // aria-describedby have no NSH channel. Kept: the description is on screen
 // exactly once and the Label still names the checkbox.
 test("T-041 supports visible description", async () => {
-  const app = await openCase("item-description");
+  const app = await openCase("group-item-description");
 
   expect(app.count("text:Description")).toBe(1);
   expect(app.shows("role:checkbox[Label]")).toBe(true);

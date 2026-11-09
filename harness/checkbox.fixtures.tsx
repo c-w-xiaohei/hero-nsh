@@ -37,7 +37,7 @@ import { probe } from "@scenario/probe";
  *   control-click          Control has testID="control" (pressing a child view)
  *   indicator              a custom Indicator draws a ✓ only when selected
  *   visible-label          a Label inside Content
- *   item-description       a Label inside Content and a Description beside it
+ *   group-item-description       a Label inside Content and a Description beside it
  *   test-id                testID="terms" on the root (T-004)
  *   group-log              a group with two items, group and item onChange
  *                          probes, a `✓` marker beside each selected item
@@ -501,7 +501,7 @@ function Fixture() {
   if (name === "control-click") return <ControlClickCase />;
   if (name === "indicator") return <IndicatorCase />;
   if (name === "visible-label") return <VisibleLabelCase />;
-  if (name === "item-description") return <ItemDescriptionCase />;
+  if (name === "group-item-description") return <ItemDescriptionCase />;
   if (name === "test-id") return <TestIdCase />;
   if (name === "group-log") return <GroupLogCase />;
   if (name === "group-disabled") return <GroupDisabledCase />;
