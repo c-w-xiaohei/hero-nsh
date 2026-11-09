@@ -16,6 +16,7 @@ import {
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { FormContext } from "../form/context";
 import { ButtonGroupContext } from "./button-group-context";
 import { buttonGroupItemClasses } from "./button-group-classes";
 import { buttonVariants, type ButtonVariants } from "./button.styles";
@@ -83,8 +84,9 @@ export interface ButtonRootProps extends ButtonVariants, AriaProps, GlobalDomPro
   onMouseLeave?: (e: NshMouseEvent) => void;
   onFocus?: () => void;
   onBlur?: () => void;
-  /** React Aria DOM / form props: accepted for API parity, no effect in NSH. */
+  /** `submit` submits the enclosing Form; `button` (default) and `reset` do nothing (NSH has no native form). */
   type?: "button" | "submit" | "reset";
+  /** React Aria DOM / form props: accepted for API parity, no effect in NSH. */
   form?: string;
   formAction?: string;
   formEncType?: string;
@@ -114,6 +116,11 @@ export function ButtonRoot(props: ButtonRootProps) {
   // trigger. NSH has no handler injection channel, so the Button consumes the
   // trigger context itself; outside one it is `null` and nothing changes.
   const overlayTrigger = OverlayTriggerContext();
+  // Form sheet §5.2: `<Button type="submit">` is how HeroUI submits the form
+  // around it. NSH has no native submit event, so the Button asks the enclosing
+  // Form through its context; outside a Form this is `undefined` and nothing
+  // changes.
+  const form = FormContext();
 
   const isHovered = signal(false);
   const isPressed = signal(false);
@@ -205,6 +212,11 @@ export function ButtonRoot(props: ButtonRootProps) {
     // Before the caller's `onPress`, as PressResponder's handler runs before
     // the element's own: a disabled Button never reaches this line.
     overlayTrigger?.toggle();
+    // Form sheet §5.2: a submit Button asks the enclosing Form; `button` (the
+    // default) and `reset` do nothing, NSH having no native form.
+    if (props.type === "submit") {
+      form?.submit();
+    }
     props.onPress?.(event);
   };
 
