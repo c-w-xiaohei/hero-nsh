@@ -10,7 +10,7 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, signal, split, View } from "nsh";
+import { cleanup, computed, effect, openUrl, signal, split, View } from "nsh";
 
 import {
   createSelectableItem,
@@ -30,6 +30,7 @@ import {
   CollectionItemContext,
   MenuContext,
   MenuItemContext,
+  type MenuActivationKey,
   type MenuItemContextValue,
   type MenuItemDescriptor,
   MenuSectionContext,
@@ -75,6 +76,9 @@ const NEUTRAL_RENDER_PROPS: MenuItemRenderProps = {
   isDragging: () => false,
   isDropTarget: () => false,
 };
+
+/** `http:`, `mailto:`, `tel:` …: what `openUrl` accepts; `#anchor` is not. */
+const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:/i;
 
 export interface MenuItemRootProps<T = unknown> extends MenuItemVariants {
   /** The row content, or a render function called once with accessor values. */
@@ -151,12 +155,19 @@ export interface MenuItemRootProps<T = unknown> extends MenuItemVariants {
 
   onBlur?: () => void;
 
+  /** Called when the row gains or loses the menu's `focusedKey` (virtual focus). */
+  onFocusChange?: (isFocused: boolean) => void;
+
   /** A DOM key event upstream; accepted, no effect (keys are the root's). */
   onKeyDown?: unknown;
 
   onKeyUp?: unknown;
 
-  /** Link props: accepted, no effect (there is no DOM anchor, port sheet section 8). */
+  /**
+   * Link props. `href` navigates through `openUrl` on activation (there is no
+   * DOM anchor); `target`, `rel` and the rest of the anchor semantics stay
+   * without effect (port sheet section 8).
+   */
   href?: string;
 
   target?: string;
@@ -196,14 +207,15 @@ export interface MenuItemRootProps<T = unknown> extends MenuItemVariants {
 
 /**
  * The key React Aria derives for an entry: `id` → the object's `id` → its
- * `key` → the item's index (`react-aria-components/src/Menu.tsx:513`).
+ * `key` → the item's index (`react-aria-components/src/Menu.tsx:513`). An entry
+ * with none of them gets a generated key from the root; `textValue` is not part
+ * of the order (`react-aria/dist/private/collections/Document.js:212`).
  */
 function resolveKey(
   id: string | number | undefined,
   value: unknown,
   index: number | undefined,
-  textValue: string | undefined,
-): string {
+): string | undefined {
   if (id != null) {
     return String(id);
   }
@@ -225,7 +237,7 @@ function resolveKey(
     return String(index);
   }
 
-  return textValue ?? "";
+  return undefined;
 }
 
 /**
@@ -269,6 +281,7 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     "onMouseLeave",
     "onFocus",
     "onBlur",
+    "onFocusChange",
     "onKeyDown",
     "onKeyUp",
     "href",
@@ -305,12 +318,14 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
   const id = local.id;
   const value =
     local.value !== undefined ? local.value : collectionItem?.value();
-  const key = resolveKey(
+  const resolvedKey = resolveKey(
     id,
     value,
     collectionItem ? collectionItem.index() : undefined,
-    local.textValue,
   );
+  // React Aria auto-keys an entry that carries no identity, so two id-less
+  // static rows stay two collection nodes instead of sharing the empty string.
+  const key = resolvedKey ?? list.createItemKey();
 
   const variant = computed(() => local.variant ?? "default");
 
@@ -323,6 +338,9 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     selectionManager,
     key: () => key,
     disabled: () => local.isDisabled === true || list.isDisabledKey(key),
+    // RAC's `useMenuItem` selects on the completed press
+    // (`useMenuItem.js:125`), so a press dragged off the row is cancelled.
+    shouldSelectOnPressUp: () => true,
   });
 
   const labelSource = signal<{ read: () => string | undefined } | undefined>(
@@ -376,6 +394,29 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     isDropTarget: () => false,
   };
 
+  // `MenuItemProps` inherits FocusEvents upstream (`Menu.tsx:518-529`) and
+  // `useMenuItem` wires `focusableProps` (`useMenuItem.js:160-230`). Rows here
+  // only hold the menu's virtual focus, so gaining or losing `focusedKey` is
+  // the moment those events report.
+  let wasFocused = false;
+
+  effect(() => {
+    const focused = isFocused();
+
+    if (focused === wasFocused) {
+      return;
+    }
+
+    wasFocused = focused;
+    local.onFocusChange?.(focused);
+
+    if (focused) {
+      local.onFocus?.();
+    } else {
+      local.onBlur?.();
+    }
+  });
+
   const slots = computed(() => menuItemVariants({ variant: variant() }));
 
   const resolvedClassName = () => {
@@ -407,36 +448,57 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
   };
 
   /**
-   * React Aria's close decision: an explicit `shouldCloseOnSelect` wins, read
-   * Item → Section → Menu; otherwise single, `none` and link entries close and
-   * a multiple menu stays open. A submenu trigger never acts or closes.
+   * React Aria's close rule, per press source and per key
+   * (`react-aria@3.48.0/dist/private/menu/useMenuItem.js:114`): pointer closes
+   * unless the menu is multiple; keyboard Enter closes, keyboard Space only
+   * when the mode has no selection state (or the row is a link). An explicit
+   * `shouldCloseOnSelect` (Item → Section → Menu) wins over both, and a submenu
+   * trigger never acts or closes.
+   *
+   * The host press on macOS and the web carries no key identity (the common
+   * rules keep Return / Space unbound there), so an unnamed keyboard activation
+   * takes Enter's branch; the Windows binding names the key.
    */
-  const shouldCloseAfterActivation = () => {
+  const isLink = () => local.href != null;
+
+  const shouldCloseAfterActivation = (
+    source: "pointer" | "keyboard",
+    keyName?: MenuActivationKey,
+  ) => {
     const explicit =
       local.shouldCloseOnSelect ??
       section?.shouldCloseOnSelect?.() ??
       list.shouldCloseOnSelect();
 
-    if (explicit != null) {
-      return explicit;
-    }
-
     if (hasSubmenu()) {
       return false;
     }
 
-    return selectionManager().selectionMode() !== "multiple";
+    if (explicit != null) {
+      return explicit;
+    }
+
+    const mode = selectionManager().selectionMode();
+
+    if (source === "pointer") {
+      return mode !== "multiple" || isLink();
+    }
+
+    return keyName !== "Space" || mode === "none" || isLink();
   };
 
   /**
    * The single activation entry for pointer, keyboard and the Windows binding.
-   * Selection and action are two halves (port sheet section 5): a pointer
-   * selects on press down and acts on release; the keyboard does both here.
+   * Selection and action are two halves (port sheet section 5): a press selects
+   * on release, the keyboard does both here. A link row replays its navigation
+   * through `openUrl` after the action, as React Aria's `useMenuItem` opens the
+   * link after `performAction`.
    */
   const activate = (
     source: "pointer" | "keyboard",
     event?: PressEvent,
     modifiers?: SelectionModifiers,
+    keyName?: MenuActivationKey,
   ) => {
     if (selectable.isDisabled()) {
       return;
@@ -455,7 +517,16 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
 
     fireAction();
 
-    if (shouldCloseAfterActivation()) {
+    // The native anchor's navigation, replayed: only an absolute URL is handed
+    // to the host; a relative path or `#anchor` fires the handlers and stops
+    // (port sheet section 8, as Link does).
+    const href = local.href;
+
+    if (href !== undefined && ABSOLUTE_URL.test(href)) {
+      void openUrl(href).catch(() => {});
+    }
+
+    if (shouldCloseAfterActivation(source, keyName)) {
       list.onClose();
     }
   };
@@ -586,6 +657,16 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     isHovered.set(true);
     local.onHoverStart?.(event);
     local.onHoverChange?.(true);
+
+    // RAC's `useMenuItem` moves the virtual focus to the hovered row while the
+    // keyboard ring is off (`useMenuItem.js:145-152`), so a pointer sweep after
+    // a keyboard interaction leaves `focusedKey` on the row under the cursor.
+    if (!list.isKeyboard()) {
+      const manager = selectionManager();
+
+      manager.setFocused(true);
+      manager.setFocusedKey(key);
+    }
   };
 
   const handleMouseLeave = (event: NshMouseEvent) => {
@@ -827,7 +908,9 @@ export function MenuItemIndicator(
   // stroke drawing; the transition exists only while selected, as R-016 says.
   const checkmark = () => (
     <View
-      class="size-2.5 border-b-2 border-s-2 -rotate-45"
+      // `border-l-2` is physical, as HeroUI's SVG polyline is: a logical
+      // `border-s-2` would mirror the tick into an inverted V in RTL.
+      class="size-2.5 border-b-2 border-l-2 -rotate-45"
       classList={{
         "opacity-100 scale-100": isSelected(),
         "opacity-0": !isSelected(),

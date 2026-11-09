@@ -39,6 +39,7 @@ import { renderChildren } from "./children";
 import {
   CollectionItemContext,
   MenuContext,
+  type MenuActivationKey,
   type MenuContextValue,
   type MenuDescriptor,
   type MenuItemDescriptor,
@@ -307,6 +308,13 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
   const createSectionKey = () =>
     `\u0000nsh-menu-section:${generatedSectionCount++}`;
 
+  // The entry counterpart: React Aria gives an entry with no `id`, no value and
+  // no index a generated key (`react-aria/dist/private/collections/
+  // Document.js:212`), so two id-less static rows never share one node.
+  let generatedItemCount = 0;
+
+  const createItemKey = () => `\u0000nsh-menu-item:${generatedItemCount++}`;
+
   const isDisabledKey = (key: string) => {
     const keys = local.disabledKeys;
 
@@ -426,6 +434,7 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     source: "pointer" | "keyboard",
     event?: PressEvent,
     modifiers?: SelectionModifiers,
+    keyName?: MenuActivationKey,
   ) => {
     const key = manager().focusedKey();
 
@@ -433,7 +442,12 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
       return;
     }
 
-    findItemDescriptor(descriptors(), key)?.activate(source, event, modifiers);
+    findItemDescriptor(descriptors(), key)?.activate(
+      source,
+      event,
+      modifiers,
+      keyName,
+    );
   };
 
   const runKey = (key: string, modifiers?: SelectionModifiers) => {
@@ -524,13 +538,17 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
 
   // The Windows exception: the host reports Return / Space as a press only on
   // macOS and the web, so Windows resolves them through the same activation.
+  // The binding is the one channel that names the key, so it forwards it: React
+  // Aria's close rule treats Enter and Space differently.
   if (platform.os === "windows") {
-    navigationBindings.enter = () => activateFocused("keyboard");
+    navigationBindings.enter = () =>
+      activateFocused("keyboard", undefined, undefined, "Enter");
     navigationBindings["shift+enter"] = () =>
-      activateFocused("keyboard", undefined, { shift: true });
-    navigationBindings.space = () => activateFocused("keyboard");
+      activateFocused("keyboard", undefined, { shift: true }, "Enter");
+    navigationBindings.space = () =>
+      activateFocused("keyboard", undefined, undefined, "Space");
     navigationBindings["shift+space"] = () =>
-      activateFocused("keyboard", undefined, { shift: true });
+      activateFocused("keyboard", undefined, { shift: true }, "Space");
   }
 
   // `isCtrlKeyPressed` wants `platform` on Apple and `control` elsewhere; the
@@ -663,6 +681,7 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     focusRoot,
     focusRootFromPointer,
     createSectionKey,
+    createItemKey,
     notePointer: () => modality.setPointerModality(),
     keyboardPressedKey,
     registerItemLayout: selectableList.registerItemLayout,

@@ -44,11 +44,14 @@ export interface MenuItemDescriptor {
    * The one activation entry: a pointer press, Return / Space on the focused
    * root, and the Windows key binding all arrive here. It runs the selection
    * half, then the action half, then the close decision (port sheet section 5).
+   * `keyName` names the activating key where the channel exposes it (the
+   * Windows bindings); a host press carries no key identity.
    */
   activate: (
     source: "pointer" | "keyboard",
     event?: PressEvent,
     modifiers?: SelectionModifiers,
+    keyName?: MenuActivationKey,
   ) => void;
 }
 
@@ -68,6 +71,9 @@ export interface MenuSectionDescriptor {
   /** The entries registered inside this section. */
   children: () => readonly MenuItemDescriptor[];
 }
+
+/** The activating key, when the channel reports it: React Aria's close rule reads it. */
+export type MenuActivationKey = "Enter" | "Space";
 
 /**
  * Put a registry back into rendered order: a dynamic row's `order` is its
@@ -139,6 +145,13 @@ export interface MenuContextValue {
 
   /** A fresh, non-empty key for a static Section that was given no `id`. */
   createSectionKey: () => string;
+
+  /**
+   * A fresh, non-empty key for a static entry that was given no `id`, `value`
+   * or index (React Aria's auto key, `react-aria/dist/private/collections/
+   * Document.js`).
+   */
+  createItemKey: () => string;
 
   /** Records a pointer interaction on the root's modality tracker. */
   notePointer: () => void;
