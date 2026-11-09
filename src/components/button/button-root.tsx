@@ -15,6 +15,7 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { ButtonGroupContext } from "./button-group-context";
 import { buttonGroupItemClasses } from "./button-group-classes";
 import { buttonVariants, type ButtonVariants } from "./button.styles";
@@ -109,6 +110,10 @@ export interface ButtonRootProps extends ButtonVariants, AriaProps, GlobalDomPro
  */
 export function ButtonRoot(props: ButtonRootProps) {
   const group = ButtonGroupContext();
+  // Port sheet popover §5.2: a Button written inside a popover root becomes its
+  // trigger. NSH has no handler injection channel, so the Button consumes the
+  // trigger context itself; outside one it is `null` and nothing changes.
+  const overlayTrigger = OverlayTriggerContext();
 
   const isHovered = signal(false);
   const isPressed = signal(false);
@@ -197,6 +202,9 @@ export function ButtonRoot(props: ButtonRootProps) {
     }
 
     notePress(event);
+    // Before the caller's `onPress`, as PressResponder's handler runs before
+    // the element's own: a disabled Button never reaches this line.
+    overlayTrigger?.toggle();
     props.onPress?.(event);
   };
 
@@ -276,6 +284,11 @@ export function ButtonRoot(props: ButtonRootProps) {
   let node: ViewRef | undefined;
   const handleRef = (next: ViewRef) => {
     node = next;
+    // The popover anchor and focus-return target (§5.2). The registration
+    // hands back its cleanup, held by the same owner as ButtonGroup's.
+    if (overlayTrigger) {
+      cleanup(overlayTrigger.registerTrigger(next));
+    }
     props.ref?.(next);
   };
 
@@ -300,7 +313,7 @@ export function ButtonRoot(props: ButtonRootProps) {
       disabled: isDisabled() || isPending() || own.disabled === true,
       busy: props["aria-busy"] ?? own.busy,
       checked: props["aria-checked"] ?? own.checked,
-      expanded: props["aria-expanded"] ?? own.expanded,
+      expanded: props["aria-expanded"] ?? overlayTrigger?.isOpen() ?? own.expanded,
       pressed: props["aria-pressed"] ?? own.pressed,
       selected: props["aria-selected"] ?? own.selected,
     };
