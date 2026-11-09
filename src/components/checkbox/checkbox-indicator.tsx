@@ -1,4 +1,4 @@
-import { Canvas, computed, Path2D, split, untracked, View } from "nsh";
+import { Canvas, computed, Path2D, split, View } from "nsh";
 import type {
   CanvasRenderingContext2D,
   CanvasSize,
@@ -161,13 +161,20 @@ export function CheckboxIndicator(
     isRequired: ctx.isRequired,
   };
 
+  // The render prop runs inside the `computed` rather than under `untracked`,
+  // because HeroUI calls it on every render and a body may return a
+  // conditional tree (`children(state)` in `checkbox.tsx:144`, so
+  // `({ isSelected }) => isSelected() ? <Check /> : null` is legal usage). With
+  // the call untracked, that whole tree is decided once and freezes; tracking it
+  // re-runs the body when the state it read at the top level changes.
+  // A body that reads the state only inside its child expressions still reads
+  // nothing here (the expressions are NSH's reactive children), so the common
+  // case is still built once and left alone.
   const custom = computed(() => {
     const value = children();
 
     if (typeof value === "function" && value.length >= 1) {
-      return untracked(() =>
-        (value as (values: CheckboxFieldRenderProps) => JSX.Element)(fieldRenderProps),
-      );
+      return (value as (values: CheckboxFieldRenderProps) => JSX.Element)(fieldRenderProps);
     }
 
     return value as JSX.Element;
