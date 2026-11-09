@@ -11,8 +11,8 @@ export type BreadcrumbsKey = string | number;
  *
  * HeroUI reads the same facts from React Aria's collection (`node.key`,
  * `node.nextKey`); NSH has no collection introspection, so the Root keeps an
- * ordered registry of the items that mounted under it and the last entry is
- * the current page (port sheet section 2).
+ * ordered registry of the items that mounted under it: the last entry in
+ * display order is the current page (port sheet section 2).
  */
 export interface BreadcrumbsContextValue {
   /** The root instance's variant table result; each Item reads its own slot. */
@@ -27,14 +27,19 @@ export interface BreadcrumbsContextValue {
   /** The root's `onAction`, called with the item's key on every press. */
   onAction: (key: BreadcrumbsKey) => void;
 
-  /** The last registered item: RAC's `node.nextKey == null`. */
+  /** The last item in display order: RAC's `node.nextKey == null`. */
   lastKey: Accessor<BreadcrumbsKey | undefined>;
 
   /**
-   * Registers one item in mount order; the returned function unregisters it.
-   * Called from the item body, as the registration snippet of research 4.2.
+   * Registers one item; the returned function unregisters it. Called from the
+   * item body, as the registration snippet of research 4.2. `order` is the
+   * item's row index in a dynamic `items` collection (a `null` collection
+   * leaves it undefined, and the registry falls back to mount order).
    */
-  register: (key: BreadcrumbsKey) => () => void;
+  register: (
+    key: BreadcrumbsKey,
+    order?: Accessor<number | undefined>,
+  ) => () => void;
 
   /** A fresh key for an item written without `id`: its registration index. */
   createKey: () => BreadcrumbsKey;
@@ -45,5 +50,19 @@ export interface BreadcrumbsContextValue {
  * registration point and no separator upstream either.
  */
 export const BreadcrumbsContext = context<BreadcrumbsContextValue | undefined>(
+  undefined,
+);
+
+/**
+ * The data index of the row an Item was rendered for, set by `Breadcrumbs.Root`
+ * around each row of a dynamic `items` collection.
+ *
+ * React Aria's collection order is the item order the caller wrote, and a
+ * reorder moves the current page with it. `Each` keeps rows by item (its
+ * default key), so a reordered row keeps its component and only its index
+ * signal changes; `Breadcrumbs.Item` therefore hands this accessor to the
+ * registry instead of a captured number.
+ */
+export const BreadcrumbsOrderContext = context<Accessor<number> | undefined>(
   undefined,
 );

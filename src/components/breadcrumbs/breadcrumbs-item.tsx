@@ -11,6 +11,7 @@ import { IconChevronRight } from "../icons";
 import { Link, type LinkRenderProps, type LinkRootProps } from "../link";
 import {
   BreadcrumbsContext,
+  BreadcrumbsOrderContext,
   type BreadcrumbsKey,
 } from "./breadcrumbs-context";
 import { renderChildren } from "./children";
@@ -48,7 +49,11 @@ export type BreadcrumbsItemProps = Omit<
   /** Appended after the item slot classes, on the item's own `View`. */
   className?: string | ((values: BreadcrumbsItemRenderProps) => string);
 
-  /** NSH style keys instead of React's `CSSProperties` (sheet §8). */
+  /**
+   * NSH style keys instead of React's `CSSProperties` (sheet §8). It lands on
+   * both the item box and the inner `Link`, as upstream's two `{...props}`
+   * spreads do (breadcrumbs.tsx:90 and :99).
+   */
   style?: StyleProp<ViewStyle>;
 
   /** A React Aria `Key`: the registration key and the `onAction` payload. */
@@ -88,13 +93,16 @@ export function BreadcrumbsItem(props: BreadcrumbsItemProps): JSX.Element {
   }
 
   const slots = root.slots;
+  // The row's data index when the Item was rendered by an `items` collection;
+  // undefined for static children, whose mount order is their write order.
+  const order = BreadcrumbsOrderContext();
 
   // Identity values are read once on purpose: the key must not move under the
   // item while the registry is live. An item written without `id` takes its
   // registration index, React Aria's positional key.
   const key = local.id ?? root.createKey();
 
-  cleanup(root.register(key));
+  cleanup(root.register(key, order));
 
   const isCurrent = computed(() => root.lastKey() === key);
   // React Aria's render values: the root's `isDisabled` or the current page.
@@ -122,11 +130,20 @@ export function BreadcrumbsItem(props: BreadcrumbsItemProps): JSX.Element {
 
   // R-004: `.breadcrumbs__link[data-current="true"]` → `color:var(--link);
   // opacity:1`. There is no `data-current` attribute channel (D18): the
-  // registry decides the current item, and its link appends `text-link
-  // opacity-100` after the link slot, so the later classes win over
-  // `text-muted` (and over Link's disabled `opacity-50`).
+  // registry decides the current item, and its link appends `text-link` after
+  // the link slot, so it wins over `text-muted`. Upstream renders the current
+  // link with `aria-disabled="true"` (React Aria's LinkContext) and hides the
+  // disabled opacity with the current rule: `.breadcrumbs .breadcrumbs__link
+  // [data-current="true"]` (0,3,0) outranks `.link[aria-disabled="true"]`
+  // (0,2,0) in packages/styles/components/breadcrumbs.css:14-16. In NSH Link's
+  // `disabled:opacity-50` is a variant and sorts after plain utilities
+  // (twref:51), so the current item needs the same disabled-level override,
+  // `disabled:opacity-100`; every other disabled link keeps 0.5.
   const linkClassName = (_values: LinkRenderProps): string =>
-    joinClassNames(slots.link(), isCurrent() ? "text-link opacity-100" : undefined);
+    joinClassNames(
+      slots.link(),
+      isCurrent() ? "text-link opacity-100 disabled:opacity-100" : undefined,
+    );
 
   // The link's `onPress` runs the root's `onAction` first and then the
   // caller's handler, the order `mergeProps` gives context and props.
@@ -205,6 +222,10 @@ export function BreadcrumbsItem(props: BreadcrumbsItemProps): JSX.Element {
         // Link maps it into `accessibilityState.current`.
         aria-current={ariaCurrent()}
         className={linkClassName}
+        // Upstream spreads `{...props}` onto the `li` and the inner `<a>`, so
+        // a caller's `style` lands on both boxes (breadcrumbs.tsx:90 and :99);
+        // this mirrors the two spreads, non-inherited keys included.
+        style={local.style}
         onPress={handlePress}
       >
         {renderChildren(value as JSX.Element)}

@@ -1,4 +1,5 @@
 import type {
+  Accessor,
   Bounds,
   JSX,
   StyleProp,
@@ -11,6 +12,7 @@ import { renderChildren } from "./children";
 import { joinClassNames } from "./class-names";
 import {
   BreadcrumbsContext,
+  BreadcrumbsOrderContext,
   type BreadcrumbsContextValue,
   type BreadcrumbsKey,
 } from "./breadcrumbs-context";
@@ -105,7 +107,9 @@ export interface BreadcrumbsRootProps<T = unknown>
  * HeroUI gets "which item is current" from React Aria's collection
  * (`node.nextKey == null`). NSH cannot see its children, so every Item
  * registers its key here when it mounts and unregisters on cleanup; the last
- * key in mount order is the current page (research 4.2, port sheet section 2).
+ * key in display order is the current page (research 4.2, port sheet
+ * section 2). A dynamic `items` row registers with its data index, so a
+ * reorder moves the current page even though `Each` keeps the row mounted.
  */
 export function BreadcrumbsRoot<T = unknown>(
   props: BreadcrumbsRootProps<T>,
@@ -133,35 +137,76 @@ export function BreadcrumbsRoot<T = unknown>(
 
   const slots = breadcrumbsVariants();
 
-  // The ordered registry: mount order is the order the items are written in.
-  // A dynamic `items` list registers in data order, because its rows mount in
-  // data order (research 4.2's ordering rule).
-  const keys = signal<BreadcrumbsKey[]>([]);
+  /**
+   * One registered item: its key and, for a dynamic `items` collection, the
+   * accessor for its row's data index.
+   */
+  interface Entry {
+    key: BreadcrumbsKey;
+    order?: Accessor<number | undefined>;
+  }
+
+  // The registry in display order. Static children have no collection to read
+  // an order from, so their mount order is the order they are written in; a
+  // dynamic `items` list registers each row with its data index, which follows
+  // a reorder even though `Each` keeps the row (and the Item) mounted.
+  const entries = signal<Entry[]>([]);
   // The key React Aria would take from the collection: the item's position.
   let nextKey = 0;
 
   const createKey = (): BreadcrumbsKey => nextKey++;
 
-  const register = (key: BreadcrumbsKey): (() => void) => {
-    keys.set([...keys(), key]);
+  const register = (
+    key: BreadcrumbsKey,
+    order?: Accessor<number | undefined>,
+  ): (() => void) => {
+    entries.set([...entries(), { key, order }]);
 
     // One occurrence: two items written with the same `id` (which React Aria
     // also asks to be unique) each take their own slot, and the last one is
-    // still the last in mount order.
+    // still the last in display order.
     return () => {
-      const entries = keys();
-      const index = entries.indexOf(key);
+      const current = entries();
+      const index = current.findIndex((entry) => entry.key === key);
 
       if (index >= 0) {
-        keys.set([...entries.slice(0, index), ...entries.slice(index + 1)]);
+        entries.set([...current.slice(0, index), ...current.slice(index + 1)]);
       }
     };
   };
 
+  /**
+   * RAC's `node.nextKey == null`: the last item in collection order.
+   *
+   * With `items`, every entry carries its row's index, so the highest index is
+   * the last item however the rows are ordered in the registry; a tie (two
+   * items in one row) goes to the later mount, as `Each` renders them in
+   * order. Without an order to compare (static children), the later mount wins
+   * — the order the items are written in.
+   */
   const lastKey = computed(() => {
-    const entries = keys();
+    const current = entries();
 
-    return entries[entries.length - 1];
+    if (current.length === 0) {
+      return undefined;
+    }
+
+    const orders = current.map((entry) => entry.order?.());
+    const ordered = orders.every((order) => order !== undefined);
+
+    if (!ordered) {
+      return current[current.length - 1]?.key;
+    }
+
+    let winner = 0;
+
+    for (let index = 1; index < current.length; index++) {
+      if ((orders[index] as number) >= (orders[winner] as number)) {
+        winner = index;
+      }
+    }
+
+    return current[winner]?.key;
   });
 
   const contextValue: BreadcrumbsContextValue = {
@@ -178,17 +223,26 @@ export function BreadcrumbsRoot<T = unknown>(
 
   /**
    * One row of a dynamic collection: the caller's function child, called in
-   * data order, so the registry order is the data order (port sheet §1, §5).
+   * data order, with the row's index handed down as its display order (port
+   * sheet §1, §5). The index accessor is the provider value itself so a
+   * re-render does not change the context identity and remount the Item.
    */
-  const renderRow = (item: T, index: number): JSX.Element => {
+  const renderRow = (item: T, index: Accessor<number>): JSX.Element => {
     const children = local.children;
 
     if (typeof children !== "function") {
       return null;
     }
 
-    return renderChildren(
-      (children as (value: T, position: number) => JSX.Element)(item, index),
+    return (
+      <BreadcrumbsOrderContext.Provider value={index}>
+        {renderChildren(
+          (children as (value: T, position: number) => JSX.Element)(
+            item,
+            untracked(() => index()),
+          ),
+        )}
+      </BreadcrumbsOrderContext.Provider>
     );
   };
 
@@ -215,7 +269,7 @@ export function BreadcrumbsRoot<T = unknown>(
             local or an `If` `else` element would freeze it. */}
         <If when={hasItems()}>
           <Each of={local.items}>
-            {(item, index) => renderRow(item(), untracked(() => index()))}
+            {(item, index) => renderRow(item(), index)}
           </Each>
         </If>
         <If when={!hasItems()}>{renderChildren(local.children as JSX.Element)}</If>

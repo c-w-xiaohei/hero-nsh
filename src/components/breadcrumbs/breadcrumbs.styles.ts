@@ -45,11 +45,12 @@ export const breadcrumbsVariants = tv({
      * R-006: `.breadcrumbs__separator` → `width:.75rem; height:.75rem` →
      * `size-3`. It follows the icon's default `h-4 w-4`, so `size-3` wins; a
      * custom element separator carries it on the wrapper View instead.
-     * R-008 is deleted: `.breadcrumbs__separator { rtl:rotate-180 }` has no
-     * host channel, NSH has no writing direction and no `dir` attribute
-     * (port sheet §5).
+     * R-008: `.breadcrumbs__separator { rtl:rotate-180 }` → `rtl:rotate-180`.
+     * NSH has the variant (twref:449, "the layout direction"), so the mirror
+     * is written here, on the slot upstream applies it to: the default
+     * chevron's `className` and the custom separator's wrapper both take it.
      */
-    separator: "size-3",
+    separator: "size-3 rtl:rotate-180",
   },
 });
 
