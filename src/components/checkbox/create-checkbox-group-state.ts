@@ -59,6 +59,13 @@ export interface CreateCheckboxGroupStateProps {
     | ((value: string[]) => true | string | CheckboxGroupValidationError | null | undefined)
     | undefined
   >;
+
+  /**
+   * When the validation message appears: `"native"` (the default) waits for
+   * the first change, `"aria"` shows the live `validate` result from the first
+   * render and follows controlled value changes (RAC `Checkbox.tsx:434-447`).
+   */
+  validationBehavior?: Accessor<"native" | "aria" | undefined>;
 }
 
 /**
@@ -147,6 +154,8 @@ export function createCheckboxGroupState(
   const validationErrors = signal<readonly string[]>([]);
   let hasCommitted = false;
 
+  const validationBehavior = computed(() => props.validationBehavior?.() ?? "native");
+
   const runValidation = () => {
     const validate = props.validate?.();
 
@@ -159,13 +168,26 @@ export function createCheckboxGroupState(
     validationErrors.set(toValidationErrors(validate([...value()])));
   };
 
+  // React Aria's `"aria"` mode reads the live `validate` result from the first
+  // render, instead of waiting for a commit
+  // (`@react-stately/form`'s `useFormValidationState.ts:184-193`).
+  const shownValidationErrors = computed<readonly string[]>(() => {
+    if (validationBehavior() !== "aria") {
+      return validationErrors();
+    }
+
+    const validate = props.validate?.();
+
+    return validate ? toValidationErrors(validate([...value()])) : [];
+  });
+
   const commitValidation = () => {
     hasCommitted = true;
     runValidation();
   };
 
   const isInvalid = computed(
-    () => props.isInvalid?.() === true || validationErrors().length > 0,
+    () => props.isInvalid?.() === true || shownValidationErrors().length > 0,
   );
 
   const update = (next: (previous: string[]) => string[]) => {
@@ -212,7 +234,7 @@ export function createCheckboxGroupState(
     isRequired,
     isInvalid,
     validationState: computed(() => (isInvalid() ? "invalid" : "valid")),
-    validationErrors,
+    validationErrors: shownValidationErrors,
     commitValidation,
   };
 }

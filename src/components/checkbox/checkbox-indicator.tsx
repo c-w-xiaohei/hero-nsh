@@ -110,6 +110,9 @@ export interface CheckboxIndicatorProps
   /** An identifier for UI tests, on the indicator. */
   testID?: string;
 
+  /** A DOM id upstream; maps to `nativeID`, the name other elements refer to. */
+  id?: string;
+
   /** The name other elements refer to; also set by `id`. */
   nativeID?: string;
 }
@@ -137,6 +140,7 @@ export function CheckboxIndicator(
     "render",
     "accessibilityElementsHidden",
     "testID",
+    "id",
     "nativeID",
   ] as const);
 
@@ -254,7 +258,7 @@ export function CheckboxIndicator(
       {...rest}
       ref={(node) => local.ref?.(node)}
       testID={local.testID}
-      nativeID={local.nativeID}
+      nativeID={local.id ?? local.nativeID}
       accessibilityElementsHidden={hidden()}
       importantForAccessibility={hidden() ? "no-hide-descendants" : "auto"}
       class={classes()}

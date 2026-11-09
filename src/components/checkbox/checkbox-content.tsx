@@ -11,6 +11,8 @@ import type {
 import { cleanup, computed, split, untracked, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives/create-interaction-modality";
+import { DescriptionContext } from "../description/context";
+import { FieldErrorContext } from "../field-error/context";
 import {
   FALLBACK_CHECKBOX_CONTEXT,
   type CheckboxButtonRenderProps,
@@ -136,6 +138,26 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
   ] as const);
 
   const ctx = CheckboxContext() ?? FALLBACK_CHECKBOX_CONTEXT;
+
+  // `checkbox.css:9-14` gives the indented help-text classes to the field
+  // root's *direct* Description / FieldError children only (`& > …`); the
+  // disabled dim (`checkbox.css:24-28`) is descendant-scoped. A Description
+  // nested inside the Content — the FeaturesAndAddOns story, upstream
+  // `checkbox.stories.tsx:366-369` — therefore keeps only the dim. NSH has no
+  // `>` selector, so the Content shadows the two contexts with the same
+  // registration and a narrower `partClass`.
+  const descriptionContext = DescriptionContext();
+  const fieldErrorContext = FieldErrorContext();
+
+  const nestedPartClass = () => (ctx.isDisabled() ? "opacity-50" : undefined);
+
+  const nestedDescriptionState = descriptionContext
+    ? { ...descriptionContext, partClass: nestedPartClass }
+    : undefined;
+
+  const nestedFieldErrorState = fieldErrorContext
+    ? { ...fieldErrorContext, partClass: nestedPartClass }
+    : undefined;
 
   // The Content is the pressable face, so a caller may put HeroUI's press
   // callbacks here instead of on the root. They are reported back through the
@@ -401,7 +423,8 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
     }
 
     contentFocused = false;
-    // The root's `onBlur` / `onFocusChange(false)` and validation commit.
+    // The root's `onBlur` / `onFocusChange(false)`. Validation does not commit
+    // on blur: React Aria listens to `change` / `invalid` only.
     ctx.focusOut(focusToken);
     local.onBlur?.();
   };
@@ -444,7 +467,11 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
       onFocus={handleFocus}
       onBlur={handleBlur}
     >
-      {renderChildren(content() as JSX.Element)}
+      <DescriptionContext.Provider value={nestedDescriptionState}>
+        <FieldErrorContext.Provider value={nestedFieldErrorState}>
+          {renderChildren(content() as JSX.Element)}
+        </FieldErrorContext.Provider>
+      </DescriptionContext.Provider>
     </View>
   );
 }

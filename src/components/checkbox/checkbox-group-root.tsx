@@ -79,7 +79,7 @@ export interface CheckboxGroupRootProps
     value: string[],
   ) => true | string | CheckboxGroupValidationError | null | undefined;
 
-  /** Accepted, no effect: NSH has no DOM form validation modes. */
+  /** When the group's validation message appears: `native` after the first change, `aria` live. @default "native" */
   validationBehavior?: "native" | "aria";
 
   /** Accepted, no effect: NSH has no form submission. */
@@ -207,6 +207,7 @@ export function CheckboxGroupRoot(props: CheckboxGroupRootProps): JSX.Element {
     isRequired: () => local.isRequired,
     isInvalid: () => local.isInvalid,
     validate: () => local.validate,
+    validationBehavior: () => local.validationBehavior,
   });
 
   const isDisabled = computed(() => local.isDisabled === true);

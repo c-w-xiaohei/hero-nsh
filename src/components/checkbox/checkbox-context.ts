@@ -231,7 +231,7 @@ export interface CheckboxContextValue {
   /** A Content gained the focus: the root's focus events, and the group's. */
   focusIn: (token: object) => void;
 
-  /** A Content lost the focus: the root's focus events, the group's, and validation. */
+  /** A Content lost the focus: the root's focus events and the group's. */
   focusOut: (token: object) => void;
 
   /** The keyboard drove the last interaction, so a focus ring is due (R-023). */
@@ -246,7 +246,7 @@ export interface CheckboxContextValue {
    */
   consumeFocusFromPointer: () => boolean;
 
-  /** Runs `validate` and commits its errors (the root's blur handler). */
+  /** Runs `validate` and commits its errors (the first change, then every change). */
   commitValidation: () => void;
 }
 

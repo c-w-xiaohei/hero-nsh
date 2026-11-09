@@ -122,7 +122,7 @@ export interface CheckboxRootProps
   /** The clickable face took the focus. */
   onFocus?: () => void;
 
-  /** The clickable face lost the focus; validation commits here. */
+  /** The clickable face lost the focus; validation does not commit here. */
   onBlur?: () => void;
 
   /** Both focus transitions of the clickable face. */
@@ -134,22 +134,29 @@ export interface CheckboxRootProps
   /** Keeps the field focusable and blocks the value change. */
   isReadOnly?: boolean;
 
-  /** Marks the field required; a Label inside it shows the asterisk. */
+  /** Marks the field required; the render props and the item's context report it, but no Label inside a checkbox shows the asterisk (the item's Label sits inside the Content, `label.css:12-16`). */
   isRequired?: boolean;
 
   /** Marks the field invalid; a `FieldError` inside it shows its message. */
   isInvalid?: boolean;
 
   /**
-   * Runs at commit (the first change, then every change). `true` means valid; a
-   * string or a `{ message }` object is the error. Ignored inside a group,
-   * where the group owns validation.
+   * Runs on commit (the first change, then every change) in the `"native"`
+   * mode, and live from the first render in the `"aria"` mode. `true` means
+   * valid; a string or a `{ message }` object is the error. Ignored inside a
+   * group, where the group owns validation.
    */
   validate?: (
     isSelected: boolean,
   ) => true | string | CheckboxValidationError | null | undefined;
 
-  /** Accepted, no effect: NSH has no DOM form validation modes. */
+  /**
+   * When the validation message appears: `"native"` waits for the first
+   * change, `"aria"` shows the live `validate` result from the first render
+   * and follows controlled value changes. Defaults to `"native"`, as RAC
+   * does (`Checkbox.tsx:280-284`). Ignored inside a group, where the group
+   * validates.
+   */
   validationBehavior?: "native" | "aria";
 
   /** Accepted, no effect: NSH has no form submission. */
@@ -330,11 +337,10 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
     defaultIsSelected: () => local.defaultSelected,
     isDisabled,
     isReadOnly,
-    onSelectedChange: (next) => {
-      if (!group) {
-        local.onChange?.(next);
-      }
-    },
+    // `useCheckboxGroupItem`'s ToggleState reports every change through the
+    // item's `onChange` too, after it writes the group
+    // (`react-aria/src/checkbox/useCheckboxGroupItem.ts:45-58`).
+    onSelectedChange: (next) => local.onChange?.(next),
   });
 
   const isSelected = computed(() =>
@@ -344,9 +350,12 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
   // --- Validation ------------------------------------------------------------
   // React Aria commits validation on the input's change event, so the message
   // appears on the first press, and re-checks after that; a controlled parent
-  // changing the value does not re-run it (port sheet §2, same as Switch).
+  // changing the value does not re-run it in the native mode (port sheet §2,
+  // same as Switch). RAC defaults to `"native"` (`Checkbox.tsx:280-284`).
   const validationErrors = signal<readonly string[]>([]);
   let hasCommitted = false;
+
+  const validationBehavior = computed(() => local.validationBehavior ?? "native");
 
   const runValidation = () => {
     const validate = local.validate;
@@ -359,6 +368,20 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
 
     validationErrors.set(toValidationErrors(validate(isSelected())));
   };
+
+  // React Aria's `"aria"` mode exposes the live `validate` result from the
+  // first render and re-runs it whenever the value changes;
+  // `@react-stately/form`'s `useFormValidationState.ts:184-193` is the only
+  // mode that reads the client error before a commit.
+  const shownValidationErrors = computed<readonly string[]>(() => {
+    if (validationBehavior() !== "aria") {
+      return validationErrors();
+    }
+
+    const validate = local.validate;
+
+    return validate ? toValidationErrors(validate(isSelected())) : [];
+  });
 
   const commitValidation = () => {
     hasCommitted = true;
@@ -374,11 +397,19 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
 
   const setSelected = (next: boolean) => {
     if (group) {
+      const current = group.state.isSelected(value());
+
+      if (current === next) {
+        return;
+      }
+
       if (next) {
         group.state.addValue(value());
       } else {
         group.state.removeValue(value());
       }
+
+      local.onChange?.(next);
 
       return;
     }
@@ -392,14 +423,19 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
 
   // The one place the value changes (the Content's press and a Label's
   // `focusField` both arrive here). `createToggleState` blocks disabled and
-  // read-only; the guard keeps the group path the same.
+  // read-only; the guard keeps the group path the same. In a group the value
+  // goes to the group and the item still reports it through `onChange`, as
+  // `useCheckboxGroupItem.ts:45-58` does.
   const toggle = () => {
     if (isDisabled() || isReadOnly()) {
       return;
     }
 
     if (group) {
+      const next = !group.state.isSelected(value());
+
       group.state.toggleValue(value());
+      local.onChange?.(next);
       commitValidation();
 
       return;
@@ -419,7 +455,7 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
   // Inside a group the group's validation is the only source; the item's own
   // `isInvalid` is ignored, as `useCheckboxGroupItem` does upstream.
   const isInvalid = computed(() =>
-    group ? group.isInvalid() : local.isInvalid === true || validationErrors().length > 0,
+    group ? group.isInvalid() : local.isInvalid === true || shownValidationErrors().length > 0,
   );
 
   // --- Interaction state (R-010, R-014, R-016, R-023 … R-031) ----------------
@@ -609,7 +645,10 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
   const focusOut = (token: object) => {
     focused.set(false);
     group?.setItemFocused(token, false);
-    commitValidation();
+    // Validation commits on the change, never on blur: React Aria attaches
+    // only `invalid` / `change` listeners (`react-aria/src/form/
+    // useFormValidation.ts:123-127`), and the project ruling keeps a group
+    // from committing on focus loss (`tmp/port-sheets/radio.md:71`).
     local.onFocusChange?.(false);
     local.onBlur?.();
   };
@@ -722,8 +761,13 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
   // Only a standalone field owns validation; inside a group the group does, and
   // upstream hands the items a null FieldError context so a FieldError placed
   // inside one shows nothing (`react-aria-components/src/Checkbox.tsx:421-423`).
+  //
+  // `isRequired` is deliberately absent: `label.css:12-16` excludes
+  // `[data-slot="checkbox"]` from the asterisk rule and only a direct child
+  // Label of the field root could match it, while a checkbox item's Label sits
+  // inside the Content (`tmp/port-sheets/label.md:107`). The render props and
+  // the checkbox context still report it.
   const fieldState = {
-    isRequired,
     isDisabled,
     isInvalid,
     registerLabel,
@@ -744,7 +788,7 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
       }
     : {
         isInvalid,
-        validationErrors,
+        validationErrors: shownValidationErrors,
         isToggleField: () => true,
         registerErrorMessage,
         partClass,
