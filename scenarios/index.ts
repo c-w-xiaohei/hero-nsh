@@ -37,6 +37,7 @@ import { accordionScenarios } from "./accordion.scenarios";
 import { searchFieldScenarios } from "./search-field.scenarios";
 import { numberFieldScenarios } from "./number-field.scenarios";
 import { disclosureScenarios } from "./disclosure.scenarios";
+import { menuScenarios } from "./menu.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -77,4 +78,5 @@ export const scenarios: Record<string, Component> = {
   ...searchFieldScenarios,
   ...numberFieldScenarios,
   ...disclosureScenarios,
+  ...menuScenarios,
 };

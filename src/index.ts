@@ -41,3 +41,4 @@ export * from "./components/search-field";
 export * from "./components/number-field";
 export * from "./components/disclosure";
 export * from "./components/disclosure-group";
+export * from "./components/menu";
