@@ -32,7 +32,12 @@ import { probe } from "@scenario/probe";
  *   required           isRequired with a Label
  *   without-label      aria-label only, no visible label
  *   validation         validate fails while selected, with a fallback FieldError
- *   press              press callbacks on the Content, with a Label to press too
+ *   controlled-validation  the same in controlled form: the parent ignores the
+ *                      change, so the commit validates the value still in effect
+ *   readonly-validate  read-only and selected, validate would fail while selected;
+ *                      presses must not commit it
+ *   press              Root press callbacks, with a Label to press and an
+ *                      isPressed marker
  *   render-count       a Root render prop that counts each call through probe
  *   layout             Control and Thumb report onLayout; hosts.params gives
  *                      size (sm / md / lg), dir (ltr / rtl) and wide (4rem);
@@ -213,20 +218,87 @@ function ValidationCase() {
   );
 }
 
-function PressCase() {
+function ControlledValidationCase() {
+  const value = signal(false);
+
   return (
     <Stage>
-      <Switch aria-label={NAME}>
-        <Switch.Content
-          onPress={probe("onPress")}
-          onPressChange={probe("onPressChange")}
-          onPressEnd={probe("onPressEnd")}
-          onPressStart={probe("onPressStart")}
-        >
+      <Switch
+        aria-label={NAME}
+        isSelected={value()}
+        onChange={probe("onChange")}
+        validate={(isSelected) => {
+          probe("validate")(isSelected);
+
+          return isSelected ? "Selected is not allowed" : true;
+        }}
+      >
+        <Switch.Content>
+          {({ isSelected }) => (
+            <View class="flex-row items-center gap-3">
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <Text>{isSelected() ? "On" : "Off"}</Text>
+            </View>
+          )}
+        </Switch.Content>
+        <FieldError />
+      </Switch>
+    </Stage>
+  );
+}
+
+function ReadonlyValidateCase() {
+  return (
+    <Stage>
+      <Switch
+        aria-label={NAME}
+        isReadOnly
+        isSelected={true}
+        onChange={probe("onChange")}
+        onClick={probe("onClick")}
+        onPress={probe("onPress")}
+        onPressChange={probe("onPressChange")}
+        onPressEnd={probe("onPressEnd")}
+        onPressStart={probe("onPressStart")}
+        onPressUp={probe("onPressUp")}
+        validate={(isSelected) => (isSelected ? "Selected is not allowed" : true)}
+      >
+        <Switch.Content>
           <Switch.Control>
             <Switch.Thumb />
           </Switch.Control>
           <Label>{NAME}</Label>
+        </Switch.Content>
+        <FieldError />
+      </Switch>
+    </Stage>
+  );
+}
+
+function PressCase() {
+  return (
+    <Stage>
+      <Switch
+        aria-label={NAME}
+        onClick={probe("onClick")}
+        onPress={probe("onPress")}
+        onPressChange={probe("onPressChange")}
+        onPressEnd={probe("onPressEnd")}
+        onPressStart={probe("onPressStart")}
+        onPressUp={probe("onPressUp")}
+      >
+        <Switch.Content>
+          {({ isPressed }) => (
+            <View class="flex-row items-center gap-3">
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <Label>{NAME}</Label>
+              <Text>{isPressed() ? "Pressed" : "NotPressed"}</Text>
+            </View>
+          )}
         </Switch.Content>
       </Switch>
     </Stage>
@@ -300,6 +372,8 @@ function Fixture() {
   if (name === "required") return <RequiredCase />;
   if (name === "without-label") return <WithoutLabelCase />;
   if (name === "validation") return <ValidationCase />;
+  if (name === "controlled-validation") return <ControlledValidationCase />;
+  if (name === "readonly-validate") return <ReadonlyValidateCase />;
   if (name === "press") return <PressCase />;
   if (name === "render-count") return <RenderCountCase />;
   if (name === "layout") return <LayoutCase />;

@@ -320,19 +320,23 @@ test("X-002 shows a validation error right after a press and clears it on the ne
 });
 
 // react-aria-components/src/Switch.tsx:71-77, react-aria/src/toggle/useToggle.ts:119-184
-test("X-003 fires press callbacks for a press on the Content and on the Label", async () => {
+test("X-003 fires the Root's press callbacks for a press on the Content and on the Label", async () => {
   const app = await openCase("press");
 
   await app.press("role:switch[Enable notifications]");
   expect(callsOf(app, "onPressStart")).toHaveLength(1);
   expect(callsOf(app, "onPressEnd")).toHaveLength(1);
   expect(callsOf(app, "onPress")).toHaveLength(1);
+  expect(callsOf(app, "onPressUp")).toHaveLength(1);
+  expect(callsOf(app, "onClick")).toHaveLength(1);
   expect(callsOf(app, "onPressChange")).toEqual([[true], [false]]);
 
   await app.press("text:Enable notifications");
   expect(callsOf(app, "onPressStart")).toHaveLength(2);
   expect(callsOf(app, "onPressEnd")).toHaveLength(2);
   expect(callsOf(app, "onPress")).toHaveLength(2);
+  expect(callsOf(app, "onPressUp")).toHaveLength(2);
+  expect(callsOf(app, "onClick")).toHaveLength(2);
   expect(callsOf(app, "onPressChange")).toEqual([
     [true],
     [false],
@@ -366,4 +370,66 @@ test("X-005 keeps a read-only switch out of the pressed state", async () => {
 
   await app.drop();
   expect(app.shows("text:NotPressed")).toBe(true);
+});
+
+// react-aria/src/toggle/useToggle.ts:136-187
+test("X-006 a read-only switch fires no press callbacks and commits no validation", async () => {
+  const app = await openCase("readonly-validate");
+  const control = "role:switch[Enable notifications]";
+  const error = "text:Selected is not allowed";
+
+  expect(app.shows(error)).toBe(false);
+
+  await app.press(control);
+  expect(app.shows(error)).toBe(false);
+  expect(callsOf(app, "onChange")).toHaveLength(0);
+  expect(callsOf(app, "onPress")).toHaveLength(0);
+
+  await app.press("text:Enable notifications");
+  expect(app.shows(error)).toBe(false);
+  expect(callsOf(app, "onChange")).toHaveLength(0);
+  expect(callsOf(app, "onPress")).toHaveLength(0);
+  expect(callsOf(app, "onPressStart")).toHaveLength(0);
+  expect(callsOf(app, "onPressEnd")).toHaveLength(0);
+  expect(callsOf(app, "onPressChange")).toHaveLength(0);
+  expect(callsOf(app, "onPressUp")).toHaveLength(0);
+  expect(callsOf(app, "onClick")).toHaveLength(0);
+});
+
+// react-aria/src/toggle/useToggle.ts:134-147
+test("X-007 shows the pressed state while the Label is held down", async () => {
+  const app = await openCase("press");
+
+  expect(app.shows("text:NotPressed")).toBe(true);
+
+  await app.dragAndHold("text:Enable notifications", { x: 0, y: 0 });
+  expect(app.shows("text:Pressed")).toBe(true);
+
+  await app.drop();
+  expect(app.shows("text:NotPressed")).toBe(true);
+});
+
+// react-aria/src/toggle/useToggle.ts:174-184, react-aria/src/form/useFormValidation.ts:91-93
+test("X-008 commits validation against the value still in effect when the parent ignores it", async () => {
+  const app = await openCase("controlled-validation");
+  const control = "role:switch[Enable notifications]";
+  const error = "text:Selected is not allowed";
+
+  expect(app.shows("text:Off")).toBe(true);
+  expect(app.shows(error)).toBe(false);
+
+  const before = callsOf(app, "validate").length;
+
+  await app.press(control);
+
+  expect(callsOf(app, "onChange")).toEqual([[true]]);
+  expect(app.shows("text:Off")).toBe(true);
+
+  const commits = callsOf(app, "validate");
+
+  // The press committed validation against isSelected, which the ignoring
+  // parent left false, so the validate that failed for true must not report.
+  expect(commits.length).toBeGreaterThan(before);
+  expect(commits[commits.length - 1][0]).toBe(false);
+  expect(app.shows(error)).toBe(false);
 });
