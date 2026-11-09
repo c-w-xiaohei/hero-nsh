@@ -9,6 +9,7 @@ import { switchScenarios } from "./switch.scenarios";
 import { separatorScenarios } from "./separator.scenarios";
 import { surfaceScenarios } from "./surface.scenarios";
 import { kbdScenarios } from "./kbd.scenarios";
+import { spinnerScenarios } from "./spinner.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -21,4 +22,5 @@ export const scenarios: Record<string, Component> = {
   ...separatorScenarios,
   ...surfaceScenarios,
   ...kbdScenarios,
+  ...spinnerScenarios,
 };
