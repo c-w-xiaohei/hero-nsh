@@ -136,11 +136,13 @@ test("T-028 should show the error message when invalid", async () => {
 
 // kobalte/packages/core/src/number-field/number-field.test.tsx:295
 // Rewritten port of T-029: `data-required` becomes the one visible effect of
-// `isRequired`, the Label's asterisk.
+// `isRequired`, the Label's asterisk. Label renders the star as a nested Text
+// and NSH merges nested text into the parent run, so the assertable run is
+// "Width*".
 test("T-029 should mark the label when required", async () => {
   const app = await openCase("required");
 
-  expect(app.texts()).toContain("*");
+  expect(app.texts()).toContain("Width*");
 });
 
 // kobalte/packages/core/src/number-field/number-field.test.tsx:310
@@ -175,7 +177,8 @@ test("T-032 should show the error message for an invalid field", async () => {
 // kobalte/packages/core/src/number-field/number-field.test.tsx:352
 // Rewritten port of T-033: the three missing native attributes become three
 // default behaviours — the input is editable, a typed value commits, and no
-// required asterisk is drawn.
+// required asterisk is drawn. The star would merge into the Label run, so the
+// negative is the absence of "Width*".
 test("T-033 should be editable and not required by default", async () => {
   const app = await openCase("log");
 
@@ -187,16 +190,17 @@ test("T-033 should be editable and not required by default", async () => {
   const calls = callsOf(app, "onChange");
   expect(calls[calls.length - 1][0]).toBe(5);
 
-  expect(app.texts()).not.toContain("*");
+  expect(app.texts()).not.toContain("Width*");
 });
 
 // kobalte/packages/core/src/number-field/number-field.test.tsx:366
 // Partial port of T-034: `aria-required` has no field in AccessibilityState
-// (port sheet §8); the asterisk is the required half that is visible.
+// (port sheet §8); the asterisk is the required half that is visible. It merges
+// into the Label run, so the observed run is "Width*".
 test("T-034 should mark the label when required", async () => {
   const app = await openCase("required");
 
-  expect(app.texts()).toContain("*");
+  expect(app.texts()).toContain("Width*");
 });
 
 // kobalte/packages/core/src/number-field/number-field.test.tsx:379
