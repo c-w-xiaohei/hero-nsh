@@ -87,3 +87,30 @@ test("T-007 exposes the prose appearance", async () => {
   expect(app.shows("text:Prose content")).toBe(true);
   expect(app.spanStyle("text:Prose content").color).toBe("#18181bff");
 });
+
+/*
+ * Regression X-001. Evidence:
+ * src/components/typography/typography-root.tsx:218-220,245-248 /
+ * src/components/typography/typography.styles.ts:95
+ *
+ * Upstream applies every variant class to the one element it renders, and the
+ * stylesheet places `.typography--code` before `.typography--color-default` /
+ * `.typography--color-muted`, so a resolved `color` overrides the code box's
+ * own `text-foreground`. The port hard-coded `text-foreground` on the nested
+ * code Text instead, which shadowed the root's muted color: the first four
+ * muted cases below reported the foreground (#18181bff) before the fix. The
+ * last case is the control, not a duplicate: a code that merely inherits a
+ * muted paragraph must keep the code's own foreground rather than pick up the
+ * parent color.
+ */
+test("X-001 lets a muted color reach an inline code box", async () => {
+  const app = await openScenario("typography/code-color");
+  const muted = "#71717aff";
+  const foreground = "#18181bff";
+
+  expect(app.spanStyle("text:Muted body control").color).toBe(muted);
+  expect(app.spanStyle("text:Muted code span").color).toBe(muted);
+  expect(app.spanStyle("text:Muted typed code").color).toBe(muted);
+  expect(app.spanStyle("text:Muted nested code").color).toBe(muted);
+  expect(app.spanStyle("text:Inherited code").color).toBe(foreground);
+});

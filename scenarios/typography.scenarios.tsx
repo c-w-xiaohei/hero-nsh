@@ -111,6 +111,29 @@ function BodySizes() {
   );
 }
 
+/* Regression X-001: `color` belongs to the code parts as well, and upstream's
+ * class order (`.typography--code` before `.typography--color-*`) lets a
+ * resolved muted color override the code box's own `text-foreground`. The
+ * last paragraph is the control: a code that only inherits the parent's muted
+ * color keeps its own foreground, because the code class is what paints it. */
+function CodeColor() {
+  return (
+    <Stage>
+      <Typography color="muted">Muted body control</Typography>
+      <Typography.Code color="muted">Muted code span</Typography.Code>
+      <Typography type="code" color="muted">
+        Muted typed code
+      </Typography>
+      <Typography.Paragraph>
+        Paragraph with <Typography.Code color="muted">Muted nested code</Typography.Code> inside.
+      </Typography.Paragraph>
+      <Typography.Paragraph color="muted">
+        Muted paragraph with <Typography.Code>Inherited code</Typography.Code> inside.
+      </Typography.Paragraph>
+    </Stage>
+  );
+}
+
 /* Story `InlineCode`: a Code nested in a Paragraph is an inline span of the
  * same paragraph, as upstream's `<code>` inside `<p>`. */
 function InlineCode() {
@@ -283,6 +306,7 @@ export const typographyScenarios = {
   "typography/heading": Heading,
   "typography/paragraph": Paragraph,
   "typography/code": Code,
+  "typography/code-color": CodeColor,
   "typography/prose": Prose,
   "typography/headings": Headings,
   "typography/body-sizes": BodySizes,
