@@ -361,3 +361,14 @@ test("X-008 commits validation against the value still in effect when the parent
   expect(commits[commits.length - 1][0]).toBe(false);
   expect(app.shows(error)).toBe(false);
 });
+
+// Ref forwarding regression: this scenario passes no ref to any Switch part
+// (Control, Icon, Thumb). A plain `ref={local.ref}` with an undefined value is
+// a ref store to NSH, which throws at mount on the web target and renders an
+// empty page. The callback refs keep the switch and its label on screen.
+test("X-009 renders a ref-less Switch on a real engine", async () => {
+  const app = await openScenario("switch/basic");
+
+  expect(app.shows("role:switch[Enable notifications]")).toBe(true);
+  expect(app.shows("label:Enable notifications")).toBe(true);
+});

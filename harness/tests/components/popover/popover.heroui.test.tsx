@@ -270,3 +270,13 @@ test("X-003 the underlay is gone immediately on close, so the trigger reopens du
 
   expect(app.count(CONTENT)).toBe(1);
 });
+
+// Ref forwarding regression: this scenario passes no ref to Popover.Content,
+// whose Overlay used to receive `ref={props.ref}`. NSH treats an undefined
+// plain ref as a ref store and throws at mount on the web target, so the whole
+// page was empty there. The forwarded callback ref keeps the content on screen.
+test("X-004 renders a ref-less Popover on a real engine", async () => {
+  const app = await openScenario("popover/default-open", { clock: {} });
+
+  expect(app.shows(CONTENT)).toBe(true);
+});
