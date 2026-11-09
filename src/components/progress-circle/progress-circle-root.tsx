@@ -178,7 +178,6 @@ export function ProgressCircleRoot(props: ProgressCircleRootProps): JSX.Element 
     isIndeterminate: () => local.isIndeterminate,
     formatOptions: () => local.formatOptions,
     valueLabel: () => local.valueLabel,
-    ariaValueText: () => local["aria-valuetext"],
   });
 
   const renderProps: ProgressCircleRenderProps = {
@@ -234,14 +233,16 @@ export function ProgressCircleRoot(props: ProgressCircleRootProps): JSX.Element 
   );
 
   // --- Registered label (the stand-in for aria-labelledby) -------------------
-  // A `Label` inside the root reports its text here. Upstream activates that
-  // Label slot only when the caller supplies neither `aria-label` nor
-  // `aria-labelledby` (`useSlot(!props['aria-label'] &&
-  // !props['aria-labelledby'])`), so a caller's `aria-label` suppresses the
-  // association instead of losing to it. NSH cannot resolve an
-  // `aria-labelledby` reference, so the registered Label stays the stand-in
-  // for that branch. Only one Label names a progressbar upstream (the context
-  // is a single slot); a second one replaces the first.
+  // A `Label` inside the root reports its text here. Upstream opens the Label
+  // slot when the caller supplies neither `aria-label` nor `aria-labelledby`
+  // (`useSlot(!props['aria-label'] && !props['aria-labelledby'])`), but the
+  // slot's callback ref reopens it as soon as the Label attaches
+  // (utils.tsx:364-388 sets `hasSlot` true from the ref), so a registered
+  // Label names the bar even when the caller also passed `aria-label`. The
+  // name then reads "<aria-label> <label text>" through `aria-labelledby`.
+  // NSH cannot resolve that cross-element reference, so the two are joined
+  // below. Only one Label names a progressbar upstream (the context is a
+  // single slot); a second one replaces the first.
   const labelSource = signal<(() => string | undefined) | undefined>(undefined);
 
   const field: FieldState = {
@@ -260,30 +261,26 @@ export function ProgressCircleRoot(props: ProgressCircleRootProps): JSX.Element 
   });
 
   // --- Accessibility ---------------------------------------------------------
-  // A truthy `aria-label` (or NSH's own name prop) wins; the registered Label
-  // only names the bar when the caller supplied no name of its own, which is
-  // how upstream's `useSlot` guard behaves.
+  // The caller's name (the DOM `aria-label` first, then NSH's own
+  // `accessibilityLabel`) and a Label registered through `FieldContext` both
+  // name the bar: upstream's `aria-labelledby` reads "<caller name> <label
+  // text>" ("Outer Inner"), and the Label is never dropped because a caller
+  // name exists. Either one alone names the bar. NSH has no cross-element
+  // reference, so the parts are joined here with one space.
   const accessibilityLabel = computed(() => {
-    const ariaLabel = local["aria-label"];
+    const ownLabel = local["aria-label"] || local.accessibilityLabel;
+    const parts = [ownLabel, labelText()].filter(
+      (part): part is string => part !== undefined && part.length > 0,
+    );
 
-    if (ariaLabel) {
-      return ariaLabel;
-    }
-
-    const ownLabel = local.accessibilityLabel;
-
-    if (ownLabel) {
-      return ownLabel;
-    }
-
-    return labelText();
+    return parts.length > 0 ? parts.join(" ") : undefined;
   });
 
   /**
    * Upstream sets `aria-valuemin` / `aria-valuemax` in both modes, omits
    * `aria-valuenow` while indeterminate, and writes `aria-valuetext` from
-   * `valueText` (which keeps the caller's text only in the indeterminate
-   * branch; see `createProgressState`).
+   * `valueText`, which is undefined while indeterminate (the caller's own
+   * `aria-valuetext` never reaches it; see `createProgressState`).
    */
   const accessibilityValue = computed(() => {
     const min = state.minValue();

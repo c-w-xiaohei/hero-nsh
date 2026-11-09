@@ -5,10 +5,11 @@
  * accessible name, a value, a disabled state and a hidden subtree, so the ARIA
  * attributes with a counterpart are mapped by the components:
  *
- * - `aria-label` → `accessibilityLabel` (root; it suppresses a registered
- *   `Label`, as upstream's `useSlot` guard does)
+ * - `aria-label` → `accessibilityLabel` (root; it joins a registered `Label`
+ *   in the name, as upstream's `aria-labelledby` does)
  * - `aria-disabled` → `accessibilityState.disabled`, and R-011's class list
- * - `aria-valuetext` → the derived `accessibilityValue.text`
+ * - `aria-valuetext` → accepted, no effect: upstream filters it out of the DOM
+ *   props, so it reaches neither the render props nor the accessible value text
  *
  * The rest (`aria-labelledby`, `aria-describedby`, the other `aria-*`, every
  * `data-*`, `dir` / `lang` / …, and the SVG attributes of R-005 / R-006) are
@@ -26,7 +27,7 @@ import type { AccessibilityState } from "nsh";
  * by the root; the index signature keeps the rest accepted and ignored.
  */
 export interface AriaProps {
-  /** The accessible name; it wins over a label registered through `FieldContext`. */
+  /** The accessible name; it joins a label registered through `FieldContext`, as upstream's `aria-labelledby` does. */
   "aria-label"?: string;
 
   /** Hides the view and its subtree from assistive technology; maps to `accessibilityElementsHidden`. */
@@ -44,7 +45,7 @@ export interface AriaProps {
   /** Accepted, no effect: derived from `maxValue`. */
   "aria-valuemax"?: number;
 
-  /** Drives `accessibilityValue.text`; an indeterminate circle keeps it, as upstream does. */
+  /** Accepted, no effect: upstream filters it out of the DOM props, so nothing reads it; the value text is derived from the state. */
   "aria-valuetext"?: string;
 
   /** Accepted, no effect: NSH has no cross-element references. */

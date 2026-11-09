@@ -12,9 +12,9 @@
  *
  * Adapted to NSH: the clamp, the percentage and the value label come from
  * `meter-root.tsx` / `progress-root.tsx`; the formatting branch and the
- * `aria-valuetext` precedence come from `useProgressBar`. One primitive, one
- * copy of the clamping arithmetic, shared by ProgressBar, ProgressCircle and
- * Meter (research D16).
+ * value-label precedence come from `useProgressBar`. One primitive, one copy
+ * of the clamping arithmetic, shared by ProgressBar, ProgressCircle and Meter
+ * (research D16).
  */
 
 import { NumberFormatter } from "@internationalized/number";
@@ -42,16 +42,10 @@ export interface CreateProgressStateOptions {
 
   /**
    * A caller-supplied value label; wins over the formatted value on a
-   * determinate bar. An indeterminate bar has no label at all.
+   * determinate bar. An indeterminate bar has no value text at all, so the
+   * label never names one.
    */
   valueLabel?: Accessor<string | undefined>;
-
-  /**
-   * The caller's `aria-valuetext`. Upstream's precedence is odd but real: a
-   * determinate bar overwrites it with the derived label, while an
-   * indeterminate one keeps it (there is no derived label to write).
-   */
-  ariaValueText?: Accessor<string | undefined>;
 }
 
 export interface ProgressState {
@@ -123,15 +117,16 @@ export function createProgressState(
     return range === 0 ? 0 : fraction() * 100;
   });
 
-  // An indeterminate bar has no derived text: `useProgressBar` leaves
-  // `aria-valuetext` undefined in that branch, and Kobalte returns undefined
-  // before formatting, so `valueLabel` never names an indeterminate circle —
-  // only the caller's own `aria-valuetext` survives. A determinate bar takes a
-  // truthy `valueLabel` first (upstream's `if (valueLabel)`) and otherwise
-  // formats the value; an empty range formats the guarded fraction `0`.
+  // An indeterminate bar has no value text at all: `useProgressBar` sets
+  // `'aria-valuetext': isIndeterminate ? undefined : valueLabel`, and the
+  // caller's own `aria-valuetext` never reaches the render props: RAC's
+  // `filterDOMProps` keeps it out of the DOM props, so nothing fills the
+  // render prop's `valueText` either. A determinate bar takes a truthy
+  // `valueLabel` first (upstream's `if (valueLabel)`) and otherwise formats
+  // the value; an empty range formats the guarded fraction `0`.
   const valueText = computed(() => {
     if (isIndeterminate()) {
-      return options.ariaValueText?.();
+      return undefined;
     }
 
     const label = options.valueLabel?.();
