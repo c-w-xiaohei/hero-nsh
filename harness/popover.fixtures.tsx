@@ -13,7 +13,9 @@ import { Button, Popover } from "@heroui/react";
  *                  mounted and keep its own state;
  *   skip           shouldSkipAnimation is true: closing unmounts at once;
  *   override-false shouldSkipAnimation is explicitly false: closing still
- *                  runs the exit hold.
+ *                  runs the exit hold;
+ *   auto           uncontrolled (defaultOpen): Escape closes it on its own, so
+ *                  the exit hold can be observed without a host event.
  *
  * The counter is a component of its own so that its signal lives only while
  * the content subtree is mounted: if closing and reopening rebuild that
@@ -36,6 +38,7 @@ function RetainedCounter() {
 
 function Fixture() {
   const name = String(host.params.case ?? "retained");
+  const automatic = name === "auto";
   const open = signal(true);
   const exiting = signal(false);
   const skip = name === "skip" ? true : name === "override-false" ? false : undefined;
@@ -53,7 +56,7 @@ function Fixture() {
 
   return (
     <View class="flex-1 items-start gap-4 bg-background p-6">
-      <Popover isOpen={open()}>
+      <Popover isOpen={automatic ? undefined : open()} defaultOpen={automatic}>
         <Button>Open popover</Button>
         <Popover.Content isExiting={exiting()} shouldSkipAnimation={skip}>
           <Popover.Dialog>

@@ -35,7 +35,9 @@ function Basic() {
   return (
     <Stage>
       <Popover onOpenChange={probe("openChange")}>
-        <Button onFocus={probe("triggerFocus")}>Open popover</Button>
+        <Button onFocus={probe("triggerFocus")} onBlur={probe("triggerBlur")}>
+          Open popover
+        </Button>
         <Content />
       </Popover>
     </Stage>

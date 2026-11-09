@@ -1,6 +1,6 @@
 import { expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
-import { callsOf } from "../../helpers/calls";
+import { callsOf, calls } from "../../helpers/calls";
 import { openScenario } from "../../helpers/open-scenario";
 
 /*
@@ -111,7 +111,9 @@ test("T-013 exposes heading slot", async () => {
 
 // heroui/packages/react/tests/components/popover/popover.browser.test.tsx:13
 // Rewritten port (port sheet T-014): the DOM containment check becomes "the
-// Dialog itself received focus"; the trigger must get focus back on Escape.
+// Dialog itself received focus". Focus must end on the trigger: a trigger that
+// is focused and then blurred would still satisfy a presence count, so the
+// last of the trigger's focus events has to be onFocus.
 test("T-014 supports focus move into dialog and Escape restore", async () => {
   const app = await openScenario("popover/basic", { platform: "web", clock: {} });
 
@@ -126,23 +128,34 @@ test("T-014 supports focus move into dialog and Escape restore", async () => {
   await app.clock!.runFor(120);
 
   expect(app.count(CONTENT)).toBe(0);
-  expect(callsOf(app, "triggerFocus").length).toBeGreaterThan(0);
+
+  const focusEvents = calls(app)
+    .filter((call) => call.name === "triggerFocus" || call.name === "triggerBlur")
+    .map((call) => call.name);
+
+  expect(focusEvents[focusEvents.length - 1]).toBe("triggerFocus");
 });
 
 // heroui/packages/react/tests/components/popover/popover.browser.test.tsx:48
 // Rewritten port (port sheet T-016): `data-exiting`, the animation name and
-// the animated properties have no NSH query; the contract that survives is
-// that the content stays mounted until the 100 ms exit hold ends.
+// the animated properties have no NSH query. Count-only presence passes even
+// when the close rebuilds the content, so the stateful counter is mutated
+// while open: the same subtree must still show it during the hold and go with
+// the hold.
 test("T-016 stays mounted through its close animation", async () => {
-  const app = await openScenario("popover/default-open", { clock: {} });
+  const app = await openFixture("auto");
 
-  expect(app.shows(CONTENT)).toBe(true);
+  expect(app.shows("text:Count 0")).toBe(true);
+
+  await app.press("id:counter");
+  expect(app.shows("text:Count 1")).toBe(true);
 
   await app.keyboard.press("escape");
-  expect(app.count(CONTENT)).toBe(1);
+  expect(app.shows("text:Count 1")).toBe(true);
 
   await app.clock!.runFor(120);
-  expect(app.count(CONTENT)).toBe(0);
+  expect(app.count("text:Count 1")).toBe(0);
+  expect(app.count("text:Retained content")).toBe(0);
 });
 
 // heroui/packages/react/tests/components/popover/popover-animation.browser.test.tsx:15
@@ -214,4 +227,43 @@ test("X-001 pressing a Button inside Popover.Content does not toggle the popover
   const closes = callsOf(app, "openChange").filter((args) => args[0] === false);
 
   expect(closes).toHaveLength(0);
+});
+
+// heroui/packages/react/tests/components/popover/popover-animation.browser.test.tsx:15
+// X-002: reopening inside the 100 ms exit hold must cancel the pending
+// removal, not remount later. The counter mutated before Escape is still
+// there, and stays there once the clock passes the hold.
+test("X-002 reopening during the exit hold keeps the content state", async () => {
+  const app = await openFixture("auto");
+
+  await app.press("id:counter");
+  expect(app.shows("text:Count 1")).toBe(true);
+
+  await app.keyboard.press("escape");
+  expect(app.shows("text:Count 1")).toBe(true);
+
+  await app.press("role:button[Open popover]");
+  expect(app.shows("text:Count 1")).toBe(true);
+
+  await app.clock!.runFor(120);
+  expect(app.count("text:Count 1")).toBe(1);
+});
+
+// react-aria-components/src/Popover.tsx:377
+// X-003: the underlay mounts only while `state.isOpen`, so it is gone as soon
+// as the close starts. During the exit hold the trigger is reachable and a
+// press on it reopens the popover, which then survives the hold.
+test("X-003 the underlay is gone immediately on close, so the trigger reopens during the hold", async () => {
+  const app = await openScenario("popover/basic", { clock: {} });
+
+  await app.press("role:button[Open popover]");
+  expect(app.shows(CONTENT)).toBe(true);
+
+  await app.keyboard.press("escape");
+  expect(app.count(CONTENT)).toBe(1);
+
+  await app.press("role:button[Open popover]");
+  await app.clock!.runFor(120);
+
+  expect(app.count(CONTENT)).toBe(1);
 });
