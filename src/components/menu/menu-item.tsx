@@ -450,14 +450,13 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
   /**
    * React Aria's close rule, per press source and per key
    * (`react-aria@3.48.0/dist/private/menu/useMenuItem.js:114`): pointer closes
-   * unless the menu is multiple; keyboard Enter closes, keyboard Space only
-   * when the mode has no selection state (or the row is a link). An explicit
-   * `shouldCloseOnSelect` (Item → Section → Menu) wins over both, and a submenu
-   * trigger never acts or closes.
+   * unless the menu is multiple; keyboard Enter always closes, keyboard Space
+   * only when the mode has no selection state (or the row is a link). An
+   * explicit `shouldCloseOnSelect` (Item → Section → Menu) wins over both, and a
+   * submenu trigger never acts or closes.
    *
-   * The host press on macOS and the web carries no key identity (the common
-   * rules keep Return / Space unbound there), so an unnamed keyboard activation
-   * takes Enter's branch; the Windows binding names the key.
+   * The key name arrives with the activation: the root's Return binding names
+   * it, and an unnamed keyboard activation is the host press, which means Space.
    */
   const isLink = () => local.href != null;
 
@@ -484,11 +483,11 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
       return mode !== "multiple" || isLink();
     }
 
-    return keyName !== "Space" || mode === "none" || isLink();
+    return keyName === "Enter" || mode === "none" || isLink();
   };
 
   /**
-   * The single activation entry for pointer, keyboard and the Windows binding.
+   * The single activation entry for pointer, keyboard and the keymap bindings.
    * Selection and action are two halves (port sheet section 5): a press selects
    * on release, the keyboard does both here. A link row replays its navigation
    * through `openUrl` after the action, as React Aria's `useMenuItem` opens the

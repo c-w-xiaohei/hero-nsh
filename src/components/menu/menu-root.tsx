@@ -511,9 +511,9 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
   };
 
   // The collection's keys are bound only while the root has the focus, and
-  // dropped on blur or unmount (createKeymapScope). Enter / Space stay unbound
-  // on macOS and the web: the host delivers them as the focused view's press,
-  // and a binding would consume them first.
+  // dropped on blur or unmount (createKeymapScope). Return is bound with the
+  // list keys; Space stays on the host press wherever the host sends one
+  // (macOS, the web), and is bound only on Windows, which sends none.
   //
   // Keymap matches the modifiers exactly, so the Shift and Control forms of a
   // shortcut are separate bindings; each one forwards its own modifiers.
@@ -536,19 +536,26 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     "shift+pagedown": () => runKey("pagedown", { shift: true }),
   };
 
-  // The Windows exception: the host reports Return / Space as a press only on
-  // macOS and the web, so Windows resolves them through the same activation.
-  // The binding is the one channel that names the key, so it forwards it: React
-  // Aria's close rule treats Enter and Space differently.
+  // The key name is part of the activation, not a detail: React Aria's close
+  // rule treats Return and Space differently (`useMenuItem.js:114`), and the
+  // host press carries no key identity. Return is bound on every platform, so
+  // the activation entry learns its key; the unnamed host press then means
+  // Space, which keeps its held-key pressed state (R-014) on macOS and the web.
+  // Windows reports no press for either key, so it binds Space as well.
+  const activateWithKey = (
+    keyName: MenuActivationKey,
+    modifiers?: SelectionModifiers,
+  ) => {
+    modality.setKeyboardModality();
+    activateFocused("keyboard", undefined, modifiers, keyName);
+  };
+
+  navigationBindings.enter = () => activateWithKey("Enter");
+  navigationBindings["shift+enter"] = () => activateWithKey("Enter", { shift: true });
+
   if (platform.os === "windows") {
-    navigationBindings.enter = () =>
-      activateFocused("keyboard", undefined, undefined, "Enter");
-    navigationBindings["shift+enter"] = () =>
-      activateFocused("keyboard", undefined, { shift: true }, "Enter");
-    navigationBindings.space = () =>
-      activateFocused("keyboard", undefined, undefined, "Space");
-    navigationBindings["shift+space"] = () =>
-      activateFocused("keyboard", undefined, { shift: true }, "Space");
+    navigationBindings.space = () => activateWithKey("Space");
+    navigationBindings["shift+space"] = () => activateWithKey("Space", { shift: true });
   }
 
   // `isCtrlKeyPressed` wants `platform` on Apple and `control` elsewhere; the

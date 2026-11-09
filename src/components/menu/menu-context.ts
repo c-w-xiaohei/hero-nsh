@@ -42,10 +42,10 @@ export interface MenuItemDescriptor {
 
   /**
    * The one activation entry: a pointer press, Return / Space on the focused
-   * root, and the Windows key binding all arrive here. It runs the selection
+   * root, and the keymap bindings all arrive here. It runs the selection
    * half, then the action half, then the close decision (port sheet section 5).
-   * `keyName` names the activating key where the channel exposes it (the
-   * Windows bindings); a host press carries no key identity.
+   * `keyName` names the activating key: the keymap bindings know it, and an
+   * unnamed host press is Space.
    */
   activate: (
     source: "pointer" | "keyboard",
