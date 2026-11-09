@@ -159,6 +159,10 @@ function Case(props: CaseProps) {
   return (
     <View class="w-64 items-start gap-2">
       <Select
+        // A ClearButton makes the trigger's centre land inside its 24pt hit
+        // area when the root shrink-wraps, so the root takes the width
+        // HeroUI's own WithClearButton story sets (`w-[256px]`).
+        className={props.clear ? "w-[256px]" : undefined}
         placeholder={props.placeholder}
         aria-label={props.ariaLabel}
         selectionMode={props.multiple ? "multiple" : "single"}
