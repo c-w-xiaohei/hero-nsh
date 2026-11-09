@@ -38,7 +38,7 @@ import type { Component } from "./types";
  *
  * Split scenarios (SOP 3.3.3): the Value render prop takes booleans upstream
  * and accessors here (D17), so `custom-value*` read `isPlaceholder()`,
- * `defaultChildren()` and `state.selectedItems()` inside reactive tree
+ * `defaultChildren()` and the top-level `selectedItems()` accessor inside reactive tree
  * constructs (`<If>`, `<Each>`): the function body itself runs once,
  * untracked, so an impermanent `if` there would freeze the branch.
  *
