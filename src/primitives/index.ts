@@ -4,3 +4,4 @@ export * from "./create-interaction-modality";
 export * from "./create-overlay-presence";
 export * from "./create-overlay-trigger";
 export * from "./create-toggle-state";
+export * from "./create-scroll-shadow";
