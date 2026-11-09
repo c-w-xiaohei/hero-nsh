@@ -22,8 +22,10 @@ import { openScenario } from "../../helpers/open-scenario";
  *
  * Every case waits for the first frame after `open` before it reads, on what it
  * reads first: on `--target web` `open` can resolve before the app's first
- * commit, and a read straight after it sees an empty screen. The waits only
- * delay the reads — every assertion still runs and can still fail.
+ * commit, and a read straight after it sees an empty screen. The waits all pass
+ * `{ timeout: 15_000 }`, above nsh's own 10 s app-start budget, so a slow first
+ * commit does not fail at the 5 s default. The waits only delay the reads —
+ * every assertion still runs and can still fail.
  */
 
 // kobalte/packages/core/src/toggle-button/toggle-button.test.tsx:10
@@ -31,7 +33,7 @@ import { openScenario } from "../../helpers/open-scenario";
 // kept, as the rendered text.
 test("T-024 can be default selected (uncontrolled)", async () => {
   const app = await openScenario("toggle-button/default-selected.split");
-  await app.waitFor("role:button[Button on]");
+  await app.waitFor("role:button[Button on]", { timeout: 15_000 });
 
   expect(app.shows("role:button[Button on]")).toBe(true);
 });
@@ -41,7 +43,7 @@ test("T-024 can be default selected (uncontrolled)", async () => {
 // the parent that ignores it; the duplicate attribute reads fold into the text.
 test("T-025 can be controlled", async () => {
   const app = await openScenario("toggle-button/controlled-on.split");
-  await app.waitFor("text:Button on");
+  await app.waitFor("text:Button on", { timeout: 15_000 });
 
   expect(app.shows("text:Button on")).toBe(true);
 
@@ -55,7 +57,7 @@ test("T-025 can be controlled", async () => {
 // Partial port (port sheet T-026): the off state, read as text.
 test("T-026 should have correct attributes when the toggle button is off (not selected)", async () => {
   const app = await openScenario("toggle-button/render-props.split");
-  await app.waitFor("text:Bold off");
+  await app.waitFor("text:Bold off", { timeout: 15_000 });
 
   expect(app.shows("text:Bold off")).toBe(true);
 });
@@ -64,7 +66,7 @@ test("T-026 should have correct attributes when the toggle button is off (not se
 // Partial port (port sheet T-027): the on state, read as text.
 test("T-027 should have correct attributes when the toggle button is on (selected)", async () => {
   const app = await openScenario("toggle-button/default-selected.split");
-  await app.waitFor("text:Button on");
+  await app.waitFor("text:Button on", { timeout: 15_000 });
 
   expect(app.shows("text:Button on")).toBe(true);
 });
@@ -75,7 +77,7 @@ test("T-027 should have correct attributes when the toggle button is on (selecte
 // callback's string payload becomes a `Set` read back as a sorted array.
 test("T-028 can have a default value", async () => {
   const app = await openScenario("toggle-button-group/animals.split");
-  await app.waitFor("role:radiogroup");
+  await app.waitFor("role:radiogroup", { timeout: 15_000 });
 
   expect(app.shows("role:radiogroup")).toBe(true);
   expect(app.count("role:radiogroup >> role:radio")).toBe(3);
@@ -96,7 +98,7 @@ test("T-028 can have a default value", async () => {
 // Rewritten port (port sheet T-032): single selection, read as text.
 test("T-032 supports using click to change state", async () => {
   const app = await openScenario("toggle-button-group/click-single.split");
-  await app.waitFor("text:Dogs off");
+  await app.waitFor("text:Dogs off", { timeout: 15_000 });
 
   expect(app.shows("text:Dogs off")).toBe(true);
 
@@ -113,7 +115,7 @@ test("T-032 supports using click to change state", async () => {
 // Rewritten port (port sheet T-033): multiple selection keeps both pressed.
 test("T-033 multi-select", async () => {
   const app = await openScenario("toggle-button-group/multi-click.split");
-  await app.waitFor("text:Cats off");
+  await app.waitFor("text:Cats off", { timeout: 15_000 });
 
   expect(app.shows("text:Cats off")).toBe(true);
 
@@ -130,7 +132,7 @@ test("T-033 multi-select", async () => {
 // reports no selection change.
 test("T-036 disabled item should be be pressed", async () => {
   const app = await openScenario("toggle-button-group/item-disabled.split");
-  await app.waitFor("role:radio[Cats off]");
+  await app.waitFor("role:radio[Cats off]", { timeout: 15_000 });
 
   await expect(app.press("role:radio[Cats off]")).rejects.toMatchObject({
     code: "ERR_NSH_TEST_DISABLED",

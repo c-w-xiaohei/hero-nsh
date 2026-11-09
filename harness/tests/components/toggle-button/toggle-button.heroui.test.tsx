@@ -25,7 +25,10 @@ import { openScenario } from "../../helpers/open-scenario";
  * `--target web` `open` can resolve before the app's first commit, and a read
  * straight after it sees an empty screen. Text and role cases wait on what they
  * read first, the layout cases on the probes they measure. The waits only delay
- * the reads — every assertion still runs and can still fail.
+ * the reads — every assertion still runs and can still fail. They all pass
+ * `{ timeout: 15_000 }`, above nsh's own 10 s app-start budget: the default
+ * 5 s is shorter than the host may take to mount the tree, and a slow first
+ * commit is not a component failure.
  */
 
 type LayoutCall = { name: string; x: number; y: number; width: number; height: number };
@@ -36,7 +39,9 @@ function layoutCalls(app: App): LayoutCall[] {
 
 /** Waits until the app's layout pass has reached `names`: an `open` can resolve before the first commit. */
 async function firstFrame(app: App, ...names: string[]): Promise<void> {
-  await app.waitUntil(() => names.every((name) => layoutCalls(app).some((call) => call.name === name)));
+  await app.waitUntil(() => names.every((name) => layoutCalls(app).some((call) => call.name === name)), {
+    timeout: 15_000,
+  });
 }
 
 function frame(app: App, name: string): LayoutCall {
@@ -54,7 +59,7 @@ function frame(app: App, name: string): LayoutCall {
 // heroui/packages/react/tests/components/toggle-button/toggle-button.test.tsx:27
 test("T-001 renders with role and accessible name", async () => {
   const app = await openScenario("toggle-button/basic");
-  await app.waitFor("role:button[Bold]");
+  await app.waitFor("role:button[Bold]", { timeout: 15_000 });
 
   expect(app.shows("role:button[Bold]")).toBe(true);
 });
@@ -64,7 +69,7 @@ test("T-001 renders with role and accessible name", async () => {
 // test identity is `testID`, which the fixture gives to the root.
 test("T-003 supports data attribute passthrough", async () => {
   const app = await openScenario("toggle-button/basic");
-  await app.waitFor("id:toggle");
+  await app.waitFor("id:toggle", { timeout: 15_000 });
 
   expect(app.shows("id:toggle")).toBe(true);
 });
@@ -74,7 +79,7 @@ test("T-003 supports data attribute passthrough", async () => {
 // NSH channel; the render prop prints the selection, and onChange is probed.
 test("T-004 supports toggling selected state on click", async () => {
   const app = await openScenario("toggle-button/render-props.split");
-  await app.waitFor("text:Bold off");
+  await app.waitFor("text:Bold off", { timeout: 15_000 });
 
   expect(app.shows("text:Bold off")).toBe(true);
 
@@ -92,7 +97,7 @@ test("T-004 supports toggling selected state on click", async () => {
 // render prop, since `aria-pressed` is not readable.
 test("T-005 supports uncontrolled defaultSelected", async () => {
   const app = await openScenario("toggle-button/default-selected.split");
-  await app.waitFor("text:Button on");
+  await app.waitFor("text:Button on", { timeout: 15_000 });
 
   expect(app.shows("text:Button on")).toBe(true);
 });
@@ -102,7 +107,7 @@ test("T-005 supports uncontrolled defaultSelected", async () => {
 // signal and a "Set selected" button writes it, standing in for rerender().
 test("T-006 supports controlled isSelected", async () => {
   const app = await openScenario("toggle-button/controlled.split");
-  await app.waitFor("text:Bold off");
+  await app.waitFor("text:Bold off", { timeout: 15_000 });
 
   expect(app.shows("text:Bold off")).toBe(true);
 
@@ -120,7 +125,7 @@ test("T-006 supports controlled isSelected", async () => {
 // callbacks it guards are probed instead.
 test("T-007 supports hover state", async () => {
   const app = await openScenario("toggle-button/hover");
-  await app.waitFor("role:button[Bold]");
+  await app.waitFor("role:button[Bold]", { timeout: 15_000 });
 
   await app.hover("role:button[Bold]");
   expect(callsOf(app, "onHoverStart")).toHaveLength(1);
@@ -136,7 +141,7 @@ test("T-007 supports hover state", async () => {
 test("T-011 supports disabled state and blocks toggle", async () => {
   const app = await openScenario("toggle-button/disabled.split");
   const control = "role:button[Bold off]";
-  await app.waitFor(control);
+  await app.waitFor(control, { timeout: 15_000 });
 
   expect(app.enabled(control)).toBe(false);
 
@@ -151,7 +156,7 @@ test("T-011 supports disabled state and blocks toggle", async () => {
 // Rewritten port (port sheet T-012): a disabled button reports no hover.
 test("T-012 exposes no hover state when disabled", async () => {
   const app = await openScenario("toggle-button/disabled.split");
-  await app.waitFor("role:button[Bold off]");
+  await app.waitFor("role:button[Bold off]", { timeout: 15_000 });
 
   await app.hover("role:button[Bold off]");
 
@@ -161,7 +166,7 @@ test("T-012 exposes no hover state when disabled", async () => {
 // heroui/packages/react/tests/components/toggle-button/toggle-button.test.tsx:168
 test("T-013 supports children as a render function receiving selection state", async () => {
   const app = await openScenario("toggle-button/render-props.split");
-  await app.waitFor("role:button[Bold off]");
+  await app.waitFor("role:button[Bold off]", { timeout: 15_000 });
 
   expect(app.shows("role:button[Bold off]")).toBe(true);
 
@@ -180,7 +185,7 @@ test("T-013 supports children as a render function receiving selection state", a
 // screen-reader check (`accessibilityElementsHidden`).
 test("T-015 renders a Separator with data-slot", async () => {
   const app = await openScenario("toggle-button-group/separators");
-  await app.waitFor("id:group-separator");
+  await app.waitFor("id:group-separator", { timeout: 15_000 });
 
   expect(app.shows("id:group-separator")).toBe(true);
   expect(app.count("id:group-separator")).toBe(1);
@@ -232,7 +237,7 @@ test("T-017 exposes detached BEM modifier", async () => {
 // pressed state is printed by each member's render prop.
 test("T-018 exposes a toolbar role with pressable toggle buttons", async () => {
   const app = await openScenario("toggle-button-group/multiple.split");
-  await app.waitFor("role:toolbar");
+  await app.waitFor("role:toolbar", { timeout: 15_000 });
 
   expect(app.shows("role:toolbar")).toBe(true);
   expect(app.shows("text:Bold off")).toBe(true);
@@ -249,7 +254,7 @@ test("T-018 exposes a toolbar role with pressable toggle buttons", async () => {
 // Rewritten port (port sheet T-019): both pressed states are read as text.
 test("T-019 supports defaultSelectedKeys", async () => {
   const app = await openScenario("toggle-button-group/multiple-default.split");
-  await app.waitFor("text:Bold on");
+  await app.waitFor("text:Bold on", { timeout: 15_000 });
 
   expect(app.shows("text:Bold on")).toBe(true);
   expect(app.shows("text:Italic off")).toBe(true);
@@ -260,7 +265,7 @@ test("T-019 supports defaultSelectedKeys", async () => {
 // radio state is printed; the radiogroup / radio roles stay readable.
 test("T-020 exposes a radiogroup role with radio-style buttons", async () => {
   const app = await openScenario("toggle-button-group/single.split");
-  await app.waitFor("role:radiogroup");
+  await app.waitFor("role:radiogroup", { timeout: 15_000 });
 
   expect(app.shows("role:radiogroup")).toBe(true);
   expect(app.shows("role:radio[Left off]")).toBe(true);
@@ -280,7 +285,7 @@ test("T-020 exposes a radiogroup role with radio-style buttons", async () => {
 // it, read through its printed text.
 test("T-021 supports disallowEmptySelection", async () => {
   const app = await openScenario("toggle-button-group/single-disallow.split");
-  await app.waitFor("role:radio[Left on]");
+  await app.waitFor("role:radio[Left on]", { timeout: 15_000 });
 
   await app.press("role:radio[Left on]");
 
@@ -290,7 +295,7 @@ test("T-021 supports disallowEmptySelection", async () => {
 // heroui/packages/react/tests/components/toggle-button-group/toggle-button-group.test.tsx:159
 test("T-022 supports group disabled state on every button", async () => {
   const app = await openScenario("toggle-button-group/disabled");
-  await app.waitFor("role:button[Bold]");
+  await app.waitFor("role:button[Bold]", { timeout: 15_000 });
 
   expect(app.enabled("role:button[Bold]")).toBe(false);
   expect(app.enabled("role:button[Italic]")).toBe(false);
@@ -301,7 +306,7 @@ test("T-022 supports group disabled state on every button", async () => {
 // readable; `text-base` is, and only lg raises the member's text to 16.
 test("T-023 exposes inherited size on child ToggleButtons", async () => {
   const app = await openScenario("toggle-button-group/sizes");
-  await app.waitFor("text:Bold");
+  await app.waitFor("text:Bold", { timeout: 15_000 });
 
   expect(app.spanStyle("text:Bold").fontSize).toBe(16);
 });
