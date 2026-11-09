@@ -34,20 +34,39 @@ const RIGHT_ARC = new Path2D(
 );
 
 /**
+ * The same color with alpha 0.
+ *
+ * `token()` gives a color as `#rrggbbaa`, so the first seven characters are the
+ * paint at full opacity and the trailing `00` empties it. Both ends of a
+ * fading gradient must be the paint's own RGB: upstream writes
+ * `stopColor="currentColor" stopOpacity={0}`, which fades alpha and keeps the
+ * hue, while the named CSS `transparent` is black at alpha 0 and darkens the
+ * in-between samples toward black on a non-premultiplied backend (and measurably
+ * in Chrome's own gradient interpolation).
+ */
+function fadeOut(paint: string): string {
+  return `${paint.slice(0, 7)}00`;
+}
+
+/**
  * Draws the icon at the canvas's measured size.
  *
  * `paint` is the resolved color (see `paint` in `SpinnerRoot`). Both arcs'
  * gradients are built in the local coordinate space after the SVG
  * `translate(1.5 1.625)`, and their stops are the upstream percentages.
  *
- * Alpha is composed rather than written as semi-transparent stops, because
- * `currentColor`/token colors arrive as a single string: the left arc is laid
- * down at 0.55 and a full-opacity gradient (`1 → 0`) is drawn over it, giving
- * `α = g + 0.55(1-g)` from 1 down to 0.55; the right arc is one gradient
- * (`0 → 1`) at `globalAlpha = 0.55`, giving `0.55g` from 0 up to 0.55. Both
- * match the SVG's stop opacities (`1 → 0.55` and `0 → 0.55`).
+ * Upstream's stops are `currentColor` with a `stopOpacity` (`1 → 0.55` on the
+ * left arc, `0 → 0.55` on the right). The port composes those opacities from
+ * host fills instead, because a token color arrives as one string: the left arc
+ * is laid down at `globalAlpha = 0.55` and a full-opacity gradient (`1 → 0`,
+ * both stops the paint color) is drawn over it, giving `α = g + 0.55(1-g)` from
+ * 1 down to 0.55; the right arc is one gradient (`0 → 1`, same two colors) at
+ * `globalAlpha = 0.55`, giving `0.55g` from 0 up to 0.55. The RGB never leaves
+ * the paint, so the fade is in opacity alone, exactly as `stopOpacity` does.
  */
 function drawSpinner(cx: CanvasRenderingContext2D, size: CanvasSize, paint: string) {
+  const zeroAlpha = fadeOut(paint);
+
   cx.clearRect(0, 0, size.width, size.height);
   cx.save();
   // The SVG viewBox is 0 0 24 24.
@@ -60,14 +79,14 @@ function drawSpinner(cx: CanvasRenderingContext2D, size: CanvasSize, paint: stri
   cx.fill(LEFT_ARC);
   const leftGradient = cx.createLinearGradient(0, 0.0047, 0, 20.875);
   leftGradient.addColorStop(0.05271, paint);
-  leftGradient.addColorStop(0.91793, "transparent");
+  leftGradient.addColorStop(0.91793, zeroAlpha);
   cx.globalAlpha = 1;
   cx.fillStyle = leftGradient;
   cx.fill(LEFT_ARC);
 
   // Right arc: bbox y 2.1742 … 20.875, gradient y1 = 15.24%, y2 = 87.15%.
   const rightGradient = cx.createLinearGradient(0, 2.1742, 0, 20.875);
-  rightGradient.addColorStop(0.1524, "transparent");
+  rightGradient.addColorStop(0.1524, zeroAlpha);
   rightGradient.addColorStop(0.8715, paint);
   cx.globalAlpha = 0.55;
   cx.fillStyle = rightGradient;
@@ -117,6 +136,19 @@ export interface SpinnerRootProps
   extends Omit<ViewProps, "children" | "class" | "role">,
     SpinnerAriaProps,
     SpinnerDataProps {
+  /**
+   * Accepted, not rendered, as upstream: no children leave a `Spinner`.
+   *
+   * The upstream type takes `children` through the
+   * `Omit<React.JSX.IntrinsicElements[E], keyof SpinnerRootProps<E>>`
+   * intersection (`spinner.tsx:66-74`), but the root passes its JSX children
+   * `<SpinnerPrimitive aria-hidden />` as `createElement`'s children argument
+   * (`spinner.tsx:93-101`), and React replaces whatever `{...props}` carried
+   * with that argument. So a caller's children are swallowed upstream too, and
+   * the port keeps them accepted in the type and out of the tree.
+   */
+  children?: JSX.Element;
+
   /** Appended after the variant classes; later classes win. */
   className?: string;
 
@@ -159,6 +191,9 @@ export interface SpinnerRootProps
  */
 export function SpinnerRoot(props: SpinnerRootProps): JSX.Element {
   const [local, rest] = split(props, [
+    // Consumed so it cannot ride `rest` into `View`; upstream drops it (see
+    // `children` in `SpinnerRootProps`).
+    "children",
     "className",
     "color",
     "size",
