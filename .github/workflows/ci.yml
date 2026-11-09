@@ -23,8 +23,10 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      - run: nsh test harness --junit junit.xml
-      - run: pnpm test:web
+      - name: Headless tests
+        run: node scripts/run-tests.mjs headless --junit-dir junit
+      - name: Web tests
+        run: node scripts/run-tests.mjs web --junit-dir junit-web
       - name: Distribution smoke test
         run: |
           pnpm pack --pack-destination "$RUNNER_TEMP"
@@ -43,9 +45,17 @@ jobs:
           TSX
           nsh check .
           echo 'expect(app.texts()).toContain("0.0.0");' | nsh test App.tsx
-      - uses: actions/upload-artifact@v7
+      - name: Upload headless JUnit
+        uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: junit-ubuntu
-          path: junit.xml
+          name: junit-ubuntu-headless
+          path: junit
+          if-no-files-found: ignore
+      - name: Upload web JUnit
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: junit-ubuntu-web
+          path: junit-web
           if-no-files-found: ignore

@@ -62,6 +62,9 @@ export const PopoverPositionContext = context<PopoverPositionContextValue | null
 export interface PopoverContentContextValue {
   /** Registers the Dialog view; the returned function unregisters it. */
   registerDialog: (ref: ViewRef) => () => void;
+
+  /** Records that the registered Dialog received focus (the open focus move). */
+  markDialogFocused: () => void;
 }
 
 export const PopoverContentContext = context<PopoverContentContextValue | null>(null);

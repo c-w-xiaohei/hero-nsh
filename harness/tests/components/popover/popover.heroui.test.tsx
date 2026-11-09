@@ -187,6 +187,9 @@ test("T-018 skips the exit hold when shouldSkipAnimation is true", async () => {
   expect(app.shows("text:Retained content")).toBe(true);
 
   await app.host.send("popover.close");
+  // The host event lands after a frame; 20ms is still inside the 100ms hold,
+  // so a broken skip still shows the retained content here.
+  await app.clock!.runFor(20);
 
   expect(app.count("text:Retained content")).toBe(0);
 });
@@ -266,4 +269,14 @@ test("X-003 the underlay is gone immediately on close, so the trigger reopens du
   await app.clock!.runFor(120);
 
   expect(app.count(CONTENT)).toBe(1);
+});
+
+// Ref forwarding regression: this scenario passes no ref to Popover.Content,
+// whose Overlay used to receive `ref={props.ref}`. NSH treats an undefined
+// plain ref as a ref store and throws at mount on the web target, so the whole
+// page was empty there. The forwarded callback ref keeps the content on screen.
+test("X-004 renders a ref-less Popover on a real engine", async () => {
+  const app = await openScenario("popover/default-open", { clock: {} });
+
+  expect(app.shows(CONTENT)).toBe(true);
 });

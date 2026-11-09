@@ -91,6 +91,11 @@ export function PopoverDialog(props: PopoverDialogProps) {
     props.ref?.(node);
   };
 
+  const handleFocus = () => {
+    content?.markDialogFocused();
+    props.onFocus?.();
+  };
+
   // One read of `props.children`, at the placement. HeroUI's Dialog children
   // may be a function taking `{ close }`; a zero-argument function is NSH's
   // reactive child instead (D17), so the arity decides, as in Button.
@@ -117,7 +122,7 @@ export function PopoverDialog(props: PopoverDialogProps) {
       accessibilityState={props.accessibilityState}
       class={classes()}
       style={props.style}
-      onFocus={props.onFocus}
+      onFocus={handleFocus}
       onBlur={props.onBlur}
     >
       {/* React Aria's Dialog supplies `level: 2` to the heading in its `title`

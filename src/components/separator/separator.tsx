@@ -126,7 +126,7 @@ export function SeparatorRoot(props: SeparatorRootProps): JSX.Element {
   return (
     <View
       {...rest}
-      ref={local.ref}
+      ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
       nativeID={local.id ?? local.nativeID}
       style={local.style}
       // R-001 … R-016 in `separator.styles.ts`, then the container's classes,

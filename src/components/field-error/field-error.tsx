@@ -290,7 +290,7 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
   const renderMessage = (content: () => JSX.Element) => (
     <Text
       {...rest}
-      ref={local.ref}
+      ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
       nativeID={local.id ?? local.nativeID}
       class={classes()}
       classList={classList()}

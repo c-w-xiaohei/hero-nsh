@@ -58,7 +58,7 @@ export function HeaderRoot(props: HeaderRootProps): JSX.Element {
   return (
     <Text
       {...rest}
-      ref={local.ref}
+      ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
       nativeID={local.id ?? local.nativeID}
       style={local.style}
       // R-001–R-008 in `header.styles.ts`, then the caller's class: later wins.

@@ -490,6 +490,7 @@ function EventsCase() {
       <Input
         testID="field"
         accessibilityLabel="field"
+        class="w-48 p-2"
         onKeyPress={(e: { key: string }) => report("keypress", e.key)}
         onFocus={() => report("focus", "field")}
         onBlur={() => report("blur", "field")}

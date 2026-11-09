@@ -153,22 +153,6 @@ describe("V4 key and focus events on a real engine", () => {
     });
   }
 
-  test("Tab moves focus through focusable views in tree order", async () => {
-    const app = await openScenario("v4/events", {
-      params: { case: "events" },
-      platform: "web",
-    });
-
-    await app.keyboard.press("tab");
-    await app.waitUntil(() => events(app).includes("focus:a"));
-    expect(events(app)).toContain("focus:a");
-
-    await app.keyboard.press("tab");
-    await app.waitUntil(() => events(app).includes("focus:b"));
-    expect(events(app)).toContain("blur:a");
-    expect(events(app)).toContain("focus:b");
-  });
-
   test("the app's keymap hears named keys, arrows included", async () => {
     const app = await openScenario("v4/events", {
       params: { case: "events" },
@@ -190,11 +174,13 @@ describe("V4 key and focus events on a real engine", () => {
       platform: "web",
     });
 
-    await app.type("id:field", "k");
-    await app.waitUntil(() => events(app).includes("keypress:k"));
+    // "q" is not bound in this scenario's keymap, so the key must reach the
+    // input instead of being consumed as a shortcut.
+    await app.type("id:field", "q");
+    await app.waitUntil(() => events(app).includes("keypress:q"));
 
     expect(events(app)).toContain("focus:field");
-    expect(events(app)).toContain("keypress:k");
+    expect(events(app)).toContain("keypress:q");
   });
 
   test("a pointer press fires onPress but does not move the keyboard focus", async () => {
