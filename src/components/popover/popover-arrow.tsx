@@ -139,7 +139,7 @@ export function PopoverArrow(props: PopoverArrowProps) {
 
   return (
     <View
-      ref={props.ref}
+      ref={(node) => props.ref?.(node)}
       testID={props.testID}
       nativeID={props.id ?? props.nativeID}
       class={className()}

@@ -273,12 +273,26 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
     return typeof value === "function" ? value(styleRenderProps) : value;
   });
 
+  // R-002 / R-005 / R-013, then the container's descendant classes, then the
+  // caller's: three segments in that order, later winning (port sheet §4). The
+  // container is the field root this error belongs to (a switch indents it
+  // under its track), the same channel Description uses.
+  const classes = computed(() => {
+    const container = field?.partClass?.();
+
+    return fieldErrorVariants({
+      className: [container, className()]
+        .filter((part): part is string => typeof part === "string" && part.length > 0)
+        .join(" "),
+    });
+  });
+
   const renderMessage = (content: () => JSX.Element) => (
     <Text
       {...rest}
-      ref={local.ref}
+      ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
       nativeID={local.id ?? local.nativeID}
-      class={fieldErrorVariants({ className: className() })}
+      class={classes()}
       classList={classList()}
       style={style()}
       // A `<span>` is not a keyboard focus stop upstream; a pressable Text

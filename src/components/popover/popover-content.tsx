@@ -256,6 +256,7 @@ export function PopoverContent(props: PopoverContentProps) {
    * channel on the content root, so the Dialog part registers itself here.
    * ----------------------------------------------------------------------------------------- */
   const dialogRef = signal<ViewRef | undefined>(undefined);
+  const dialogFocused = signal(false);
   let focusedForOpen = false;
 
   effect(() => {
@@ -264,6 +265,7 @@ export function PopoverContent(props: PopoverContentProps) {
 
     if (!open) {
       focusedForOpen = false;
+      dialogFocused.set(false);
 
       return;
     }
@@ -272,8 +274,28 @@ export function PopoverContent(props: PopoverContentProps) {
       return;
     }
 
-    dialog.focus();
     focusedForOpen = true;
+    dialogFocused.set(false);
+
+    // A real Windows window registers the dialog after the opening commit, so
+    // focusing it in the same frame is a no-op there (T-014 observes 0 focus
+    // events). Defer the first attempt one frame and retry once when the focus
+    // did not land; the dialog's own onFocus is what records the landing.
+    let frame = requestAnimationFrame(() => {
+      if (dialogFocused()) {
+        return;
+      }
+
+      dialog.focus();
+
+      frame = requestAnimationFrame(() => {
+        if (!dialogFocused()) {
+          dialog.focus();
+        }
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
   });
 
   const contentContextValue = {
@@ -286,6 +308,7 @@ export function PopoverContent(props: PopoverContentProps) {
         }
       };
     },
+    markDialogFocused: () => dialogFocused.set(true),
   };
 
   /* -------------------------------------------------------------------------------------------
@@ -386,44 +409,64 @@ export function PopoverContent(props: PopoverContentProps) {
     }
   };
 
-  return (
-    <>
-      {/* Modal underlay: the second overlay that absorbs presses, as RAC's
-          `usePopover` underlay and the core Overlay docs describe. RAC renders
-          it only while the state is open (`react-aria-components/src/
-          Popover.tsx`: `!props.isNonModal && state.isOpen`), so the exit hold
-          does not keep a press-absorbing layer over the trigger. */}
-      <If when={!isNonModal() && isOpen()}>
-        <Overlay class="inset-0" focusable={false} onPress={close} />
-      </If>
+  // The underlay only hit-tests while the popover is open; during the exit hold
+  // it stays mounted around the content but lets the trigger take the press.
+  const underlayClassList = computed(() => ({ "pointer-events-none": !isOpen() }));
 
-      <If when={presence.isPresent()}>
+  // One read of `props.children`, at its placement inside the content overlay.
+  const contentOverlay = (
+    <Overlay
+      ref={(node) => props.ref?.(node)}
+      anchor={anchor() ?? null}
+      placement={resolved().side}
+      align={resolved().align}
+      offset={props.offset ?? 8}
+      margin={props.containerPadding ?? 12}
+      testID={props.testID}
+      nativeID={props.id ?? props.nativeID}
+      accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel}
+      class={classes()}
+      classList={classList()}
+      style={style()}
+      onPressOutside={close}
+      onCancel={handleCancel}
+      onPosition={handlePosition}
+    >
+      <OverlayTriggerContext.Provider value={scopedTrigger}>
+        <PopoverContentContext.Provider value={contentContextValue}>
+          <PopoverPositionContext.Provider value={positionContext}>
+            {renderChildren(props.children)}
+          </PopoverPositionContext.Provider>
+        </PopoverContentContext.Provider>
+      </OverlayTriggerContext.Provider>
+    </Overlay>
+  );
+
+  return (
+    <If when={presence.isPresent()}>
+      {/* Modal underlay: the second overlay that absorbs presses, as RAC's
+          `usePopover` underlay and the core Overlay docs describe. It has to be
+          the outer overlay, with the content overlay nested inside it: two
+          sibling overlays both claim the press on the web target, where the
+          earlier full-screen one wins the hit test, so the content would never
+          see a press. While the popover closes, the underlay ignores pointer
+          events (X-003: the trigger is reachable during the exit hold) and its
+          `onPress` is dead with it. The content stays mounted for the hold and
+          is gone with the underlay afterwards. */}
+      <If when={!isNonModal()} else={contentOverlay}>
         <Overlay
-          ref={props.ref}
-          anchor={anchor() ?? null}
-          placement={resolved().side}
-          align={resolved().align}
-          offset={props.offset ?? 8}
-          margin={props.containerPadding ?? 12}
-          testID={props.testID}
-          nativeID={props.id ?? props.nativeID}
-          accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel}
-          class={classes()}
-          classList={classList()}
-          style={style()}
-          onPressOutside={close}
-          onCancel={handleCancel}
-          onPosition={handlePosition}
+          class="inset-0"
+          classList={underlayClassList()}
+          focusable={false}
+          onPress={() => {
+            if (isOpen()) {
+              close();
+            }
+          }}
         >
-          <OverlayTriggerContext.Provider value={scopedTrigger}>
-            <PopoverContentContext.Provider value={contentContextValue}>
-              <PopoverPositionContext.Provider value={positionContext}>
-                {renderChildren(props.children)}
-              </PopoverPositionContext.Provider>
-            </PopoverContentContext.Provider>
-          </OverlayTriggerContext.Provider>
+          {contentOverlay}
         </Overlay>
       </If>
-    </>
+    </If>
   );
 }

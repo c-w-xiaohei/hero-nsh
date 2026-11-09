@@ -6,6 +6,13 @@ import { descriptionScenarios } from "./description.scenarios";
 import { buttonScenarios } from "./button.scenarios";
 import { popoverScenarios } from "./popover.scenarios";
 import { listBoxScenarios } from "./list-box.scenarios";
+import { switchScenarios } from "./switch.scenarios";
+import { separatorScenarios } from "./separator.scenarios";
+import { surfaceScenarios } from "./surface.scenarios";
+import { kbdScenarios } from "./kbd.scenarios";
+import { spinnerScenarios } from "./spinner.scenarios";
+import { skeletonScenarios } from "./skeleton.scenarios";
+import { headerScenarios } from "./header.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -15,4 +22,11 @@ export const scenarios: Record<string, Component> = {
   ...buttonScenarios,
   ...popoverScenarios,
   ...listBoxScenarios,
+  ...switchScenarios,
+  ...separatorScenarios,
+  ...surfaceScenarios,
+  ...kbdScenarios,
+  ...spinnerScenarios,
+  ...skeletonScenarios,
+  ...headerScenarios,
 };

@@ -13,9 +13,9 @@
   "files": ["src", "theme"],
   "scripts": {
     "check": "nsh check harness",
-    "test": "nsh test harness",
-    "test:web": "nsh test harness --target web",
-    "test:windows": "nsh test harness --target windows"
+    "test": "node scripts/run-tests.mjs headless",
+    "test:web": "node scripts/run-tests.mjs web",
+    "test:windows": "node scripts/run-tests.mjs windows"
   },
   "dependencies": {
     "@internationalized/date": "3.12.4",

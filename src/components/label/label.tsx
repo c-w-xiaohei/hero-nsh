@@ -72,6 +72,8 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
     "isDisabled",
     "isInvalid",
     "onPress",
+    "onPressDown",
+    "onPressUp",
   ] as const);
 
   // Read once, in the body: a field root's state, when a Label is rendered
@@ -121,17 +123,31 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
     );
   }
 
-  // A press on a `<label for>` focuses its control; the field root performs
-  // that here. The caller's `onPress` still runs, after the focus moved.
+  // A press on a `<label for>` focuses its control and, when the field treats
+  // the label's press as its own, is the field's press. NSH's label is its own
+  // pressable Text and its press does not reach the field root, so the field is
+  // told the press transitions here, with the real events: a held label press
+  // must paint in the field like the `<label>`'s own press does upstream.
+  const onPressDown = (event: PressEvent) => {
+    field?.pressFieldStart?.(event);
+    local.onPressDown?.(event);
+  };
+
+  const onPressUp = (event: PressEvent) => {
+    field?.pressFieldUp?.(event);
+    local.onPressUp?.(event);
+  };
+
+  // The caller's `onPress` still runs, after the focus moved.
   const onPress = (event: PressEvent) => {
-    field?.focusField?.();
+    field?.focusField?.(event);
     local.onPress?.(event);
   };
 
   return (
     <Text
       {...rest}
-      ref={local.ref}
+      ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
       nativeID={local.id ?? local.nativeID}
       style={local.style}
       class={labelVariants({
@@ -145,6 +161,8 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
       // caller's own `focusable` still wins: HeroUI forwards whatever `rest`
       // carries to the element.
       focusable={local.focusable ?? false}
+      onPressDown={onPressDown}
+      onPressUp={onPressUp}
       onPress={onPress}
     >
       {children()}
