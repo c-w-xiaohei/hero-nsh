@@ -56,7 +56,9 @@ export interface ColorSwatchRootProps
   /**
    * The inline style. A function receives the render props. A `boxShadow` whose
    * layers are all inset moves to the border layer above the color, where an
-   * inner shadow is visible; any other shadow stays on the root (R-004).
+   * inner shadow is visible; any other shadow stays on the root. Either way the
+   * caller's shadow replaces the default 1px ring rather than drawing on top of
+   * it (R-004).
    */
   style?:
     | StyleProp<ViewStyle>
@@ -122,11 +124,14 @@ const CHECKER_CELLS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
  * | root | size, radius, clipping, the caller's style (except an all-inset `boxShadow`) |
  * | checker | `backgroundImage` of the nine cells |
  * | color | `backgroundColor` (R-016, the only inline color) |
- * | border | the default inset shadow, or the caller's all-inset `boxShadow` (R-004) |
+ * | border | the default inset ring, or the caller's all-inset `boxShadow` (R-004) |
  *
  * A caller's shadow that mixes inset and non-inset layers stays on the root:
  * one `boxShadow` has one owner, and the root's own shadow is not clipped by
- * its `overflow-hidden` (port sheet §8).
+ * its `overflow-hidden` (port sheet §8). Whatever its layers, a caller's shadow
+ * replaces the default ring, exactly as upstream's inline `boxShadow` replaces
+ * the stylesheet's `inset 0 0 0 1px rgba(0, 0, 0, 0.1)`; the ring is drawn only
+ * while the caller supplies no shadow at all.
  */
 export function ColorSwatchRoot(props: ColorSwatchRootProps): JSX.Element {
   const [local, rest] = split(props, [
@@ -184,9 +189,11 @@ export function ColorSwatchRoot(props: ColorSwatchRootProps): JSX.Element {
       : color.getColorName();
   });
 
-  /** `[colorName ?? generatedName, aria-label].filter(Boolean).join(", ")`. */
+  /** `[colorName || generatedName, aria-label].filter(Boolean).join(", ")`. */
   const accessibilityLabel = computed(() => {
-    const colorName = local.colorName ?? generatedName();
+    // A falsy check, like upstream's `if (!colorName)`: `colorName=""` still
+    // generates the name instead of leaving the label empty.
+    const colorName = local.colorName || generatedName();
 
     return [colorName, local["aria-label"] ?? local.accessibilityLabel ?? ""]
       .filter(Boolean)
@@ -211,6 +218,22 @@ export function ColorSwatchRoot(props: ColorSwatchRootProps): JSX.Element {
   );
 
   const styles = computed(() => splitUserStyle(userStyle()));
+
+  /**
+   * The border layer's own props. R-004: the default ring draws only while the
+   * caller supplies no `boxShadow`; any shadow of theirs, an all-inset one
+   * included, takes the ring's place, never sits under it.
+   */
+  const borderLayer = computed(() => {
+    const { border, hasShadow } = styles();
+
+    return {
+      class: hasShadow
+        ? "absolute inset-0"
+        : "absolute inset-0 shadow-[inset_0_0_0_1px_rgb(0_0_0_/_0.1)]",
+      style: border === undefined ? undefined : { boxShadow: border },
+    };
+  });
 
   return (
     <View
@@ -244,12 +267,7 @@ export function ColorSwatchRoot(props: ColorSwatchRootProps): JSX.Element {
       <View class="absolute inset-0" style={{ backgroundColor: colorCss() }} />
 
       {/* R-004: the default border, above the color so the inset shadow shows. */}
-      <View
-        class="absolute inset-0 shadow-[inset_0_0_0_1px_rgb(0_0_0_/_0.1)]"
-        style={
-          styles().border === undefined ? undefined : { boxShadow: styles().border }
-        }
-      />
+      <View class={borderLayer().class} style={borderLayer().style} />
 
       {/*
         The single read of `children`, at the placement and after every layer.
@@ -268,20 +286,29 @@ export function ColorSwatchRoot(props: ColorSwatchRootProps): JSX.Element {
 /**
  * The caller's style, split by R-004's ownership rule: an all-inset `boxShadow`
  * moves to the border layer, everything else stays on the root together.
+ *
+ * `hasShadow` records that the caller supplied a `boxShadow` at all, in either
+ * form; the border layer uses it to drop the default ring. Upstream writes the
+ * caller's style into the same inline `style` that the stylesheet's
+ * `box-shadow` sits under, so any inline shadow — `"none"`, an outer one, a
+ * mixed one — replaces the ring instead of stacking on it.
  */
 function splitUserStyle(style: StyleProp<ViewStyle>): {
   root: StyleProp<ViewStyle>;
   border: ViewStyle["boxShadow"];
+  hasShadow: boolean;
 } {
   const flattened = flattenStyle(style);
+  const hasShadow =
+    flattened.boxShadow !== undefined && flattened.boxShadow !== null;
 
   if (!isInsetOnlyShadow(flattened.boxShadow)) {
-    return { root: flattened, border: undefined };
+    return { root: flattened, border: undefined, hasShadow };
   }
 
   const { boxShadow, ...root } = flattened;
 
-  return { root, border: boxShadow };
+  return { root, border: boxShadow, hasShadow };
 }
 
 /** Arrays of style objects, as `StyleProp` allows, collapsed into one object. */

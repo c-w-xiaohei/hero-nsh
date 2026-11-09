@@ -9,9 +9,11 @@
 
 /*
  * Solid port of `@kobalte/core@0.13.14` `packages/core/src/colors/types.ts`
- * (itself a port of React Stately's `@react-types/color`). One signature change,
- * per port sheet §1: `getColorName` / `getHueName` also accept React Stately's
- * locale string.
+ * (itself a port of React Stately's `@react-types/color`). Kobalte's translation
+ * table and React Stately's `locale: string` are both accepted by every
+ * localized method — `getColorName`, `getHueName`, `getChannelName` and
+ * `formatChannelValue` — so HeroUI's `Color` shape is assignable to this one
+ * (port sheet §1, §8).
  */
 
 import type { ColorIntlTranslations } from "./intl";
@@ -84,10 +86,13 @@ export interface Color {
 	/**
 	 * Returns a localized color channel name for a given channel and locale,
 	 * for use in visual or accessibility labels.
+	 *
+	 * Accepts Kobalte's translation table or React Stately's `locale` string;
+	 * the string form uses the English table (port sheet §8).
 	 */
 	getChannelName(
 		channel: ColorChannel,
-		translations: ColorIntlTranslations,
+		translations?: ColorIntlTranslations | string,
 	): string;
 	/**
 	 * Returns the number formatting options for the given channel.
@@ -95,8 +100,14 @@ export interface Color {
 	getChannelFormatOptions(channel: ColorChannel): Intl.NumberFormatOptions;
 	/**
 	 * Formats the numeric value for a given channel for display according to the provided locale.
+	 *
+	 * The second argument is React Stately's `locale` string (or Kobalte's
+	 * translation table, which does not affect the number format).
 	 */
-	formatChannelValue(channel: ColorChannel): string;
+	formatChannelValue(
+		channel: ColorChannel,
+		translations?: ColorIntlTranslations | string,
+	): string;
 	/**
 	 * Returns the color space, 'rgb', 'hsb' or 'hsl', for the current color.
 	 */

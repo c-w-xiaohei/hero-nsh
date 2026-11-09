@@ -9,14 +9,15 @@
  * (port sheet §5). The only changes are the two Kobalte utilities it imported:
  *
  * - `clamp` from `@kobalte/utils` is inlined below (two lines, no dependency);
- * - `createNumberFormatter` (Kobalte's reactive locale) becomes the plain
- *   `Intl.NumberFormat` below: NSH has `Intl`, and the color model never
- *   changes locale while a color is rendered.
+ * - `createNumberFormatter` (Kobalte's reactive locale) becomes a plain
+ *   `Intl.NumberFormat`: NSH has `Intl`, and the color model never changes
+ *   locale while a color is rendered, so the locale is an argument.
  *
- * The `getColorName` / `getHueName` methods additionally accept React Stately's
- * `locale: string` argument, so the exported `Color` interface has the same
- * shape as HeroUI's `Color`; the string form uses the English translations
- * (port sheet §8, a registered difference).
+ * `getColorName` / `getHueName` / `getChannelName` / `formatChannelValue`
+ * additionally accept React Stately's `locale: string` as the translations
+ * argument, so the exported `Color` interface has the same shape as HeroUI's
+ * `Color`: names use the English translations (port sheet §8, a registered
+ * difference) and numbers format for that locale.
  */
 
 import { COLOR_INTL_TRANSLATIONS, type ColorIntlTranslations } from "./intl";
@@ -39,11 +40,15 @@ function clamp(
 }
 
 /**
- * Kobalte's `createNumberFormatter` without the reactive locale: one locale
- * per process is enough for a color that is formatted synchronously.
+ * Kobalte's `createNumberFormatter` without the reactive locale. The locale is
+ * passed per call, the way React Stately's `formatChannelValue(channel, locale)`
+ * does it: `undefined` means the host default.
  */
-function createNumberFormatter(options: Intl.NumberFormatOptions) {
-	return new Intl.NumberFormat(undefined, options);
+function createNumberFormatter(
+	options: Intl.NumberFormatOptions,
+	locale?: string,
+) {
+	return new Intl.NumberFormat(locale, options);
 }
 
 /** Parses a color from a string value. Throws an error if the string could not be parsed. */
@@ -121,6 +126,17 @@ function resolveTranslations(
 		: COLOR_INTL_TRANSLATIONS;
 }
 
+/**
+ * The locale a number format should use. React Stately passes a `locale` string
+ * where Kobalte passes its translation table, which never affects the digits:
+ * only a string reaches `Intl.NumberFormat`, an object leaves the host default.
+ */
+function toLocale(
+	translations?: ColorIntlTranslations | string,
+): string | undefined {
+	return typeof translations === "string" ? translations : undefined;
+}
+
 abstract class Color implements IColor {
 	abstract toFormat(format: ColorFormat): IColor;
 	abstract toString(format: ColorFormat | "css"): string;
@@ -129,7 +145,10 @@ abstract class Color implements IColor {
 	abstract getChannelFormatOptions(
 		channel: ColorChannel,
 	): Intl.NumberFormatOptions;
-	abstract formatChannelValue(channel: ColorChannel): string;
+	abstract formatChannelValue(
+		channel: ColorChannel,
+		translations?: ColorIntlTranslations | string,
+	): string;
 
 	toHexInt(): number {
 		return this.toFormat("rgb").toHexInt();
@@ -155,8 +174,16 @@ abstract class Color implements IColor {
 		throw new Error(`Unsupported color channel: ${channel}`);
 	}
 
-	getChannelName(channel: ColorChannel, translations: ColorIntlTranslations) {
-		return translations[channel];
+	/**
+	 * Returns a localized channel name. Kobalte passes its translation table,
+	 * React Stately (and therefore HeroUI) passes a locale string; a string or
+	 * `undefined` selects the English table, an object is used as is.
+	 */
+	getChannelName(
+		channel: ColorChannel,
+		translations?: ColorIntlTranslations | string,
+	): string {
+		return resolveTranslations(translations)[channel];
 	}
 
 	abstract getColorSpace(): ColorSpace;
@@ -238,9 +265,10 @@ abstract class Color implements IColor {
 
 		const alpha = this.getChannelValue("alpha");
 		if (alpha < 1) {
-			const percentTransparent = createNumberFormatter({
-				style: "percent",
-			}).format(1 - alpha);
+			const percentTransparent = createNumberFormatter(
+				{ style: "percent" },
+				toLocale(translations),
+			).format(1 - alpha);
 			return strings
 				.transparentColorName(lightness, chroma, hue, percentTransparent)
 				.replace(/\s+/g, " ")
@@ -520,10 +548,15 @@ class RGBColor extends Color {
 		}
 	}
 
-	formatChannelValue(channel: ColorChannel) {
+	formatChannelValue(
+		channel: ColorChannel,
+		translations?: ColorIntlTranslations | string,
+	) {
 		const options = this.getChannelFormatOptions(channel);
 		const value = this.getChannelValue(channel);
-		return createNumberFormatter(options).format(value);
+		return createNumberFormatter(options, toLocale(translations)).format(
+			value,
+		);
 	}
 
 	getColorSpace(): ColorSpace {
@@ -677,13 +710,18 @@ class HSBColor extends Color {
 		}
 	}
 
-	formatChannelValue(channel: ColorChannel) {
+	formatChannelValue(
+		channel: ColorChannel,
+		translations?: ColorIntlTranslations | string,
+	) {
 		const options = this.getChannelFormatOptions(channel);
 		let value = this.getChannelValue(channel);
 		if (channel === "saturation" || channel === "brightness") {
 			value /= 100;
 		}
-		return createNumberFormatter(options).format(value);
+		return createNumberFormatter(options, toLocale(translations)).format(
+			value,
+		);
 	}
 
 	getColorSpace(): ColorSpace {
@@ -833,13 +871,18 @@ class HSLColor extends Color {
 		}
 	}
 
-	formatChannelValue(channel: ColorChannel) {
+	formatChannelValue(
+		channel: ColorChannel,
+		translations?: ColorIntlTranslations | string,
+	) {
 		const options = this.getChannelFormatOptions(channel);
 		let value = this.getChannelValue(channel);
 		if (channel === "saturation" || channel === "lightness") {
 			value /= 100;
 		}
-		return createNumberFormatter(options).format(value);
+		return createNumberFormatter(options, toLocale(translations)).format(
+			value,
+		);
 	}
 
 	getColorSpace(): ColorSpace {
