@@ -9,7 +9,7 @@ import { Stage } from "@scenario/stage";
  * `basic`, `body`, `heading`, `paragraph`, `code` and `prose` back the ported
  * upstream cases (port sheet 4b T-001 … T-007). The remaining entries merge
  * the upstream stories: HeadingScale, BodySizes, InlineCode, Alignment,
- * WeightScale, MutedColor, Truncation, ArticleExample and ProseBlock.
+ * WeightScale, MutedColor, Truncation and ProseBlock.
  *
  * ProseBlock is rewritten, not copied: NSH has no HTML elements, so the bare
  * `h1` / `p` / `code` become Typography parts. The story's `<blockquote>`,
@@ -218,50 +218,6 @@ function Truncate() {
   );
 }
 
-/* Story `ArticleExample`. */
-function Article() {
-  return (
-    <Stage>
-      <Typography.Heading level={1}>Crafting a Design System</Typography.Heading>
-      <Typography.Paragraph color="muted" size="sm">
-        Published May 2026 · 8 min read
-      </Typography.Paragraph>
-      <Typography.Paragraph>
-        A design system is more than a collection of reusable components. It is a shared language
-        that unifies product teams, accelerates development, and ensures visual consistency at
-        every level of an application.
-      </Typography.Paragraph>
-      <Typography.Heading level={2}>Why Typography Matters</Typography.Heading>
-      <Typography.Paragraph>
-        Typography accounts for roughly 95% of web design. The typefaces you choose, the scale you
-        define, and the rhythm you establish between headings and body text determine how users
-        perceive your product before they interact with a single button or form.
-      </Typography.Paragraph>
-      <Typography.Paragraph>
-        A well-tuned type scale creates a clear visual hierarchy. Readers can scan a page, locate
-        the information they need, and absorb your content without friction.
-      </Typography.Paragraph>
-      <Typography.Heading level={3}>Building the Scale</Typography.Heading>
-      <Typography.Paragraph>
-        Start with a base size — <Typography.Code>16px</Typography.Code> (1rem) is the industry
-        standard — and derive heading sizes using a consistent ratio. HeroUI uses a tracking-tight
-        heading stack from <Typography.Code>text-base</Typography.Code> through{" "}
-        <Typography.Code>text-4xl</Typography.Code>, giving six levels of hierarchy.
-      </Typography.Paragraph>
-      <Typography.Heading level={3}>Readable Body Copy</Typography.Heading>
-      <Typography.Paragraph>
-        Good body text should feel effortless to read. A line height of 1.75 (Tailwind's{" "}
-        <Typography.Code>leading-7</Typography.Code>) paired with a measure of roughly 65
-        characters keeps readers comfortable across long passages.
-      </Typography.Paragraph>
-      <Typography.Paragraph color="muted" size="sm">
-        Shorter paragraphs, generous whitespace, and intentional weight contrast all contribute to
-        readability. These defaults work out of the box with HeroUI's Typography primitive.
-      </Typography.Paragraph>
-    </Stage>
-  );
-}
-
 /* Story `ProseBlock`, rewritten with Typography parts (no HTML elements). The
  * quote, lists, divider and link of the story are commented out: they have no
  * part and no descendant selector in NSH (port sheet 8). */
@@ -335,7 +291,6 @@ export const typographyScenarios = {
   "typography/weights": Weights,
   "typography/colors": Colors,
   "typography/truncate": Truncate,
-  "typography/article": Article,
   "typography/prose-article": ProseArticle,
   "typography/custom": Custom,
 };
