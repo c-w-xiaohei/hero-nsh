@@ -26,6 +26,16 @@ export interface ToggleButtonGroupItem {
   /** Whether the member cannot be focused or pressed. */
   disabled: Accessor<boolean>;
 
+  /**
+   * Whether the member's view can take keyboard focus at all. NSH has no
+   * `tabIndex`: `focusable` is the only focusability knob, so
+   * `excludeFromTabOrder` and `isDisabled` both make a view unreachable. RAC
+   * maps `excludeFromTabOrder` to `tabIndex: -1` and its toolbar walker still
+   * focuses it; here the arrows must skip it, because `focus()` on an
+   * unfocusable view does nothing and would stop the chain.
+   */
+  focusable: Accessor<boolean>;
+
   /** Whether the member holds the keyboard focus right now. */
   focused: Accessor<boolean>;
 

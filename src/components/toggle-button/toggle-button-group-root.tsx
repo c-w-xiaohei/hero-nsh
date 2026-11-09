@@ -208,10 +208,14 @@ export function ToggleButtonGroupRoot(props: ToggleButtonGroupRootProps) {
   const isFocusWithin = computed(() => items().some((item) => item.focused()));
 
   /**
-   * Moves the keyboard focus by one enabled member. RAC's `useToolbar` uses
+   * Moves the keyboard focus by one focusable member. RAC's `useToolbar` uses
    * `focusManager.focusNext` / `focusPrevious`, which do not wrap, and it does
    * not bind Home / End; this matches both. Moving writes the focused key of a
    * collection member and calls its view's `focus()`, pressing nothing.
+   *
+   * NSH has no `tabIndex`, so `excludeFromTabOrder` makes a view unfocusable
+   * rather than RAC's `tabIndex: -1`, and `focus()` on it is a no-op that would
+   * end the walk. Such a member is skipped: the arrows cannot reach it at all.
    */
   const moveFocus = (delta: 1 | -1) => {
     const members = items();
@@ -224,7 +228,7 @@ export function ToggleButtonGroupRoot(props: ToggleButtonGroupRootProps) {
     for (let next = current + delta; next >= 0 && next < members.length; next += delta) {
       const target = members[next];
 
-      if (target.disabled()) {
+      if (target.disabled() || !target.focusable()) {
         continue;
       }
 

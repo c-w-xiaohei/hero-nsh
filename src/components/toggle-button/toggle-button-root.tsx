@@ -84,7 +84,8 @@ export interface ToggleButtonRootProps
   /** Focuses the button after it mounts. */
   autoFocus?: boolean;
 
-  /** Leaves the button out of the Tab order. */
+  /** Leaves the button out of the Tab order. NSH has no `tabIndex`, so this
+   * also makes the view unfocusable, and a group's arrows cannot reach it. */
   excludeFromTabOrder?: boolean;
 
   /** Accepted, no effect: NSH pointer presses never focus a view. */
@@ -105,6 +106,10 @@ export interface ToggleButtonRootProps
   "aria-hidden"?: boolean;
   /** Reads as `isDisabled` when `true`. */
   "aria-disabled"?: boolean;
+  /** Maps to `accessibilityState.expanded`, as Button does. */
+  "aria-expanded"?: boolean;
+  /** Maps to `accessibilityState.current`; `true` reads as ARIA's `aria-current`. */
+  "aria-current"?: boolean | "page" | "step" | "location" | "date" | "time";
 
   /** NSH host props, accepted beside the ARIA aliases above. */
   accessibilityLabel?: string;
@@ -192,8 +197,16 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
     onSelectedChange: (value) => props.onChange?.(value),
   });
 
-  // React Aria activates a toggle button on the click (release), not on the
-  // press down (port sheet §5), so the selectable item waits for `onPressUp`.
+  // React Aria toggles a group member on the release, inside `onPress`:
+  // `useToggleButton` chains `state.toggle` into `onPress`, so the member's key
+  // is the only thing that changes and the press modifiers are ignored
+  // (react-spectrum@740c6c5 packages/react-aria/src/button/useToggleButton.ts:136-142,
+  // .../useToggleButtonGroup.ts:121-130,
+  // .../packages/react-stately/src/toggle/useToggleGroupState.ts:79-89). The
+  // selectable item below only tracks the focused key and the selected state;
+  // its own selection half would honor Shift as a range extend, which a toggle
+  // group never does, so it is not wired (`shouldSelectOnPressUp` also keeps
+  // `onPressDown` from selecting).
   const selectableItem =
     isGroupItem && group
       ? createSelectableItem({
@@ -274,6 +287,8 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
       group.registerItem({
         selectionKey: groupKey,
         disabled: isDisabled,
+        // The same expression the view gets: NSH's only focusability knob.
+        focusable: () => props.excludeFromTabOrder !== true && !isBlocked(),
         focused: isFocused,
         focus: focusSelf,
       }),
@@ -365,7 +380,9 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
       return;
     }
 
-    selectableItem?.onPressUp(event);
+    // The selection waits for `onPress` (React Aria's `chain(state.toggle,
+    // props.onPress)`), so the press-up sees the selection the press started
+    // with. The selectable item's press-up selection half stays unwired.
     props.onPressUp?.(event);
     props.onPressEnd?.(event);
   };
@@ -377,8 +394,13 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
 
     notePress(event);
 
-    if (selectableItem) {
-      selectableItem.onPress(event);
+    // RAC's `chain(state.toggle, props.onPress)` compares against nothing and
+    // asks for no modifiers: a Shift, Ctrl or Alt click toggles this one key in
+    // a multiple group, it never extends a range. `state.toggle` goes through
+    // the group's `SelectionManager.toggleSelection`, which honours
+    // `selectionMode` and `disallowEmptySelection` on its own.
+    if (isGroupItem) {
+      state.toggle();
     } else {
       toggleState.toggle();
     }
@@ -458,6 +480,11 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
     const resolved: AccessibilityState = {
       ...own,
       disabled: isBlocked() || own.disabled === true,
+      // React Aria keeps `aria-expanded` / `aria-current` on the button's own
+      // props (react-spectrum@740c6c5 packages/react-aria/src/button/useButton.ts:42-66);
+      // NSH carries both in `accessibilityState`, so they are merged here.
+      expanded: props["aria-expanded"] ?? own.expanded,
+      current: props["aria-current"] ?? own.current,
     };
 
     if (isGroupItem && group && group.selectionMode() === "single") {
