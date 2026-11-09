@@ -1,5 +1,8 @@
 import { expect, test } from "nsh/test";
-import { parseColor } from "@heroui/react";
+// Upstream imports the value model relatively (`./utils`); NSH bundles a test
+// file on its own and leaves the `@heroui/react` alias external, so import the
+// ported module directly instead.
+import { parseColor } from "../../../../src/components/color-swatch/colors/utils";
 
 /*
  * Kobalte 0.13.14 regression cases for the color value model, per port sheet 4b
