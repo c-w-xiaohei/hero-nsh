@@ -114,3 +114,26 @@ test("X-001 lets a muted color reach an inline code box", async () => {
   expect(app.spanStyle("text:Muted nested code").color).toBe(muted);
   expect(app.spanStyle("text:Inherited code").color).toBe(foreground);
 });
+
+/*
+ * Regression X-005. Evidence:
+ * src/components/typography/typography-root.tsx:211-230,263-275,301-312
+ * heroui/packages/styles/components/typography.css:117-119,149-163
+ * heroui/packages/styles/src/components/typography/typography.styles.ts:41-46
+ *
+ * Upstream resolves the whole variant table on the one `<code>` element: the
+ * weight utilities land next to `.typography--code`, and the code class sets
+ * no font weight of its own, so the utility is what paints the glyphs bold.
+ * The port put the weight class on the root Text while the glyphs sit in the
+ * chip's inner span, across an inline View boundary, so both bold cases below
+ * reported 400 before the fix. The last case is the control: an unweighted
+ * Code reports 400, which is what the default state already paints, so only
+ * the two 700 assertions can tell a reaching weight from a missing one.
+ */
+test("X-005 lets the code parts render a bold weight", async () => {
+  const app = await openScenario("typography/code-weight");
+
+  expect(app.spanStyle("text:Bold code").fontWeight).toBe(700);
+  expect(app.spanStyle("text:Bold typed code").fontWeight).toBe(700);
+  expect(app.spanStyle("text:Normal code").fontWeight).toBe(400);
+});

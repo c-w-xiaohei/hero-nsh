@@ -66,6 +66,24 @@ function Prose() {
   );
 }
 
+/* Regression X-005: upstream resolves `weight` on the same `<code>` element
+ * the inline chip paints, and `.typography--code` does not set a font weight,
+ * so the weight utility is the only thing that bolds the glyphs. Both entry
+ * points are covered: the `Code` part and the root with `type="code"`. The
+ * normal-weight Code is the control that tells a missing class from a bold
+ * one, since 400 is what the default state already paints. */
+function CodeWeight() {
+  return (
+    <Stage>
+      <Typography.Code weight="bold">Bold code</Typography.Code>
+      <Typography type="code" weight="bold">
+        Bold typed code
+      </Typography>
+      <Typography.Code>Normal code</Typography.Code>
+    </Stage>
+  );
+}
+
 /* Story `HeadingScale`: all six levels mount, so the type table is exercised
  * in full. */
 function Headings() {
@@ -332,6 +350,7 @@ export const typographyScenarios = {
   "typography/paragraph": Paragraph,
   "typography/code": Code,
   "typography/code-color": CodeColor,
+  "typography/code-weight": CodeWeight,
   "typography/code-padding": CodePadding,
   "typography/prose": Prose,
   "typography/headings": Headings,
