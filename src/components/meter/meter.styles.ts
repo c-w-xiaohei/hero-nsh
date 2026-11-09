@@ -28,6 +28,10 @@ export const meterVariants = tv({
     // (the independent Label) is sized by content through
     // `justify-items-start`. A caller's extra non-part child aligns the same
     // way; registered in §8.
+    // R-008 / R-009: `.meter [data-slot="label"]` → `font-size: 14` and
+    // `font-weight: 500`. The independent Label's own base already carries
+    // `text-sm font-medium`, so Meter hands it no class of its own (the
+    // stylesheet's only other option, a descendant selector, has no NSH form).
     //
     // R-004 / R-010 (structural): the CSS names the areas `label output` /
     // `track track`. NSH has no `grid-template-areas`; the slots that are ours
