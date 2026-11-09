@@ -28,8 +28,13 @@ import { probe } from "@scenario/probe";
  *                      submenu chevron
  *   disabled           disabledKeys = {2} plus one row with isDisabled
  *   empty              renderEmptyState
- *   typeahead          One / Two / Three with probes; the test supplies the
- *                      manual clock
+ *   typeahead          One / Two / Three, autoFocus, a `*` marker on the
+ *                      focused row; the test supplies the manual clock
+ *   items              the `items` prop with a function child
+ *   idless             two static items with no id / value / textValue, whose
+ *                      keys must still differ (regression X-001)
+ *   keyboard-close     autoFocus, selectionMode from `params.mode`, onClose
+ *                      and onAction probes only (regression X-002)
  *
  * Rows print `✓` from `Menu.ItemIndicator`'s render prop because the built-in
  * checkmark and dot carry no text and `nsh test` counts text (port sheet 4b).
@@ -58,6 +63,7 @@ function sectionSelectionChange(keys: "all" | Iterable<unknown>): void {
 function Row(props: {
   id: string;
   label: string;
+  marker?: string;
   variant?: "default" | "danger";
   disabled?: boolean;
   description?: string;
@@ -65,6 +71,7 @@ function Row(props: {
   return (
     <Menu.Item
       id={props.id}
+      testID={props.marker ?? `item-${props.id}`}
       textValue={props.label}
       variant={props.variant}
       isDisabled={props.disabled}
@@ -204,13 +211,13 @@ function GroupSelectionCase() {
           }}
         >
           <Header>Text Style</Header>
-          <Menu.Item id="bold" textValue="Bold">
+          <Menu.Item id="bold" testID="item-bold" textValue="Bold">
             <Menu.ItemIndicator>
               {(values) => <Text>{values.isSelected() ? "✓" : ""}</Text>}
             </Menu.ItemIndicator>
             <Label>Bold</Label>
           </Menu.Item>
-          <Menu.Item id="italic" textValue="Italic">
+          <Menu.Item id="italic" testID="item-italic" textValue="Italic">
             <Menu.ItemIndicator>
               {(values) => <Text>{values.isSelected() ? "✓" : ""}</Text>}
             </Menu.ItemIndicator>
@@ -226,13 +233,13 @@ function GroupSelectionCase() {
           }}
         >
           <Header>Text Alignment</Header>
-          <Menu.Item id="left" textValue="Left">
+          <Menu.Item id="left" testID="item-left" textValue="Left">
             <Menu.ItemIndicator>
               {(values) => <Text>{values.isSelected() ? "✓" : ""}</Text>}
             </Menu.ItemIndicator>
             <Label>Left</Label>
           </Menu.Item>
-          <Menu.Item id="center" textValue="Center">
+          <Menu.Item id="center" testID="item-center" textValue="Center">
             <Menu.ItemIndicator>
               {(values) => <Text>{values.isSelected() ? "✓" : ""}</Text>}
             </Menu.ItemIndicator>
@@ -318,7 +325,7 @@ function DangerIndicatorCase() {
 function DisabledCase() {
   return (
     <View class="w-64">
-      <Menu aria-label="Options" disabledKeys={["2"]}>
+      <Menu aria-label="Options" disabledKeys={["2"]} onAction={probe("onAction")}>
         <Row id="1" label="One" />
         <Row id="2" label="Two" />
         <Row id="3" label="Three" disabled />
@@ -331,6 +338,94 @@ function EmptyCase() {
   return (
     <View class="w-64">
       <Menu aria-label="Options" renderEmptyState={() => <Text>No actions</Text>} />
+    </View>
+  );
+}
+
+const DYNAMIC_ITEMS = [
+  { id: "item-a", name: "Alpha" },
+  { id: "item-b", name: "Beta" },
+];
+
+function ItemsCase() {
+  return (
+    <View class="w-64">
+      <Menu aria-label="Items" items={DYNAMIC_ITEMS} onAction={probe("onAction")}>
+        {(item) => (
+          <Menu.Item id={item.id} textValue={item.name} aria-label={item.name}>
+            <Label>{item.name}</Label>
+          </Menu.Item>
+        )}
+      </Menu>
+    </View>
+  );
+}
+
+const TYPEAHEAD_ITEMS = [
+  { id: "1", label: "One" },
+  { id: "2", label: "Two" },
+  { id: "3", label: "Three" },
+];
+
+function TypeaheadCase() {
+  return (
+    <View class="w-64">
+      <Menu aria-label="Options" autoFocus>
+        {TYPEAHEAD_ITEMS.map((item) => (
+          <Menu.Item id={item.id} textValue={item.label} aria-label={item.label}>
+            {(values) => <Text>{`${item.label}${values.isFocused() ? "*" : ""}`}</Text>}
+          </Menu.Item>
+        ))}
+      </Menu>
+    </View>
+  );
+}
+
+/*
+ * Regression X-001: two static items without an id, a value object or an index
+ * must still get two different collection keys. Both rows print their own
+ * selection marker under its own testID, so a shared key shows up as both rows
+ * selected at once.
+ */
+function IdlessCase() {
+  return (
+    <View class="w-64">
+      <Menu aria-label="Options" selectionMode="single">
+        <Menu.Item testID="item-alpha" aria-label="Alpha">
+          <Menu.ItemIndicator>
+            {(values) => <Text>{values.isSelected() ? "✓" : ""}</Text>}
+          </Menu.ItemIndicator>
+          <Label>Alpha</Label>
+        </Menu.Item>
+        <Menu.Item testID="item-beta" aria-label="Beta">
+          <Menu.ItemIndicator>
+            {(values) => <Text>{values.isSelected() ? "✓" : ""}</Text>}
+          </Menu.ItemIndicator>
+          <Label>Beta</Label>
+        </Menu.Item>
+      </Menu>
+    </View>
+  );
+}
+
+/*
+ * Regression X-002: the menu stays mounted after activation, so `onClose` is
+ * counted instead of observed through an unmount, and `onAction` proves the key
+ * did activate a row.
+ */
+function KeyboardCloseCase(props: { mode: "single" | "multiple" }) {
+  return (
+    <View class="w-64">
+      <Menu
+        aria-label="Close"
+        autoFocus
+        selectionMode={props.mode}
+        onAction={probe("onAction")}
+        onClose={probe("onClose")}
+      >
+        <Row id="1" label="One" />
+        <Row id="2" label="Two" />
+      </Menu>
     </View>
   );
 }
@@ -383,7 +478,19 @@ function Case() {
   }
 
   if (name === "typeahead") {
-    return <SelectionCase mode="single" />;
+    return <TypeaheadCase />;
+  }
+
+  if (name === "items") {
+    return <ItemsCase />;
+  }
+
+  if (name === "idless") {
+    return <IdlessCase />;
+  }
+
+  if (name === "keyboard-close") {
+    return <KeyboardCloseCase mode={host.params.mode === "multiple" ? "multiple" : "single"} />;
   }
 
   if (name === "empty") {
