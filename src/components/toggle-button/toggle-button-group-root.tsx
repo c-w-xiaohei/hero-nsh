@@ -12,7 +12,6 @@ import type { Accessor } from "nsh";
 import {
   createKeymapScope,
   createListState,
-  type ListState,
   type SelectionValue,
 } from "../../primitives";
 import { renderChildren } from "./children";
@@ -24,6 +23,10 @@ import {
   type ToggleButtonGroupSelectionMode,
 } from "./toggle-button-group-context";
 import {
+  createToggleButtonGroupState,
+  type ToggleButtonGroupState,
+} from "./toggle-button-group-state";
+import {
   toggleButtonGroupVariants,
   type ToggleButtonGroupOrientation,
 } from "./toggle-button-group.styles";
@@ -33,8 +36,14 @@ import type { ToggleButtonSize } from "./toggle-button.styles";
 export interface ToggleButtonGroupRenderProps {
   orientation: Accessor<ToggleButtonGroupOrientation>;
   isDisabled: Accessor<boolean>;
-  /** The group's list state (this port's `ListState`, not React Stately's). */
-  state: ListState;
+  /**
+   * The group's `ToggleGroupState`
+   * (react-spectrum@740c6c5 packages/react-aria-components/src/ToggleButtonGroup.tsx:46),
+   * with its values as getters (D17). React Stately's shape, not the internal
+   * list state: `selectedKeys`, `isSelected`, `setSelected`, `toggleKey`,
+   * `selectionMode`, `disallowEmptySelection`, `isDisabled`.
+   */
+  state: ToggleButtonGroupState;
 }
 
 export interface ToggleButtonGroupRootProps
@@ -266,7 +275,12 @@ export function ToggleButtonGroupRoot(props: ToggleButtonGroupRootProps) {
   const renderProps: ToggleButtonGroupRenderProps = {
     orientation,
     isDisabled: () => groupIsDisabled() === true,
-    state: listState,
+    state: createToggleButtonGroupState({
+      listState,
+      selectionMode,
+      isDisabled: () => groupIsDisabled() === true,
+      disallowEmptySelection: () => props.disallowEmptySelection ?? false,
+    }),
   };
 
   const contextValue: ToggleButtonGroupContextValue = {

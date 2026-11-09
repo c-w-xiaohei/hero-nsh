@@ -16,7 +16,6 @@ import {
   createSelectableItem,
   createToggleState,
   isKeyboardPress,
-  type ToggleState,
 } from "../../primitives";
 import { renderChildren } from "./children";
 import { type AriaProps, type DataProps, type GlobalDomProps } from "./dom-props";
@@ -33,6 +32,21 @@ import {
  * Render props
  * ---------------------------------------------------------------------------------------------- */
 
+/**
+ * React Aria's `ToggleState` (`{ isSelected, setSelected, toggle }`,
+ * react-spectrum@740c6c5 packages/react-aria-components/src/ToggleButton.tsx:47,116),
+ * with the selected flag as an accessor (D17). The shared primitive keeps its
+ * own `setIsSelected`; this is the public, upstream-named surface, the same
+ * shape `SwitchToggleState` carries (src/components/switch/switch-context.ts).
+ */
+export interface ToggleButtonState {
+  isSelected: Accessor<boolean>;
+  /** Updates the selection; the group's `onSelectionChange` or `onChange` hears it. */
+  setSelected: (isSelected: boolean) => void;
+  /** Flips the selection. */
+  toggle: () => void;
+}
+
 /** The live state HeroUI hands to render-prop children, `className` and `style`. */
 export interface ToggleButtonRenderProps {
   isHovered: Accessor<boolean>;
@@ -41,8 +55,8 @@ export interface ToggleButtonRenderProps {
   isSelected: Accessor<boolean>;
   isFocusVisible: Accessor<boolean>;
   isDisabled: Accessor<boolean>;
-  /** The toggle state (this port's `createToggleState` shape, D17). */
-  state: ToggleState;
+  /** The toggle state, by its upstream member names (D17). */
+  state: ToggleButtonState;
 }
 
 /* ------------------------------------------------------------------------------------------------
@@ -238,9 +252,9 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
     manager.toggleSelection(groupKey);
   };
 
-  const state: ToggleState = {
+  const state: ToggleButtonState = {
     isSelected,
-    setIsSelected: (value) => {
+    setSelected: (value) => {
       if (isGroupItem) {
         setGroupSelected(value);
         return;

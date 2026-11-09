@@ -2,6 +2,7 @@ import {
   ToggleButtonRoot,
   type ToggleButtonRenderProps,
   type ToggleButtonRootProps,
+  type ToggleButtonState,
 } from "./toggle-button-root";
 import {
   ToggleButtonGroupRoot,
@@ -45,11 +46,18 @@ export type {
   ToggleButtonRenderProps,
   ToggleButtonRootProps,
   ToggleButtonRootProps as ToggleButtonProps,
+  ToggleButtonState,
   ToggleButtonGroupRenderProps,
   ToggleButtonGroupRootProps,
   ToggleButtonGroupRootProps as ToggleButtonGroupProps,
   ToggleButtonGroupSeparatorProps,
 };
+
+export type {
+  ToggleButtonGroupKey,
+  ToggleButtonGroupState,
+  ToggleButtonGroupStateOptions,
+} from "./toggle-button-group-state";
 
 /* -------------------------------------------------------------------------------------------------
  * Context
