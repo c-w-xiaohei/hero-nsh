@@ -14,9 +14,15 @@ import { spinnerScenarios } from "./spinner.scenarios";
 import { skeletonScenarios } from "./skeleton.scenarios";
 import { headerScenarios } from "./header.scenarios";
 import { scrollShadowScenarios } from "./scroll-shadow.scenarios";
+import { typographyScenarios } from "./typography.scenarios";
 import { badgeScenarios } from "./badge.scenarios";
 import { chipScenarios } from "./chip.scenarios";
 import { emptyStateScenarios } from "./empty-state.scenarios";
+import { closeButtonScenarios } from "./close-button.scenarios";
+import { linkScenarios } from "./link.scenarios";
+import { progressBarScenarios } from "./progress-bar.scenarios";
+import { avatarScenarios } from "./avatar.scenarios";
+import { errorMessageScenarios } from "./error-message.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -34,7 +40,13 @@ export const scenarios: Record<string, Component> = {
   ...skeletonScenarios,
   ...headerScenarios,
   ...scrollShadowScenarios,
+  ...typographyScenarios,
   ...badgeScenarios,
   ...chipScenarios,
   ...emptyStateScenarios,
+  ...closeButtonScenarios,
+  ...linkScenarios,
+  ...progressBarScenarios,
+  ...avatarScenarios,
+  ...errorMessageScenarios,
 };
