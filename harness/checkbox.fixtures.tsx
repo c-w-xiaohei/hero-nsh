@@ -32,7 +32,8 @@ import { probe } from "@scenario/probe";
  *   readonly-uncontrolled  isReadOnly starting off
  *   invalid                isInvalid with a Label and a FieldError message
  *   valid-error            a FieldError message on a valid field
- *   required               isRequired with a Label (no asterisk: X-002)
+ *   required               isRequired with a Label (no asterisk: X-002) and a
+ *                          Required marker driven by the Content render prop
  *   validation-aria        validate() with validationBehavior="aria": the error
  *                          shows before the first press (X-003)
  *   validation-native      the same validate() with native's commit timing
@@ -322,10 +323,15 @@ function RequiredCase() {
     <Stage>
       <Checkbox isRequired>
         <Checkbox.Content>
-          <Checkbox.Control>
-            <Checkbox.Indicator />
-          </Checkbox.Control>
-          <Label>Label</Label>
+          {({ isRequired }) => (
+            <View class="flex-row items-center gap-3">
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              <Label>Label</Label>
+              <Text>{isRequired() ? "Required" : "Optional"}</Text>
+            </View>
+          )}
         </Checkbox.Content>
       </Checkbox>
     </Stage>

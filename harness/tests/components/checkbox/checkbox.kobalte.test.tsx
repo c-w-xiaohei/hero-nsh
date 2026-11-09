@@ -263,13 +263,16 @@ test("T-057 should have 'data-indeterminate' attribute when checkbox is indeterm
   expect(app.shows("text:Mixed")).toBe(true);
 });
 
-// kobalte/packages/core/src/checkbox/checkbox.test.tsx:692 is not ported
-// (port sheet T-058 deleted). It only asserts `data-required` on the parts
-// (kobalte/packages/core/src/checkbox/checkbox.test.tsx:692-709); HeroUI carries
-// the requirement on the hidden input's `required` / `aria-required`, which has
-// no visual result, and packages/styles/components/label.css:15 keeps the
-// asterisk off checkbox item labels. So there is no NSH channel for it, and no
-// asterisk may appear either: that absence is X-002.
+// kobalte/packages/core/src/checkbox/checkbox.test.tsx:692
+// Rewritten port (port sheet T-058): data-required on every part becomes the
+// Content render prop's `isRequired()` (react-spectrum/packages/react-aria-components/src/Checkbox.tsx:224-261),
+// drawn as a marker. The asterisk stays out of it: label.css:15 excludes
+// checkbox item labels, so its scope is X-002.
+test("T-058 should have 'data-required' attribute when checkbox is required", async () => {
+  const app = await openCase("required");
+
+  expect(app.shows("text:Required")).toBe(true);
+});
 
 // kobalte/packages/core/src/checkbox/checkbox.test.tsx:710
 // Rewritten port (port sheet T-059): data-disabled becomes the content's
