@@ -25,6 +25,7 @@ import { progressBarScenarios } from "./progress-bar.scenarios";
 import { avatarScenarios } from "./avatar.scenarios";
 import { errorMessageScenarios } from "./error-message.scenarios";
 import { selectScenarios } from "./select.scenarios";
+import { iconsScenarios } from "./icons.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -53,4 +54,5 @@ export const scenarios: Record<string, Component> = {
   ...avatarScenarios,
   ...errorMessageScenarios,
   ...selectScenarios,
+  ...iconsScenarios,
 };
