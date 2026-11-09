@@ -88,7 +88,7 @@ export function SwitchControl(props: SwitchControlProps): JSX.Element {
   return (
     <View
       {...rest}
-      ref={local.ref}
+      ref={(node) => local.ref?.(node)}
       nativeID={local.id ?? local.nativeID}
       class={classes()}
       // R-026: `.switch:focus-visible &` / the content's `data-focus-visible`

@@ -26,10 +26,11 @@ jobs:
           irm https://nsh.dev/install.ps1 | iex
           "$env:LOCALAPPDATA\nsh\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - run: pnpm install --frozen-lockfile
-      - run: nsh test harness --target windows --junit junit.xml
+      - name: Windows tests
+        run: node scripts/run-tests.mjs windows --junit-dir junit
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: junit-windows
-          path: junit.xml
+          path: junit
           if-no-files-found: ignore

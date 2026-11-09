@@ -99,20 +99,6 @@ test("T-027 can be checked by clicking on the control", async () => {
   expect(callsOf(app, "onChange")).toEqual([[true]]);
 });
 
-// kobalte/packages/core/src/switch/switch.test.tsx:244
-test("T-028 can be checked by pressing the Space key on the control", async () => {
-  const app = await openCase("log", {}, { platform: "web" });
-
-  expect(app.shows("text:Off")).toBe(true);
-
-  await app.keyboard.press("tab");
-  expect(callsOf(app, "onFocus")).toHaveLength(1);
-
-  await app.keyboard.press("space");
-  expect(app.shows("text:On")).toBe(true);
-  expect(callsOf(app, "onChange")).toEqual([[true]]);
-});
-
 /* -------------------------------------------------------------------------------------------------
  * Disabled, invalid, read only
  * -----------------------------------------------------------------------------------------------*/

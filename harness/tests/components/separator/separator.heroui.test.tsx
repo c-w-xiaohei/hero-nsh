@@ -109,3 +109,13 @@ test("T-009 supports switching between decorative and semantic dividers", async 
 
   expect(app.shows("id:divider")).toBe(true);
 });
+
+// Ref forwarding regression: this scenario passes no ref to Separator. NSH
+// treats a plain `ref={local.ref}` with an undefined value as a ref store and
+// throws at mount on the web target, leaving the page empty. The forwarded
+// callback ref keeps the divider mounted on every target.
+test("X-010 renders a ref-less Separator on a real engine", async () => {
+  const app = await openScenario("separator/default");
+
+  expect(app.shows("id:separator")).toBe(true);
+});

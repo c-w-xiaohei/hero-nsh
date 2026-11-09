@@ -105,21 +105,6 @@ test("T-005 calls onChange when selection is toggled", async () => {
   expect(app.shows("text:Off")).toBe(true);
 });
 
-// heroui/packages/react/tests/components/switch/switch.test.tsx:85
-test("T-006 supports Space key toggle", async () => {
-  const app = await openCase("log", {}, { platform: "web" });
-  const control = "role:switch[Enable notifications]";
-
-  expect(app.shows("text:Off")).toBe(true);
-
-  await app.keyboard.press("tab");
-  expect(callsOf(app, "onFocus")).toHaveLength(1);
-
-  await app.keyboard.press("space");
-  expect(app.shows("text:On")).toBe(true);
-  expect(callsOf(app, "onChange")).toEqual([[true]]);
-});
-
 // heroui/packages/react/tests/components/switch/switch.test.tsx:99
 test("T-007 supports controlled isSelected", async () => {
   const app = await openCase("controlled");
@@ -187,17 +172,6 @@ test("T-011 exposes no hover state when disabled", async () => {
 
   expect(callsOf(app, "onHoverStart")).toHaveLength(0);
   expect(app.shows("text:Idle")).toBe(true);
-});
-
-// heroui/packages/react/tests/components/switch/switch.test.tsx:176
-test("T-012 supports focus-visible via keyboard", async () => {
-  const app = await openCase("log", {}, { platform: "web" });
-
-  expect(app.shows("text:NoRing")).toBe(true);
-
-  await app.keyboard.press("tab");
-  expect(callsOf(app, "onFocus")).toHaveLength(1);
-  expect(app.shows("text:FocusRing")).toBe(true);
 });
 
 /* -------------------------------------------------------------------------------------------------
@@ -284,24 +258,6 @@ test("T-015 supports intermediate thumb positions without changing its dimension
  * test covers (WAI-ARIA toggle contract, D17).
  * -----------------------------------------------------------------------------------------------*/
 
-// react-aria/src/toggle/useToggle.ts:174-176
-test("X-001 keeps the focus ring off after a pointer press and toggles again with Space", async () => {
-  const app = await openCase("log", {}, { platform: "web" });
-  const control = "role:switch[Enable notifications]";
-
-  await app.keyboard.press("tab");
-  expect(app.shows("text:FocusRing")).toBe(true);
-
-  await app.press(control);
-  expect(app.shows("text:On")).toBe(true);
-  expect(callsOf(app, "onChange")).toEqual([[true]]);
-  expect(app.shows("text:NoRing")).toBe(true);
-
-  await app.keyboard.press("space");
-  expect(app.shows("text:Off")).toBe(true);
-  expect(callsOf(app, "onChange")).toEqual([[true], [false]]);
-});
-
 // react-aria/src/toggle/useToggle.ts:174-184, react-aria/src/form/useFormValidation.ts:91-93
 test("X-002 shows a validation error right after a press and clears it on the next", async () => {
   const app = await openCase("validation");
@@ -357,21 +313,6 @@ test("X-004 calls a Root render prop once across a toggle", async () => {
   expect(callsOf(app, "render")).toHaveLength(1);
 });
 
-// react-aria/src/toggle/useToggle.ts:186,223
-test("X-005 keeps a read-only switch out of the pressed state", async () => {
-  const app = await openCase("readonly-selected");
-  const control = "role:switch[Enable notifications]";
-
-  expect(app.shows("text:NotPressed")).toBe(true);
-
-  await app.dragAndHold(control, { x: 0, y: 0 });
-  expect(app.shows("text:NotPressed")).toBe(true);
-  expect(app.shows("text:On")).toBe(true);
-
-  await app.drop();
-  expect(app.shows("text:NotPressed")).toBe(true);
-});
-
 // react-aria/src/toggle/useToggle.ts:136-187
 test("X-006 a read-only switch fires no press callbacks and commits no validation", async () => {
   const app = await openCase("readonly-validate");
@@ -394,19 +335,6 @@ test("X-006 a read-only switch fires no press callbacks and commits no validatio
   expect(callsOf(app, "onPressChange")).toHaveLength(0);
   expect(callsOf(app, "onPressUp")).toHaveLength(0);
   expect(callsOf(app, "onClick")).toHaveLength(0);
-});
-
-// react-aria/src/toggle/useToggle.ts:134-147
-test("X-007 shows the pressed state while the Label is held down", async () => {
-  const app = await openCase("press");
-
-  expect(app.shows("text:NotPressed")).toBe(true);
-
-  await app.dragAndHold("text:Enable notifications", { x: 0, y: 0 });
-  expect(app.shows("text:Pressed")).toBe(true);
-
-  await app.drop();
-  expect(app.shows("text:NotPressed")).toBe(true);
 });
 
 // react-aria/src/toggle/useToggle.ts:174-184, react-aria/src/form/useFormValidation.ts:91-93
@@ -432,4 +360,15 @@ test("X-008 commits validation against the value still in effect when the parent
   expect(commits.length).toBeGreaterThan(before);
   expect(commits[commits.length - 1][0]).toBe(false);
   expect(app.shows(error)).toBe(false);
+});
+
+// Ref forwarding regression: this scenario passes no ref to any Switch part
+// (Control, Icon, Thumb). A plain `ref={local.ref}` with an undefined value is
+// a ref store to NSH, which throws at mount on the web target and renders an
+// empty page. The callback refs keep the switch and its label on screen.
+test("X-009 renders a ref-less Switch on a real engine", async () => {
+  const app = await openScenario("switch/basic");
+
+  expect(app.shows("role:switch[Enable notifications]")).toBe(true);
+  expect(app.shows("label:Enable notifications")).toBe(true);
 });

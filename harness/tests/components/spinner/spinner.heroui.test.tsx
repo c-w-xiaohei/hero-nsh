@@ -120,3 +120,13 @@ test("X-001 fades each arc toward its own color, not toward black", async () => 
     expect(gradient.map((stop) => stop.offset)).toEqual([0.05271, 0.91793, 0.1524, 0.8715]);
   }
 });
+
+// Ref forwarding regression: this scenario passes no ref to Spinner. A plain
+// `ref={local.ref}` with an undefined value is a ref store to NSH, which throws
+// at mount on the web target and renders an empty page. The callback ref keeps
+// the progressbar on screen on every target.
+test("X-002 renders a ref-less Spinner on a real engine", async () => {
+  const app = await openScenario("spinner/basic");
+
+  expect(app.shows("role:progressbar")).toBe(true);
+});

@@ -241,7 +241,7 @@ export function SpinnerRoot(props: SpinnerRootProps): JSX.Element {
   return (
     <View
       {...rest}
-      ref={local.ref}
+      ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
       nativeID={local.id ?? local.nativeID}
       role={local.role ?? "progressbar"}
       accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel ?? "Loading"}

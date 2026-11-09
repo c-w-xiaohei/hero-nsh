@@ -97,7 +97,7 @@ export function SurfaceRoot(props: SurfaceRootProps): JSX.Element {
     <SurfaceContext.Provider value={contextValue}>
       <View
         {...rest}
-        ref={local.ref}
+        ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
         nativeID={local.id ?? local.nativeID}
         // A `<div>` is not a keyboard focus stop upstream; without this a
         // pressable surface would become one (Tab moves between pressables).
