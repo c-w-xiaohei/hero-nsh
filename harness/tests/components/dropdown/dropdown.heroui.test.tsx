@@ -196,3 +196,94 @@ test("T-014 renders the menu wide enough for row icons on a narrow viewport", as
 
   expect(app.shows("role:menuitem[System theme]")).toBe(true);
 });
+
+/*
+ * Follow-up round, review regressions. The reviewer's probes ran the shared
+ * `dropdown/submenus` scenario and the `inside-dialog` fixture; each case
+ * below states the behavior the fix must reach, not the current one.
+ */
+
+// src/components/dropdown/dropdown-submenu-trigger.tsx:184-186, dropdown-item.tsx:84-86,
+// src/components/menu/menu-item.tsx:521-523
+// Probe: pressing WhatsApp in dropdown/submenus left both menus open and ran
+// nothing, because every row of the submenu's Menu inherited the trigger
+// context and was treated as a submenu trigger. A plain row must close the
+// menus when pressed.
+test("X-001 lets a row inside an open submenu act as a plain item", async () => {
+  const app = await openScenario("dropdown/submenus", { clock: {} });
+
+  await app.press("role:button[Menu]");
+  await app.waitFor("role:menu");
+
+  await app.hover("role:menuitem[Other]");
+  await app.clock!.runFor(300);
+
+  expect(app.count("role:menu")).toBe(2);
+
+  await app.press("role:menuitem[WhatsApp]");
+  await app.clock!.runFor(200);
+
+  expect(app.count("role:menu")).toBe(0);
+});
+
+// src/components/menu/menu-item.tsx:521-523, src/components/dropdown/dropdown-item.tsx:86
+// Probe: pressing Other in dropdown/submenus and advancing 50 ms (below the
+// 200 ms hover delay) left one menu, so a press did not open the submenu on
+// its trigger row.
+test("X-002 opens a submenu on press, before the hover delay", async () => {
+  const app = await openScenario("dropdown/submenus", { clock: {} });
+
+  await app.press("role:button[Menu]");
+  await app.waitFor("role:menu");
+
+  await app.press("role:menuitem[Other]");
+  await app.clock!.runFor(50);
+
+  expect(app.count("role:menu")).toBe(2);
+  expect(app.shows("role:menuitem[Copy Link]")).toBe(true);
+});
+
+// src/components/dropdown/dropdown-popover.tsx:541-542, select-popover.tsx:421-422,
+// tmp/docs/nsh/nsh_el_overlay.md:124-128
+// Probe: a closed Dropdown inside an open base Dialog swallowed Escape and the
+// dialog stayed open, because the unmounted-looking popover still passed
+// onCancel. Only an open layer may listen.
+test("X-003 keeps a closed dropdown from taking Escape from the dialog above it", async () => {
+  const app = await openFixture("inside-dialog");
+
+  await app.press("role:button[Open modal]");
+  await app.waitFor("text:Modal with dropdown");
+
+  await app.keyboard.press("escape");
+  await app.waitFor("text:Modal with dropdown", { state: "gone" });
+
+  expect(app.shows("text:Modal with dropdown")).toBe(false);
+});
+
+// src/components/dropdown/dropdown-popover.tsx:541-542, select-popover.tsx:421-422,
+// tmp/docs/nsh/nsh_el_overlay.md:124-128
+// Probe: in dropdown/submenus Escape left both menus open. An open submenu must
+// handle the key itself and close only itself; a second Escape then closes the
+// root menu.
+test("X-004 closes only the open submenu on Escape", async () => {
+  const app = await openScenario("dropdown/submenus", { clock: {} });
+
+  await app.press("role:button[Menu]");
+  await app.waitFor("role:menu");
+
+  await app.hover("role:menuitem[Other]");
+  await app.clock!.runFor(300);
+
+  expect(app.count("role:menu")).toBe(2);
+
+  await app.keyboard.press("escape");
+  await app.clock!.runFor(200);
+
+  expect(app.count("role:menu")).toBe(1);
+  expect(app.shows("role:menuitem[Copy Link]")).toBe(true);
+
+  await app.keyboard.press("escape");
+  await app.clock!.runFor(200);
+
+  expect(app.count("role:menu")).toBe(0);
+});

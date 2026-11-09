@@ -141,7 +141,14 @@ function InsideDialogCase() {
     <View class="items-start gap-2 p-4">
       <Button onPress={() => dialogOpen.set(true)}>Open modal</Button>
 
-      <Dialog open={dialogOpen()}>
+      <Dialog
+        open={dialogOpen()}
+        onOpenChange={(event: { open: boolean }) => {
+          if (!event.open) {
+            dialogOpen.set(false);
+          }
+        }}
+      >
         <View class="items-start gap-2 p-4">
           <Text>Modal with dropdown</Text>
           <Dropdown>
