@@ -142,7 +142,12 @@ function KobalteAccordion(props: {
         <KobalteItems />
       </Accordion>
       {props.after ? (
-        <View role="button" testID="after" onPress={() => undefined}>
+        <View
+          role="button"
+          testID="after"
+          onPress={() => undefined}
+          onFocus={() => probe("focus")("after")}
+        >
           <Text>After</Text>
         </View>
       ) : null}
