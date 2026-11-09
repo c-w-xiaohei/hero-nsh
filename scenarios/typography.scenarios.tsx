@@ -13,8 +13,9 @@ import { Stage } from "@scenario/stage";
  *
  * ProseBlock is rewritten, not copied: NSH has no HTML elements, so the bare
  * `h1` / `p` / `code` become Typography parts. The story's `<blockquote>`,
- * `<ul>` / `<ol>`, `<hr>` and `<a>` have no part and no descendant selector,
- * so they stay out of the scenario (port sheet R-011 … R-014, R-016).
+ * `<ul>` / `<ol>`, `<hr>`, `<a>`, `<strong>` and `<pre>` have no part and no
+ * descendant selector, so they stay out of the scenario (port sheet R-011 …
+ * R-014, R-016 … R-018).
  */
 
 function Basic() {
@@ -261,25 +262,28 @@ function Truncate() {
 }
 
 /* Story `ProseBlock`, rewritten with Typography parts (no HTML elements). The
- * quote, lists, divider and link of the story are commented out: they have no
- * part and no descendant selector in NSH (port sheet 8). */
+ * quote, lists, divider, link, inline emphasis and code block of the story are
+ * left out: they have no part and no descendant selector in NSH (port sheet 8).
+ * Emphasis and the block remain caller-written Text, so substituting a
+ * `Typography` for them would render a block in a paragraph on the reference
+ * side and an inline span here. */
 function ProseArticle() {
   return (
     <Stage>
       <Typography.Prose className="max-w-2xl">
         <Typography.Heading level={1}>Getting Started with HeroUI</Typography.Heading>
         <Typography.Paragraph>
-          HeroUI is a modern React component library built on top of{" "}
-          <Typography weight="semibold">Tailwind CSS v4</Typography> and{" "}
-          <Typography weight="semibold">React Aria</Typography>. It provides accessible,
-          customizable primitives that you can compose into complex interfaces.
+          {/* strong: no element, caller nests Text with font-semibold (R-018). */}
+          HeroUI is a modern React component library built on top of Tailwind CSS v4 and React Aria.
+          It provides accessible, customizable primitives that you can compose into complex
+          interfaces.
         </Typography.Paragraph>
         <Typography.Heading level={2}>Installation</Typography.Heading>
         <Typography.Paragraph>
           Add the library to your project using your preferred package manager. The{" "}
-          <Typography.Code>@heroui/react</Typography.Code> package includes every component:
+          <Typography.Code>@heroui/react</Typography.Code> package includes every component.
         </Typography.Paragraph>
-        <Typography.Code>pnpm add @heroui/react</Typography.Code>
+        {/* pre: no element, caller composes Scroll + Text with the R-017 class string. */}
         <Typography.Heading level={3}>Quick Setup</Typography.Heading>
         <Typography.Paragraph>
           Import the stylesheet in your application entry point and wrap your app with the
