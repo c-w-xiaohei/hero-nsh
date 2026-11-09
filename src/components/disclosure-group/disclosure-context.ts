@@ -17,8 +17,19 @@ export type DisclosureGroupKey = string | number;
  * sheet §3, criteria B1 / B3 / B4).
  */
 export interface DisclosureGroupState {
-  /** The keys of the expanded disclosures, in insertion order. */
+  /**
+   * The keys of the expanded disclosures, in insertion order. In single mode
+   * it never holds more than one key (React Stately normalizes the set).
+   */
   expandedKeys: Accessor<Set<DisclosureGroupKey>>;
+
+  /**
+   * Replaces the expanded-key set, as React Stately's
+   * `DisclosureGroupState.setExpandedKeys` does; `onExpandedChange` receives the
+   * resulting set. In single mode a set of several keys collapses to its first
+   * key.
+   */
+  setExpandedKeys: (keys: Set<DisclosureGroupKey>) => void;
 
   /** Whether more than one disclosure may be open at once. */
   allowsMultipleExpanded: Accessor<boolean>;

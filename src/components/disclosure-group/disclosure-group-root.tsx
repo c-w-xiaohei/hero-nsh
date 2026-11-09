@@ -1,6 +1,6 @@
 import type { Accessor } from "nsh";
-import type { Bounds, JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { computed, split, View } from "nsh";
+import type { Bounds, JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
+import { computed, effect, split, View } from "nsh";
 
 import { createControllableSetSignal } from "../../primitives/create-controllable-signal";
 import {
@@ -10,6 +10,8 @@ import {
   type DisclosureGroupState,
 } from "./disclosure-context";
 import { disclosureGroupVariants } from "./disclosure-group.styles";
+import type { AriaProps, DataProps, GlobalDomEvents, GlobalDomProps } from "./dom-props";
+import { viewProps } from "./dom-props";
 import { renderChildren } from "./render-children";
 
 /** What the group root's `className` and `style` functions receive (D17: accessors). */
@@ -30,9 +32,21 @@ export interface DisclosureGroupRenderProps {
  * `slot`, `render`) are accepted so code written against HeroUI keeps
  * compiling; port sheet §1.2 and §8 say what each can and cannot do.
  */
-export interface DisclosureGroupRootProps {
-  /** The disclosures inside the group. */
-  children?: JSX.Element;
+export interface DisclosureGroupRootProps
+  extends
+    Omit<ViewProps, "children" | "class" | "style">,
+    AriaProps,
+    DataProps,
+    GlobalDomProps,
+    GlobalDomEvents {
+  /**
+   * The disclosures inside the group, or a function that receives the render
+   * props and returns them (React Aria's `ChildrenOrFunction`). A zero-argument
+   * function stays a reactive child and is resolved at the placement.
+   */
+  children?:
+    | JSX.Element
+    | ((values: DisclosureGroupRenderProps) => JSX.Element);
 
   /** Appended after the base slot; later classes win. Function form gets the render props. */
   className?: string | ((values: DisclosureGroupRenderProps) => string | undefined);
@@ -82,12 +96,6 @@ export interface DisclosureGroupRootProps {
 
   /** Accepted, no effect: NSH has no slot collection. */
   slot?: string;
-
-  /** Every `aria-*` attribute, accepted for API parity. */
-  [key: `aria-${string}`]: unknown;
-
-  /** Every `data-*` attribute: NSH projects none of them (D18). */
-  [key: `data-${string}`]: unknown;
 }
 
 /**
@@ -103,7 +111,7 @@ export interface DisclosureGroupRootProps {
  * would mean adding behaviour upstream does not have.
  */
 export function DisclosureGroupRoot(props: DisclosureGroupRootProps): JSX.Element {
-  const [local] = split(props, [
+  const [local, rest] = split(props, [
     "children",
     "className",
     "style",
@@ -141,11 +149,37 @@ export function DisclosureGroupRoot(props: DisclosureGroupRootProps): JSX.Elemen
   const allowsMultipleExpanded = computed(() => local.allowsMultipleExpanded ?? false);
   const isDisabled = computed(() => local.isDisabled === true);
 
+  // React Stately normalizes the set: in single mode it never holds more than
+  // one key, and the first key wins. Deriving it here (rather than only inside
+  // `toggleKey`) closes the gap for `defaultExpandedKeys` / controlled
+  // `expandedKeys` that arrive with two keys (upstream
+  // `useDisclosureGroupState.ts:65-73`).
+  const visibleExpandedKeys = computed(() => {
+    const keys = expandedKeys();
+
+    if (allowsMultipleExpanded() || keys.size <= 1) {
+      return keys;
+    }
+
+    return new Set([keys.values().next().value as DisclosureGroupKey]);
+  });
+
+  // Upstream's normalization also reports the collapsed set to
+  // `onExpandedChange`. The effect runs once per change of the raw set, so a
+  // controlled parent that ignores the callback is not called in a loop.
+  effect(() => {
+    const keys = expandedKeys();
+
+    if (!allowsMultipleExpanded() && keys.size > 1) {
+      setExpandedKeys(new Set([keys.values().next().value as DisclosureGroupKey]));
+    }
+  });
+
   // React Stately's `toggleKey`. Single mode empties the set on a second press
   // of the same key, the opposite of Kobalte's non-collapsible accordion; the
   // HeroUI contract wins (port sheet §5, T-042).
   const toggleKey = (key: DisclosureGroupKey) => {
-    const current = expandedKeys();
+    const current = visibleExpandedKeys();
 
     if (allowsMultipleExpanded()) {
       const next = new Set(current);
@@ -165,7 +199,8 @@ export function DisclosureGroupRoot(props: DisclosureGroupRootProps): JSX.Elemen
   };
 
   const state: DisclosureGroupState = {
-    expandedKeys,
+    expandedKeys: visibleExpandedKeys,
+    setExpandedKeys: (keys) => setExpandedKeys(keys),
     allowsMultipleExpanded,
     isDisabled,
     toggleKey,
@@ -193,11 +228,23 @@ export function DisclosureGroupRoot(props: DisclosureGroupRootProps): JSX.Elemen
       .join(" "),
   );
 
-  const resolveChildren = (children: JSX.Element) => renderChildren(children);
+  // React Aria's `ChildrenOrFunction`: a function that declares a parameter is
+  // the render-prop form and gets the render values; a zero-argument function
+  // is a reactive child and keeps its existing pass-through (research 4.1).
+  const resolveChildren = (children: DisclosureGroupRootProps["children"]) => {
+    if (typeof children === "function") {
+      const fn = children as (values?: DisclosureGroupRenderProps) => JSX.Element;
+
+      return renderChildren(fn.length > 0 ? fn(renderProps) : fn());
+    }
+
+    return renderChildren(children as JSX.Element);
+  };
 
   return (
     <DisclosureGroupContext.Provider value={contextValue}>
       <View
+        {...viewProps(rest)}
         ref={(node) => local.ref?.(node)}
         testID={local.testID}
         nativeID={local.id ?? local.nativeID}
