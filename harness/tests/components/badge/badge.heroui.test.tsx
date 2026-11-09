@@ -93,3 +93,25 @@ test("T-005 renders string children in a labeled sub-part", async () => {
   expect(explicitLabel.width - noPaddingLabel.width).toBe(4);
   expect(implicitRoot.width - noPaddingRoot.width).toBe(4);
 });
+
+// src/components/badge/badge.styles.ts:46
+// HeroUI's Badge.Label is a <span> (heroui/packages/react/src/components/badge/badge.tsx:126)
+// whose only declaration is px-0.5 (heroui/packages/styles/components/badge.css:23-24),
+// so its children lay out inline beside each other. NSH views with no display
+// class are a column (docs/nsh/nsh_twref.md:54), which stacked an 8pt icon above
+// the text: the label measured 24x23 against 24x15 for the same text alone. A
+// row layout puts the icon beside the text, so the label widens by the icon and
+// keeps the text's height.
+test("X-001 lays an icon beside text inside Badge.Label", async () => {
+  const app = await open("../../../badge.fixtures.tsx", {
+    platform: "windows",
+    width: 1024,
+    height: 768,
+  });
+
+  const mixed = lastLayout(app, "mixed-label");
+  const textOnly = lastLayout(app, "text-only-label");
+
+  expect(mixed.width - textOnly.width).toBeGreaterThanOrEqual(7);
+  expect(mixed.height).toBeLessThanOrEqual(textOnly.height + 2);
+});

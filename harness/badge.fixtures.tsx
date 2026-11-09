@@ -1,4 +1,4 @@
-import { mount, View } from "nsh";
+import { mount, Text, View } from "nsh";
 import { Badge } from "@heroui/react";
 import { probe } from "@scenario/probe";
 
@@ -13,6 +13,11 @@ import { probe } from "@scenario/probe";
  * the no-padding control. The text is "Hello There" rather than "5" so
  * `min-w-7` cannot mask the four points of horizontal padding.
  *
+ * The last two entries (X-001) measure a label holding an 8pt icon beside the
+ * text "New" against the same label holding only that text. HeroUI's label is a
+ * <span>, so its children run inline on one line; an NSH default column would
+ * stack the icon above the text and grow the label's height by the icon.
+ *
  * It sits next to harness/nsh.json on purpose: NSH takes the entry's own
  * directory as the app root, so a fixture under harness/tests/... would find no
  * nsh.json and lose the `@heroui/react` alias and the theme.
@@ -25,7 +30,14 @@ type LayoutEvent = {
   };
 };
 
-type Case = "implicit-root" | "explicit-root" | "explicit-label" | "no-padding-root" | "no-padding-label";
+type Case =
+  | "implicit-root"
+  | "explicit-root"
+  | "explicit-label"
+  | "no-padding-root"
+  | "no-padding-label"
+  | "mixed-label"
+  | "text-only-label";
 
 function layoutProbe(name: Case) {
   return (event: LayoutEvent) =>
@@ -51,6 +63,21 @@ function Fixture() {
         <Badge onLayout={layoutProbe("no-padding-root")}>
           <Badge.Label className="px-0" onLayout={layoutProbe("no-padding-label")}>
             Hello There
+          </Badge.Label>
+        </Badge>
+      </Badge.Anchor>
+      <Badge.Anchor>
+        <Badge>
+          <Badge.Label onLayout={layoutProbe("mixed-label")}>
+            <View class="size-2 rounded-full bg-accent" />
+            <Text>New</Text>
+          </Badge.Label>
+        </Badge>
+      </Badge.Anchor>
+      <Badge.Anchor>
+        <Badge>
+          <Badge.Label onLayout={layoutProbe("text-only-label")}>
+            <Text>New</Text>
           </Badge.Label>
         </Badge>
       </Badge.Anchor>
