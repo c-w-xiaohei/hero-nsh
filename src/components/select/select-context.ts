@@ -34,18 +34,22 @@ export interface SelectSelectedItem {
  * read are carried, because React Stately's `SelectState` has no NSH
  * counterpart for the rest.
  *
- * Per D17 every member is an accessor: the render function runs once, and a
- * tree that reads the accessor where it binds (`<If when={state.selectedItems()
- * .length > 0}>`, `<Each of={state.selectedItems()}>`) follows the field.
+ * The fields are plain values, as upstream: `state.selectedItems` is an array
+ * of `{ key, value, textValue }`, read as `state.selectedItems[0].key`,
+ * `.length` or `.map` (HeroUI's `select.stories.tsx:582,586,688`). Each is a
+ * tracked getter over the field's signals, so a tree that reads it where it
+ * binds still follows a change; a scene that branches inside `<If>` / `<Each>`
+ * reads the top-level `selectedItems` accessor of the render values instead
+ * (D17).
  */
 export interface SelectStateFacade {
-  selectedItems: Accessor<readonly SelectSelectedItem[]>;
-  selectedKeys: Accessor<Set<string>>;
-  selectionMode: Accessor<SelectionMode>;
-  isOpen: Accessor<boolean>;
-  isDisabled: Accessor<boolean>;
-  isInvalid: Accessor<boolean>;
-  isRequired: Accessor<boolean>;
+  readonly selectedItems: readonly SelectSelectedItem[];
+  readonly selectedKeys: Set<string>;
+  readonly selectionMode: SelectionMode;
+  readonly isOpen: boolean;
+  readonly isDisabled: boolean;
+  readonly isInvalid: boolean;
+  readonly isRequired: boolean;
 }
 
 /**

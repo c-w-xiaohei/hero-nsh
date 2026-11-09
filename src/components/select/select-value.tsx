@@ -11,11 +11,8 @@ import { computed, split, Text, untracked, View } from "nsh";
 
 import { renderChildren } from "../list-box/children";
 import { FieldErrorContext } from "../field-error/context";
-import type { FieldErrorState } from "../field-error/context";
 import { FieldContext } from "../label/context";
-import type { FieldState } from "../label/context";
 import { DescriptionContext } from "../description/context";
-import type { DescriptionContextValue } from "../description/context";
 import {
   ListBoxContainerContext,
   type ListBoxContainerContextValue,
@@ -136,24 +133,40 @@ export function SelectValue(props: SelectValueProps): JSX.Element {
    * `FieldError` parts. Their bodies run where they are built (each read builds
    * the tree, research 4.1), and outside the row they would resolve the field
    * root's contexts and rename it (`<Label>Bob</Label>` in a row once became
-   * part of the trigger's name). Blank contexts keep the copy a visual copy:
-   * it registers nothing.
+   * part of the trigger's name). The copy gets the field's own state minus the
+   * `register*` callbacks: it registers nothing, but it still looks like part
+   * of the field — a copied Label in an invalid field stays `text-danger`
+   * (`label.css:23-27`) and a copied Description stays hidden (`select.css:4-9`,
+   * the root's `partClass`).
    */
   const suppress: ListBoxContainerContextValue = {
     itemIndicatorSuppressed: () => true,
   };
 
-  const isolated: FieldState = {};
-  const isolatedDescription: DescriptionContextValue = {};
-  const isolatedError: FieldErrorState = {};
+  // Read where this part sits, so the copy inherits the field root's state.
+  const field = FieldContext();
+  const description = DescriptionContext();
+  const fieldError = FieldErrorContext();
+
+  const { registerLabel: _copiedLabel, ...isolated } = field ?? {};
+  const { registerDescription: _copiedDescription, ...isolatedDescription } =
+    description ?? {};
+  const { registerErrorMessage: _copiedError, ...isolatedError } =
+    fieldError ?? {};
 
   /**
    * The value HeroUI renders with no children: the selected option's children
    * (single) or the `Intl.ListFormat` parts, each element part replaced by its
    * option's content (multiple). Literal parts (", " in English) become `Text`,
    * because a bare string inside a View is not painted.
+   *
+   * A plain function, not a `computed`: NSH's `computed` builds its value where
+   * it is created, so the copied row's `Label` / `Description` bodies would run
+   * in this component's body — outside the isolating providers below — and
+   * register with the field root. Built where it is read (inside the binding
+   * and the providers), the copy sees the isolated contexts.
    */
-  const defaultChildren = computed<JSX.Element | undefined>(() => {
+  const defaultChildren = (): JSX.Element | undefined => {
     const items = selectedItems();
 
     if (items.length === 0) {
@@ -178,7 +191,7 @@ export function SelectValue(props: SelectValueProps): JSX.Element {
 
       return item ? renderChildren(item.children()) : <Text>{part.value}</Text>;
     }) as unknown as JSX.Element;
-  });
+  };
 
   const state: SelectStateFacade = select.state;
 
