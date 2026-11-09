@@ -24,3 +24,19 @@ test("T-002 renders pulse without a shimmer overlay", async () => {
   expect(app.shows("id:skeleton")).toBe(true);
   expect(app.count("id:skeleton-shimmer")).toBe(0);
 });
+
+// src/components/skeleton/skeleton.tsx:58-67,123-124
+// X-001: port sheet §1 maps `aria-label` to accessibilityLabel and the
+// `aria-*` state aliases to accessibilityState, and accepts the remaining div
+// props (`title`, `tabIndex`, `onClick` ...) as no-ops. Each state skeleton
+// hides itself through the class of the state it should report, so a dropped
+// alias leaves the skeleton showing.
+test("X-001 maps aria aliases and accepts div props on the root", async () => {
+  const app = await openScenario("skeleton/accessibility-aliases");
+
+  expect(app.shows("label:Loading profile")).toBe(true);
+  expect(app.shows("id:skeleton-checked")).toBe(false);
+  expect(app.shows("id:skeleton-expanded")).toBe(false);
+  expect(app.shows("id:skeleton-pressed")).toBe(false);
+  expect(app.shows("id:skeleton-selected")).toBe(false);
+});
