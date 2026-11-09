@@ -883,9 +883,12 @@ test("T-077 resets the search text after the timeout", async () => {
 });
 
 // kobalte/packages/core/src/select/select.test.tsx:3746
-// Ported (port sheet T-078): after `t` selects Two, `o` ("to" with no match)
-// falls back to "o" and wraps past the end to One. Without wrapping the
-// selection stays Two.
+// Ported (port sheet T-078): after `t` selects Two, `o` finds nothing below the
+// current row and the delegate's whole-list fallback wraps to One. Upstream
+// flushes its fake timers between the two presses (`vi.runAllTimers()` at
+// :3787), which clears the 500 ms prefix, so `o` is a one-letter search; a
+// surviving "to" prefix would match nothing. Without wrapping the selection
+// stays Two.
 test("T-078 wraps around when no item past the current one matches", async () => {
   const app = await openCase("items");
 
@@ -900,6 +903,8 @@ test("T-078 wraps around when no item past the current one matches", async () =>
   expect(changes).toHaveLength(1);
   expect(changes[0][0]).toBe("2");
   expect(select.triggerShows(app, "Two")).toBe(true);
+
+  await app.clock!.runFor(500);
 
   await app.keyboard.press("o");
 
