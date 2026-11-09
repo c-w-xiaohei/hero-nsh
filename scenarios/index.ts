@@ -18,6 +18,7 @@ import { badgeScenarios } from "./badge.scenarios";
 import { chipScenarios } from "./chip.scenarios";
 import { emptyStateScenarios } from "./empty-state.scenarios";
 import { closeButtonScenarios } from "./close-button.scenarios";
+import { linkScenarios } from "./link.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -39,4 +40,5 @@ export const scenarios: Record<string, Component> = {
   ...chipScenarios,
   ...emptyStateScenarios,
   ...closeButtonScenarios,
+  ...linkScenarios,
 };
