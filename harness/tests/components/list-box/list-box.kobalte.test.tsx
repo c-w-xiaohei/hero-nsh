@@ -295,6 +295,7 @@ test("T-014 supports disabled options", async () => {
 
   await behavior.press("role:option[Two]");
   expect(callsOf(behavior, "selectionChange")).toHaveLength(0);
+  expect(callsOf(behavior, "onAction")).toEqual([["2"]]);
 });
 
 // kobalte/packages/core/src/listbox/listbox.test.tsx:435
@@ -495,4 +496,55 @@ test("T-027 should display item indicator when selected", async () => {
   expect(selectedOptions(app)).toBe(1);
   expect(app.count("role:option[Two] >> text:✓")).toBe(1);
   expect(app.count("role:option[One] >> text:✓")).toBe(0);
+});
+
+// kobalte/packages/core/src/list/list-keyboard-delegate.ts:90-135
+// Finding fix: the page keys had no component-level case. Ten 40 pt rows in a
+// 160 pt box make one page four rows: PageDown from One lands on Four and
+// PageUp returns to One. A delegate without item or container bounds returns
+// nothing, so the focus would stay on One.
+test("PageDown and PageUp move focus by one page", async () => {
+  const app = await openFixture("paged", { platform: "web" });
+
+  await app.keyboard.press("tab");
+  expect(app.shows("text:One*")).toBe(true);
+
+  await app.keyboard.press("pagedown");
+  expect(app.shows("text:Four*")).toBe(true);
+  expect(app.count(FOCUS_MARKER)).toBe(1);
+
+  await app.keyboard.press("pageup");
+  expect(app.shows("text:One*")).toBe(true);
+  expect(app.count(FOCUS_MARKER)).toBe(1);
+});
+
+// kobalte/packages/core/src/selection/create-selectable-collection.ts:157-158,265-268,317
+// X-003: the modifiers of a key press reach the collection. Shift+ArrowDown
+// extends the multiple selection from the focused row; Ctrl+A selects every
+// row. Dropping the modifiers makes both steps plain navigation with no
+// selection.
+test("X-003 extends the selection with shift and selects all with ctrl+a", async () => {
+  const app = await openFixture("modified", { platform: "web" });
+
+  await app.keyboard.press("tab");
+
+  expect(app.shows("text:One*")).toBe(true);
+  expect(selectedOptions(app)).toBe(0);
+
+  await app.keyboard.press("shift+arrowdown");
+
+  expect(app.shows("text:Two*")).toBe(true);
+  expect(app.count("role:option[Two] >> text:✓")).toBe(1);
+  expect(selectedOptions(app)).toBe(1);
+
+  await app.keyboard.press("shift+arrowdown");
+
+  expect(app.shows("text:Three*")).toBe(true);
+  expect(app.count("role:option[Two] >> text:✓")).toBe(1);
+  expect(app.count("role:option[Three] >> text:✓")).toBe(1);
+  expect(selectedOptions(app)).toBe(2);
+
+  await app.keyboard.press("ctrl+a");
+
+  expect(selectedOptions(app)).toBe(4);
 });

@@ -89,13 +89,14 @@ function onSelectionChange(keys: "all" | Iterable<unknown>): void {
  * Rows
  * -----------------------------------------------------------------------------------------------*/
 
-function Row(props: { id: string; label: string; disabled?: boolean }) {
+function Row(props: { id: string; label: string; disabled?: boolean; className?: string }) {
   return (
     <ListBox.Item
       id={props.id}
       textValue={props.label}
       aria-label={props.label}
       isDisabled={props.disabled}
+      className={props.className}
     >
       {(values) => [
         <View class="flex flex-col">
@@ -125,6 +126,7 @@ function PlainList(props: {
   defaultSelectedKeys?: SelectionValue;
   selectedKeys?: SelectionValue;
   disallowEmptySelection?: boolean;
+  escapeKeyBehavior?: "clearSelection" | "none";
   wrap?: boolean;
   action?: boolean;
 }) {
@@ -138,6 +140,7 @@ function PlainList(props: {
         defaultSelectedKeys={props.defaultSelectedKeys}
         selectedKeys={props.selectedKeys}
         disallowEmptySelection={props.disallowEmptySelection}
+        escapeKeyBehavior={props.escapeKeyBehavior}
         shouldFocusWrap={props.wrap}
         onSelectionChange={onSelectionChange}
         onAction={props.action ? probe("onAction") : undefined}
@@ -315,6 +318,226 @@ function IndicatorSelected() {
   );
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * Follow-up cases: page keys, modified keys, focus ring, press-up label,
+ * dynamic collections and the empty state
+ * -----------------------------------------------------------------------------------------------*/
+
+const PAGED: ItemData[] = [
+  { id: "1", name: "One", valueText: "One", disabled: false },
+  { id: "2", name: "Two", valueText: "Two", disabled: false },
+  { id: "3", name: "Three", valueText: "Three", disabled: false },
+  { id: "4", name: "Four", valueText: "Four", disabled: false },
+  { id: "5", name: "Five", valueText: "Five", disabled: false },
+  { id: "6", name: "Six", valueText: "Six", disabled: false },
+  { id: "7", name: "Seven", valueText: "Seven", disabled: false },
+  { id: "8", name: "Eight", valueText: "Eight", disabled: false },
+  { id: "9", name: "Nine", valueText: "Nine", disabled: false },
+  { id: "10", name: "Ten", valueText: "Ten", disabled: false },
+];
+
+/** Ten 40 pt rows in a 160 pt box: one page is four rows. */
+function PagedList() {
+  return (
+    <View class="h-40 w-64">
+      <ListBox aria-label="Options" className="h-40 w-full" selectionMode="single">
+        {PAGED.map((item) => (
+          <Row id={item.id} label={item.name} className="h-10" />
+        ))}
+      </ListBox>
+    </View>
+  );
+}
+
+const SECTION_ROWS: string[][] = [
+  ["A1", "A2", "A3", "A4", "A5"],
+  ["B1", "B2", "B3", "B4", "B5"],
+  ["C1", "C2", "C3", "C4", "C5"],
+];
+
+/** Three sections without ids, five 40 pt rows each, in a 160 pt box. */
+function KeylessSections() {
+  return (
+    <View class="h-40 w-64">
+      <ListBox
+        aria-label="Options"
+        className="h-40 w-full"
+        selectionMode="single"
+        onSelectionChange={onSelectionChange}
+      >
+        {SECTION_ROWS.map((rows) => (
+          <ListBox.Section aria-label={rows[0]}>
+            {rows.map((label) => (
+              <Row id={label.toLowerCase()} label={label} className="h-10" />
+            ))}
+          </ListBox.Section>
+        ))}
+      </ListBox>
+    </View>
+  );
+}
+
+function ModifiedList() {
+  return (
+    <View class="w-64">
+      <ListBox
+        aria-label="Options"
+        selectionMode="multiple"
+        onSelectionChange={onSelectionChange}
+      >
+        <Row id="1" label="One" />
+        <Row id="2" label="Two" />
+        <Row id="3" label="Three" />
+        <Row id="4" label="Four" />
+      </ListBox>
+    </View>
+  );
+}
+
+function FocusRingRow(props: { id: string; label: string }) {
+  return (
+    <ListBox.Item id={props.id} textValue={props.label} aria-label={props.label}>
+      {(values) => (
+        <Label>
+          {`${props.label}${values.isFocused() ? "*" : ""}${values.isFocusVisible() ? "!" : ""}`}
+        </Label>
+      )}
+    </ListBox.Item>
+  );
+}
+
+function FocusRingList() {
+  return (
+    <View class="w-64">
+      <ListBox aria-label="Options" selectionMode="single">
+        <FocusRingRow id="1" label="One" />
+        <FocusRingRow id="2" label="Two" />
+      </ListBox>
+    </View>
+  );
+}
+
+function PressUpLabelList() {
+  return (
+    <View class="w-64">
+      <ListBox
+        aria-label="Options"
+        selectionMode="single"
+        shouldSelectOnPressUp
+        onSelectionChange={onSelectionChange}
+      >
+        <Row id="1" label="One" />
+        <Row id="2" label="Two" />
+      </ListBox>
+    </View>
+  );
+}
+
+function DynamicItems() {
+  const rows = signal<ItemData[]>([...ITEMS]);
+
+  return (
+    <View class="w-64">
+      <ListBox
+        aria-label="Options"
+        selectionMode="single"
+        items={rows()}
+        onSelectionChange={onSelectionChange}
+      >
+        {(item) => (
+          <ListBox.Item id={item.id} textValue={item.name} aria-label={item.name}>
+            <Label>{item.name}</Label>
+          </ListBox.Item>
+        )}
+      </ListBox>
+      <View
+        testID="reorder"
+        role="button"
+        onPress={() => rows.set([...rows()].reverse())}
+      >
+        <Text>reorder</Text>
+      </View>
+      <View
+        testID="remove"
+        role="button"
+        onPress={() => rows.set(rows().filter((item) => item.id !== "2"))}
+      >
+        <Text>remove</Text>
+      </View>
+      <View
+        testID="prepend"
+        role="button"
+        onPress={() =>
+          rows.set([
+            { id: "z", name: "Zed", valueText: "Zed", disabled: false },
+            ...rows(),
+          ])
+        }
+      >
+        <Text>prepend</Text>
+      </View>
+    </View>
+  );
+}
+
+function DynamicChildren() {
+  const added = signal(false);
+
+  return (
+    <View class="w-64">
+      <ListBox
+        aria-label="Options"
+        selectionMode="single"
+        onSelectionChange={onSelectionChange}
+      >
+        <ListBox.Item id="1" textValue="One">
+          <Label>One</Label>
+        </ListBox.Item>
+        <ListBox.Item id="2" textValue="Two">
+          <Label>Two</Label>
+        </ListBox.Item>
+        <If when={added()}>
+          <ListBox.Item id="3" textValue="Three">
+            <Label>Three</Label>
+          </ListBox.Item>
+        </If>
+      </ListBox>
+      <View testID="add" role="button" onPress={() => added.set(true)}>
+        <Text>add</Text>
+      </View>
+    </View>
+  );
+}
+
+function EmptyFill() {
+  const rows = signal<ItemData[]>([]);
+
+  return (
+    <View class="w-64">
+      <ListBox
+        aria-label="Options"
+        selectionMode="single"
+        items={rows()}
+        renderEmptyState={() => <Text>Empty list</Text>}
+        onSelectionChange={onSelectionChange}
+      >
+        {(item) => (
+          <ListBox.Item id={item.id} textValue={item.name} aria-label={item.name}>
+            <Label>{item.name}</Label>
+          </ListBox.Item>
+        )}
+      </ListBox>
+      <View
+        testID="fill"
+        role="button"
+        onPress={() => rows.set([ITEMS[0], ITEMS[1]])}
+      >
+        <Text>fill</Text>
+      </View>
+    </View>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "log");
   const disabledMapping = String(host.params.disabled ?? "mapped") !== "none";
@@ -367,7 +590,12 @@ function Fixture() {
 
   if (name === "disabled-selection") {
     return (
-      <PlainList mode="single" disabledBehavior="selection" disabledKeys={["2"]} />
+      <PlainList
+        mode="single"
+        disabledBehavior="selection"
+        disabledKeys={["2"]}
+        action
+      />
     );
   }
 
@@ -411,6 +639,58 @@ function Fixture() {
 
   if (name === "indicator-selected") {
     return <IndicatorSelected />;
+  }
+
+  if (name === "focus-ring") {
+    return <FocusRingList />;
+  }
+
+  if (name === "press-up-label") {
+    return <PressUpLabelList />;
+  }
+
+  if (name === "escape") {
+    return (
+      <PlainList
+        mode="single"
+        defaultSelectedKeys={new Set(["2"])}
+        escapeKeyBehavior="clearSelection"
+      />
+    );
+  }
+
+  if (name === "escape-none") {
+    return (
+      <PlainList
+        mode="single"
+        defaultSelectedKeys={new Set(["2"])}
+        escapeKeyBehavior="none"
+      />
+    );
+  }
+
+  if (name === "paged") {
+    return <PagedList />;
+  }
+
+  if (name === "keyless-sections") {
+    return <KeylessSections />;
+  }
+
+  if (name === "modified") {
+    return <ModifiedList />;
+  }
+
+  if (name === "dynamic-items") {
+    return <DynamicItems />;
+  }
+
+  if (name === "dynamic-children") {
+    return <DynamicChildren />;
+  }
+
+  if (name === "empty-fill") {
+    return <EmptyFill />;
   }
 
   return <PlainList mode="single" />;
