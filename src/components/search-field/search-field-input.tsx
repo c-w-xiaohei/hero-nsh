@@ -7,6 +7,7 @@ import type {
   JSX,
   MouseEvent as NshMouseEvent,
   PasteEvent,
+  PressEvent,
   StyleProp,
 } from "nsh";
 import { cleanup, computed, effect, signal, split, untracked } from "nsh";
@@ -254,6 +255,13 @@ export interface SearchFieldInputProps
   /** Both hover transitions, as React Aria's `useHover` reports them. */
   onHoverChange?: (isHovered: boolean) => void;
 
+  /**
+   * A press on the input. The input takes presses so that a pointer press
+   * focuses it, as a browser's click does; the caller's callback runs after
+   * that focus.
+   */
+  onPress?: (event: PressEvent) => void;
+
   /** The accessible name; wins over the field root's registered Label text. */
   "aria-label"?: string;
 
@@ -317,6 +325,7 @@ export function SearchFieldInput(props: SearchFieldInputProps): JSX.Element {
     "onHoverStart",
     "onHoverEnd",
     "onHoverChange",
+    "onPress",
     "aria-label",
     "aria-invalid",
     "accessibilityLabel",
@@ -617,6 +626,20 @@ export function SearchFieldInput(props: SearchFieldInputProps): JSX.Element {
     local.onHoverChange?.(false);
   };
 
+  // A press on the input focuses it, as a browser's click does. NSH does not
+  // move the focus with a pointer press and a view hears presses only while it
+  // has an `onPress` handler, so the input takes presses and moves its own
+  // focus — the same shape DateInputGroup's slot input uses for its segments.
+  // Return / Space on the focused input also arrive as a press; focusing again
+  // is a no-op, so the keyboard path stays with the host.
+  const handlePress = (event: PressEvent) => {
+    local.onPress?.(event);
+
+    if (!isDisabled()) {
+      node?.focus();
+    }
+  };
+
   const handleFocus = () => {
     focused.set(true);
     // The field's focus state, its `onFocus` and `onFocusChange`, then the
@@ -692,6 +715,7 @@ export function SearchFieldInput(props: SearchFieldInputProps): JSX.Element {
       style={resolvedStyle()}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onPress={handlePress}
       onFocus={handleFocus}
       onBlur={handleBlur}
     />
