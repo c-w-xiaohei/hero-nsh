@@ -14,3 +14,4 @@ export * from "./components/spinner";
 export * from "./components/skeleton";
 export * from "./components/header";
 export * from "./components/badge";
+export * from "./components/chip";

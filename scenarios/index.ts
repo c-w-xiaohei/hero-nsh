@@ -13,6 +13,7 @@ import { spinnerScenarios } from "./spinner.scenarios";
 import { skeletonScenarios } from "./skeleton.scenarios";
 import { headerScenarios } from "./header.scenarios";
 import { badgeScenarios } from "./badge.scenarios";
+import { chipScenarios } from "./chip.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -29,4 +30,5 @@ export const scenarios: Record<string, Component> = {
   ...skeletonScenarios,
   ...headerScenarios,
   ...badgeScenarios,
+  ...chipScenarios,
 };
