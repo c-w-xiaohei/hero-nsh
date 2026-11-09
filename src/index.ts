@@ -20,3 +20,4 @@ export * from "./components/chip";
 export * from "./components/empty-state";
 export * from "./components/close-button";
 export * from "./components/link";
+export * from "./components/progress-bar";
