@@ -28,6 +28,7 @@ import { selectScenarios } from "./select.scenarios";
 import { iconsScenarios } from "./icons.scenarios";
 import { formScenarios } from "./form.scenarios";
 import { switchGroupScenarios } from "./switch-group.scenarios";
+import { colorSwatchScenarios } from "./color-swatch.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -59,4 +60,5 @@ export const scenarios: Record<string, Component> = {
   ...iconsScenarios,
   ...formScenarios,
   ...switchGroupScenarios,
+  ...colorSwatchScenarios,
 };
