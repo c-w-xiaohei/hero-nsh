@@ -130,16 +130,14 @@ function IndeterminateCase() {
     <Stage>
       <Checkbox aria-label={NAME} isIndeterminate onChange={probe("onChange")}>
         <Checkbox.Content>
-          <Checkbox.Control>
-            <Checkbox.Indicator>
-              {({ isSelected, isIndeterminate }) => (
-                <View class="flex-row items-center gap-2">
-                  {marks({ isSelected, isIndeterminate })}
-                </View>
-              )}
-            </Checkbox.Indicator>
-          </Checkbox.Control>
-          Accept terms
+          {({ isSelected, isIndeterminate }) => (
+            <View class="flex-row items-center gap-3">
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              {marks({ isSelected, isIndeterminate })}
+            </View>
+          )}
         </Checkbox.Content>
       </Checkbox>
     </Stage>
@@ -159,16 +157,14 @@ function IndeterminateToggleCase() {
         onChange={(isSelected) => selected.set(isSelected)}
       >
         <Checkbox.Content>
-          <Checkbox.Control>
-            <Checkbox.Indicator>
-              {({ isSelected, isIndeterminate }) => (
-                <View class="flex-row items-center gap-2">
-                  {marks({ isSelected, isIndeterminate })}
-                </View>
-              )}
-            </Checkbox.Indicator>
-          </Checkbox.Control>
-          Accept terms
+          {({ isSelected, isIndeterminate }) => (
+            <View class="flex-row items-center gap-3">
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              {marks({ isSelected, isIndeterminate })}
+            </View>
+          )}
         </Checkbox.Content>
       </Checkbox>
       <View

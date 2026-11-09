@@ -179,11 +179,11 @@ test("T-016 calls onChange when selection is toggled via createTester", async ()
   expect(getCheckboxes(app)).toBe(2);
 
   await toggleCheckbox(app, "Coding");
-  expect(callsOf(app, "groupChange")).toEqual([["coding"]]);
+  expect(callsOf(app, "groupChange")).toEqual([[["coding"]]]);
   expect(getSelectedCheckboxes(app)).toBe(1);
 
   await toggleCheckbox(app, "Design");
-  expect(callsOf(app, "groupChange")).toEqual([["coding"], ["coding", "design"]]);
+  expect(callsOf(app, "groupChange")).toEqual([[["coding"]], [["coding", "design"]]]);
   expect(getSelectedCheckboxes(app)).toBe(2);
 });
 
