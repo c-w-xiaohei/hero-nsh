@@ -13,6 +13,7 @@ import { kbdScenarios } from "./kbd.scenarios";
 import { spinnerScenarios } from "./spinner.scenarios";
 import { skeletonScenarios } from "./skeleton.scenarios";
 import { headerScenarios } from "./header.scenarios";
+import { typographyScenarios } from "./typography.scenarios";
 import { badgeScenarios } from "./badge.scenarios";
 import { chipScenarios } from "./chip.scenarios";
 import { emptyStateScenarios } from "./empty-state.scenarios";
@@ -33,6 +34,7 @@ export const scenarios: Record<string, Component> = {
   ...spinnerScenarios,
   ...skeletonScenarios,
   ...headerScenarios,
+  ...typographyScenarios,
   ...badgeScenarios,
   ...chipScenarios,
   ...emptyStateScenarios,

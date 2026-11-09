@@ -14,6 +14,7 @@ export * from "./components/kbd";
 export * from "./components/spinner";
 export * from "./components/skeleton";
 export * from "./components/header";
+export * from "./components/typography";
 export * from "./components/badge";
 export * from "./components/chip";
 export * from "./components/empty-state";
