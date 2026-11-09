@@ -31,6 +31,9 @@ export const checkboxVariants = tv({
     // itself (and `cursor-not-allowed` when disabled). `no-highlight` dropped
     // as in R-002. `group` is kept as the marker class so a caller's own
     // `group-*` variants keep working, exactly as the port sheet asks.
+    // R-007: `.checkbox .checkbox__content [data-slot="label"] { cursor:
+    // var(--cursor-interactive) }` is dropped: the cursor inherits from this
+    // view, so a Label inside the face already shows the pointer.
     content:
       "group relative inline-flex items-center gap-3 text-sm font-medium text-foreground outline-none select-none",
     // R-017: `.checkbox__control` → `relative inline-flex size-4 shrink-0
@@ -47,6 +50,10 @@ export const checkboxVariants = tv({
     // §5).
     // R-019: `motion-reduce:transition-none`.
     // R-020: `cursor: var(--cursor-interactive)` → `cursor-pointer`.
+    // R-025: the stylesheet's pressed block (`.checkbox:active &`,
+    // `:has(content[data-pressed])`) is empty, so a held press has no
+    // declaration of its own here either; the only visible pressed rule is
+    // R-028's indeterminate background.
     control:
       "relative inline-flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-md border-0 border-field-border bg-field shadow-field dark:shadow-field-dark outline-none cursor-pointer transition duration-200 ease-out motion-reduce:transition-none",
     // R-032: `.checkbox__indicator` → `relative z-10 flex size-3
