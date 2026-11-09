@@ -106,17 +106,19 @@ export function createSelectState(
 
   /**
    * Kobalte's `open`: the selected option first (in collection order), then
-   * the strategy's end. It focuses the list, marks it focused and sets the key
-   * — in that order, so the focus event cannot overwrite the chosen key with
-   * the collection's first one.
+   * the strategy's end. It marks the list focused and sets the key; the view
+   * focus itself moves in the effect below, once the list is on screen (a
+   * hidden list cannot take it). Doing the key here, before the state update,
+   * puts the highlight in the same commit that shows the list — the first
+   * frame a test can see already has it (T-069's marker was one commit late
+   * under load).
    */
-  const placeFocus = () => {
+  const markFocus = (): boolean => {
     const manager = props.selectionManager();
-    const listControls = controls();
     const collection = props.collection();
 
-    if (!manager || !listControls) {
-      return;
+    if (!manager) {
+      return false;
     }
 
     let key = manager.firstSelectedKey();
@@ -130,21 +132,25 @@ export function createSelectState(
       }
     }
 
-    listControls.focusList();
     manager.setFocused(true);
     manager.setFocusedKey(key);
+
+    return true;
   };
 
   // The list can register after the first open (a field that starts closed
   // mounts its list in the same commit, so this is the `defaultOpen` path and
-  // the guard for a list built later). Placement runs once per open.
+  // the guard for a list built later). The key is placed once per open and the
+  // view focus once per open, after the commit that makes the list visible.
   let placed = false;
+  let marked = false;
 
   effect(() => {
     const open = props.isOpen();
 
     if (!open) {
       placed = false;
+      marked = false;
       // The list stays mounted while the field closes (port sheet §5, third
       // change), so its typeahead prefix would survive the close; upstream the
       // popover unmounts and the buffer goes with it (Kobalte's list is only
@@ -155,12 +161,23 @@ export function createSelectState(
       return;
     }
 
-    if (placed || props.selectionManager() == null) {
+    const listControls = controls();
+
+    if (!listControls || props.selectionManager() == null) {
+      return;
+    }
+
+    // A `defaultOpen` / controlled open never went through `open()`.
+    if (!marked) {
+      marked = markFocus();
+    }
+
+    if (placed) {
       return;
     }
 
     placed = true;
-    placeFocus();
+    listControls.focusList();
   });
 
   /**
@@ -188,6 +205,11 @@ export function createSelectState(
     focusStrategy.set(
       strategy === "first" || strategy === "last" ? strategy : undefined,
     );
+
+    // The highlight lands in the commit that opens the list; the effect below
+    // moves the focus to the list view once it is visible.
+    marked = markFocus();
+
     props.setIsOpen(true);
   };
 
