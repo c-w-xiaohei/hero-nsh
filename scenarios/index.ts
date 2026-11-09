@@ -16,6 +16,7 @@ import { headerScenarios } from "./header.scenarios";
 import { badgeScenarios } from "./badge.scenarios";
 import { chipScenarios } from "./chip.scenarios";
 import { emptyStateScenarios } from "./empty-state.scenarios";
+import { errorMessageScenarios } from "./error-message.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -35,4 +36,5 @@ export const scenarios: Record<string, Component> = {
   ...badgeScenarios,
   ...chipScenarios,
   ...emptyStateScenarios,
+  ...errorMessageScenarios,
 };
