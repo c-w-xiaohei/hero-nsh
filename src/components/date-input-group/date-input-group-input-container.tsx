@@ -2,6 +2,7 @@ import type { Bounds, JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
 import { Scroll, split } from "nsh";
 
 import { DateInputGroupContext } from "./date-input-group-context";
+import { renderChildren } from "./render-children";
 
 /** The props of `DateInputGroup.InputContainer`, HeroUI's `DateInputGroupInputContainerProps`. */
 export interface DateInputGroupInputContainerProps {
@@ -95,7 +96,9 @@ export function DateInputGroupInputContainer(
       style={local.style}
       onLayout={local.onLayout}
     >
-      {local.children}
+      {/* The one read of `props.children`: its bare strings become `Text`, as
+          HeroUI's `div` renders them (port sheet §1.3), like the affixes. */}
+      {renderChildren(local.children)}
     </Scroll>
   );
 }

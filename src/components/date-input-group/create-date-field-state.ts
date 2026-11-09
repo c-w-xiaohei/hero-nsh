@@ -162,11 +162,20 @@ export interface DateFieldState {
   focusSegment: (segment: DateSegment | null) => void;
 
   /**
-   * Moves the focus to the neighbouring editable segment. No wrap, as React
-   * Aria's `focusNext` / `focusPrevious`; the target's real focus arrives
-   * through its element, so a host that cannot focus a view simply stays put.
+   * Moves the focus to the neighbouring focusable segment (every non-literal
+   * segment, editable or not). No wrap, as React Aria's `focusNext` /
+   * `focusPrevious`; the target's real focus arrives through its element, so a
+   * host that cannot focus a view simply stays put.
    */
   focusAdjacent: (direction: -1 | 1) => void;
+
+  /**
+   * Focuses the segment React Aria's `focusLast` picks for a press on the
+   * field's padding: the earliest segment of the trailing placeholder run, or
+   * the last focusable one when nothing is a placeholder. Returns the type it
+   * focused, so the press can tell whether the focus actually moved.
+   */
+  focusLast: () => DateSegmentType | null;
 
   /** The Segment part reports the element the focus moves to. */
   registerSegmentElement: (
@@ -194,6 +203,14 @@ export interface DateFieldState {
 
   /** Types one character into a segment, with React Aria's buffer and advance rules. */
   type: (segment: DateSegment, key: string) => void;
+
+  /**
+   * React Aria's Backspace / Delete on a segment: deletes one digit, moves to
+   * the previous segment when the text is still its placeholder, and clears
+   * only when the remainder is empty or zero (or the segment is a day period /
+   * era).
+   */
+  backspace: (segment: DateSegment) => void;
 
   /** Clears a segment, reverting it to its placeholder. */
   clear: (segment: DateSegment) => void;
@@ -573,23 +590,62 @@ export function createDateFieldState(
     };
   };
 
-  const focusAdjacent = (direction: -1 | 1) => {
-    const editable = segments().filter((segment) => segment.isEditable);
+  // React Aria walks the focusable tree for `focusNext` / `focusPrevious`
+  // (`@react-aria/datepicker/src/useDateSegment.ts`'s `focusManager`, which
+  // `getFocusableTreeWalker(ref, {tabbable: true})` backs): every non-literal
+  // segment is a Tab stop, read-only and non-editable ones included, only a
+  // disabled field removes them.
+  const isFocusableSegment = (segment: DateSegment) =>
+    segment.type !== "literal" && !isDisabled();
 
-    if (editable.length === 0) {
+  const focusAdjacent = (direction: -1 | 1) => {
+    const focusable = segments().filter(isFocusableSegment);
+
+    if (focusable.length === 0) {
       return;
     }
 
     const current = focused();
-    const index = current ? editable.findIndex((segment) => segment.type === current.type) : -1;
+    const index = current ? focusable.findIndex((segment) => segment.type === current.type) : -1;
     const nextIndex =
-      index < 0 ? (direction > 0 ? 0 : editable.length - 1) : index + direction;
+      index < 0 ? (direction > 0 ? 0 : focusable.length - 1) : index + direction;
 
-    if (nextIndex < 0 || nextIndex >= editable.length) {
+    if (nextIndex < 0 || nextIndex >= focusable.length) {
       return;
     }
 
-    segmentNodes.get(editable[nextIndex].type)?.()?.focus();
+    segmentNodes.get(focusable[nextIndex].type)?.()?.focus();
+  };
+
+  /**
+   * React Aria's `focusLast` (`@react-aria/datepicker/src/useDatePickerGroup.ts:82-110`):
+   * a press on the field's padding focuses the last Tab stop, then walks back
+   * while the previous segment is still a placeholder, so the earliest of the
+   * trailing placeholders takes the focus. With every segment filled it stays
+   * on the last one.
+   */
+  const focusLast = (): DateSegmentType | null => {
+    const focusable = segments().filter(isFocusableSegment);
+
+    if (focusable.length === 0) {
+      return null;
+    }
+
+    let index = focusable.length - 1;
+
+    while (
+      index > 0 &&
+      focusable[index].isPlaceholder &&
+      focusable[index - 1].isPlaceholder
+    ) {
+      index--;
+    }
+
+    const target = focusable[index];
+
+    segmentNodes.get(target.type)?.()?.focus();
+
+    return target.type;
   };
 
   // --- Typing ----------------------------------------------------------------
@@ -743,6 +799,53 @@ export function createDateFieldState(
     commitValue(displayValue().set(segment.type, limit, placeholder()));
   };
 
+  const clearSegment = (type: DateSegmentType) => {
+    // React Stately's `clearSegment` leaves the time zone and literals alone.
+    if (isDisabled() || isReadOnly() || type === "timeZoneName" || type === "literal") {
+      return;
+    }
+
+    enteredKeys.delete(type);
+    commitValue(displayValue().clear(type));
+  };
+
+  /**
+   * React Aria's `backspace` (`@react-aria/datepicker/src/useDateSegment.ts:104-124`):
+   * at the placeholder, Backspace moves to the previous segment instead of
+   * editing; otherwise it deletes one digit, and clears the segment only when
+   * the remainder is empty or parses to zero, or when the segment is a day
+   * period / era (whose text is not a partial number).
+   */
+  const backspace = (segment: DateSegment) => {
+    if (isDisabled()) {
+      return;
+    }
+
+    if (segment.text === segment.placeholder) {
+      focusAdjacent(-1);
+    }
+
+    if (isReadOnly() || !segment.isEditable) {
+      return;
+    }
+
+    if (parser().isValidPartialNumber(segment.text) && !segment.isPlaceholder) {
+      const truncated = segment.text.slice(0, -1);
+      const parsed = parser().parse(truncated);
+      const nextText = parsed === 0 ? "" : truncated;
+
+      if (nextText.length === 0 || parsed === 0) {
+        clearSegment(segment.type);
+      } else {
+        setSegmentValue(segment.type, parsed);
+      }
+
+      enteredKeys.set(segment.type, nextText);
+    } else if (segment.type === "dayPeriod" || segment.type === "era") {
+      clearSegment(segment.type);
+    }
+  };
+
   return {
     value: calendarValue,
     setValue,
@@ -758,6 +861,7 @@ export function createDateFieldState(
     focusedSegment,
     focusSegment,
     focusAdjacent,
+    focusLast,
     registerSegmentElement,
     increment: (segment) => adjust(segment, 1),
     decrement: (segment) => adjust(segment, -1),
@@ -766,13 +870,13 @@ export function createDateFieldState(
     incrementToMax: (segment) => toLimit(segment, 1),
     decrementToMin: (segment) => toLimit(segment, -1),
     type: typeKey,
+    backspace,
     clear: (segment) => {
-      if (isDisabled() || isReadOnly() || !segment.isEditable) {
+      if (!segment.isEditable) {
         return;
       }
 
-      enteredKeys.delete(segment.type);
-      commitValue(displayValue().clear(segment.type));
+      clearSegment(segment.type);
     },
     commit,
     formatValue: (fieldOptions) => {

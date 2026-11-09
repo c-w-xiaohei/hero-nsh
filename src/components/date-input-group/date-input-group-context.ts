@@ -45,6 +45,16 @@ export interface DateInputGroupContextValue {
   /** Records a pointer interaction (a press on a segment or the input). */
   setPointerModality: () => void;
 
+  /**
+   * A pointer press is about to move the focus (a segment focusing itself, or
+   * the input's padding focusing a segment). The next focus belongs to it, so
+   * the focus handler must not record the keyboard modality.
+   */
+  requestPointerFocus: () => void;
+
+  /** Whether a pointer press asked for the focus being reported; clears the mark. */
+  consumePointerFocus: () => boolean;
+
   /** Whether a Prefix part was created inside the group (R-010). */
   hasPrefix: Accessor<boolean>;
 
@@ -94,6 +104,8 @@ export const FALLBACK_DATE_INPUT_GROUP_CONTEXT: DateInputGroupContextValue = {
   isKeyboard: () => false,
   setKeyboardModality: () => {},
   setPointerModality: () => {},
+  requestPointerFocus: () => {},
+  consumePointerFocus: () => false,
   hasPrefix: () => false,
   hasSuffix: () => false,
   hasRangeSeparator: () => false,

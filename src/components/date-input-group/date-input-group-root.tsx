@@ -1,5 +1,5 @@
 import type { Accessor, Bounds, JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { computed, reduceMotion, signal, split, untracked, View } from "nsh";
+import { computed, effect, reduceMotion, signal, split, untracked, View } from "nsh";
 
 import {
   createInteractionModality,
@@ -273,6 +273,51 @@ export function DateInputGroupRoot(props: DateInputGroupRootProps): JSX.Element 
   const modality: InteractionModalityState = createInteractionModality();
   const isFocusVisible = computed(() => isFocusWithin() && modality.isKeyboard());
 
+  // React Aria sets the modality from the event that caused it, never from a
+  // focus event (`@react-aria/interactions/src/useFocusVisible.ts:86-92`): a
+  // keydown or a pointer press does, a programmatic `focus()` does not. NSH
+  // reports no keydown for Tab, so a focus that no press asked for is the
+  // keyboard arriving; a press marks the focus it is about to take, and its
+  // own focus handler must not turn it into a keyboard interaction.
+  let focusFromPointer = false;
+
+  const requestPointerFocus = () => {
+    focusFromPointer = true;
+  };
+
+  const consumePointerFocus = () => {
+    const value = focusFromPointer;
+
+    focusFromPointer = false;
+
+    return value;
+  };
+
+  const setKeyboardModality = () => {
+    // Any keyboard interaction invalidates a mark left by a press that did not
+    // move the focus after all.
+    focusFromPointer = false;
+    modality.setKeyboardModality();
+  };
+
+  // React Aria commits the edited value and runs validation when the focus
+  // leaves the whole field, not when it moves between segments
+  // (`@react-aria/datepicker/src/useDateField.ts:105-116`, `useFocusWithin`'s
+  // `onBlurWithin`). The group is the field's boundary: its registered targets
+  // are the segments and the picker triggers, so a focus moving to a trigger
+  // stays inside and does not commit.
+  let hadFocusWithin = false;
+
+  effect(() => {
+    const value = isFocusWithin();
+
+    if (hadFocusWithin && !value) {
+      field?.commit();
+    }
+
+    hadFocusWithin = value;
+  });
+
   // --- Classes and style (R-001 … R-008, R-027 … R-031, R-033) --------------
   const renderProps: DateInputGroupRenderProps = {
     isHovered: hovered,
@@ -371,8 +416,10 @@ export function DateInputGroupRoot(props: DateInputGroupRootProps): JSX.Element 
     isFocusWithin,
     isFocusVisible,
     isKeyboard: modality.isKeyboard,
-    setKeyboardModality: modality.setKeyboardModality,
+    setKeyboardModality,
     setPointerModality: modality.setPointerModality,
+    requestPointerFocus,
+    consumePointerFocus,
     hasPrefix,
     hasSuffix,
     hasRangeSeparator,

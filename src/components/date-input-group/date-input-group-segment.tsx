@@ -1,4 +1,5 @@
-import type { Accessor, JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
+import { DateFormatter } from "@internationalized/date";
+import type { Accessor, JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh";
 import {
   cleanup,
   computed,
@@ -11,6 +12,7 @@ import {
   View,
 } from "nsh";
 
+import { isKeyboardPress } from "../../primitives/create-interaction-modality";
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
 import type { DateSegment } from "./date-field-utils";
 import {
@@ -154,7 +156,6 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
   const hovered = signal(false);
 
   let node: ViewRef | undefined;
-  let pointerFocusPending = false;
 
   // R-006: the group's ring follows the parts that can hold the focus.
   cleanup(group.registerFocusTarget(focused));
@@ -171,6 +172,11 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
   // React Aria's `isEditable`: the field settings decide, then the segment.
   const canFocus = () => props.segment.isEditable && !isDisabled();
   const canEdit = () => canFocus() && !isReadOnly();
+
+  // React Aria gives every non-literal segment `tabIndex: 0` while the field is
+  // enabled (`useDateSegment.ts:421`), read-only and non-editable ones
+  // included; only literals are hidden from the Tab order.
+  const isInTabOrder = () => !isLiteral() && !isDisabled();
 
   const isFocusVisible = () => focused() && group.isKeyboard();
 
@@ -224,12 +230,11 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
     focused.set(true);
     field?.focusSegment(props.segment);
 
-    if (pointerFocusPending) {
-      // A press focused this segment; the appearance must not show the
-      // keyboard ring, as `:focus-visible` would not.
-      pointerFocusPending = false;
-      group.setPointerModality();
-    } else {
+    // React Aria sets the modality on the interaction that caused it, and a
+    // programmatic `focus()` must not change it (`useFocusVisible.ts:86-92`,
+    // `:188-192`). NSH reports no keydown for Tab, so a focus no press asked
+    // for is the keyboard arriving; a press marks the focus it takes.
+    if (!group.consumePointerFocus()) {
       group.setKeyboardModality();
     }
   };
@@ -237,53 +242,78 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
   const handleBlur = () => {
     focused.set(false);
     field?.focusSegment(null);
-    // React Aria commits the edited value when the segment loses the focus.
-    field?.commit();
   };
 
   /**
    * A pointer press focuses the segment. NSH does not focus a view on press and
-   * a view is only pressable when it hears `onPress`, so the down and the tap
-   * share one handler: the focus arrives on the press-down where the host
-   * allows it, and the modality is recorded as the pointer's, so no keyboard
-   * ring shows (port sheet §2).
+   * a view is pressable when it hears `onPress`, so the press moves the focus
+   * itself and records the pointer modality, which keeps the keyboard ring off
+   * (port sheet §2). Return / Space arrive as a press of their own and must not
+   * be taken for the pointer.
    */
-  const handlePress = () => {
-    if (!canFocus()) {
+  const handlePress = (event: PressEvent) => {
+    if (isKeyboardPress(event)) {
+      group.setKeyboardModality();
+
       return;
     }
 
-    pointerFocusPending = true;
     group.setPointerModality();
+
+    if (focused()) {
+      return;
+    }
+
+    group.requestPointerFocus();
     node?.focus();
   };
 
   // --- Keys ------------------------------------------------------------------
   // Bound only while this segment is focused; every editing call is gated again
   // inside the state, so a read-only segment still moves with the arrows.
+  // Every key that reaches here records the keyboard modality first: React
+  // Aria's `useFocusVisible` switches on keydown, which is also what keeps the
+  // group's ring on after a pointer press followed by typing.
+  const keyboard = (handler: () => void) => () => {
+    group.setKeyboardModality();
+    handler();
+  };
+
   createKeymapScope({
-    isActive: () => focused() && canFocus(),
+    // Every focusable segment binds the row's keys, as React Aria puts the
+    // arrow keys on the group (`useDatePickerGroup.ts:34-72`); the editing
+    // calls themselves no-op on a read-only or non-editable segment.
+    isActive: () => focused() && !isDisabled(),
     bindings: {
       // `keymap` names the arrows `up` / `down` / `left` / `right`.
-      up: () => field?.increment(props.segment),
-      down: () => field?.decrement(props.segment),
-      left: () => field?.focusAdjacent(-1),
-      right: () => field?.focusAdjacent(1),
-      backspace: () => field?.clear(props.segment),
-      delete: () => field?.clear(props.segment),
-      enter: () => field?.commit(),
-      "0": () => field?.type(props.segment, "0"),
-      "1": () => field?.type(props.segment, "1"),
-      "2": () => field?.type(props.segment, "2"),
-      "3": () => field?.type(props.segment, "3"),
-      "4": () => field?.type(props.segment, "4"),
-      "5": () => field?.type(props.segment, "5"),
-      "6": () => field?.type(props.segment, "6"),
-      "7": () => field?.type(props.segment, "7"),
-      "8": () => field?.type(props.segment, "8"),
-      "9": () => field?.type(props.segment, "9"),
-      a: () => field?.type(props.segment, "a"),
-      p: () => field?.type(props.segment, "p"),
+      up: keyboard(() => field?.increment(props.segment)),
+      down: keyboard(() => field?.decrement(props.segment)),
+      left: keyboard(() => field?.focusAdjacent(-1)),
+      right: keyboard(() => field?.focusAdjacent(1)),
+      // React Aria's Backspace / Delete deletes one digit and clears only the
+      // cases its `backspace` names (`useDateSegment.ts:104-124`).
+      backspace: keyboard(() => field?.backspace(props.segment)),
+      delete: keyboard(() => field?.backspace(props.segment)),
+      enter: keyboard(() => field?.commit()),
+      // React Aria's spinbutton page and limit keys
+      // (`spinbutton/useSpinButton.ts:78-128`): PageUp / PageDown a page,
+      // Home / End the segment's minimum / maximum.
+      pageup: keyboard(() => field?.incrementPage(props.segment)),
+      pagedown: keyboard(() => field?.decrementPage(props.segment)),
+      home: keyboard(() => field?.decrementToMin(props.segment)),
+      end: keyboard(() => field?.incrementToMax(props.segment)),
+      "0": keyboard(() => field?.type(props.segment, "0")),
+      "1": keyboard(() => field?.type(props.segment, "1")),
+      "2": keyboard(() => field?.type(props.segment, "2")),
+      "3": keyboard(() => field?.type(props.segment, "3")),
+      "4": keyboard(() => field?.type(props.segment, "4")),
+      "5": keyboard(() => field?.type(props.segment, "5")),
+      "6": keyboard(() => field?.type(props.segment, "6")),
+      "7": keyboard(() => field?.type(props.segment, "7")),
+      "8": keyboard(() => field?.type(props.segment, "8")),
+      "9": keyboard(() => field?.type(props.segment, "9")),
+      a: keyboard(() => field?.type(props.segment, "a")),
+      p: keyboard(() => field?.type(props.segment, "p")),
     },
   });
 
@@ -351,8 +381,41 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
     return props.segment.type === "timeZoneName" ? ("text" as const) : ("spinbutton" as const);
   };
 
+  // React Aria's `aria-valuetext`: the month also reads its long name, the
+  // hour its localized hour (`useDateSegment.ts:59-72`), so a screen reader
+  // says "08 – August" and "8 PM" rather than the raw digits. A time zone
+  // segment carries no value at all (`:322-334`).
+  const accessibilityText = () => {
+    const segment = props.segment;
+
+    if (segment.isPlaceholder) {
+      return "";
+    }
+
+    if (!field || (segment.type !== "month" && segment.type !== "hour")) {
+      return segment.text;
+    }
+
+    const options = field.dateFormatter().resolvedOptions();
+
+    if (segment.type === "month") {
+      const monthText = new DateFormatter(hostLocale(), {
+        month: "long",
+        timeZone: options.timeZone,
+      }).format(field.dateValue());
+
+      return monthText !== segment.text ? `${segment.text} – ${monthText}` : monthText;
+    }
+
+    return new DateFormatter(hostLocale(), {
+      hour: "numeric",
+      hour12: options.hour12,
+      timeZone: options.timeZone,
+    }).format(field.dateValue());
+  };
+
   const accessibilityValue = () => {
-    if (isLiteral()) {
+    if (isLiteral() || props.segment.type === "timeZoneName") {
       return undefined;
     }
 
@@ -360,7 +423,7 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
       min: props.segment.minValue,
       max: props.segment.maxValue,
       now: props.segment.value ?? undefined,
-      text: props.segment.isPlaceholder ? "" : props.segment.text,
+      text: accessibilityText(),
     };
   };
 
@@ -372,7 +435,7 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
     return segmentName(props.segment.type, hostLocale());
   };
 
-  const focusable = () => canFocus();
+  const focusable = () => isInTabOrder();
 
   return (
     <View
@@ -392,8 +455,10 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
       style={resolvedStyle()}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onPressDown={handlePress}
-      onPress={handlePress}
+      // A literal separator does not take presses: React Aria's literal segment
+      // installs no pointer handler, so a press on it reaches the group and
+      // focuses the last placeholder (`useDateSegment.ts:352-357`).
+      onPress={isLiteral() ? undefined : handlePress}
       onFocus={handleFocus}
       onBlur={handleBlur}
     >

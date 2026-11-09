@@ -1,6 +1,7 @@
-import type { Accessor, JSX, StyleProp, ViewStyle } from "nsh";
-import { computed, signal, split, View } from "nsh";
+import type { Accessor, JSX, PressEvent, StyleProp, ViewStyle } from "nsh";
+import { computed, effect, signal, split, View } from "nsh";
 
+import { isKeyboardPress } from "../../primitives/create-interaction-modality";
 import { createDateFieldState, type DateFieldState } from "./create-date-field-state";
 import {
   DateInputGroupContext,
@@ -121,6 +122,26 @@ export function DateInputGroupInput(props: DateInputGroupInputProps): JSX.Elemen
   const isHovered = () => hovered() && !isDisabled();
   const isFocusVisible = () => isFocusWithin() && group.isKeyboard();
 
+  // A standalone Input owns its field, so no DateField root commits for it.
+  // React Aria commits the edited value and runs validation when the focus
+  // leaves the field (`packages/@react-aria/datepicker/src/useDateField.ts:105-116`,
+  // `onBlurWithin`), not when it moves between segments, so this waits for the
+  // last segment to let go. A field a consumer provides has its own root for
+  // that, and a range picker's two sides share one.
+  if (!inheritedField) {
+    let hadFocus = false;
+
+    effect(() => {
+      const value = isFocusWithin();
+
+      if (hadFocus && !value) {
+        field.commit();
+      }
+
+      hadFocus = value;
+    });
+  }
+
   const renderProps: DateInputGroupInputRenderProps = {
     isHovered,
     isFocusWithin,
@@ -177,23 +198,51 @@ export function DateInputGroupInput(props: DateInputGroupInputProps): JSX.Elemen
     return value === "presentation" ? "none" : value;
   });
 
-  // A press on the padding (not on a segment) moves the focus like React Aria's
-  // `useDatePickerGroup`: previous segment, or the last one when none is
-  // focused. NSH does not focus a view on press, so the state's registered
-  // element does it.
-  const handlePress = () => {
+  // A press on the padding (not on a segment) moves the focus the way React
+  // Aria's `useDatePickerGroup` does: its `focusLast` focuses the earliest of
+  // the trailing placeholder segments, or the last segment when every one is
+  // filled. Pressing a segment never reaches here — NSH sends a press to the
+  // innermost pressable view, and React Aria's segment stops the event for the
+  // same reason (`useDateSegment.ts:424-430`).
+  //
+  // One event: a real press reports both `onPressDown` and `onPress`, and
+  // registering the move on both ran it twice. Mouse presses focus on the way
+  // down upstream and touch / pen on the press; `PressEvent` carries no
+  // `pointerType`, so the one press event serves both. Return / Space reach the
+  // same handler; `isKeyboardPress` keeps them out of the pointer path.
+  const handlePress = (event: PressEvent) => {
     if (isDisabled()) {
       return;
     }
 
+    if (isKeyboardPress(event)) {
+      group.setKeyboardModality();
+
+      return;
+    }
+
     group.setPointerModality();
-    field.focusAdjacent(-1);
+
+    const before = field.focusedSegment(local.slot)?.type ?? null;
+
+    // Mark the focus this press takes, so the segment's focus handler records
+    // the pointer rather than the keyboard. The mark goes in before the move:
+    // a host may report the focus synchronously. A press that lands on the
+    // segment already focused moves nothing, so its mark is dropped again.
+    group.requestPointerFocus();
+
+    const target = field.focusLast();
+
+    if (target == null || target === before) {
+      group.consumePointerFocus();
+    }
   };
 
   return (
     <DateInputGroupFieldContext.Provider value={field}>
       <View
         role={role()}
+        focusable={false}
         nativeID={local.id ?? local.nativeID}
         testID={local.testID}
         accessibilityState={isDisabled() ? { disabled: true } : undefined}
@@ -201,7 +250,6 @@ export function DateInputGroupInput(props: DateInputGroupInputProps): JSX.Elemen
         style={resolvedStyle()}
         onMouseEnter={() => hovered.set(true)}
         onMouseLeave={() => hovered.set(false)}
-        onPressDown={handlePress}
         onPress={handlePress}
       >
         <Each of={field.segments(local.slot)} key="index">
