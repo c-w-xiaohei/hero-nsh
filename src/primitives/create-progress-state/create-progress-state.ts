@@ -54,6 +54,49 @@ export interface ProgressStateProps {
 }
 
 /**
+ * The props of a progress display that never goes indeterminate, such as
+ * Meter: `isIndeterminate` is absent or literally `false`, so the percentage
+ * and the value text always exist. This is React Aria's `useMeter` contract,
+ * whose `percentage` is a plain number.
+ */
+export interface DeterminateProgressStateProps
+  extends Omit<ProgressStateProps, "isIndeterminate"> {
+  /** A determinate display has no indeterminate state. @default false */
+  isIndeterminate?: Accessor<false | undefined>;
+}
+
+/** The derived state of a progress display that always has a value. */
+export interface ProgressState {
+  /** The clamped value. */
+  value: Accessor<number>;
+
+  /** The range's minimum, defaulted. */
+  minValue: Accessor<number>;
+
+  /** The range's maximum, defaulted. */
+  maxValue: Accessor<number>;
+
+  /** `0..100`, or `undefined` while indeterminate. */
+  percentage: Accessor<number | undefined>;
+
+  /** The formatted or caller-supplied value text; `undefined` when there is none. */
+  valueText: Accessor<string | undefined>;
+
+  /** Whether there is no value to show. */
+  isIndeterminate: Accessor<boolean>;
+}
+
+/** {@link ProgressState} of a display that always has a value. */
+export interface DeterminateProgressState
+  extends Omit<ProgressState, "percentage" | "valueText"> {
+  /** `0..100`; never `undefined`, because the display is never indeterminate. */
+  percentage: Accessor<number>;
+
+  /** The formatted or caller-supplied value text; never `undefined`. */
+  valueText: Accessor<string>;
+}
+
+/**
  * The derived value state of a progress display, shared by ProgressBar and
  * Meter (port sheet section 5).
  *
@@ -71,14 +114,11 @@ export interface ProgressStateProps {
  * `clamp` is local: NSH has no utils directory, and `@kobalte/utils` depends on
  * `solid-js`, which the NSH bundler rejects.
  */
-export function createProgressState(props: ProgressStateProps): {
-  value: Accessor<number>;
-  minValue: Accessor<number>;
-  maxValue: Accessor<number>;
-  percentage: Accessor<number | undefined>;
-  valueText: Accessor<string | undefined>;
-  isIndeterminate: Accessor<boolean>;
-} {
+export function createProgressState(
+  props: DeterminateProgressStateProps,
+): DeterminateProgressState;
+export function createProgressState(props: ProgressStateProps): ProgressState;
+export function createProgressState(props: ProgressStateProps): ProgressState {
   const minValue = computed(() => props.minValue?.() ?? 0);
   const maxValue = computed(() => props.maxValue?.() ?? 100);
   const isIndeterminate = computed(() => props.isIndeterminate?.() === true);

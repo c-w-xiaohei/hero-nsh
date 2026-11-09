@@ -17,6 +17,7 @@ import { typographyScenarios } from "./typography.scenarios";
 import { badgeScenarios } from "./badge.scenarios";
 import { chipScenarios } from "./chip.scenarios";
 import { emptyStateScenarios } from "./empty-state.scenarios";
+import { progressCircleScenarios } from "./progress-circle.scenarios";
 import { closeButtonScenarios } from "./close-button.scenarios";
 import { linkScenarios } from "./link.scenarios";
 import { progressBarScenarios } from "./progress-bar.scenarios";
@@ -42,6 +43,7 @@ export const scenarios: Record<string, Component> = {
   ...badgeScenarios,
   ...chipScenarios,
   ...emptyStateScenarios,
+  ...progressCircleScenarios,
   ...closeButtonScenarios,
   ...linkScenarios,
   ...progressBarScenarios,
