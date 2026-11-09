@@ -1,4 +1,5 @@
 import { context } from "nsh";
+import type { PressEvent } from "nsh";
 
 /**
  * What a field root tells the Labels inside it. HeroUI reaches the same
@@ -35,8 +36,21 @@ export interface FieldState {
    */
   registerLabel?: (text: () => string | undefined) => () => void;
 
-  /** Moves the focus to the field's control, standing in for pressing a `<label for>`. */
-  focusField?: () => void;
+  /**
+   * Moves the focus to the field's control, standing in for pressing a
+   * `<label for>`. The press event is passed so the field hears the real
+   * release (its modality and position), not a synthetic one.
+   */
+  focusField?: (event?: PressEvent) => void;
+
+  /**
+   * The label was pressed down. A field that treats the label's press as its
+   * own (a `<label for="…">` around a control) starts its pressed state here.
+   */
+  pressFieldStart?: (event: PressEvent) => void;
+
+  /** The label's press was released. */
+  pressFieldUp?: (event: PressEvent) => void;
 }
 
 export const FieldContext = context<FieldState | undefined>(undefined);

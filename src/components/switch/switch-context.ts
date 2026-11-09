@@ -133,6 +133,16 @@ export interface SwitchContextValue {
   /** The root's `onPressEnd`, and the pressed state ending. */
   pressEnd: (event: PressEvent) => void;
 
+  /**
+   * A Label inside the field reported its real press-down, so a held label
+   * press sets the pressed state and paints, as the `<label>`'s own
+   * `onPressStart` does upstream (`react-aria/src/toggle/useToggle.ts:134-147`).
+   */
+  pressFieldStart: (event: PressEvent) => void;
+
+  /** A Label inside the field reported its real press-up. */
+  pressFieldUp: (event: PressEvent) => void;
+
   /** The root's `onPress`, dispatched before the selection changes. */
   press: (event: PressEvent) => void;
 
@@ -242,6 +252,8 @@ export const FALLBACK_SWITCH_CONTEXT: SwitchContextValue = {
   pressStart: () => {},
   pressUp: () => {},
   pressEnd: () => {},
+  pressFieldStart: () => {},
+  pressFieldUp: () => {},
   press: () => {},
   click: () => {},
   setHovered: () => {},

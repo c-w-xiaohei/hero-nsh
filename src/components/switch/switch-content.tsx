@@ -283,6 +283,16 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
   };
 
   const handlePressDown = (event: PressEvent) => {
+    // A read-only press dispatches no press callback upstream
+    // (`react-aria/src/toggle/useToggle.ts:186`: the press is disabled for
+    // `isDisabled || isReadOnly`). The held raw signal still starts, so the
+    // track's `:active` paint is unchanged; the callbacks are gated in the root.
+    if (ctx.isDisabled() || ctx.isReadOnly()) {
+      ctx.pressStart(event);
+
+      return;
+    }
+
     notePress(event);
     // R-028: the root's press callbacks and the pressed signal, from the one
     // press state machine both the Content and the Label report into.
@@ -298,6 +308,14 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
   };
 
   const handlePress = (event: PressEvent) => {
+    // Read-only: no callbacks, no toggle, no validation, no focus. Only the
+    // held paint ends (`react-aria/src/toggle/useToggle.ts:136-187`).
+    if (ctx.isDisabled() || ctx.isReadOnly()) {
+      ctx.pressEnd(event);
+
+      return;
+    }
+
     notePress(event);
     // The release already ended the press in `handlePressUp`; this is a no-op
     // then, and the guard keeps a backend that only reports `onPress` correct.
