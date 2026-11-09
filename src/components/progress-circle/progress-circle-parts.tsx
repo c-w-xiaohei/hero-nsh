@@ -341,11 +341,11 @@ export function ProgressCircleFillCircle(
         duration: TRANSITION_MS,
         easing: EASE_OUT,
       })
-      // A retarget or the app closing cancels the previous animation; its
-      // promise then rejects, which is expected and has no listener to report
-      // to (the new value is already set by the next run).
+      // A retarget or the app closing cancels the running animation; its
+      // promise then rejects. The phase is already where it should be (the
+      // next run sets it, and a closed app draws nothing), so the rejection
+      // is swallowed rather than reported as unhandled.
       .catch(() => undefined);
-
   });
 
   const classes = computed(() =>
