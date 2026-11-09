@@ -1,11 +1,13 @@
 import type { Bounds, JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { cleanup, computed, signal, split, View } from "nsh";
+import { cleanup, computed, signal, split, untracked, View } from "nsh";
 
 import { renderChildren } from "./children";
 import {
   CollectionItemContext,
+  collectionItemKey,
   ListBoxContext,
   ListBoxSectionContext,
+  sortByRenderedOrder,
   type ListBoxItemDescriptor,
   type ListBoxSectionContextValue,
   type ListBoxSectionDescriptor,
@@ -121,10 +123,18 @@ export function ListBoxSectionRoot<T>(
 
   const collectionItem = CollectionItemContext();
 
-  // Identity, read once (port sheet section 2).
+  // Identity, read once (port sheet section 2). A static Section without `id`
+  // has no key of its own: React Aria derives one from its position
+  // (`list-box.stories.tsx:87,117`), so the root hands out a unique one. The
+  // empty string is not a key: `collection-layout` reads it as "no section".
   const id = local.id;
-  const value = local.value !== undefined ? local.value : collectionItem?.value;
-  const key = resolveSectionKey(id, value, collectionItem?.index);
+  const value = local.value !== undefined ? local.value : collectionItem?.value();
+  const resolvedKey = resolveSectionKey(
+    id,
+    value,
+    collectionItem ? collectionItem.index() : undefined,
+  );
+  const key = resolvedKey !== "" ? resolvedKey : list.createSectionKey();
 
   const sectionItems = signal<readonly ListBoxItemDescriptor[]>([]);
 
@@ -142,7 +152,10 @@ export function ListBoxSectionRoot<T>(
     type: "section",
     key,
     textValue: () => local["aria-label"] ?? local.accessibilityLabel ?? "",
-    children: () => sectionItems(),
+    // The group's `<Each>` row index, so a reordered dynamic section keeps its
+    // place in the data order.
+    order: collectionItem?.index,
+    children: () => sortByRenderedOrder(sectionItems()),
   };
 
   cleanup(list.register(descriptor));
@@ -168,32 +181,22 @@ export function ListBoxSectionRoot<T>(
     local.onLayout?.(event);
   };
 
-  // One read of `props.children` at the placement; with `items`, the function
-  // child runs once per entry and each row learns its value and index.
-  const renderContent = (): JSX.Element => {
-    const children = local.children;
-    const items = local.items;
+  // One read of `props.children` at the placement. A dynamic Section mirrors
+  // the root: `items` is read by the `<Each>` itself (a JSX expression, so it
+  // follows the prop), rows are keyed by the entry's identity, and a row's
+  // content is rebuilt from its item where the row goes.
+  const hasItems = computed(() => local.items != null);
 
-    if (items != null && typeof children === "function") {
-      return (
-        <Each<T> of={items} key="index">
-          {(item, index) => (
-            <CollectionItemContext.Provider
-              value={{ value: item(), index: index() }}
-            >
-              {renderChildren(
-                (children as (value: T, position: number) => JSX.Element)(
-                  item(),
-                  index(),
-                ),
-              )}
-            </CollectionItemContext.Provider>
-          )}
-        </Each>
-      );
+  const renderRow = (item: T, index: number): JSX.Element => {
+    const children = local.children;
+
+    if (typeof children !== "function") {
+      return null;
     }
 
-    return renderChildren(children as JSX.Element);
+    return renderChildren(
+      (children as (value: T, position: number) => JSX.Element)(item, index),
+    );
   };
 
   return (
@@ -213,7 +216,16 @@ export function ListBoxSectionRoot<T>(
         style={resolvedStyle()}
         onLayout={handleLayout}
       >
-        {renderContent()}
+        <If when={hasItems()}>
+          <Each of={local.items} key={collectionItemKey}>
+            {(item, index) => (
+              <CollectionItemContext.Provider value={{ value: item, index }}>
+                {renderRow(item(), untracked(() => index()))}
+              </CollectionItemContext.Provider>
+            )}
+          </Each>
+        </If>
+        <If when={!hasItems()}>{renderChildren(local.children as JSX.Element)}</If>
       </View>
     </ListBoxSectionContext.Provider>
   );

@@ -16,6 +16,7 @@ import {
   setAccessibilityFocus,
   signal,
   split,
+  untracked,
   View,
 } from "nsh";
 
@@ -28,15 +29,18 @@ import {
   type ListState,
   type SelectionBehavior,
   type SelectionMode,
+  type SelectionModifiers,
   type SelectionValue,
 } from "../../primitives";
 import { renderChildren } from "./children";
 import {
   CollectionItemContext,
+  collectionItemKey,
   ListBoxContext,
   type ListBoxContextValue,
   type ListBoxDescriptor,
   type ListBoxItemDescriptor,
+  sortByRenderedOrder,
 } from "./list-box-context";
 import { listboxVariants, type ListBoxVariants } from "./list-box.styles";
 
@@ -301,7 +305,9 @@ export function ListBoxRoot<T>(
 
   // Research 4.2: parts register themselves with the nearest owner, and the
   // registry becomes the primitive's data source. A section descriptor carries
-  // its options so `buildNodes` expands the hierarchy.
+  // its options so `buildNodes` expands the hierarchy. Registration order is
+  // creation order, so a dynamic collection is sorted back into data order
+  // through each row's `order` accessor (its `<Each>` index signal).
   const descriptors = signal<readonly ListBoxDescriptor[]>([]);
 
   const register = (descriptor: ListBoxDescriptor) => {
@@ -312,7 +318,18 @@ export function ListBoxRoot<T>(
     };
   };
 
-  const dataSource = computed(() => descriptors().map(descriptorToData));
+  const dataSource = computed(() =>
+    sortByRenderedOrder(descriptors()).map(descriptorToData),
+  );
+
+  // A static Section without `id` still needs a key: React Aria derives one
+  // from the section's position (`list-box.stories.tsx:87,117`). The root
+  // hands out one per Section, prefixed with a NUL byte so it can never take
+  // an item's key; the layout store and the item's `sectionKey` use it too.
+  let generatedSectionCount = 0;
+
+  const createSectionKey = () =>
+    `\u0000nsh-listbox-section:${generatedSectionCount++}`;
 
   const isDisabledKey = (key: string) => {
     const keys = local.disabledKeys;
@@ -351,6 +368,25 @@ export function ListBoxRoot<T>(
 
   /** Focuses the root, the only Tab stop; a no-op where code focus is not offered. */
   const focusRoot = () => {
+    rootNode?.focus();
+  };
+
+  // A pointer press gives the root no native focus, so the port focuses it for
+  // the arrows to keep working (macOS / web). That focus event is not keyboard
+  // focus: the flag tells `handleFocus` to keep the pointer modality, which is
+  // what `:focus-visible` would do upstream (`list-box-item.css:37-39`).
+  // `ViewRef.focus()` only moves a view's keyboard focus on macOS and the web
+  // (`nsh/types.d.ts`), so elsewhere the flag would never be consumed; do not
+  // set it where no focus event can arrive.
+  const canFocusViews = platform.os === "macos" || platform.os === "web";
+  let pointerFocusPending = false;
+
+  const focusRootFromPointer = () => {
+    if (!canFocusViews) {
+      return;
+    }
+
+    pointerFocusPending = true;
     rootNode?.focus();
   };
 
@@ -420,6 +456,7 @@ export function ListBoxRoot<T>(
   const activateFocused = (
     source: "pointer" | "keyboard",
     event?: PressEvent,
+    modifiers?: SelectionModifiers,
   ) => {
     const key = manager().focusedKey();
 
@@ -427,17 +464,24 @@ export function ListBoxRoot<T>(
       return;
     }
 
-    findItemDescriptor(descriptors(), key)?.activate(source, event);
+    findItemDescriptor(descriptors(), key)?.activate(source, event, modifiers);
   };
 
-  const runKey = (key: string) => {
+  const runKey = (key: string, modifiers?: SelectionModifiers) => {
     modality.setKeyboardModality();
-    selectableList.onKeyDown(key);
+    selectableList.onKeyDown(key, modifiers);
   };
 
   const handleFocus = () => {
     rootFocused.set(true);
-    modality.onFocus();
+
+    if (pointerFocusPending) {
+      // A press focused the root; the modality stays pointer, so no ring.
+      pointerFocusPending = false;
+    } else {
+      modality.onFocus();
+    }
+
     selectableList.onFocusIn();
     local.onFocus?.();
   };
@@ -487,32 +531,87 @@ export function ListBoxRoot<T>(
   // has the focus, and dropped on blur or unmount (createKeymapScope). Enter /
   // Space stay unbound on macOS and the web: the host delivers them as the
   // focused view's press, and a binding would consume them first.
+  //
+  // Keymap matches the modifiers exactly, so the Shift and Control forms of a
+  // shortcut are separate bindings (`nsh/index.d.ts` `Keymap`). React Aria
+  // reads `shiftKey` / ctrl-or-meta from the event; here the binding is the
+  // only place that knows them, so each one forwards its own modifiers
+  // (Kobalte `create-selectable-collection.ts:157-158, 265-268, 286-289, 317`).
   const navigationBindings: Record<string, () => void> = {
     down: () => runKey("down"),
+    "shift+down": () => runKey("down", { shift: true }),
     up: () => runKey("up"),
+    "shift+up": () => runKey("up", { shift: true }),
     left: () => runKey("left"),
+    "shift+left": () => runKey("left", { shift: true }),
     right: () => runKey("right"),
+    "shift+right": () => runKey("right", { shift: true }),
     home: () => runKey("home"),
+    "shift+home": () => runKey("home", { shift: true }),
     end: () => runKey("end"),
+    "shift+end": () => runKey("end", { shift: true }),
     pageup: () => runKey("pageup"),
+    "shift+pageup": () => runKey("pageup", { shift: true }),
     pagedown: () => runKey("pagedown"),
+    "shift+pagedown": () => runKey("pagedown", { shift: true }),
   };
-
-  if (local.escapeKeyBehavior !== "none") {
-    navigationBindings.escape = () => runKey("escape");
-  }
 
   // The Windows exception: the host reports Return / Space as a press only on
   // macOS and the web, so Windows resolves them through the same activation.
+  // Shift+Return / Shift+Space extend the selection, as the press modifiers
+  // do upstream.
   if (platform.os === "windows") {
     navigationBindings.enter = () => activateFocused("keyboard");
+    navigationBindings["shift+enter"] = () =>
+      activateFocused("keyboard", undefined, { shift: true });
     navigationBindings.space = () => activateFocused("keyboard");
+    navigationBindings["shift+space"] = () =>
+      activateFocused("keyboard", undefined, { shift: true });
   }
+
+  // `isCtrlKeyPressed` wants `platform` on Apple and `control` elsewhere; the
+  // web target cannot tell the browser's OS, so there both must work.
+  const selectAllModifiers = (): SelectionModifiers =>
+    platform.os === "web"
+      ? { control: true }
+      : platform.os === "macos" || platform.os === "ios"
+        ? { platform: true }
+        : { control: true };
+
+  const commandBindings: Record<string, () => void> = {
+    "ctrl+a": () => runKey("a", { control: true }),
+    "mod+a": () => runKey("a", selectAllModifiers()),
+  };
+
+  // Kobalte's type-select takes any single character
+  // (`create-type-select.ts:42-47`); keymap has a name per printable key, so
+  // the punctuation of the US layout is bound too. Space stays out: on the web
+  // and macOS it is the focused view's activation press, and a binding would
+  // consume it (`_common` "NSH component rules", last paragraph). A shifted
+  // character (`?`, `!`) is a different keystroke and is not bound: the
+  // typeahead is narrower than upstream's on Shift.
+  const PUNCTUATION: ReadonlyArray<[keystroke: string, character: string]> = [
+    ["minus", "-"],
+    ["plus", "="],
+    ["[", "["],
+    ["]", "]"],
+    ["\\", "\\"],
+    [";", ";"],
+    ["'", "'"],
+    [",", ","],
+    [".", "."],
+    ["/", "/"],
+    ["`", "`"],
+  ];
 
   const printableBindings: Record<string, () => void> = {};
 
   for (const key of "abcdefghijklmnopqrstuvwxyz0123456789") {
     printableBindings[key] = () => runKey(key);
+  }
+
+  for (const [keystroke, character] of PUNCTUATION) {
+    printableBindings[keystroke] = () => runKey(character);
   }
 
   createKeymapScope({
@@ -523,7 +622,20 @@ export function ListBoxRoot<T>(
 
   createKeymapScope({
     isActive: rootFocused,
+    bindings: commandBindings,
+  });
+
+  createKeymapScope({
+    isActive: rootFocused,
     bindings: printableBindings,
+  });
+
+  // `escapeKeyBehavior` is a prop, so the binding is its own scope: flipping it
+  // while the list is focused re-binds or drops Escape instead of keeping the
+  // value read at mount.
+  createKeymapScope({
+    isActive: () => rootFocused() && local.escapeKeyBehavior !== "none",
+    bindings: { escape: () => runKey("escape") },
   });
 
   // The screen reader follows the focused key, the stand-in for
@@ -569,6 +681,8 @@ export function ListBoxRoot<T>(
     isDisabledKey,
     onAction: (key) => local.onAction?.(key),
     focusRoot,
+    focusRootFromPointer,
+    createSectionKey,
     notePointer: () => modality.setPointerModality(),
     keyboardPressedKey,
     registerItemLayout: selectableList.registerItemLayout,
@@ -578,32 +692,25 @@ export function ListBoxRoot<T>(
   };
 
   // The plan's §5 children rule: Root provides a context, so `props.children`
-  // is read here, at the placement inside the provider, exactly once per
-  // evaluation. With `items`, the function child runs once per entry.
-  const renderContent = (): JSX.Element => {
-    const children = local.children;
-    const items = local.items;
+  // is read at the placement inside the provider, once per evaluation. The
+  // read must be a JSX child expression, not a body local or an `If` `else`
+  // element: only a binding re-reads it, so an `<If>` child added later, or a
+  // changed render function, reaches the tree (each read builds new views).
+  const hasItems = computed(() => local.items != null);
 
-    if (items != null && typeof children === "function") {
-      return (
-        <Each<T> of={items} key="index">
-          {(item, index) => (
-            <CollectionItemContext.Provider
-              value={{ value: item(), index: index() }}
-            >
-              {renderChildren(
-                (children as (value: T, position: number) => JSX.Element)(
-                  item(),
-                  index(),
-                ),
-              )}
-            </CollectionItemContext.Provider>
-          )}
-        </Each>
-      );
+  // One row of the dynamic collection. `item()` is read where the row goes, so
+  // a positional row (an object with no id) rebuilds its content when the data
+  // at its index changes; an identity-keyed row never sees another item.
+  const renderRow = (item: T, index: number): JSX.Element => {
+    const children = local.children;
+
+    if (typeof children !== "function") {
+      return null;
     }
 
-    return renderChildren(children as JSX.Element);
+    return renderChildren(
+      (children as (value: T, position: number) => JSX.Element)(item, index),
+    );
   };
 
   const showEmpty = () =>
@@ -638,9 +745,22 @@ export function ListBoxRoot<T>(
         onPressUp={handlePressUp}
         onLayout={handleLayout}
       >
-        <If when={showEmpty()} else={renderContent()}>
-          {local.renderEmptyState?.(renderProps)}
+        {/* RAC draws the empty state only while the collection is empty
+            (ListBox.tsx:385-391); a function child is called when the branch
+            shows, so `renderEmptyState` never runs for a filled list. */}
+        <If when={showEmpty()}>
+          {() => local.renderEmptyState?.(renderProps)}
         </If>
+        <If when={hasItems()}>
+          <Each of={local.items} key={collectionItemKey}>
+            {(item, index) => (
+              <CollectionItemContext.Provider value={{ value: item, index }}>
+                {renderRow(item(), untracked(() => index()))}
+              </CollectionItemContext.Provider>
+            )}
+          </Each>
+        </If>
+        <If when={!hasItems()}>{renderChildren(local.children as JSX.Element)}</If>
       </View>
     </ListBoxContext.Provider>
   );

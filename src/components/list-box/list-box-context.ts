@@ -6,6 +6,7 @@ import type {
   SelectionBehavior,
   SelectionManager,
   SelectionMode,
+  SelectionModifiers,
 } from "../../primitives";
 import type { ListBoxItemRenderProps } from "./list-box-item";
 
@@ -24,6 +25,15 @@ export interface ListBoxItemDescriptor {
   /** Typeahead text, read when the collection is rebuilt. */
   textValue: () => string;
 
+  /**
+   * The row's position in a dynamic collection (its `index` accessor, which
+   * follows a row that moves). Parts register in creation order, so a
+   * reordered `items` list is put back into data order by sorting on this
+   * before the collection is built. Static children have no order and keep
+   * the order their components were written in.
+   */
+  order?: () => number;
+
   /** Whether the option is disabled (its own `isDisabled` or `disabledKeys`). */
   disabled: () => boolean;
 
@@ -34,8 +44,14 @@ export interface ListBoxItemDescriptor {
    * The one activation entry: a pointer press, Return / Space on the focused
    * root, and the Windows key binding all arrive here. It selects when the
    * primitive allows it, otherwise reports the action (port sheet section 5).
+   * `modifiers` carries what the keystroke was pressed with (Shift, Control,
+   * Command), so a keymap binding keeps React Aria's extend / toggle rules.
    */
-  activate: (source: "pointer" | "keyboard", event?: PressEvent) => void;
+  activate: (
+    source: "pointer" | "keyboard",
+    event?: PressEvent,
+    modifiers?: SelectionModifiers,
+  ) => void;
 }
 
 /** One registered group; `children` lets the collection expand the hierarchy. */
@@ -48,11 +64,55 @@ export interface ListBoxSectionDescriptor {
   /** The group name; only `aria-label` can supply it (port sheet section 5). */
   textValue: () => string;
 
+  /** The group's position in a dynamic collection, as an item's `order`. */
+  order?: () => number;
+
   /** The options registered inside this section. */
   children: () => readonly ListBoxItemDescriptor[];
 }
 
+/**
+ * Put a registry back into rendered order: a dynamic row's `order` is its
+ * `index` accessor, which `<Each>` keeps current when a keyed row moves; a
+ * static part has none and stays where it was written (its registration
+ * sequence). Reading `order()` here subscribes the caller, so the collection is
+ * rebuilt when `items` is reordered.
+ */
+export function sortByRenderedOrder<T extends { order?: () => number }>(
+  descriptors: readonly T[],
+): T[] {
+  return descriptors
+    .map((descriptor, sequence) => ({
+      descriptor,
+      sequence,
+      order: descriptor.order?.(),
+    }))
+    .sort((a, b) =>
+      a.order != null && b.order != null ? a.order - b.order : a.sequence - b.sequence,
+    )
+    .map((entry) => entry.descriptor);
+}
+
 export type ListBoxDescriptor = ListBoxItemDescriptor | ListBoxSectionDescriptor;
+
+/**
+ * The row identity of one `items` entry, as React Aria's collection builder
+ * derives it: the object's `id`, else its `key`, else its position; a string
+ * or number is its own key. It keys the `<Each>` rows of a dynamic collection,
+ * so a reordered list moves rows instead of rebuilding them, while an object
+ * with no id is positional, exactly as upstream
+ * (`react-aria-components/src/ListBox.tsx:513`).
+ */
+export function collectionItemKey(item: unknown, index: number): unknown {
+  if (item != null && typeof item === "object") {
+    const record = item as { id?: unknown; key?: unknown };
+    const derived = record.id ?? record.key;
+
+    return derived ?? index;
+  }
+
+  return item ?? index;
+}
 
 /** What a ListBox root provides to every Item, Section and Indicator. */
 export interface ListBoxContextValue {
@@ -94,6 +154,16 @@ export interface ListBoxContextValue {
   /** Focuses the root: the one Tab stop (macOS / web). */
   focusRoot: () => void;
 
+  /**
+   * Focuses the root from a pointer press. The focus event that follows is not
+   * keyboard focus, so the root keeps the pointer modality (no focus ring);
+   * it is the port's stand-in for `:focus-visible` on a click-focused list.
+   */
+  focusRootFromPointer: () => void;
+
+  /** A fresh, non-empty key for a static Section that was given no `id`. */
+  createSectionKey: () => string;
+
   /** Records a pointer interaction on the root's modality tracker. */
   notePointer: () => void;
 
@@ -129,11 +199,16 @@ export const ListBoxSectionContext = context<
  * React Aria's `CollectionItem` node provides it. The Item derives its key and
  * value from it when its own props omit them
  * (`react-aria-components/src/ListBox.tsx:513`, `:519-521`).
+ *
+ * Both members are the `<Each>` row's accessors, not snapshots: a keyed row
+ * that moves keeps its item and gets a new index, and a positional row keeps
+ * its place and gets a new item. Reading them where the value is needed (the
+ * key, the descriptor's order) keeps the collection in step.
  */
 export interface CollectionItemContextValue {
-  value: any;
+  value: Accessor<any>;
 
-  index: number;
+  index: Accessor<number>;
 }
 
 export const CollectionItemContext = context<

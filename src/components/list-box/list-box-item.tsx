@@ -13,9 +13,11 @@ import { cleanup, computed, signal, split, View } from "nsh";
 
 import {
   createSelectableItem,
+  isKeyboardPress,
   modifiersFromPress,
   type SelectionBehavior,
   type SelectionMode,
+  type SelectionModifiers,
 } from "../../primitives";
 import { DescriptionContext } from "../description/context";
 import type { DescriptionContextValue } from "../description/context";
@@ -253,10 +255,18 @@ export function ListBoxItemRoot<T>(
   const collectionItem = CollectionItemContext();
 
   // Identity values are read once on purpose: the key must not move under the
-  // row while the collection is live (port sheet section 2).
+  // row while the collection is live (port sheet section 2). The dynamic
+  // collection's value and index are accessors: a positional row gets a new
+  // value in place, and its content is rebuilt from it by the root.
   const id = local.id;
-  const value = local.value !== undefined ? local.value : collectionItem?.value;
-  const key = resolveKey(id, value, collectionItem?.index, local.textValue);
+  const value =
+    local.value !== undefined ? local.value : collectionItem?.value();
+  const key = resolveKey(
+    id,
+    value,
+    collectionItem ? collectionItem.index() : undefined,
+    local.textValue,
+  );
 
   const variant = computed(() => local.variant ?? "default");
   const selectionManager = list.selectionManager;
@@ -351,6 +361,7 @@ export function ListBoxItemRoot<T>(
   const activate = (
     source: "pointer" | "keyboard",
     event?: PressEvent,
+    modifiers?: SelectionModifiers,
   ) => {
     if (selectable.isDisabled()) {
       return;
@@ -358,11 +369,17 @@ export function ListBoxItemRoot<T>(
 
     if (selectable.allowsSelection()) {
       if (source === "pointer") {
-        selectable.onPress(event);
+        // The selection already ran on press down or up; the release is only
+        // the action half. With no event (a Label's forwarded press), there
+        // is nothing left to do: `onPress()` without an event is the keyboard
+        // activation and would select a second time.
+        if (event) {
+          selectable.onPress(event);
+        }
       } else {
         selectable.onKeyDown(
           "enter",
-          event ? modifiersFromPress(event) : undefined,
+          modifiers ?? (event ? modifiersFromPress(event) : undefined),
         );
       }
 
@@ -376,6 +393,10 @@ export function ListBoxItemRoot<T>(
     type: "item",
     key,
     textValue: () => textValue(),
+    // Its `<Each>` row's index signal, read when the collection is built: a
+    // keyed row that moves reports its new position, so the registry order
+    // follows the data rather than the order rows were created in.
+    order: collectionItem?.index,
     disabled: () => local.isDisabled === true || list.isDisabledKey(key),
     ref: () => node,
     activate,
@@ -400,37 +421,62 @@ export function ListBoxItemRoot<T>(
     registerIndicator,
   };
 
-  const handlePressDown = (event: PressEvent) => {
+  // The row's press handlers serve both a real press event and the Label's
+  // forwarded press, which has no payload (the Label is `pointer-events-none`
+  // upstream, so a press on it is a press on the row). With no event the
+  // pointer path is implied: `onPress` must not fall into its keyboard branch,
+  // or a second selection would run on release.
+  const handlePressDown = (event?: PressEvent) => {
+    if (event && isKeyboardPress(event)) {
+      return;
+    }
+
+    // The pointer modality first: a press on an already focused row must drop
+    // the keyboard ring even though no new focus event follows.
     list.notePointer();
 
     if (!selectable.isDisabled()) {
       pointerPressed.set(true);
       // macOS / web: give the root the focus so the arrows keep working after
-      // a click; elsewhere `focus()` does nothing (port sheet section 8).
-      list.focusRoot();
+      // a click; elsewhere `focus()` does nothing (port sheet section 8). The
+      // focus is press-driven, so the root keeps the pointer modality.
+      list.focusRootFromPointer();
     }
 
     selectable.onPressDown(event);
-    local.onPressStart?.(event);
-    local.onPressDown?.(event);
+    if (event) {
+      local.onPressStart?.(event);
+      local.onPressDown?.(event);
+    }
     local.onPressChange?.(true);
   };
 
-  const handlePressUp = (event: PressEvent) => {
+  const handlePressUp = (event?: PressEvent) => {
+    if (event && isKeyboardPress(event)) {
+      return;
+    }
+
     if (pointerPressed()) {
       pointerPressed.set(false);
       local.onPressChange?.(false);
     }
 
     selectable.onPressUp(event);
-    local.onPressUp?.(event);
-    local.onPressEnd?.(event);
+    if (event) {
+      local.onPressUp?.(event);
+      local.onPressEnd?.(event);
+    }
   };
 
-  const handlePress = (event: PressEvent) => {
+  const handlePress = (event?: PressEvent) => {
     pointerPressed.set(false);
-    activate("pointer", event);
-    local.onPress?.(event);
+    activate(
+      event && isKeyboardPress(event) ? "keyboard" : "pointer",
+      event,
+    );
+    if (event) {
+      local.onPress?.(event);
+    }
   };
 
   const handleLongPress = (event: PressEvent) => {
@@ -512,11 +558,12 @@ export function ListBoxItemRoot<T>(
         return;
       }
 
-      if (selectable.allowsSelection()) {
-        selectable.onPressDown();
-      } else {
-        fireAction();
-      }
+      // Upstream's Label is `pointer-events-none`, so a press on it is a press
+      // on the row: run the item's whole activation path, down, up and press.
+      // The Label's own press carries no payload, which the handlers accept.
+      handlePressDown();
+      handlePressUp();
+      handlePress();
     },
   };
 
