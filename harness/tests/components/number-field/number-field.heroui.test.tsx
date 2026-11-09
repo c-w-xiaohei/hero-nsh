@@ -132,6 +132,79 @@ test("T-008 should support maxValue and invalid state", async () => {
   expect(app.enabled("id:nf-inc")).toBe(false);
 });
 
+// Regression X-001, evidence:
+//   src/components/number-field/create-number-field-state.ts:469-519 (stepFrom / canStep)
+//   src/components/number-field/create-number-field-state.ts:272 (numberValue)
+// Upstream: @react-stately/numberfield/src/useNumberFieldState.ts:243-265 (safeNextStep
+// starts from parsedValue; an empty field lands on minValue / maxValue) and :308-330
+// (canIncrement / canDecrement read parsedValue).
+test("X-001 steps from the parsed input text, not the last committed value", async () => {
+  // An empty field with minValue 0 increments onto minValue itself, as upstream does.
+  let app = await openCase("log", { minValue: 0 });
+  await app.press("id:nf-input");
+  await app.keyboard.press("arrowup");
+  expect(app.value("id:nf-input")).toBe("0");
+
+  // An empty field with maxValue 100 decrements onto maxValue itself.
+  app = await openCase("log", { maxValue: 100 });
+  await app.press("id:nf-input");
+  await app.keyboard.press("arrowdown");
+  expect(app.value("id:nf-input")).toBe("100");
+
+  // A step after typing continues from the text in the field (57), not from the
+  // committed value (5), whose step would land on 6.
+  app = await openCase("log", { defaultValue: 5, minValue: 0 });
+  expect(app.value("id:nf-input")).toBe("5");
+  await app.type("id:nf-input", "7");
+  expect(app.value("id:nf-input")).toBe("57");
+  await app.keyboard.press("arrowup");
+  expect(app.value("id:nf-input")).toBe("58");
+
+  // canDecrement reads the parsed text too: 0 at minValue 0 disables the button,
+  // while the committed 5 would leave it enabled.
+  app = await openCase("log", { defaultValue: 5, minValue: 0 });
+  await app.clear("id:nf-input");
+  await app.type("id:nf-input", "0");
+  expect(app.value("id:nf-input")).toBe("0");
+  expect(app.enabled("id:nf-dec")).toBe(false);
+});
+
+// Regression X-002, evidence:
+//   src/components/number-field/create-number-field-state.ts:242-268 (initial snap)
+// Upstream: @react-stately/numberfield/src/useNumberFieldState.ts:147-153 snaps a
+// controlled value and, only under commitBehavior "snap", defaultValue in render.
+// The snap writes no onChange.
+test("X-002 snaps the initial value in render and leaves validate defaults raw", async () => {
+  // Controlled value -5, minValue 0: clamps to 0 without a step.
+  let app = await openCase("snap", { controlled: true, minValue: 0, value: -5 });
+  expect(app.value("id:nf-input")).toBe("0");
+  expect(callsOf(app, "onChange")).toHaveLength(0);
+
+  // Controlled value 1.5, step 0.1, maxValue 1: snaps then clamps to 1 (100%).
+  app = await openCase("snap", {
+    controlled: true,
+    maxValue: 1,
+    minValue: 0,
+    percent: true,
+    step: 0.1,
+    value: 1.5,
+  });
+  expect(app.value("id:nf-input")).toBe("100%");
+
+  // Controlled value 1.5, step 1: snaps to the nearest step (2).
+  app = await openCase("snap", { controlled: true, step: 1, value: 1.5 });
+  expect(app.value("id:nf-input")).toBe("2");
+  expect(callsOf(app, "onChange")).toHaveLength(0);
+
+  // defaultValue snaps under the default commitBehavior "snap"...
+  app = await openCase("snap", { defaultValue: 1.5, step: 1 });
+  expect(app.value("id:nf-input")).toBe("2");
+
+  // ...but stays raw under "validate".
+  app = await openCase("snap", { commitBehavior: "validate", defaultValue: 1.5, step: 1 });
+  expect(app.value("id:nf-input")).toBe("1.5");
+});
+
 // heroui/packages/react/tests/components/number-field/number-field.test.tsx:178
 // Partial port of T-009: the root `data-disabled` attribute is dropped. The
 // input does not take input and the increment button reports no change.

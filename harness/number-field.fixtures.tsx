@@ -47,6 +47,10 @@ import { probe } from "@scenario/probe";
  *                      true; locale comes from `open` (T-050…T-053)
  *   cleared            no default value, onChange probe: the clearing contract
  *                      of port sheet §2 / §5
+ *   snap               controlled `value` (params controlled) or `defaultValue`,
+ *                      with minValue / maxValue / step / percent /
+ *                      commitBehavior params and an onChange probe: the
+ *                      initial snap in render (X-002)
  */
 
 type FieldProps = {
@@ -392,6 +396,37 @@ function ClearedCase() {
   );
 }
 
+/* Controlled value or defaultValue with the bounds, step and commitBehavior
+ * that decide the initial snap. Probes onChange so the snap cannot sneak a
+ * commit in (X-002). */
+function SnapCase() {
+  const controlled = host.params.controlled === true;
+  const validate = host.params.commitBehavior === "validate";
+
+  return (
+    <Stage>
+      <NumberField
+        commitBehavior={validate ? "validate" : "snap"}
+        defaultValue={controlled ? undefined : numberParam("defaultValue")}
+        formatOptions={host.params.percent === true ? { style: "percent" } : undefined}
+        maxValue={numberParam("maxValue")}
+        minValue={numberParam("minValue")}
+        name="width"
+        onChange={probe("onChange")}
+        step={numberParam("step")}
+        value={controlled ? numberParam("value") : undefined}
+      >
+        <Label>Width</Label>
+        <NumberField.Group testID="nf-group">
+          <NumberField.DecrementButton testID="nf-dec" />
+          <NumberField.Input testID="nf-input" />
+          <NumberField.IncrementButton testID="nf-inc" />
+        </NumberField.Group>
+      </NumberField>
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "parts");
 
@@ -413,6 +448,7 @@ function Fixture() {
   if (name === "bounds") return <BoundsCase />;
   if (name === "decimal") return <DecimalCase />;
   if (name === "cleared") return <ClearedCase />;
+  if (name === "snap") return <SnapCase />;
 
   return <PartsCase />;
 }
