@@ -1,4 +1,4 @@
-import { Canvas, computed, Path2D, split, token, View } from "nsh";
+import { Canvas, computed, Path2D, split, View } from "nsh";
 import type {
   AccessibilityRole,
   CanvasRenderingContext2D,
@@ -7,6 +7,7 @@ import type {
   ViewProps,
 } from "nsh";
 
+import { themeToken } from "../../theme";
 import { spinnerVariants, type SpinnerVariants } from "./spinner.styles";
 
 /* -------------------------------------------------------------------------------------------------
@@ -235,7 +236,7 @@ export function SpinnerRoot(props: SpinnerRootProps): JSX.Element {
   const paint = computed(() => {
     const color = local.color ?? "accent";
 
-    return color === "current" ? token("foreground") : token(color);
+    return color === "current" ? themeToken("foreground") : themeToken(color);
   });
 
   return (

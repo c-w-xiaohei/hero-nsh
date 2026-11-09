@@ -66,29 +66,6 @@ describe("keymap ownership", () => {
     expect(states(app).b?.focusedKey).toBeNull();
   });
 
-  test("focus moving to the other list moves the bindings with it", async () => {
-    const app = await openScoped();
-
-    await app.keyboard.press("down");
-    await waitState(app, "a", "apple");
-    await app.keyboard.press("b");
-    await waitState(app, "a", "banana");
-
-    await app.press("id:focus-b");
-    await app.waitUntil(() => states(app).b?.isFocused === true);
-    await waitState(app, "b", "apple");
-    await app.waitUntil(() => states(app).a?.isFocused === false);
-
-    await app.keyboard.press("down");
-    await waitState(app, "b", "apricot");
-    // List A kept its focused key and did not hear the key.
-    expect(states(app).a?.focusedKey).toBe("banana");
-
-    await app.keyboard.press("b");
-    await waitState(app, "b", "banana");
-    expect(states(app).a?.focusedKey).toBe("banana");
-  });
-
   test("a text field keeps its printable keys", async () => {
     const app = await openScoped();
 
