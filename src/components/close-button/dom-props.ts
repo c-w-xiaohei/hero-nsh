@@ -68,6 +68,9 @@ export interface GlobalDomProps {
   hidden?: boolean;
   inert?: boolean;
   translate?: "yes" | "no";
+
+  /** A React-only hydration flag upstream; NSH has no hydration, accepted and dropped. */
+  suppressHydrationWarning?: boolean;
 }
 
 /**
@@ -93,6 +96,7 @@ export interface GlobalDomEvents {
   onDoubleClickCapture?: IgnoredEventHandler;
   onMouseDown?: IgnoredEventHandler;
   onMouseDownCapture?: IgnoredEventHandler;
+  onMouseMoveCapture?: IgnoredEventHandler;
   onMouseUp?: IgnoredEventHandler;
   onMouseUpCapture?: IgnoredEventHandler;
   onMouseOver?: IgnoredEventHandler;

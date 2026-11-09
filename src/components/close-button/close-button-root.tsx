@@ -69,7 +69,7 @@ export interface CloseButtonRootProps
   /** Accepts or blocks presses, hover and the focus ring; `aria-disabled` folds in. */
   isDisabled?: boolean;
 
-  /** Blocks presses and hover and reports unavailable while staying focusable. */
+  /** Blocks presses and hover while staying focusable, as RAC's `isPending` does. */
   isPending?: boolean;
 
   /** Focuses the button after it mounts. */
@@ -272,18 +272,24 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
     props.onPressChange?.(true);
   };
 
+  // RAC's release order (usePress.ts:252-285, `triggerPressEnd` called after
+  // `triggerPressUp`): `onPressUp`, then `onPressEnd`, then `onPressChange(false)`
+  // with the pressed state, then `onPress` / `onClick` on the same release
+  // (`handlePress` runs after this host event).
   const handlePressUp = (event: PressEvent) => {
+    const blocked = isBlocked();
+
+    if (!blocked) {
+      props.onPressUp?.(event);
+      props.onPressEnd?.(event);
+    }
+
+    // Still clears a press that started before the button became blocked, so
+    // `isPressed` cannot stay stuck true.
     if (isPressed()) {
       isPressed.set(false);
       props.onPressChange?.(false);
     }
-
-    if (isBlocked()) {
-      return;
-    }
-
-    props.onPressUp?.(event);
-    props.onPressEnd?.(event);
   };
 
   const handleMouseEnter = (event: NshMouseEvent) => {
@@ -337,14 +343,19 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
     }
   });
 
-  // R-008: a pending button stays focusable but reads as unavailable; R-007's
-  // disabled state does the same, and `View.disabled` blocks the press.
+  // R-007: `isDisabled` is the state a view reports as unavailable. R-008's
+  // pending look reuses R-007's declarations, but pending must NOT reach
+  // `accessibilityState.disabled`: NSH drops a view that reports disabled from
+  // the focus system, while RAC's `isPending` retains focusability
+  // (Button.tsx:89-93). Pending's screen-reader announcement is a registered
+  // §5 difference; `View.disabled` and the `isBlocked()` guards keep press and
+  // hover blocked.
   const accessibilityState = computed<AccessibilityState>(() => {
     const own = props.accessibilityState ?? {};
 
     return {
       ...own,
-      disabled: isBlocked() || own.disabled === true,
+      disabled: isDisabled() || own.disabled === true,
       expanded: foldBoolean(props["aria-expanded"]) ?? own.expanded,
       pressed: foldPressed(props["aria-pressed"]) ?? own.pressed,
       current: foldCurrent(props["aria-current"]) ?? own.current,
