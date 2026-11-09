@@ -1,7 +1,15 @@
 /*
  * HeroUI's EmptyState sits on a `div`, so its props include the element's ARIA
- * and global attributes. NSH has no DOM and no element relationships, so these
- * are accepted for API parity and have no effect: the values are never read.
+ * and global attributes. NSH has no DOM, but it does model an accessible name,
+ * a hidden subtree and an element state, so the ARIA attributes with a
+ * counterpart are mapped by `empty-state.tsx`: `aria-label` →
+ * `accessibilityLabel`, `aria-hidden` → `accessibilityElementsHidden`, and
+ * `aria-disabled` / `aria-busy` / `aria-checked` / `aria-expanded` /
+ * `aria-pressed` / `aria-selected` / `aria-current` →
+ * `accessibilityState`. The rest (the cross-element relations and the
+ * attributes NSH has no field for) are accepted for API parity and read by
+ * nothing, so they never reach the root `View` (which would report them as
+ * unsupported).
  *
  * This is a local copy of `src/components/kbd/kbd-dom-props.ts`, which the
  * port sheet §5 proposes lifting into `src/primitives/dom-props.ts`. The unit
@@ -9,8 +17,56 @@
  * instructs.
  */
 
-/** Every `aria-*` attribute, ignored at runtime. */
+import type { AccessibilityState } from "nsh";
+
+/**
+ * Every `aria-*` attribute. The ones NSH models are declared below and mapped
+ * by the root; the index signature keeps the rest accepted and ignored.
+ */
 export interface AriaProps {
+  /** The accessible name; wins over a caller `accessibilityLabel`, as a spread attribute wins upstream. */
+  "aria-label"?: string;
+
+  /** Hides the view and its subtree from assistive technology; maps to `accessibilityElementsHidden`. */
+  "aria-hidden"?: boolean;
+
+  /** Maps to `accessibilityState.disabled`. */
+  "aria-disabled"?: boolean;
+
+  /** Maps to `accessibilityState.busy`. */
+  "aria-busy"?: boolean;
+
+  /** Maps to `accessibilityState.checked`. */
+  "aria-checked"?: boolean | "mixed";
+
+  /** Maps to `accessibilityState.expanded`. */
+  "aria-expanded"?: boolean;
+
+  /** Maps to `accessibilityState.pressed`. */
+  "aria-pressed"?: boolean | "mixed";
+
+  /** Maps to `accessibilityState.selected`. */
+  "aria-selected"?: boolean;
+
+  /** Maps to `accessibilityState.current`. */
+  "aria-current"?: AccessibilityState["current"];
+
+  /** Accepted, no effect: NSH has no cross-element references. */
+  "aria-labelledby"?: string;
+
+  /** Accepted, no effect: NSH has no cross-element references. */
+  "aria-describedby"?: string;
+
+  /** Accepted, no effect: NSH has no cross-element references. */
+  "aria-controls"?: string;
+
+  /** Accepted, no effect: NSH has no cross-element references. */
+  "aria-owns"?: string;
+
+  /** Accepted, no effect: NSH has no cross-element references. */
+  "aria-activedescendant"?: string;
+
+  /** Every other `aria-*` attribute (live regions, autocomplete, …), ignored at runtime. */
   [key: `aria-${string}`]: unknown;
 }
 
@@ -41,12 +97,18 @@ const DOM_ONLY_PROPS = new Set([
   "hidden",
   "inert",
   "translate",
+  "tabIndex",
 ]);
 
 /**
  * The props the root actually hands to its `View`: everything `split` left in
  * `rest` except the DOM-only members above and the caller's `aria-*` /
  * `data-*` attributes.
+ *
+ * The mapped `aria-*` keys (`aria-label`, `aria-hidden`, the state ones) are
+ * taken out by `split` and reach the `View` through the accessibility props
+ * instead; whatever `aria-*` is left here is one NSH has no field for, and the
+ * host has no attribute channel, so it is dropped like `data-*`.
  *
  * Each kept prop becomes an enumerable getter that reads `rest`, so the value
  * keeps following its source exactly as `split`'s `rest` does; the keys are

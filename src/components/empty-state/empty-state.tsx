@@ -1,5 +1,5 @@
 import { computed, split, Text, View } from "nsh";
-import type { JSX, ViewProps } from "nsh";
+import type { AccessibilityState, JSX, ViewProps } from "nsh";
 
 import type { AriaProps, DataProps, GlobalDomProps } from "./dom-props";
 import { viewProps } from "./dom-props";
@@ -15,13 +15,15 @@ import { renderChildren } from "./render-children";
  * `EmptyStateRootProps`, which is a `div`'s intrinsic attributes plus
  * `children` and `className`, expressed with NSH's view host props.
  *
- * The DOM-only members upstream (`render`, `aria-*`, `data-*`, `dir` / `lang`
- * / `hidden` / `inert` / `translate`) are accepted so code written against
- * HeroUI keeps compiling; see the port sheet §1 and §8 for what they can and
- * cannot do here. NSH host events (`onPress`, `onMouseEnter`, …) travel
- * through the rest props to the root `View`. The `E` type parameter upstream
- * only types those forwarded attributes; the element is always a `div`, so it
- * is not kept (port sheet §8).
+ * The DOM-only members upstream (`render`, `tabIndex`, the unmapped `aria-*`,
+ * `data-*`, `dir` / `lang` / `hidden` / `inert` / `translate`) are accepted so
+ * code written against HeroUI keeps compiling; the ARIA ones NSH models
+ * (`aria-label`, `aria-hidden`, the state attributes) are mapped onto the root
+ * `View`. See the port sheet §1 and §8 for what each can and cannot do here.
+ * NSH host events (`onPress`, `onMouseEnter`, …) travel through the rest props
+ * to the root `View`. The `E` type parameter upstream only types those
+ * forwarded attributes; the element is always a `div`, so it is not kept (port
+ * sheet §8).
  */
 export interface EmptyStateRootProps
   extends Omit<ViewProps, "children" | "class">,
@@ -51,6 +53,13 @@ export interface EmptyStateRootProps
 
   /** Accepted, no effect: NSH has no DOM render function to replace the element. */
   render?: unknown;
+
+  /**
+   * Accepted, no effect: an NSH view's focus stops come from `focusable`, and
+   * a `tabIndex` on a plain `<div>` only joins the tab order for values ≥ 0.
+   * Kept so code written against HeroUI keeps compiling.
+   */
+  tabIndex?: number;
 }
 
 /**
@@ -75,12 +84,30 @@ export function EmptyStateRoot(props: EmptyStateRootProps): JSX.Element {
     "title",
     "tooltip",
     "accessibilityHint",
+    "accessibilityLabel",
+    "accessibilityState",
+    "accessibilityElementsHidden",
     "render",
+    "tabIndex",
     "dir",
     "lang",
     "hidden",
     "inert",
     "translate",
+    "aria-label",
+    "aria-hidden",
+    "aria-disabled",
+    "aria-busy",
+    "aria-checked",
+    "aria-expanded",
+    "aria-pressed",
+    "aria-selected",
+    "aria-current",
+    "aria-labelledby",
+    "aria-describedby",
+    "aria-controls",
+    "aria-owns",
+    "aria-activedescendant",
   ] as const);
 
   // R-001 / R-002 / R-003 in `empty-state.styles.ts`, then the caller's class:
@@ -117,8 +144,26 @@ export function EmptyStateRoot(props: EmptyStateRootProps): JSX.Element {
 
   // Only NSH host props go to the root. HeroUI forwards every `div` attribute;
   // the ones without an NSH counterpart (unmapped `aria-*` / `data-*`,
-  // `render`, `dir`, `lang`, `hidden`, `inert`, `translate`) are accepted
-  // above and never read, instead of reaching the `View` as unknown props.
+  // `render`, `tabIndex`, `dir`, `lang`, `hidden`, `inert`, `translate`) are
+  // accepted above and never read, instead of reaching the `View` as unknown
+  // props. The ARIA attributes NSH models are mapped here, with the aria name
+  // winning when both it and the host prop are given, as `{...rest}` after a
+  // host prop wins upstream (Skeleton maps them the same way).
+  const accessibilityState = computed<AccessibilityState>(() => {
+    const own = local.accessibilityState ?? {};
+
+    return {
+      ...own,
+      busy: local["aria-busy"] ?? own.busy,
+      checked: local["aria-checked"] ?? own.checked,
+      current: local["aria-current"] ?? own.current,
+      disabled: local["aria-disabled"] ?? own.disabled,
+      expanded: local["aria-expanded"] ?? own.expanded,
+      pressed: local["aria-pressed"] ?? own.pressed,
+      selected: local["aria-selected"] ?? own.selected,
+    };
+  });
+
   return (
     <View
       {...viewProps(rest)}
@@ -126,7 +171,10 @@ export function EmptyStateRoot(props: EmptyStateRootProps): JSX.Element {
       // A `<div>` is not a keyboard focus stop upstream; without this a
       // pressable view would become one. A caller's own `focusable` still wins.
       focusable={local.focusable ?? false}
+      accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel}
       accessibilityHint={local.accessibilityHint ?? titleText()}
+      accessibilityState={accessibilityState()}
+      accessibilityElementsHidden={local["aria-hidden"] ?? local.accessibilityElementsHidden}
       tooltip={local.tooltip ?? titleTooltip()}
       class={classes()}
       style={local.style}

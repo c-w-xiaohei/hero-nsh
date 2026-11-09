@@ -21,7 +21,11 @@ export const emptyStateVariants = tv({
   // styles inherit"), which is CSS's `font-size` / `line-height` inheritance.
   // R-003: `.empty-state` → `text-muted` (semantic color; the theme has a value
   // for both appearances, so it switches by itself).
-  base: "p-2 text-sm text-muted",
+  // `block`: upstream's `empty-state.css` sets no `display`, so the root is a
+  // block `div`. An NSH view with no display utility keeps the column-flex
+  // default, which would lay the caller's children out as flex items
+  // (research 3.1: every root part declares its display).
+  base: "block p-2 text-sm text-muted",
 });
 
 export type EmptyStateVariants = VariantProps<typeof emptyStateVariants>;
