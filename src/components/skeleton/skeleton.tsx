@@ -195,7 +195,7 @@ export function SkeletonRoot(props: SkeletonRootProps): JSX.Element {
   // props.
   return (
     <View
-      ref={props.ref}
+      ref={(node) => (typeof props.ref === "function" ? props.ref(node) : undefined)}
       testID={props.testID}
       nativeID={local.id ?? local.nativeID}
       role={props.role}

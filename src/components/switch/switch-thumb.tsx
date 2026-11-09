@@ -128,7 +128,7 @@ export function SwitchThumb(props: SwitchThumbProps): JSX.Element {
   return (
     <View
       {...rest}
-      ref={local.ref}
+      ref={(node) => local.ref?.(node)}
       nativeID={local.id ?? local.nativeID}
       class={classes()}
       style={[
