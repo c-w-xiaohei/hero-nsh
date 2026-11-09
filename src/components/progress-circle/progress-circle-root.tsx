@@ -234,11 +234,14 @@ export function ProgressCircleRoot(props: ProgressCircleRootProps): JSX.Element 
   );
 
   // --- Registered label (the stand-in for aria-labelledby) -------------------
-  // A `Label` inside the root reports its text here; ARIA gives
-  // `aria-labelledby` precedence over `aria-label`, and upstream builds the
-  // former from the Label's id, so the registered text wins. Only one Label
-  // names a progressbar upstream (the context is a single slot); a second one
-  // replaces the first.
+  // A `Label` inside the root reports its text here. Upstream activates that
+  // Label slot only when the caller supplies neither `aria-label` nor
+  // `aria-labelledby` (`useSlot(!props['aria-label'] &&
+  // !props['aria-labelledby'])`), so a caller's `aria-label` suppresses the
+  // association instead of losing to it. NSH cannot resolve an
+  // `aria-labelledby` reference, so the registered Label stays the stand-in
+  // for that branch. Only one Label names a progressbar upstream (the context
+  // is a single slot); a second one replaces the first.
   const labelSource = signal<(() => string | undefined) | undefined>(undefined);
 
   const field: FieldState = {
@@ -257,9 +260,24 @@ export function ProgressCircleRoot(props: ProgressCircleRootProps): JSX.Element 
   });
 
   // --- Accessibility ---------------------------------------------------------
-  const accessibilityLabel = computed(
-    () => labelText() ?? local["aria-label"] ?? local.accessibilityLabel,
-  );
+  // A truthy `aria-label` (or NSH's own name prop) wins; the registered Label
+  // only names the bar when the caller supplied no name of its own, which is
+  // how upstream's `useSlot` guard behaves.
+  const accessibilityLabel = computed(() => {
+    const ariaLabel = local["aria-label"];
+
+    if (ariaLabel) {
+      return ariaLabel;
+    }
+
+    const ownLabel = local.accessibilityLabel;
+
+    if (ownLabel) {
+      return ownLabel;
+    }
+
+    return labelText();
+  });
 
   /**
    * Upstream sets `aria-valuemin` / `aria-valuemax` in both modes, omits

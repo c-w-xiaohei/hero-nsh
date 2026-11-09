@@ -40,7 +40,10 @@ export interface CreateProgressStateOptions {
    */
   formatOptions?: Accessor<Intl.NumberFormatOptions | undefined>;
 
-  /** A caller-supplied value label; wins over the formatted value. */
+  /**
+   * A caller-supplied value label; wins over the formatted value on a
+   * determinate bar. An indeterminate bar has no label at all.
+   */
   valueLabel?: Accessor<string | undefined>;
 
   /**
@@ -101,12 +104,13 @@ export function createProgressState(
   // the locale NSH reports, so `value=60` reads as "60%" in every locale.
   const formatter = computed(() => new NumberFormatter(locale(), formatOptions()));
 
-  // RAC's number: `0..100`, `0` when the range is empty. Indeterminate has no
-  // percentage at all, which is what the render props expose.
+  // RAC's number: `0..1`, `0` when the range is empty (`useProgressBar`:
+  // `percentage = range === 0 ? 0 : (value - minValue) / range`). Indeterminate
+  // has no percentage at all, which is what the render props expose.
   const fraction = computed(() => {
     const range = maxValue() - minValue();
 
-    return range === 0 ? Number.NaN : (value() - minValue()) / range;
+    return range === 0 ? 0 : (value() - minValue()) / range;
   });
 
   const percentage = computed(() => {
@@ -119,20 +123,21 @@ export function createProgressState(
     return range === 0 ? 0 : fraction() * 100;
   });
 
-  // `valueLabel` first (truthy, as upstream's `if (valueLabel)`); a
-  // determinate bar then formats the value and swallows a caller's
-  // `aria-valuetext`; an indeterminate one has no derived text, so the
-  // caller's value survives. An empty range formats `NaN`, which upstream
-  // also reads as "NaN%"; the port keeps that instead of inventing a value.
+  // An indeterminate bar has no derived text: `useProgressBar` leaves
+  // `aria-valuetext` undefined in that branch, and Kobalte returns undefined
+  // before formatting, so `valueLabel` never names an indeterminate circle —
+  // only the caller's own `aria-valuetext` survives. A determinate bar takes a
+  // truthy `valueLabel` first (upstream's `if (valueLabel)`) and otherwise
+  // formats the value; an empty range formats the guarded fraction `0`.
   const valueText = computed(() => {
+    if (isIndeterminate()) {
+      return options.ariaValueText?.();
+    }
+
     const label = options.valueLabel?.();
 
     if (label) {
       return label;
-    }
-
-    if (isIndeterminate()) {
-      return options.ariaValueText?.();
     }
 
     const format = formatOptions();

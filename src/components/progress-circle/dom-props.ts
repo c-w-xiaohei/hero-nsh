@@ -5,7 +5,8 @@
  * accessible name, a value, a disabled state and a hidden subtree, so the ARIA
  * attributes with a counterpart are mapped by the components:
  *
- * - `aria-label` → `accessibilityLabel` (root; a registered `Label` wins)
+ * - `aria-label` → `accessibilityLabel` (root; it suppresses a registered
+ *   `Label`, as upstream's `useSlot` guard does)
  * - `aria-disabled` → `accessibilityState.disabled`, and R-011's class list
  * - `aria-valuetext` → the derived `accessibilityValue.text`
  *
@@ -25,7 +26,7 @@ import type { AccessibilityState } from "nsh";
  * by the root; the index signature keeps the rest accepted and ignored.
  */
 export interface AriaProps {
-  /** The accessible name; a label registered through `FieldContext` wins over it. */
+  /** The accessible name; it wins over a label registered through `FieldContext`. */
   "aria-label"?: string;
 
   /** Hides the view and its subtree from assistive technology; maps to `accessibilityElementsHidden`. */
@@ -90,12 +91,31 @@ const DOM_ONLY_PROPS = new Set([
  * SVG attributes upstream's `<svg>` / `<circle>` accept and the port cannot
  * honour: the geometry, the dash and the paint are fixed in the Canvas
  * drawing (port sheet §3.1 and §8). A caller that passes one keeps compiling;
- * nothing changes on screen.
+ * nothing changes on screen. The parts' index signatures accept any other
+ * `<svg>` / `<circle>` attribute too, so the standard presentation and
+ * geometry attributes are listed here as well; they are dropped before the
+ * host spread.
  */
 export const SVG_ONLY_PROPS = new Set([
+  // Geometry.
   "cx",
   "cy",
   "r",
+  "d",
+  "x",
+  "y",
+  "x1",
+  "y1",
+  "x2",
+  "y2",
+  "width",
+  "height",
+  "pathLength",
+  "viewBox",
+  "preserveAspectRatio",
+  "transform",
+  // Paint and stroke.
+  "stroke",
   "strokeWidth",
   "strokeDasharray",
   "strokeDashoffset",
@@ -103,23 +123,45 @@ export const SVG_ONLY_PROPS = new Set([
   "strokeLinejoin",
   "strokeMiterlimit",
   "strokeOpacity",
-  "fillOpacity",
-  "vectorEffect",
-  "pathLength",
-  "viewBox",
-  "preserveAspectRatio",
   "fill",
-  "width",
-  "height",
+  "fillOpacity",
+  "fillRule",
+  "vectorEffect",
+  "color",
+  "opacity",
+  "stopColor",
+  "stopOpacity",
+  "paintOrder",
+  // Clipping, masking and filtering.
+  "clipPath",
+  "clipRule",
+  "mask",
+  "filter",
+  "overflow",
+  "display",
+  "visibility",
+  // Text and rendering hints.
+  "alignmentBaseline",
+  "baselineShift",
+  "dominantBaseline",
+  "textAnchor",
+  "textDecoration",
+  "textRendering",
+  "imageRendering",
+  "shapeRendering",
+  "pointerEvents",
+  "letterSpacing",
+  "wordSpacing",
+  "direction",
+  "unicodeBidi",
+  "writingMode",
+  // Markers and document envelope.
+  "markerStart",
+  "markerMid",
+  "markerEnd",
   "xmlns",
   "xmlnsXlink",
   "xmlSpace",
-  "overflow",
-  "clipPath",
-  "mask",
-  "filter",
-  "display",
-  "visibility",
 ]);
 
 /**
