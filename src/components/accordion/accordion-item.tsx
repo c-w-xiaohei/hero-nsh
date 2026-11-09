@@ -7,6 +7,7 @@ import { renderChildren } from "./children";
 import { AccordionContext, AccordionItemContext, type AccordionItemContextValue } from "./accordion-context";
 import { type AccordionKey, encodeAccordionKey } from "./accordion-key";
 import type { AccordionItemRenderProps, ReactStatelyDisclosureState } from "./accordion-types";
+import { withTooltip } from "./tooltip";
 
 /* -------------------------------------------------------------------------------------------------
  * Props
@@ -54,7 +55,7 @@ export interface AccordionItemProps {
   /** An identifier for UI tests. */
   testID?: string;
 
-  /** A desktop hover tooltip on the item. */
+  /** A desktop hover tooltip on the item; a bare string becomes its text. */
   tooltip?: JSX.Element;
 
   /** The item was laid out. */
@@ -257,26 +258,28 @@ export function AccordionItem(props: AccordionItemProps): JSX.Element | null {
 
   return (
     <AccordionItemContext.Provider value={itemContext}>
-      <BaseAccordionItem
-        value={encodeAccordionKey(itemKey)}
-        disabled={isDisabled()}
-        ref={(node) => local.ref?.(node)}
-        testID={local.testID}
-        tooltip={local.tooltip}
-        class={classes()}
-        style={resolvedStyle()}
-        onLayout={local.onLayout}
-      >
-        {resolveChildren()}
-        {/* R-012: `:last-child::after { content: none }` → hidden on the last
-            registered item.
-            R-013: `[data-hide-separator="true"]::after { display: none }` → the
-            root's `hideSeparator` reaches the Item through context. */}
-        <View
-          class={separatorClasses()}
-          classList={{ hidden: accordion.hideSeparator() || isLast() }}
-        />
-      </BaseAccordionItem>
+      {withTooltip(
+        local.tooltip,
+        <BaseAccordionItem
+          value={encodeAccordionKey(itemKey)}
+          disabled={isDisabled()}
+          ref={(node) => local.ref?.(node)}
+          testID={local.testID}
+          class={classes()}
+          style={resolvedStyle()}
+          onLayout={local.onLayout}
+        >
+          {resolveChildren()}
+          {/* R-012: `:last-child::after { content: none }` → hidden on the last
+              registered item.
+              R-013: `[data-hide-separator="true"]::after { display: none }` → the
+              root's `hideSeparator` reaches the Item through context. */}
+          <View
+            class={separatorClasses()}
+            classList={{ hidden: accordion.hideSeparator() || isLast() }}
+          />
+        </BaseAccordionItem>,
+      )}
     </AccordionItemContext.Provider>
   );
 }

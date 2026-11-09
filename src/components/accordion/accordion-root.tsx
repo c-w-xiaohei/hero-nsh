@@ -10,6 +10,7 @@ import { accordionVariants } from "./accordion.styles";
 import type { AccordionVariants } from "./accordion.styles";
 import type { AccordionRenderProps } from "./accordion-types";
 import { createAccordionGroupState } from "./create-accordion-group-state";
+import { withTooltip } from "./tooltip";
 
 /* -------------------------------------------------------------------------------------------------
  * Props
@@ -70,7 +71,7 @@ export interface AccordionRootProps {
   /** An identifier for UI tests. */
   testID?: string;
 
-  /** A desktop hover tooltip on the root. */
+  /** A desktop hover tooltip on the root; a bare string becomes its text. */
   tooltip?: JSX.Element;
 
   /** The root was laid out. */
@@ -299,19 +300,21 @@ export function AccordionRoot(props: AccordionRootProps): JSX.Element {
   return (
     <AccordionContext.Provider value={contextValue}>
       <SurfaceContext.Provider value={surfaceValue}>
-        <BaseAccordion
-          ref={(node) => local.ref?.(node)}
-          testID={local.testID}
-          tooltip={local.tooltip}
-          value={baseValue()}
-          multiple={group.allowsMultipleExpanded()}
-          disabled={isDisabled()}
-          class={classes()}
-          style={resolvedStyle()}
-          onLayout={local.onLayout}
-        >
-          {resolveChildren()}
-        </BaseAccordion>
+        {withTooltip(
+          local.tooltip,
+          <BaseAccordion
+            ref={(node) => local.ref?.(node)}
+            testID={local.testID}
+            value={baseValue()}
+            multiple={group.allowsMultipleExpanded()}
+            disabled={isDisabled()}
+            class={classes()}
+            style={resolvedStyle()}
+            onLayout={local.onLayout}
+          >
+            {resolveChildren()}
+          </BaseAccordion>,
+        )}
       </SurfaceContext.Provider>
     </AccordionContext.Provider>
   );

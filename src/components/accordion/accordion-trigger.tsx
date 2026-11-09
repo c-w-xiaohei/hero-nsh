@@ -155,7 +155,7 @@ export interface AccordionTriggerProps {
   /** An identifier for UI tests. */
   testID?: string;
 
-  /** A desktop hover tooltip on the trigger. */
+  /** A desktop hover tooltip on the trigger; a bare string becomes its text. */
   tooltip?: JSX.Element;
 
   /** The trigger was laid out. */
@@ -501,7 +501,7 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
       }}
       testID={local.testID}
       nativeID={local.id ?? local.nativeID}
-      tooltip={local.tooltip}
+      tooltip={renderChildren(local.tooltip)}
       role="button"
       focusable={!isDisabled() && local.excludeFromTabOrder !== true}
       disabled={isDisabled()}

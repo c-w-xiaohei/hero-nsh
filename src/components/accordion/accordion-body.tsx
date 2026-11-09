@@ -30,7 +30,7 @@ export interface AccordionBodyProps {
   /** An identifier for UI tests on the outer view. */
   testID?: string;
 
-  /** A desktop hover tooltip on the outer view. */
+  /** A desktop hover tooltip on the outer view; a bare string becomes its text. */
   tooltip?: JSX.Element;
 
   /** The outer view was laid out. */
@@ -86,7 +86,7 @@ export function AccordionBody(props: AccordionBodyProps): JSX.Element {
       ref={(node) => local.ref?.(node)}
       testID={local.testID}
       nativeID={local.id ?? local.nativeID}
-      tooltip={local.tooltip}
+      tooltip={renderChildren(local.tooltip)}
       class={bodyClass()}
       style={local.style}
       onLayout={local.onLayout}

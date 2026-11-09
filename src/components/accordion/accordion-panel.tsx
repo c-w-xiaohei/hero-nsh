@@ -5,6 +5,7 @@ import { AccordionPanel as BaseAccordionPanel } from "nsh/base";
 import { renderChildren } from "./children";
 import { AccordionContext, AccordionItemContext } from "./accordion-context";
 import type { AccordionItemRenderProps } from "./accordion-types";
+import { withTooltip } from "./tooltip";
 
 /**
  * The props of `Accordion.Panel`: HeroUI 3.2.7's `AccordionPanelProps`, which
@@ -42,7 +43,7 @@ export interface AccordionPanelProps {
   /** An identifier for UI tests. */
   testID?: string;
 
-  /** A desktop hover tooltip on the panel. */
+  /** A desktop hover tooltip on the panel; a bare string becomes its text. */
   tooltip?: JSX.Element;
 
   /** The panel was laid out. */
@@ -137,7 +138,10 @@ export function AccordionPanel(props: AccordionPanelProps): JSX.Element | null {
   const accessibilityLabel = () =>
     local["aria-label"] ?? local.accessibilityLabel ?? item.triggerLabel();
 
-  return (
+  // The hint rides on a `View` of its own: `nsh/base`'s panel takes `tooltip`
+  // and drops it (tooltip.tsx).
+  return withTooltip(
+    local.tooltip,
     <BaseAccordionPanel
       // R-024 / R-025 / R-026: the native reveal stands in for
       // `height: var(--disclosure-panel-height)`, `overflow: clip` and the
@@ -149,7 +153,6 @@ export function AccordionPanel(props: AccordionPanelProps): JSX.Element | null {
       keepMounted
       ref={(node) => local.ref?.(node)}
       testID={local.testID}
-      tooltip={local.tooltip}
       accessibilityLabel={accessibilityLabel()}
       class={classes()}
       classList={{ "opacity-100": item.isExpanded() }}
@@ -157,6 +160,6 @@ export function AccordionPanel(props: AccordionPanelProps): JSX.Element | null {
       onLayout={local.onLayout}
     >
       {renderChildren(local.children as JSX.Element)}
-    </BaseAccordionPanel>
+    </BaseAccordionPanel>,
   );
 }
