@@ -6,6 +6,7 @@ export * from "./components/description";
 export * from "./components/field-error";
 export * from "./components/button";
 export * from "./components/popover";
+export * from "./components/list-box";
 export * from "./components/switch";
 export * from "./components/separator";
 export * from "./components/surface";

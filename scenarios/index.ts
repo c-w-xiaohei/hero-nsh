@@ -5,6 +5,7 @@ import { labelScenarios } from "./label.scenarios";
 import { descriptionScenarios } from "./description.scenarios";
 import { buttonScenarios } from "./button.scenarios";
 import { popoverScenarios } from "./popover.scenarios";
+import { listBoxScenarios } from "./list-box.scenarios";
 import { switchScenarios } from "./switch.scenarios";
 import { separatorScenarios } from "./separator.scenarios";
 import { surfaceScenarios } from "./surface.scenarios";
@@ -23,6 +24,7 @@ export const scenarios: Record<string, Component> = {
   ...descriptionScenarios,
   ...buttonScenarios,
   ...popoverScenarios,
+  ...listBoxScenarios,
   ...switchScenarios,
   ...separatorScenarios,
   ...surfaceScenarios,
