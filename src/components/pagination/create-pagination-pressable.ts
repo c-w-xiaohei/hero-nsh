@@ -15,8 +15,8 @@ import {
  * The live state HeroUI hands to a render-prop `children`, `className` or
  * `style` of `Link` / `Previous` / `Next`. HeroUI passes plain booleans and
  * re-renders; NSH has no re-render, so the same members are accessors (D17).
- * `isPending` is always `false`: pagination has no pending state (port sheet
- * §1.3).
+ * `isPending` mirrors `props.isPending`, as RAC's `Button` reports it
+ * (Button.tsx:120).
  */
 export interface PaginationRenderProps {
   isHovered: Accessor<boolean>;
@@ -38,6 +38,14 @@ export interface PaginationRenderProps {
 export interface PaginationPressableProps {
   /** Accepts or blocks presses and hover; `aria-disabled` folds in. */
   isDisabled?: boolean;
+
+  /**
+   * RAC's pending state: blocks press and hover while the part stays
+   * focusable, and reaches the render props as `isPending`
+   * (Button.tsx:89-93,111-125). Upstream paints the disabled look through
+   * `aria-disabled="true"` (Button.tsx:172, pagination.css).
+   */
+  isPending?: boolean;
 
   /** `aria-disabled="true"` / `true` is the same state as `isDisabled`. */
   "aria-disabled"?: boolean | "true" | "false";
@@ -89,6 +97,8 @@ export interface PaginationPressableHandlers {
 export interface PaginationPressableState {
   /** `isDisabled` or `aria-disabled`, as one predicate. */
   isDisabled: Accessor<boolean>;
+  /** `isDisabled` or `isPending`: what stops press and hover. */
+  isBlocked: Accessor<boolean>;
   renderProps: PaginationRenderProps;
   handlers: PaginationPressableHandlers;
   /** Forwards the root view to the caller's `ref`, keeping the node for `autoFocus`. */
@@ -128,11 +138,19 @@ export function createPaginationPressable(
     props["aria-disabled"] === true ||
     props["aria-disabled"] === "true";
 
-  const isPending = () => false;
+  // RAC's `isPending` blocks press and hover but keeps the button focusable,
+  // and its render prop reports `props.isPending` (Button.tsx:89-93,111-125).
+  const isPending = () => props.isPending === true;
+
+  // RAC's `useHover`/`useButton` run under `isDisabled || isPending`; pending
+  // is not `isDisabled` in the render props, so the two are kept apart
+  // (Button.tsx:111-125).
+  const isBlocked = () => isDisabled() || isPending();
 
   const renderProps: PaginationRenderProps = {
     isHovered,
-    isPressed,
+    // RAC masks a pressed state while pending: `isPressed && !isPending`.
+    isPressed: computed(() => isPressed() && !isPending()),
     isFocused,
     isFocusVisible,
     isDisabled,
@@ -151,7 +169,7 @@ export function createPaginationPressable(
   };
 
   const handlePress = (event: PressEvent) => {
-    if (isDisabled()) {
+    if (isBlocked()) {
       return;
     }
 
@@ -161,7 +179,7 @@ export function createPaginationPressable(
   };
 
   const handlePressDown = (event: PressEvent) => {
-    if (isDisabled()) {
+    if (isBlocked()) {
       return;
     }
 
@@ -173,13 +191,13 @@ export function createPaginationPressable(
   };
 
   const handlePressUp = (event: PressEvent) => {
-    if (!isDisabled()) {
+    if (!isBlocked()) {
       props.onPressUp?.(event);
       props.onPressEnd?.(event);
     }
 
-    // Still clears a press that started before the part became disabled, so
-    // `isPressed` cannot stay stuck true.
+    // Still clears a press that started before the part became disabled or
+    // pending, so `isPressed` cannot stay stuck true.
     if (isPressed()) {
       isPressed.set(false);
       props.onPressChange?.(false);
@@ -187,9 +205,9 @@ export function createPaginationPressable(
   };
 
   const handleMouseEnter = (event: NshMouseEvent) => {
-    // RAC's `useHover` is off while disabled, but the caller's own host handler
-    // still hears the event (port sheet §1.3).
-    if (!isDisabled() && !isHovered()) {
+    // RAC's `useHover` is off while disabled or pending, but the caller's own
+    // host handler still hears the event (port sheet §1.3).
+    if (!isBlocked() && !isHovered()) {
       isHovered.set(true);
       props.onHoverStart?.(event);
       props.onHoverChange?.(true);
@@ -238,6 +256,7 @@ export function createPaginationPressable(
 
   return {
     isDisabled,
+    isBlocked,
     renderProps,
     handlers: {
       onPress: handlePress,

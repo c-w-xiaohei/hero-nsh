@@ -155,10 +155,13 @@ export function PaginationButtonRoot(props: PaginationButtonRootProps): JSX.Elem
       // R-011: `status-focused` → the focus ring, shown only while the keyboard
       // is the last interaction (the port has no `:focus-visible`).
       // R-012: `status-disabled` → opacity 0.5, `cursor-not-allowed` and no
-      // pointer events; `View.disabled` blocks the press itself.
+      // pointer events. Pending paints the same look because RAC writes
+      // `aria-disabled="true"` for it (Button.tsx:172) and pagination.css
+      // matches `[aria-disabled="true"]`; `View.disabled` stays on
+      // `isDisabled` so a pending part keeps its focus stop (Button.tsx:89-93).
       classList={{
         "ring-2 ring-focus ring-offset-2 ring-offset-background": renderProps.isFocusVisible(),
-        "opacity-50 cursor-not-allowed pointer-events-none": pressable.isDisabled(),
+        "opacity-50 cursor-not-allowed pointer-events-none": pressable.isBlocked(),
       }}
       style={[{ transitionProperty: transitionProperty() }, resolvedStyle()]}
       onPress={pressable.handlers.onPress}

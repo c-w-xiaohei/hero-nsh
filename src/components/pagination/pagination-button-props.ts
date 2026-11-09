@@ -134,13 +134,6 @@ export interface PaginationButtonProps
   /** Accepted, no effect: a pointer press does not focus a view in NSH. */
   preventFocusOnPress?: boolean;
 
-  /**
-   * Accepted, no effect: pagination has no pending state. The render prop's
-   * `isPending` is always `false` and no pending look is painted (port sheet
-   * §5).
-   */
-  isPending?: boolean;
-
   /** A DOM role upstream; defaults to `"button"` as React Aria's button does. */
   role?: string;
 
