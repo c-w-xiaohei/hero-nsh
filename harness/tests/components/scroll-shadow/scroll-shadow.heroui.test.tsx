@@ -4,7 +4,8 @@ import { openScenario } from "../../helpers/open-scenario";
 /*
  * HeroUI 3.2.7 regression cases for ScrollShadow, per port sheet 4b
  * (T-001, T-003, T-008, T-010, T-012 … T-017, T-019, T-020, T-023 … T-026,
- * T-029 … T-032). Every case keeps its upstream file:line above it.
+ * T-029 … T-032), plus X-001 / X-002. Every case keeps its upstream file:line
+ * above it.
  *
  * What this host cannot read is stated on the partial ports: the mask string,
  * the BEM classes and the `data-*` state attributes (D18 and no attribute
@@ -229,13 +230,19 @@ test("T-026 renders no fade when the content fits", async () => {
 // heroui/packages/react/tests/components/scroll-shadow/scroll-shadow.browser.test.tsx:233
 // Partial port (port sheet T-029): the fade pair is dropped; the logical
 // projection stays, so an RTL container resting at its start still reports
-// `right`. Where the physical gradient is painted is the registered RTL
-// difference (the ancestor direction has no accessor).
+// `right`. Upstream renders the row inside `<div dir="rtl">`
+// (scroll-shadow.browser.test.tsx:52-53), so the direction is inherited from an
+// ancestor here too. The mount call count is part of the assertion: the resting
+// offset of an overflowing RTL row is `maxScroll`, so a state published before
+// the host's first `onScroll` reads x = 0 and reports a false `left`.
 test("T-029 still fades only the end edge while resting at the start in RTL", async () => {
   const app = await openScenario("scroll-shadow/horizontal-rtl");
 
   await app.waitFor("text:state:right");
+  await app.wait(50);
+
   expect(app.shows("text:state:right")).toBe(true);
+  expect(app.shows("text:calls:1")).toBe(true);
 });
 
 // heroui/packages/react/tests/components/scroll-shadow/scroll-shadow.browser.test.tsx:243
@@ -289,4 +296,45 @@ test("T-032 keeps using the attribute-driven mask", async () => {
   await app.wait(50);
 
   expect(app.shows("text:calls:0")).toBe(true);
+});
+
+/* -------------------------------------------------------------------------------------------------
+ * X cases: behaviour the port sheet pins down and no upstream HeroUI test
+ * covers.
+ * -----------------------------------------------------------------------------------------------*/
+
+// X-001: src/primitives/create-scroll-shadow/create-scroll-shadow.ts:283 (the
+// hasContentSize gate) and :304-310 (onScroll);
+// src/components/scroll-shadow/scroll-shadow.tsx:201-206,287-300 (direction probe).
+// The resting offset of an overflowing horizontal RTL container is `maxScroll`
+// (x = 896 for 1152 content in a 256 viewport), not 0. Computing the auto state
+// on the first content-layout event read x = 0 and published the start edge
+// (`left`) before the host's first `onScroll` corrected it to `right`: history
+// `->left>right` and 3 calls with the inherited direction (the probe adds a
+// layout pass). Mount must notify once, with `right`, and never publish the
+// false start-edge state; this is the inherited-direction path upstream uses
+// (scroll-shadow.browser.test.tsx:52-53, :233).
+test("X-001 reports a resting RTL row once, at its start edge", async () => {
+  const app = await openScenario("scroll-shadow/horizontal-rtl");
+
+  await app.waitFor("text:state:right");
+  await app.wait(50);
+
+  expect(app.shows("text:calls:1")).toBe(true);
+  expect(app.shows("text:history:->right")).toBe(true);
+});
+
+// X-002: src/components/scroll-shadow/scroll-shadow.tsx:287-300 (own `dir` path).
+// `dir="rtl"` resolves the direction without the inherited probe, but the first
+// content-layout event still ran with the unseeded x = 0: history
+// `->left>right`, 2 calls. Both ways of knowing the direction must gate the
+// first publish on the settled axis offset.
+test("X-002 reports a resting RTL row once when the direction comes from the dir prop", async () => {
+  const app = await openScenario("scroll-shadow/horizontal-rtl-dir");
+
+  await app.waitFor("text:state:right");
+  await app.wait(50);
+
+  expect(app.shows("text:calls:1")).toBe(true);
+  expect(app.shows("text:history:->right")).toBe(true);
 });

@@ -14,7 +14,9 @@ import { Stage } from "@scenario/stage";
  * reported state as its own `state:<value>` Text node and the number of calls
  * as `calls:<n>`. Scenarios that must prove a scroll actually happened (a
  * disabled or controlled container reports no state change) also count the
- * root's forwarded `onScroll` in `scrolls:<n>`.
+ * root's forwarded `onScroll` in `scrolls:<n>`. The RTL scenarios append every
+ * reported state to `history:<first>><next>…`, so the mount sequence itself is
+ * observable, not just the settled value.
  *
  * Content. The vertical scenarios keep one bare `Row 0` string as the first
  * child on purpose (T-001 proves the content layer wraps bare text) and give
@@ -26,6 +28,7 @@ import { Stage } from "@scenario/stage";
 
 function Readouts(props: {
   calls: () => number;
+  history?: () => string;
   scrolls?: () => number;
   state: () => string;
 }) {
@@ -34,6 +37,7 @@ function Readouts(props: {
       <Text>{`state:${props.state()}`}</Text>
       <Text>{`calls:${props.calls()}`}</Text>
       {props.scrolls ? <Text>{`scrolls:${props.scrolls()}`}</Text> : null}
+      {props.history ? <Text>{`history:${props.history()}`}</Text> : null}
     </View>
   );
 }
@@ -228,27 +232,47 @@ function Horizontal() {
   );
 }
 
-function HorizontalRtl() {
+/*
+ * RTL row cases. Upstream wraps the component in `<div dir={dir}>`
+ * (scroll-shadow.browser.test.tsx:52-53, :233), so the inherited direction path
+ * is the one its suite exercises: `inherited` puts the direction on `Stage`,
+ * the ancestor. `ownDir` covers the port's own `dir` prop (port sheet section 1),
+ * which the component resolves before the inherited probe. `history` keeps every
+ * reported state in order so the mount sequence can be asserted.
+ */
+function RtlRow(props: { ownDir?: boolean }) {
   const state = signal("-");
   const calls = signal(0);
+  const history = signal("-");
+
+  const report = (visibility: ScrollShadowVisibility) => {
+    state.set(visibility);
+    history.update((value) => `${value}>${visibility}`);
+    calls.update((count) => count + 1);
+  };
 
   return (
-    <Stage>
-      <Readouts state={state} calls={calls} />
+    <Stage direction={props.ownDir ? undefined : "rtl"}>
+      <Readouts state={state} calls={calls} history={history} />
       <ScrollShadow
         testID="scroller"
         className="h-24 w-64"
         orientation="horizontal"
-        dir="rtl"
-        onVisibilityChange={(visibility) => {
-          state.set(visibility);
-          calls.update((count) => count + 1);
-        }}
+        dir={props.ownDir ? "rtl" : undefined}
+        onVisibilityChange={report}
       >
         {wideCells()}
       </ScrollShadow>
     </Stage>
   );
+}
+
+function HorizontalRtl() {
+  return <RtlRow />;
+}
+
+function HorizontalRtlDir() {
+  return <RtlRow ownDir />;
 }
 
 function FittingHorizontal() {
@@ -430,6 +454,7 @@ export const scrollShadowScenarios = {
   "scroll-shadow/rerender": Rerender,
   "scroll-shadow/horizontal": Horizontal,
   "scroll-shadow/horizontal-rtl": HorizontalRtl,
+  "scroll-shadow/horizontal-rtl-dir": HorizontalRtlDir,
   "scroll-shadow/fitting-horizontal": FittingHorizontal,
   "scroll-shadow/disabled": Disabled,
   "scroll-shadow/controlled": Controlled,
