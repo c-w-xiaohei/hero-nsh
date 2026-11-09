@@ -1,4 +1,5 @@
 import { Description, FieldError, Label, SearchField } from "@heroui/react";
+import { signal } from "nsh";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 import type { Component } from "./types";
@@ -21,6 +22,7 @@ import type { Component } from "./types";
  *   search-field/submit         `onSubmit` probe
  *   search-field/empty.split    the T-006 empty state, read from the Root render prop
  *   search-field/focus.split    the T-009 focus wiring, read from the Group / Input render props
+ *   search-field/unmount.split  the Input unmounting while it holds focus (round 3 X-002)
  *
  * Split scenarios (SOP 3.3.3): the render props take booleans upstream and
  * accessors here (D17), so `empty.split` and `focus.split` are written for this
@@ -243,6 +245,65 @@ function FocusSplit() {
   );
 }
 
+/*
+ * The Input leaving the tree while it holds focus (round 3 regression). The
+ * first change unmounts the Input, so the field has no focused descendant any
+ * more; the Group render props record what the focus look reads (D18
+ * replacement), and `onClear` says whether Escape still reaches the field.
+ */
+function UnmountSplit() {
+  const mounted = signal(true);
+  const groupRecord = probe("group-props");
+  const inputRecord = probe("input-props");
+
+  return (
+    <Stage>
+      <SearchField
+        name="search"
+        onChange={(value) => {
+          probe("onChange")(value);
+          mounted.set(false);
+        }}
+        onClear={probe("onClear")}
+      >
+        <Label>Search</Label>
+        <SearchField.Group
+          className={(values: GroupValues) => {
+            groupRecord({
+              isHovered: values.isHovered(),
+              isFocusWithin: values.isFocusWithin(),
+              isFocusVisible: values.isFocusVisible(),
+              isDisabled: values.isDisabled(),
+              isInvalid: values.isInvalid(),
+            });
+
+            return "";
+          }}
+        >
+          <SearchField.SearchIcon />
+          {mounted() ? (
+            <SearchField.Input
+              placeholder="Search..."
+              className={(values: InputValues) => {
+                inputRecord({
+                  isHovered: values.isHovered(),
+                  isFocused: values.isFocused(),
+                  isFocusVisible: values.isFocusVisible(),
+                  isDisabled: values.isDisabled(),
+                  isInvalid: values.isInvalid(),
+                });
+
+                return "";
+              }}
+            />
+          ) : null}
+          <SearchField.ClearButton />
+        </SearchField.Group>
+      </SearchField>
+    </Stage>
+  );
+}
+
 /* A controlled value with no write-back: typing must not move it. */
 function Controlled() {
   return (
@@ -318,6 +379,7 @@ export const searchFieldScenarios = {
   "search-field/invalid": Invalid,
   "search-field/secondary": Secondary,
   "search-field/focus.split": FocusSplit,
+  "search-field/unmount.split": UnmountSplit,
   "search-field/controlled": Controlled,
   "search-field/escape": Escape,
   "search-field/readonly": ReadOnly,

@@ -17,7 +17,8 @@ import { lastGroup, lastInput, lastRoot } from "../../testers/search-field";
  *
  * The `S-` cases at the end are this unit's supplement for the core SearchField
  * behaviour HeroUI's own nine cases do not cover (port sheet 4b, closing note).
- * They carry no upstream `T-` number on purpose.
+ * They carry no upstream `T-` number on purpose. `X-002` is the round-3
+ * regression case for the focused Input unmounting (below).
  */
 
 // heroui/packages/react/tests/components/search-field/search-field.test.tsx:28
@@ -176,4 +177,40 @@ test("S-006 reports hover and focus-within through the render props", async () =
   await app.type("label:Search", "hero");
   expect(lastGroup(app).isFocusWithin).toBe(true);
   expect(lastInput(app).isFocused).toBe(true);
+});
+
+/*
+ * Regression X-002 (round 3): the Input unmounting while it holds focus must
+ * release the field's focus. Finding: src/components/search-field/search-field-input.tsx:661-666;
+ * src/components/search-field/search-field-group.tsx:231;
+ * src/components/search-field/search-field-root.tsx:456-471,585-591
+ *
+ * Upstream's `:focus-within` clears as soon as the focused descendant leaves
+ * (heroui/packages/styles/components/search-field.css:54-57), so neither the
+ * Group's focus look nor the field's Escape scope survives the Input. The
+ * fixture focuses the Input and unmounts it from its first change; the hover
+ * after that gives the Group's render prop a reason to re-evaluate, so a stale
+ * `true` cannot hide behind an unchanged record. Escape then has no focused
+ * input to clear, hence no `onClear`.
+ *
+ * X-001 (the Input prop `enterKeyHint` winning over the field's) has no test:
+ * `nsh/test` exposes no view property, and `returnKeyType` only changes the
+ * label on a soft keyboard, which no test target draws. See the final answer.
+ */
+test("X-002 drops focus-within and Escape when the focused input unmounts", async () => {
+  const app = await openScenario("search-field/unmount.split");
+
+  await app.press("label:Search");
+  expect(lastInput(app).isFocused).toBe(true);
+
+  await app.type("label:Search", "h");
+
+  expect(callsOf(app, "onChange").at(-1)?.[0]).toBe("h");
+  expect(app.value("label:Search")).toBe(null);
+
+  await app.hover("role:group");
+  expect(lastGroup(app).isFocusWithin).toBe(false);
+
+  await app.keyboard.press("escape");
+  expect(callsOf(app, "onClear")).toHaveLength(0);
 });
