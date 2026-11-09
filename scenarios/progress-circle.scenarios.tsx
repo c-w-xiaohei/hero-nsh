@@ -1,5 +1,5 @@
 import { Label, ProgressCircle } from "@heroui/react";
-import { View } from "nsh";
+import { Text, View } from "nsh";
 import { Stage } from "@scenario/stage";
 
 /*
@@ -10,8 +10,10 @@ import { Stage } from "@scenario/stage";
  * `default` is the JSX of T-001/T-005; the three testIDs on Track, TrackCircle
  * and FillCircle give the composition case something to observe in place of
  * the dropped `data-slot` values. `sizes`, `colors`, `indeterminate` and
- * `label` are the stories of the same names; `values`, `nested-label` and
- * `disabled` are the port sheet's supplementary scenarios (no upstream test).
+ * `label` are the stories of the same names; `values`, `nested-label`,
+ * `indeterminate-value-text` and `disabled` are the port sheet's supplementary
+ * scenarios (no upstream test). The last one renders the render props' value
+ * text as copy, which is the only channel `nsh/test` can read for it.
  */
 
 function Default() {
@@ -145,6 +147,41 @@ function Indeterminate() {
   );
 }
 
+function IndeterminateValueText() {
+  return (
+    <Stage>
+      <View class="flex-col items-start gap-6">
+        <ProgressCircle
+          isIndeterminate
+          valueLabel="half"
+          aria-valuetext="Halfway there"
+        >
+          {(values) => (
+            <View class="flex-col items-center gap-2">
+              <Text testID="value-text-with-aria">{values.valueText() ?? "no value text"}</Text>
+              <ProgressCircle.Track>
+                <ProgressCircle.TrackCircle />
+                <ProgressCircle.FillCircle />
+              </ProgressCircle.Track>
+            </View>
+          )}
+        </ProgressCircle>
+        <ProgressCircle isIndeterminate valueLabel="half">
+          {(values) => (
+            <View class="flex-col items-center gap-2">
+              <Text testID="value-text-without-aria">{values.valueText() ?? "no value text"}</Text>
+              <ProgressCircle.Track>
+                <ProgressCircle.TrackCircle />
+                <ProgressCircle.FillCircle />
+              </ProgressCircle.Track>
+            </View>
+          )}
+        </ProgressCircle>
+      </View>
+    </Stage>
+  );
+}
+
 function WithLabel() {
   return (
     <Stage>
@@ -194,6 +231,7 @@ export const progressCircleScenarios = {
   "progress-circle/colors": Colors,
   "progress-circle/values": Values,
   "progress-circle/indeterminate": Indeterminate,
+  "progress-circle/indeterminate-value-text": IndeterminateValueText,
   "progress-circle/label": WithLabel,
   "progress-circle/nested-label": NestedLabel,
   "progress-circle/disabled": Disabled,
