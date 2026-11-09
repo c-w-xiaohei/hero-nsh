@@ -134,6 +134,25 @@ function CodeColor() {
   );
 }
 
+/* Regression X-002: the inline code box carries upstream's `px-1.5 py-0.5`
+ * (`heroui/packages/styles/components/typography.css:117-119`: 6 and 2 points).
+ * Four U+2588 FULL BLOCK characters fill their monospace cells, so the painted
+ * box's edge minus the glyph ink is the padding itself, with no side bearing
+ * left to guess; the reference app draws the same shapes.
+ *
+ * The paragraph's line is `leading-7` (28), taller than the chip, so the line
+ * never stretches the box: its height is the code's own `text-sm` line (20)
+ * plus the two paddings. */
+function CodePadding() {
+  return (
+    <Stage>
+      <Typography.Paragraph className="leading-7">
+        <Typography.Code>{"████"}</Typography.Code>
+      </Typography.Paragraph>
+    </Stage>
+  );
+}
+
 /* Story `InlineCode`: a Code nested in a Paragraph is an inline span of the
  * same paragraph, as upstream's `<code>` inside `<p>`. */
 function InlineCode() {
@@ -307,6 +326,7 @@ export const typographyScenarios = {
   "typography/paragraph": Paragraph,
   "typography/code": Code,
   "typography/code-color": CodeColor,
+  "typography/code-padding": CodePadding,
   "typography/prose": Prose,
   "typography/headings": Headings,
   "typography/body-sizes": BodySizes,
