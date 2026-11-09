@@ -24,16 +24,17 @@ export const dateInputGroupVariants = tv({
     // `border-color: var(--field-border)` are deleted: the default theme fixes
     // the width at 0 with a transparent colour, and NSH has neither token, so
     // `border-0` stands in (`border` and this rule collapse into `border-0`).
-    // R-003: transition property list, duration and curve. `transition` gives
-    // the class-level default set, the inline `transitionProperty` in the root
-    // narrows it to the three upstream properties, and `duration-150 ease-smooth`
-    // carry the timing (box-shadow's upstream `ease-out` becomes `ease-smooth`;
-    // registered in the port sheet §8).
+    // R-003: transition property list, duration and curve. The root's inline
+    // `transitionProperty` is the single owner of the property list — a class
+    // `transition` here would name its own (all-property) list and always lose
+    // to the inline one (research §3.5: one owner per property) — while
+    // `duration-150 ease-smooth` carry the timing (box-shadow's upstream
+    // `ease-out` becomes `ease-smooth`; registered in the port sheet §8).
     // R-004: `@apply motion-reduce:transition-none`.
     base: [
       "inline-flex h-9 items-center overflow-hidden rounded-field border-0 bg-field",
       "text-sm text-field-foreground shadow-field dark:shadow-field-dark outline-none",
-      "transition duration-150 ease-smooth motion-reduce:transition-none",
+      "duration-150 ease-smooth motion-reduce:transition-none",
     ].join(" "),
 
     // R-009: `.date-input-group__input` → the full upstream declaration list.

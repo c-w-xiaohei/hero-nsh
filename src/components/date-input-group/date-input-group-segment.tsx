@@ -99,6 +99,15 @@ const SEGMENT_NAMES: Record<string, string> = {
   timeZoneName: "time zone",
 };
 
+/**
+ * `@react-aria/spinbutton`'s `Empty` message: the `aria-valuetext` of a
+ * spinbutton whose value is NaN, which is every placeholder segment
+ * (`useSpinButton.ts:145-147`, `:245`). React Aria looks it up in its translated
+ * string catalog; that catalog is not part of this port, so its English default
+ * is the fallback (registered in port sheet §8).
+ */
+const EMPTY_SEGMENT_TEXT = "Empty";
+
 function segmentName(type: string, locale: string): string | undefined {
   const fallback = SEGMENT_NAMES[type];
 
@@ -294,7 +303,11 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
       // cases its `backspace` names (`useDateSegment.ts:104-124`).
       backspace: keyboard(() => field?.backspace(props.segment)),
       delete: keyboard(() => field?.backspace(props.segment)),
-      enter: keyboard(() => field?.commit()),
+      // Return is deliberately not bound: React Aria's segment listens for
+      // neither Return nor Space (`useDateSegment.ts:104-127` binds Backspace /
+      // Delete / Mod+a only, `useSpinButton.ts:78-128` the page and limit
+      // keys), so Return stays the host's native press and the field commits on
+      // its blur boundary (`useDateField.ts:105-116`).
       // React Aria's spinbutton page and limit keys
       // (`spinbutton/useSpinButton.ts:78-128`): PageUp / PageDown a page,
       // Home / End the segment's minimum / maximum.
@@ -312,8 +325,18 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
       "7": keyboard(() => field?.type(props.segment, "7")),
       "8": keyboard(() => field?.type(props.segment, "8")),
       "9": keyboard(() => field?.type(props.segment, "9")),
-      a: keyboard(() => field?.type(props.segment, "a")),
-      p: keyboard(() => field?.type(props.segment, "p")),
+      // React Aria hands the segment any typed character (`useDateSegment.ts:190-240`
+      // passes `e.data` on) and the state decides what it means: digits, the
+      // localized AM / PM names (`create-date-field-state.ts` `amPmNames`) and
+      // the localized era names (`eraNames`). Binding the whole alphabet keeps
+      // locales whose day period does not start with "a" / "p" working — de-DE
+      // answers to "v" (vorm.) and "n" (nachm.), an era to its own initial.
+      ...Object.fromEntries(
+        [..."abcdefghijklmnopqrstuvwxyz"].map((letter) => [
+          letter,
+          keyboard(() => field?.type(props.segment, letter)),
+        ]),
+      ),
     },
   });
 
@@ -384,12 +407,20 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
   // React Aria's `aria-valuetext`: the month also reads its long name, the
   // hour its localized hour (`useDateSegment.ts:59-72`), so a screen reader
   // says "08 – August" and "8 PM" rather than the raw digits. A time zone
-  // segment carries no value at all (`:322-334`).
+  // segment carries no value at all (`:322-334`), and a placeholder reads the
+  // spinbutton's `Empty` message (`useSpinButton.ts:145-147`).
+  //
+  // The names are formatted in the field state's locale (`state.locale` in
+  // `useDateSegment.ts:47-53`), not the host's: a field given `locale="de-DE"`
+  // on an English host must read German month names.
+  const fieldLocale = () =>
+    field?.dateFormatter().resolvedOptions().locale ?? hostLocale();
+
   const accessibilityText = () => {
     const segment = props.segment;
 
     if (segment.isPlaceholder) {
-      return "";
+      return EMPTY_SEGMENT_TEXT;
     }
 
     if (!field || (segment.type !== "month" && segment.type !== "hour")) {
@@ -399,7 +430,7 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
     const options = field.dateFormatter().resolvedOptions();
 
     if (segment.type === "month") {
-      const monthText = new DateFormatter(hostLocale(), {
+      const monthText = new DateFormatter(fieldLocale(), {
         month: "long",
         timeZone: options.timeZone,
       }).format(field.dateValue());
@@ -407,7 +438,7 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
       return monthText !== segment.text ? `${segment.text} – ${monthText}` : monthText;
     }
 
-    return new DateFormatter(hostLocale(), {
+    return new DateFormatter(fieldLocale(), {
       hour: "numeric",
       hour12: options.hour12,
       timeZone: options.timeZone,
@@ -432,7 +463,7 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
       return undefined;
     }
 
-    return segmentName(props.segment.type, hostLocale());
+    return segmentName(props.segment.type, fieldLocale());
   };
 
   const focusable = () => isInTabOrder();

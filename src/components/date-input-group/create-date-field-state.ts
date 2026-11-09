@@ -128,7 +128,13 @@ export interface DateFieldState {
   /** Sets the value as a parent would; blocked while disabled or read only. */
   setValue: (value: DateValue | null) => void;
 
-  /** The value's own calendar, which emitted values keep. */
+  /**
+   * The calendar system the field currently displays and edits, which React
+   * Stately calls "the calendar system currently in use"
+   * (`@react-stately/datepicker/src/useDateFieldState.ts:76-77`, resolved at
+   * `:386`). `value` is in this calendar too, so a consumer driving a
+   * DateField / DatePicker reads one calendar and builds values in it.
+   */
   calendar: Accessor<ReturnType<typeof defaultCreateCalendar>>;
 
   /** The current value as a JavaScript `Date`, for formatting. */
@@ -849,7 +855,10 @@ export function createDateFieldState(
   return {
     value: calendarValue,
     setValue,
-    calendar: originalCalendar,
+    // The display calendar, as React Stately returns it
+    // (`useDateFieldState.ts:386`); the value's own calendar only decides how
+    // committed values are emitted (`commitValue`), not what the field reports.
+    calendar,
     dateValue,
     dateFormatter,
     segments: () => segments(),

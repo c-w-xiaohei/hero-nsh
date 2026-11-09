@@ -88,10 +88,14 @@ export type {
 } from "./date-input-group.styles";
 
 /* -------------------------------------------------------------------------------------------------
- * Field state primitive and its types
+ * Field state types
  * -----------------------------------------------------------------------------------------------*/
 
-export { createDateFieldState } from "./create-date-field-state";
+// `createDateFieldState` is not exported from the package: HeroUI's
+// DateInputGroup exports no runtime field-state API (port sheet §1.1), and the
+// DateField / TimeField units import `./create-date-field-state` by relative
+// path (§5.4, item 4). Keeping the value out here means promoting the file to
+// `src/primitives/` later is not a breaking change.
 
 export type {
   CreateDateFieldStateProps,
