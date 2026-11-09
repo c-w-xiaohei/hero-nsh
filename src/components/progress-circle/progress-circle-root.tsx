@@ -16,7 +16,7 @@ import type {
   ViewStyle,
 } from "nsh";
 
-import { createProgressState } from "../../primitives/progress";
+import { createProgressState } from "../../primitives/create-progress-state";
 import { FieldContext } from "../label/context";
 import type { FieldState } from "../label/context";
 import { ProgressCircleContext } from "./context";

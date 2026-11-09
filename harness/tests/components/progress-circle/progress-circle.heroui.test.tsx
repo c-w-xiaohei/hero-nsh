@@ -103,7 +103,7 @@ test("X-001 an indeterminate circle has no value text", async () => {
   expect(texts).not.toContain("Halfway there");
 });
 
-// src/primitives/progress/create-progress-state.ts:127-149;
+// src/primitives/create-progress-state/create-progress-state.ts:111-131;
 // src/components/progress-circle/progress-circle-root.tsx:281-301
 // The port returns the caller's aria-valuetext from the indeterminate branch, so
 // the render prop and accessibilityValue.text expose "Halfway there". Upstream
