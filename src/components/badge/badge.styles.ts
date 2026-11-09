@@ -42,8 +42,14 @@ export const badgeVariants = tv({
      * R-008: `.badge__label` → `px-0.5` (2pt). The `View` carries the padding
      * and its child `Text` draws the characters, so a caller's icon is simply
      * another child of this view.
+     *
+     * The span is inline upstream, so its children sit on one line on the text
+     * baseline (an icon beside the text, two text runs beside each other). A
+     * bare NSH view is a column, so the slot states the row and the baseline
+     * itself; `flex-row` also makes the view a flex container, which a column
+     * default otherwise is not (nsh_twref, "How classes combine").
      */
-    label: "px-0.5",
+    label: "px-0.5 flex-row items-baseline",
     /*
      * R-009: `.badge-anchor` → `relative inline-flex shrink-0`; `relative` is
      * what the absolutely positioned badge lines up against. `w-fit` writes out
