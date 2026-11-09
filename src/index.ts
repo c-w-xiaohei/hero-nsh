@@ -35,3 +35,4 @@ export * from "./components/color-input-group";
 export * from "./components/date-input-group";
 export * from "./components/alert";
 export * from "./components/pagination";
+export * from "./components/breadcrumbs";

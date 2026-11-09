@@ -22,6 +22,7 @@ import { progressCircleScenarios } from "./progress-circle.scenarios";
 import { meterScenarios } from "./meter.scenarios";
 import { closeButtonScenarios } from "./close-button.scenarios";
 import { linkScenarios } from "./link.scenarios";
+import { breadcrumbsScenarios } from "./breadcrumbs.scenarios";
 import { progressBarScenarios } from "./progress-bar.scenarios";
 import { avatarScenarios } from "./avatar.scenarios";
 import { errorMessageScenarios } from "./error-message.scenarios";
@@ -57,6 +58,7 @@ export const scenarios: Record<string, Component> = {
   ...meterScenarios,
   ...closeButtonScenarios,
   ...linkScenarios,
+  ...breadcrumbsScenarios,
   ...progressBarScenarios,
   ...avatarScenarios,
   ...errorMessageScenarios,
