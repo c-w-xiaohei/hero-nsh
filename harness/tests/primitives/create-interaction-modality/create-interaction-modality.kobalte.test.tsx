@@ -174,11 +174,13 @@ describe("V4 key and focus events on a real engine", () => {
       platform: "web",
     });
 
-    await app.type("id:field", "k");
-    await app.waitUntil(() => events(app).includes("keypress:k"));
+    // "q" is not bound in this scenario's keymap, so the key must reach the
+    // input instead of being consumed as a shortcut.
+    await app.type("id:field", "q");
+    await app.waitUntil(() => events(app).includes("keypress:q"));
 
     expect(events(app)).toContain("focus:field");
-    expect(events(app)).toContain("keypress:k");
+    expect(events(app)).toContain("keypress:q");
   });
 
   test("a pointer press fires onPress but does not move the keyboard focus", async () => {
