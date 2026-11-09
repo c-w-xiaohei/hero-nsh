@@ -95,25 +95,6 @@ export function sortByRenderedOrder<T extends { order?: () => number }>(
 
 export type ListBoxDescriptor = ListBoxItemDescriptor | ListBoxSectionDescriptor;
 
-/**
- * The row identity of one `items` entry, as React Aria's collection builder
- * derives it: the object's `id`, else its `key`, else its position; a string
- * or number is its own key. It keys the `<Each>` rows of a dynamic collection,
- * so a reordered list moves rows instead of rebuilding them, while an object
- * with no id is positional, exactly as upstream
- * (`react-aria-components/src/ListBox.tsx:513`).
- */
-export function collectionItemKey(item: unknown, index: number): unknown {
-  if (item != null && typeof item === "object") {
-    const record = item as { id?: unknown; key?: unknown };
-    const derived = record.id ?? record.key;
-
-    return derived ?? index;
-  }
-
-  return item ?? index;
-}
-
 /** What a ListBox root provides to every Item, Section and Indicator. */
 export interface ListBoxContextValue {
   /** The list state: collection plus selection manager. */

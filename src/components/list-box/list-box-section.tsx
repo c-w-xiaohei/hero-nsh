@@ -4,7 +4,6 @@ import { cleanup, computed, signal, split, untracked, View } from "nsh";
 import { renderChildren } from "./children";
 import {
   CollectionItemContext,
-  collectionItemKey,
   ListBoxContext,
   ListBoxSectionContext,
   sortByRenderedOrder,
@@ -183,9 +182,8 @@ export function ListBoxSectionRoot<T>(
 
   // One read of `props.children` at the placement. A dynamic Section mirrors
   // the root: `items` is read by the `<Each>` itself (a JSX expression, so it
-  // follows the prop), rows are keyed by the entry's identity, and the row
-  // content is a function child that re-reads its item, so a replaced item
-  // rebuilds the row (React re-renders it upstream).
+  // follows the prop) and rows are kept by the item itself, so replacing an
+  // entry under an existing key builds a fresh row from the current item.
   const hasItems = computed(() => local.items != null);
 
   const renderRow = (item: T, index: number): JSX.Element => {
@@ -218,11 +216,10 @@ export function ListBoxSectionRoot<T>(
         onLayout={handleLayout}
       >
         <If when={hasItems()}>
-          <Each of={local.items} key={collectionItemKey}>
+          <Each of={local.items}>
             {(item, index) => (
               <CollectionItemContext.Provider value={{ value: item, index }}>
-                {(() =>
-                  renderRow(item(), untracked(() => index()))) as unknown as JSX.Element}
+                {renderRow(item(), untracked(() => index()))}
               </CollectionItemContext.Provider>
             )}
           </Each>

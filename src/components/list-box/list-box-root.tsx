@@ -37,7 +37,6 @@ import {
 import { renderChildren } from "./children";
 import {
   CollectionItemContext,
-  collectionItemKey,
   ListBoxContext,
   type ListBoxContextValue,
   type ListBoxDescriptor,
@@ -722,14 +721,13 @@ export function ListBoxRoot<T>(
   // changed render function, reaches the tree (each read builds new views).
   const hasItems = computed(() => local.items != null);
 
-  // One row of the dynamic collection. The content is a *function* child of the
-  // provider, not a call made when the row is created: a component's child
-  // element is built once per row, while a zero-arg child re-runs when what it
-  // reads changes. Inside it the row re-reads `item()`, so a kept row whose
-  // item is replaced (the same id renamed, or a new object at a positional
-  // index) rebuilds its content from the current collection, as React
-  // re-renders the item upstream (`react-aria-components/src/ListBox.tsx:154-160`,
-  // `:582-595`).
+  // One row of the dynamic collection. The row is keyed by the item itself
+  // (`<Each>`'s default: objects by identity, primitives by value), not by its
+  // `id`: a replacement under an existing key is a new object, so it builds a
+  // fresh row from the current collection, while a reorder that reuses the
+  // objects only moves rows. Reading `item()` here is then the row's own
+  // current value — the same fresh element React re-renders upstream
+  // (`react-aria-components/src/ListBox.tsx:154-160`, `:582-595`).
   const renderRow = (item: T, index: number): JSX.Element => {
     const children = local.children;
 
@@ -781,14 +779,10 @@ export function ListBoxRoot<T>(
           {() => local.renderEmptyState?.(renderProps)}
         </If>
         <If when={hasItems()}>
-          <Each of={local.items} key={collectionItemKey}>
+          <Each of={local.items}>
             {(item, index) => (
               <CollectionItemContext.Provider value={{ value: item, index }}>
-                {/* A function child: the call inside it re-runs when `item()`
-                    or `index()` changes, so a kept row follows a replaced
-                    item. A plain element child is built once per row. */}
-                {(() =>
-                  renderRow(item(), untracked(() => index()))) as unknown as JSX.Element}
+                {renderRow(item(), untracked(() => index()))}
               </CollectionItemContext.Provider>
             )}
           </Each>
