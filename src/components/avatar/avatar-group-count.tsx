@@ -30,7 +30,6 @@ export function AvatarGroupCount(props: AvatarGroupCountProps): JSX.Element {
   const [local, rest] = split(props, [
     "children",
     "className",
-    "style",
     "color",
     "size",
     "variant",
