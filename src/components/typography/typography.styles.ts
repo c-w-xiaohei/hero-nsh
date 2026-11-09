@@ -7,18 +7,23 @@ import { tv } from "tailwind-variants";
  * `packages/styles/src/components/typography/typography.styles.ts` plus the
  * declarations of `packages/styles/components/typography.css`.
  *
- * Upstream has two slots (`base` for the four text parts, `prose` for the
- * standalone container) and five dimensions (`align`, `color`, `truncate`,
- * `type`, `weight`). HeroUI's CSS carries the blocks as BEM names
- * (`typography`, `typography-prose`, `typography--h1`) whose rules apply the
- * Tailwind declarations; D18 drops the BEM names and each rule becomes the
- * declarations it applies.
+ * The table is 1:1 with upstream: two slots (`base` for the four text parts,
+ * `prose` for the standalone container) and five dimensions (`align`, `color`,
+ * `truncate`, `type`, `weight`), and `type.code` targets `base` as it does
+ * there. HeroUI's CSS carries the blocks as BEM names (`typography`,
+ * `typography-prose`, `typography--h1`) whose rules apply the Tailwind
+ * declarations; D18 drops the BEM names and each rule becomes the declarations
+ * it applies.
  *
- * A third slot, `inlineCode`, holds the declarations of the code box. Upstream
- * has no such slot because `<code>` is an inline element; NSH's root `Text` is
- * a block, so the code box must be a nested inline `Text` to keep the
- * background, radius and padding around the characters and to let
- * `app.spanStyle` report that background. The four text parts still use `base`.
+ * Upstream applies every variant class to the single element a part renders,
+ * so the class order in the string is the CSS cascade: `typography.css` declares
+ * the `type` rules (81–119) before align / color / truncate / weight
+ * (121–163), and a later class wins. The dimensions are declared in that same
+ * order here — `type`, `align`, `color`, `truncate`, `weight` — so the merged
+ * string resolves conflicts the way upstream's stylesheet does. The code box is
+ * the case that matters: its `text-foreground` is followed by a resolved
+ * `color="muted"` (`text-muted`), which wins, exactly as
+ * `.typography--color-muted` wins over `.typography--code` upstream.
  *
  * Every rule of port sheet §4 has its destination here. The eight structural
  * rewrites (R-003–R-008, R-010) live in the `type` dimension, because Prose no
@@ -43,14 +48,6 @@ export const typographyVariants = tv({
     // R-015: `.typography-prose li` → `text-base leading-7`, lifted to the same
     // place: there is no list item element to reach.
     prose: "text-foreground text-base leading-7",
-    // R-010 / R-030: the code box is an inline span, not the paragraph root.
-    // Upstream `<code>` is an inline element: its background, padding and
-    // radius cover the characters, not the whole line. An NSH root `Text` is a
-    // block, so the declarations of `.typography-prose code` /
-    // `.typography--code` live on this nested `Text` instead of `base`; the
-    // root keeps the shared `text-foreground` plus align / color / truncate /
-    // weight, and the span inherits them.
-    inlineCode: "",
   },
   defaultVariants: {
     align: "start",
@@ -58,6 +55,35 @@ export const typographyVariants = tv({
     type: "body",
   },
   variants: {
+    type: {
+      // R-027: `.typography--body` → `text-base leading-7` (16 / 28).
+      body: "text-base leading-7",
+      // R-028: `.typography--body-sm` → `text-sm leading-6` (14 / 24).
+      "body-sm": "text-sm leading-6",
+      // R-029: `.typography--body-xs` → `text-xs leading-5` (12 / 20).
+      "body-xs": "text-xs leading-5",
+      // R-010 / R-030: `.typography-prose code` and `.typography--code` share
+      // the same declarations. This keeps its upstream target, `base`; the
+      // renderer puts that slot's output on the nested inline box (NSH's root
+      // `Text` is a block, and an upstream `<code>` is inline), so the
+      // background, radius and padding cover the characters rather than the
+      // row. `rounded-md` is 6, `px-1.5` 6, `py-0.5` 2.
+      code: "rounded-md bg-default px-1.5 py-0.5 font-mono text-sm text-foreground",
+      // R-003 / R-021: `.typography-prose h1` / `.typography--h1` →
+      // `text-4xl font-semibold tracking-tight` (36 / 40, letter-spacing
+      // −0.025em).
+      h1: "text-4xl font-semibold tracking-tight",
+      // R-004 / R-022: `text-3xl font-semibold tracking-tight` (30 / 36).
+      h2: "text-3xl font-semibold tracking-tight",
+      // R-005 / R-023: `text-2xl font-semibold tracking-tight` (24 / 32).
+      h3: "text-2xl font-semibold tracking-tight",
+      // R-006 / R-024: `text-xl font-semibold tracking-tight` (20 / 28).
+      h4: "text-xl font-semibold tracking-tight",
+      // R-007 / R-025: `text-lg font-semibold tracking-tight` (18 / 28).
+      h5: "text-lg font-semibold tracking-tight",
+      // R-008 / R-026: `text-base font-semibold tracking-tight` (16 / 24).
+      h6: "text-base font-semibold tracking-tight",
+    },
     // R-031: `.typography--align-start` → `text-start`.
     // R-032: `.typography--align-center` → `text-center`.
     // R-033: `.typography--align-end` → `text-end`.
@@ -80,34 +106,6 @@ export const typographyVariants = tv({
     // block-level paragraph.
     truncate: {
       true: "truncate",
-    },
-    type: {
-      // R-027: `.typography--body` → `text-base leading-7` (16 / 28).
-      body: "text-base leading-7",
-      // R-028: `.typography--body-sm` → `text-sm leading-6` (14 / 24).
-      "body-sm": "text-sm leading-6",
-      // R-029: `.typography--body-xs` → `text-xs leading-5` (12 / 20).
-      "body-xs": "text-xs leading-5",
-      // R-010 / R-030: `.typography-prose code` and `.typography--code` share
-      // the same declarations; `Typography.Code` carries them on its inline
-      // span (`inlineCode` above). `rounded-md` is 6, `px-1.5` 6, `py-0.5` 2.
-      code: {
-        inlineCode: "rounded-md bg-default px-1.5 py-0.5 font-mono text-sm text-foreground",
-      },
-      // R-003 / R-021: `.typography-prose h1` / `.typography--h1` →
-      // `text-4xl font-semibold tracking-tight` (36 / 40, letter-spacing
-      // −0.025em).
-      h1: "text-4xl font-semibold tracking-tight",
-      // R-004 / R-022: `text-3xl font-semibold tracking-tight` (30 / 36).
-      h2: "text-3xl font-semibold tracking-tight",
-      // R-005 / R-023: `text-2xl font-semibold tracking-tight` (24 / 32).
-      h3: "text-2xl font-semibold tracking-tight",
-      // R-006 / R-024: `text-xl font-semibold tracking-tight` (20 / 28).
-      h4: "text-xl font-semibold tracking-tight",
-      // R-007 / R-025: `text-lg font-semibold tracking-tight` (18 / 28).
-      h5: "text-lg font-semibold tracking-tight",
-      // R-008 / R-026: `text-base font-semibold tracking-tight` (16 / 24).
-      h6: "text-base font-semibold tracking-tight",
     },
     // R-038: `.typography--weight-normal` → `font-normal`.
     // R-039: `.typography--weight-medium` → `font-medium`.

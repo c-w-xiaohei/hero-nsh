@@ -87,7 +87,10 @@ export function TypographyProse(props: TypographyProseProps): JSX.Element {
 
   // R-002 / R-009 / R-015 live in the `prose` slot of `typography.styles.ts`.
   // The caller's class is passed through the slot function, so it lands last.
-  const classes = typographyVariants().prose({ className: local.className });
+  // An accessor, not a computed string: `local.className` is a getter
+  // (research 4.1, 4.6), so it must be read where the class is used, or a
+  // changing `<Typography.Prose className={cls()}>` would stay frozen.
+  const classes = () => typographyVariants().prose({ className: local.className });
 
   return (
     <View
@@ -97,7 +100,7 @@ export function TypographyProse(props: TypographyProseProps): JSX.Element {
       // A `<div>` is not a keyboard focus stop upstream; without this a
       // pressable View would become one. A caller's own `focusable` still wins.
       focusable={local.focusable ?? false}
-      class={classes}
+      class={classes()}
       style={local.style}
     >
       {/* The single read of `children`, at the placement. `renderChildren`

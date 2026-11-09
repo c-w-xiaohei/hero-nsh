@@ -194,29 +194,46 @@ export function renderTypography(
 
   // R-001 / R-002 / R-009 / R-015 / R-021–R-041: the variant table resolves the
   // slot class; the caller's `className` is passed through the slot function,
-  // so it lands last and wins (port sheet §1). For `type="code"` the table puts
-  // the code declarations in the `inlineCode` slot instead of `base`; the
-  // caller's class goes to that inline box, as it lands on the `<code>` element
-  // upstream, while the root keeps only color, alignment, truncate and weight.
+  // so it lands last and wins (port sheet §1). `type.code` keeps its upstream
+  // target (`base`), and for `type="code"` the root is computed without the type
+  // variant so those declarations land only on the inline box below: an
+  // upstream `<code>` is inline, and `bg-default` on NSH's block root would fill
+  // the row. The caller's class goes to that inline box too, as it lands on the
+  // `<code>` element upstream, while the root keeps color, alignment, truncate
+  // and weight.
   const isCode = computed(() => resolvedType() === "code");
 
-  const classes = computed(() =>
-    typographyVariants({
+  const classes = computed(() => {
+    const shared = {
       align: local.align,
       color: local.color,
       truncate: local.truncate,
-      type: resolvedType(),
       weight: local.weight,
-    }).base({ className: isCode() ? undefined : local.className }),
-  );
+    };
+
+    return isCode()
+      ? typographyVariants(shared).base()
+      : typographyVariants({ ...shared, type: resolvedType() }).base({
+          className: local.className,
+        });
+  });
 
   // R-010 / R-030: upstream `<code>` is an inline element, so its background,
-  // radius and padding cover the characters. NSH's root `Text` is a block
-  // (`bg-default` there would fill the row), while a nested `Text` is an inline
-  // span; the code box is that span, which also makes `app.spanStyle` report
-  // the background (port sheet §6.5).
+  // radius and padding cover the characters. NSH's root `Text` is a block, while
+  // a nested `Text` is an inline span; the code box is that span, which also
+  // makes `app.spanStyle` report the background (port sheet §6.5).
+  //
+  // The span takes the `base` slot of `type: "code"` and then the resolved
+  // `color` dimension. The table declares `type` before `color`, as
+  // `typography.css` does (`.typography--code` at 117 before
+  // `.typography--color-muted` at 141), so the later color class wins over the
+  // code's own `text-foreground`: `color="muted"` reaches the code box as it
+  // does upstream. A Code that only inherits a muted Paragraph keeps its own
+  // default `color="default"`, hence `text-foreground`.
   const inlineCodeClasses = computed(() =>
-    typographyVariants({ type: "code" }).inlineCode({ className: local.className }),
+    typographyVariants({ color: local.color, type: "code" }).base({
+      className: local.className,
+    }),
   );
 
   // The single read of `children`, at the placement: a read builds new native
