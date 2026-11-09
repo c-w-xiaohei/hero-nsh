@@ -169,6 +169,79 @@ function Grow() {
   );
 }
 
+/*
+ * X-003 / X-004 clamp cases. Both start from a container scrolled to its end and
+ * then remove the overflow without any scroll: the shrink case drops the content
+ * under the viewport height, the growth case raises the viewport over the
+ * content. The host clamps its own offset back to 0 in both, and the state
+ * machine has to follow that clamped position (upstream re-reads `scrollTop` on
+ * every check, including the ones its Resize/Mutation observers trigger).
+ */
+function Shrink() {
+  const rows = signal(20);
+  const state = signal("-");
+  const calls = signal(0);
+  let scroller: ScrollRef | undefined;
+
+  return (
+    <Stage>
+      <View class="flex-row gap-2">
+        <Button onPress={() => scroller?.scrollTo({ y: 99999 })}>Scroll to end</Button>
+        <Button onPress={() => rows.set(2)}>Shrink rows</Button>
+      </View>
+      <Readouts state={state} calls={calls} />
+      <ScrollShadow
+        ref={(node) => {
+          scroller = node;
+        }}
+        testID="scroller"
+        className="h-40 w-64"
+        onVisibilityChange={(visibility) => {
+          state.set(visibility);
+          calls.update((count) => count + 1);
+        }}
+      >
+        {Array.from({ length: rows() }, (_, index) => (
+          <Text class="h-10">{`Row ${index}`}</Text>
+        ))}
+      </ScrollShadow>
+    </Stage>
+  );
+}
+
+function GrowViewport() {
+  const height = signal(160);
+  const state = signal("-");
+  const calls = signal(0);
+  let scroller: ScrollRef | undefined;
+
+  return (
+    <Stage>
+      <View class="flex-row gap-2">
+        <Button onPress={() => scroller?.scrollTo({ y: 99999 })}>Scroll to end</Button>
+        <Button onPress={() => height.set(400)}>Grow viewport</Button>
+      </View>
+      <Readouts state={state} calls={calls} />
+      <ScrollShadow
+        ref={(node) => {
+          scroller = node;
+        }}
+        testID="scroller"
+        className="w-64"
+        style={{ height: height() }}
+        onVisibilityChange={(visibility) => {
+          state.set(visibility);
+          calls.update((count) => count + 1);
+        }}
+      >
+        {Array.from({ length: 8 }, (_, index) => (
+          <Text class="h-10">{`Row ${index}`}</Text>
+        ))}
+      </ScrollShadow>
+    </Stage>
+  );
+}
+
 function Rerender() {
   const renders = signal(0);
   const state = signal("-");
@@ -451,6 +524,8 @@ export const scrollShadowScenarios = {
   "scroll-shadow/fitting": Fitting,
   "scroll-shadow/offset": Offset,
   "scroll-shadow/grow": Grow,
+  "scroll-shadow/shrink": Shrink,
+  "scroll-shadow/grow-viewport": GrowViewport,
   "scroll-shadow/rerender": Rerender,
   "scroll-shadow/horizontal": Horizontal,
   "scroll-shadow/horizontal-rtl": HorizontalRtl,

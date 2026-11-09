@@ -1,11 +1,13 @@
-import { expect, test } from "nsh/test";
+import { expect, open, test } from "nsh/test";
+import type { App } from "nsh/test";
 import { openScenario } from "../../helpers/open-scenario";
 
 /*
  * HeroUI 3.2.7 regression cases for ScrollShadow, per port sheet 4b
  * (T-001, T-003, T-008, T-010, T-012 … T-017, T-019, T-020, T-023 … T-026,
- * T-029 … T-032), plus X-001 / X-002. Every case keeps its upstream file:line
- * above it.
+ * T-029 … T-032), plus X-001 … X-005. Every case keeps its upstream file:line
+ * above it. X-005 reads the mount mask through harness/scroll-shadow.fixtures.tsx,
+ * because a view's `maskImage` is not observable from a scenario.
  *
  * What this host cannot read is stated on the partial ports: the mask string,
  * the BEM classes and the `data-*` state attributes (D18 and no attribute
@@ -250,7 +252,17 @@ test("T-029 still fades only the end edge while resting at the start in RTL", as
 // vocabulary is covered by T-024 / T-025). The four upstream `expect(` calls
 // read data attributes and the mask; the retained chain is: detected while
 // enabled, a scroll while disabled neither notifies nor is lost (the scroll
-// count proves it), and re-enabling detects the state again.
+// count proves it), and re-enabling detects the state again — with no further
+// scroll, as upstream re-enables and only polls the attribute (:268-270). The
+// scroll that ran while detection was off left the container at y = 200, so the
+// state it must re-report is `both`.
+//
+// The last upstream block (:272-279, the same fixture with `isEnabled={false}`
+// and `visibility="both"`) is an unobservable partial port: it asserts the
+// explicit `data-*-scroll` attribute and that the mask is not `none`.
+// Controlled visibility never notifies, and the mask cannot be read here. It is
+// NOT covered by T-032, which runs with detection enabled and only proves that a
+// controlled `visibility` suppresses the callback.
 test("T-030 supports disabling and re-enabling an overflowing vertical container", async () => {
   const app = await openScenario("scroll-shadow/toggle");
 
@@ -265,9 +277,9 @@ test("T-030 supports disabling and re-enabling an overflowing vertical container
   expect(app.shows("text:/^scrolls:[1-9]/")).toBe(true);
 
   await app.press("role:button[Toggle enabled]");
-  await app.press("role:button[Scroll to middle]");
-  await app.waitFor("text:state:both");
+  await app.waitFor("text:calls:2");
   expect(app.shows("text:state:both")).toBe(true);
+  expect(app.shows("text:calls:2")).toBe(true);
 });
 
 // heroui/packages/react/tests/components/scroll-shadow/scroll-shadow.browser.test.tsx:283
@@ -287,7 +299,9 @@ test("T-031 renders no fade when detection is turned off", async () => {
 // heroui/packages/react/tests/components/scroll-shadow/scroll-shadow.browser.test.tsx:306
 // Partial port (port sheet T-032): the mode attribute and the mask string are
 // dropped. The retained half: a controlled `visibility="both"` turns automatic
-// detection off, so scrolling never calls the callback.
+// detection off, so scrolling never calls the callback. This does not stand in
+// for T-030's controlled-and-disabled block (:272-279): both assert the drawn
+// mask, which is unreadable here.
 test("T-032 keeps using the attribute-driven mask", async () => {
   const app = await openScenario("scroll-shadow/controlled");
 
@@ -337,4 +351,113 @@ test("X-002 reports a resting RTL row once when the direction comes from the dir
 
   expect(app.shows("text:calls:1")).toBe(true);
   expect(app.shows("text:history:->right")).toBe(true);
+});
+
+/**
+ * The `calls:<n>` readout, as a number. The web target delivers one command as
+ * a short eased glide, so a single scroll can pass through an intermediate state
+ * (`bottom` -> `both` -> `top`) and add more than one call; comparisons are made
+ * against the count read before the step, never against a fixed number.
+ */
+function callsNow(app: App): number {
+  const line = app.texts().find((text) => /^calls:\d+$/.test(text));
+
+  if (!line) throw new Error(`no calls readout; on screen: ${app.texts().join(" | ")}`);
+
+  return Number(line.slice("calls:".length));
+}
+
+// X-003: src/primitives/create-scroll-shadow/create-scroll-shadow.ts:191-201,335-356
+// Upstream reads the live, host-clamped offset on every check
+// (tmp/vendor/heroui/packages/react/src/components/scroll-shadow/use-scroll-shadow.ts:44-49)
+// and re-runs that check after content and viewport changes (same file:136-154).
+// Here the offset is written only by `onScroll`, so after the content shrinks
+// under the viewport the host clamps its own position to 0 and draws the first
+// rows, while the cached offset leaves the state machine at `top`. The shrink
+// scenario has 20 rows of 40pt (800pt) in a 160pt box and then drops to 2 rows
+// (80pt): the state has to reach `none` and the shrink must notify again, while
+// the bug leaves both the state and the count where the scroll left them.
+test("X-003 clamps the offset when the content shrinks under the viewport", async () => {
+  const app = await openScenario("scroll-shadow/shrink");
+
+  await app.press("role:button[Scroll to end]");
+  await app.waitFor("text:state:top");
+  const settled = callsNow(app);
+
+  expect(settled).toBeGreaterThanOrEqual(2);
+
+  await app.press("role:button[Shrink rows]");
+  await app.waitFor("text:state:none");
+  expect(callsNow(app)).toBeGreaterThan(settled);
+});
+
+// X-004: src/primitives/create-scroll-shadow/create-scroll-shadow.ts:191-201,343-356
+// The same missing re-clamp on the other measurement: upstream's ResizeObserver
+// re-runs the check when the container's own box changes
+// (tmp/vendor/heroui/packages/react/src/components/scroll-shadow/use-scroll-shadow.ts:136-139).
+// Content is 320pt in a 160pt viewport, scrolled to its end; growing the viewport
+// to 400pt leaves nothing to scroll. The host clamps the offset to 0, so the
+// state has to be `none` and the growth has to notify again; the cached offset of
+// 160 keeps reporting `top` with no further call.
+test("X-004 clamps the offset when the viewport grows over the content", async () => {
+  const app = await openScenario("scroll-shadow/grow-viewport");
+
+  await app.press("role:button[Scroll to end]");
+  await app.waitFor("text:state:top");
+  const settled = callsNow(app);
+
+  expect(settled).toBeGreaterThanOrEqual(2);
+
+  await app.press("role:button[Grow viewport]");
+  await app.waitFor("text:state:none");
+  expect(callsNow(app)).toBeGreaterThan(settled);
+});
+
+/**
+ * A point-based mask is wrong before the first measurement: the axis extent is
+ * still 0 (`create-scroll-shadow.ts:143`), so its stops cannot describe a box
+ * that already has a size. In auto mode every stop collapses to 0px and the
+ * whole root is transparent; in controlled mode the 40px stops fall outside the
+ * box. Only an absent mask, or a percentage-based one (opaque at any length),
+ * leaves the content visible.
+ */
+function masksBeforeMeasuring(mask: string | undefined): boolean {
+  if (!mask) return false;
+
+  return !mask.includes("%");
+}
+
+function mountMaskOf(app: App, name: string): string | undefined {
+  const prefix = `mask:${name}:`;
+  const line = app.texts().find((text) => text.startsWith(prefix));
+
+  if (!line) throw new Error(`no ${name} mask readout; on screen: ${app.texts().join(" | ")}`);
+
+  const mask = line.slice(prefix.length);
+
+  return mask === "none" ? undefined : mask;
+}
+
+// X-005: src/primitives/create-scroll-shadow/create-scroll-shadow.ts:241-260 and
+// src/components/scroll-shadow/scroll-shadow.tsx:239-247.
+// The viewport snapshot starts at `{0,0}` (`create-scroll-shadow.ts:143`) but
+// auto mode returns a gradient anyway; at length 0 every stop is 0px
+// (`fadeGradient`, :109-119) and NSH draws a view only where its mask is opaque
+// (harness/.nsh/types/nsh/types.d.ts:345-346), so the scroll box is transparent
+// until the first `onLayout` delivers a size. Upstream's auto gradient uses
+// percentage stops (tmp/vendor/heroui/packages/styles/components/scroll-shadow.css:185-188),
+// which is opaque on the first paint. The fixture prints the primitive's mount
+// mask in both auto and controlled mode; neither may be point-based.
+test("X-005 keeps the content unmasked until the first measurement", async () => {
+  const app = await open("../../../scroll-shadow.fixtures.tsx", {
+    platform: "windows",
+    width: 1024,
+    height: 768,
+  });
+
+  const auto = mountMaskOf(app, "auto");
+  const controlled = mountMaskOf(app, "controlled");
+
+  expect(masksBeforeMeasuring(auto)).toBe(false);
+  expect(masksBeforeMeasuring(controlled)).toBe(false);
 });
