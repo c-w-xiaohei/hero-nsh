@@ -323,9 +323,10 @@ export function PopoverContent(props: PopoverContentProps) {
     [slots.base(), className()].filter((part) => part !== "").join(" ");
 
   // R-005 / R-010: the entering start classes come off one frame after mount;
-  // the exit classes stay for the 100ms hold. R-006 … R-009 add the placement
-  // translation. The property list is inline (Button's solved pattern) so the
-  // duration stays on the base class while the starting classes come off.
+  // the exit classes stay for the 100ms hold. The per-side translation start
+  // classes are the classList forms of R-006 … R-009 below. The property list
+  // is inline (Button's solved pattern) so the duration stays on the base
+  // class while the starting classes come off.
   const classList = computed(() => {
     const list: Record<string, boolean> = {};
     const current = side();
@@ -334,12 +335,16 @@ export function PopoverContent(props: PopoverContentProps) {
       list["opacity-0 scale-90"] = true;
 
       if (current === "top") {
+        // R-006: enter from below, up into place.
         list["translate-y-1"] = true;
       } else if (current === "bottom") {
+        // R-007: enter from above, down into place.
         list["-translate-y-1"] = true;
       } else if (current === "left") {
+        // R-008: enter from the right, leftwards into place.
         list["translate-x-1"] = true;
       } else {
+        // R-009: enter from the left, rightwards into place.
         list["-translate-x-1"] = true;
       }
     }
