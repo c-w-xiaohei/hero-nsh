@@ -28,3 +28,4 @@ export * from "./components/error-message";
 export * from "./components/select";
 export * from "./components/icons";
 export * from "./components/form";
+export * from "./components/switch-group";
