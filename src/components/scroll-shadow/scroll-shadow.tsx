@@ -255,9 +255,10 @@ export function ScrollShadowRoot(props: ScrollShadowRootProps): JSX.Element {
 
   // The measuring content layer mirrors the scroll axis, so a horizontal box
   // still lays its children in a row; `static` keeps absolute children anchored
-  // to the root, as upstream's positioned `div` does (port sheet §3).
+  // to the root, as upstream's positioned `div` does (port sheet §3). Both are
+  // classes, not inline style (twref: `static`, `flex-row`).
   const contentClass = computed(() =>
-    orientation() === "horizontal" ? "flex-row" : undefined,
+    orientation() === "horizontal" ? "static flex-row" : "static",
   );
 
   return (
@@ -283,19 +284,16 @@ export function ScrollShadowRoot(props: ScrollShadowRootProps): JSX.Element {
     >
       <View
         class={contentClass()}
-        // `static`: absolute children of the scroll box anchor to the root, as
-        // they do in upstream's DOM, where the scroll container is their
-        // containing block. This layer only reports the content box.
-        style={{ position: "static" }}
         onLayout={(event) => state.onContentLayout(event)}
       >
         <If when={orientation() === "horizontal"}>
           {/* The direction probe: a zero-size child at the row's inline start.
               Its x is 0 when the row runs left to right and the row's width
               when it runs right to left; NSH has no accessor for an inherited
-              `direction` (port sheet §8). */}
+              `direction` (port sheet §8). Zero size is a pair of classes, so
+              only the mask and `direction` remain inline. */}
           <View
-            style={{ width: 0, height: 0 }}
+            class="h-0 w-0"
             onLayout={(event) => probedRtl.set(event.bounds.origin.x > 0.5)}
           />
         </If>
