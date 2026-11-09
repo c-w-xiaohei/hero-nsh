@@ -97,7 +97,10 @@ export function SurfaceRoot(props: SurfaceRootProps): JSX.Element {
     <SurfaceContext.Provider value={contextValue}>
       <View
         {...rest}
-        ref={local.ref}
+        // A callback only: NSH writes into a ref store, and an undefined one
+        // throws at mount on the web target, which leaves the page empty.
+        // Identical to the landed fix on `fix/real-hosts` (b1f4721).
+        ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
         nativeID={local.id ?? local.nativeID}
         // A `<div>` is not a keyboard focus stop upstream; without this a
         // pressable surface would become one (Tab moves between pressables).
