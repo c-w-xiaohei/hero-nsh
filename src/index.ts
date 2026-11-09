@@ -38,3 +38,4 @@ export * from "./components/pagination";
 export * from "./components/breadcrumbs";
 export * from "./components/accordion";
 export * from "./components/search-field";
+export * from "./components/number-field";
