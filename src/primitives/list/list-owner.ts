@@ -43,6 +43,13 @@ export interface ListOwnerListControls {
 
   /** Looks one registered option up (the owner's value renders its children). */
   findItem: (key: string) => ListOwnerItem | undefined;
+
+  /**
+   * Forgets the list's typeahead prefix. A field whose list stays mounted
+   * while it closes calls this on close: upstream the popover unmounts, which
+   * drops the search buffer (Select's list, port sheet T-068).
+   */
+  resetTypeAhead?: () => void;
 }
 
 /**

@@ -461,6 +461,9 @@ export function ListBoxRoot<T>(
         },
         focusedKey: () => manager().focusedKey(),
         findItem: (key) => findItemDescriptor(descriptors(), key),
+        // The field's list stays mounted while it closes; its typeahead prefix
+        // must not survive the close (the closed list would search "thf").
+        resetTypeAhead: selectableList.resetTypeAhead,
       }),
     );
   }

@@ -126,6 +126,18 @@ export function createTypeSelect(props: CreateTypeSelectProps) {
     /** The prefix typed in the current window, for tests and render props. */
     search,
 
+    /**
+     * Forgets the prefix and its reset timer. Kobalte's buffer lives as long as
+     * the element does; a port whose list stays mounted while its field closes
+     * (Select) calls this on close, standing in for the unmount React Aria's
+     * popover gets (`react-aria-components/src/Select.tsx`: the popover, and so
+     * `useTypeSelect`, is only mounted while open).
+     */
+    reset: () => {
+      clearTimer();
+      search.set("");
+    },
+
     typeSelectHandlers: {
       onKeyDown,
     },

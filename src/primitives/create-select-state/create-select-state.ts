@@ -145,6 +145,12 @@ export function createSelectState(
 
     if (!open) {
       placed = false;
+      // The list stays mounted while the field closes (port sheet §5, third
+      // change), so its typeahead prefix would survive the close; upstream the
+      // popover unmounts and the buffer goes with it (Kobalte's list is only
+      // rendered while open). A prefix typed before the close must not extend
+      // the first search after it.
+      controls()?.resetTypeAhead?.();
 
       return;
     }
