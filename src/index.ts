@@ -17,3 +17,4 @@ export * from "./components/header";
 export * from "./components/badge";
 export * from "./components/chip";
 export * from "./components/empty-state";
+export * from "./components/progress-bar";
