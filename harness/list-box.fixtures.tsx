@@ -32,6 +32,10 @@ import { probe } from "@scenario/probe";
  *   label-description    Label and Description inside an item (T-024)
  *   section-action       selectionMode none + Section + root onAction (T-003)
  *   indicator-selected   controlled {2} with a custom ✓ indicator (T-027)
+ *   dynamic-items        live items reordered / shrunk / grown (X-001)
+ *   dynamic-children     a static child added after mount (X-001)
+ *   empty-fill           an initially empty items list filled (X-001)
+ *   dynamic-replace      an item replaced under its key, and at a position (X-006)
  *
  * The `disabled` parameter of the dynamic cases (`mapped` by default, `none`
  * when it is "none") makes the second instance of T-007 … T-009: the same data
@@ -538,6 +542,63 @@ function EmptyFill() {
   );
 }
 
+type PlainItem = { name: string };
+
+/**
+ * X-006: two live collections whose data is replaced under an existing key.
+ * The keyed list renames id "1" (same id, new object); the keyless list
+ * replaces the object at position 0, whose key is its index.
+ */
+function DynamicReplace() {
+  const keyed = signal<ItemData[]>([ITEMS[0], ITEMS[1]]);
+  const plain = signal<readonly PlainItem[]>([{ name: "A" }, { name: "B" }]);
+
+  return (
+    <View class="w-64">
+      <ListBox
+        aria-label="Keyed"
+        selectionMode="single"
+        items={keyed()}
+        onSelectionChange={onSelectionChange}
+      >
+        {(item) => (
+          <ListBox.Item id={item.id} textValue={item.name} aria-label={item.name}>
+            <Label>{item.name}</Label>
+          </ListBox.Item>
+        )}
+      </ListBox>
+      <View
+        testID="rename"
+        role="button"
+        onPress={() =>
+          keyed.set([{ ...keyed()[0], name: "Uno", valueText: "Uno" }, keyed()[1]])
+        }
+      >
+        <Text>rename</Text>
+      </View>
+      <ListBox
+        aria-label="Positional"
+        selectionMode="single"
+        items={plain()}
+        onSelectionChange={onSelectionChange}
+      >
+        {(item) => (
+          <ListBox.Item textValue={item.name} aria-label={item.name}>
+            <Label>{item.name}</Label>
+          </ListBox.Item>
+        )}
+      </ListBox>
+      <View
+        testID="replace"
+        role="button"
+        onPress={() => plain.set([{ name: "C" }, plain()[1]])}
+      >
+        <Text>replace</Text>
+      </View>
+    </View>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "log");
   const disabledMapping = String(host.params.disabled ?? "mapped") !== "none";
@@ -691,6 +752,10 @@ function Fixture() {
 
   if (name === "empty-fill") {
     return <EmptyFill />;
+  }
+
+  if (name === "dynamic-replace") {
+    return <DynamicReplace />;
   }
 
   return <PlainList mode="single" />;

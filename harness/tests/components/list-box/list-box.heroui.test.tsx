@@ -10,6 +10,11 @@ import { options, selectOption, selectedOptions } from "../../testers/list-box";
  *
  * `data-slot` and the BEM class strings are D18 deletions; T-001 keeps the
  * observable parts (role, accessible name, option count, visible texts).
+ *
+ * T-003 and the agents that press keys live in list-box.heroui.web.test.tsx:
+ * they start with Tab on the listbox, which NSH 0.4.0's Win32 host cannot do
+ * (approved difference, port sheet section 8). The pointer cases stay here and
+ * run on every target.
  */
 
 function openFixture(name: string, options_: ScenarioOptions = {}) {
@@ -56,57 +61,6 @@ test("T-002 calls onSelectionChange when an option is selected via the ListBox t
   expect(changes).toHaveLength(1);
   expect(changes[0][0]).toEqual(["fred"]);
   expect(selectedOptions(app)).toBe(1);
-});
-
-// heroui/packages/react/tests/components/list-box/list-box.test.tsx:70
-// Ported (port sheet T-003): selectionMode="none" sends the press down the
-// action branch; the item's own onAction wins, else the root's key. The group
-// is named by aria-label because Header belongs to another unit. Both entry
-// points are exercised: the pointer press and the keyboard activation of the
-// focused row (Enter reaches the root as a native press on web).
-test("T-003 supports sections with onAction when selectionMode is none", async () => {
-  const app = await openFixture("section-action");
-
-  expect(app.shows("role:option[Copy link]")).toBe(true);
-
-  await app.press("role:option[Copy link]");
-
-  expect(callsOf(app, "onAction")).toEqual([["copy-link"]]);
-
-  const keyboard = await openFixture("section-action", { platform: "web" });
-
-  await keyboard.keyboard.press("tab");
-  await keyboard.keyboard.press("arrowdown");
-  await keyboard.keyboard.press("enter");
-
-  expect(callsOf(keyboard, "onAction")).toEqual([["copy-link"]]);
-});
-
-// Port sheet §1 (escapeKeyBehavior row): the root binds Escape while focused
-// and clears the selection by default; "none" leaves it alone. The selection
-// starts on Two, so an unchanged marker proves the Escape did nothing.
-test("clears the selection on Escape and honors escapeKeyBehavior none", async () => {
-  const app = await openFixture("escape", { platform: "web" });
-
-  await app.keyboard.press("tab");
-  expect(app.count("role:option[Two] >> text:✓")).toBe(1);
-
-  await app.keyboard.press("escape");
-
-  expect(app.count("role:option[Two] >> text:✓")).toBe(0);
-
-  const changes = callsOf(app, "selectionChange");
-
-  expect(changes).toHaveLength(1);
-  expect(changes[0][0]).toEqual([]);
-
-  const pinned = await openFixture("escape-none", { platform: "web" });
-
-  await pinned.keyboard.press("tab");
-  await pinned.keyboard.press("escape");
-
-  expect(pinned.count("role:option[Two] >> text:✓")).toBe(1);
-  expect(callsOf(pinned, "selectionChange")).toHaveLength(0);
 });
 
 // heroui/packages/react/src/components/list-box/list-box.tsx:20-29
@@ -175,50 +129,6 @@ test("X-001 updates a live items collection and replaces the empty state", async
   expect(changes[0][0]).toEqual(["1"]);
 });
 
-// heroui/packages/react/src/components/list-box/list-box.stories.tsx:87,117
-// X-002: three sections without ids, five 40 pt rows each, in a 160 pt box.
-// The rows below the fold have no visible marker, so the focused row is read
-// by activating it after PageDown: selectionMode is single and the payload
-// names the key. Focus that stays in section A reports `a5`.
-test("X-002 pages into the next keyless section", async () => {
-  const app = await openFixture("keyless-sections", { platform: "web" });
-
-  await app.keyboard.press("tab");
-  expect(app.shows("text:A1*")).toBe(true);
-
-  await app.keyboard.press("arrowdown");
-  await app.keyboard.press("arrowdown");
-  await app.keyboard.press("arrowdown");
-  await app.keyboard.press("arrowdown");
-
-  await app.keyboard.press("pagedown");
-  await app.keyboard.press("space");
-
-  const changes = callsOf(app, "selectionChange");
-  const keys = changes[0][0] as string[];
-
-  expect(changes).toHaveLength(1);
-  expect(keys).toHaveLength(1);
-  expect(keys[0]).toMatch(/^b[1-5]$/);
-});
-
-// heroui/packages/styles/components/list-box-item.css:37-39
-// X-004: a pointer press must not show the keyboard focus ring. The fixture
-// draws `Name*` for isFocused and `Name!` for isFocusVisible; the keyboard Tab
-// first proves the ring marker is live, then the pointer press must clear it.
-test("X-004 a pointer press does not show the keyboard focus ring", async () => {
-  const app = await openFixture("focus-ring", { platform: "web" });
-
-  await app.keyboard.press("tab");
-
-  expect(app.shows("text:One*!")).toBe(true);
-
-  await app.press("role:option[Two]");
-
-  expect(app.count("text:/!$/")).toBe(0);
-  expect(app.count("text:/\\*!$/")).toBe(0);
-});
-
 // heroui/packages/styles/components/list-box-item.css:24-26
 // X-005: the label shares the row's hit area. With shouldSelectOnPressUp a
 // press on the label text itself must still run the row's selection on release.
@@ -234,4 +144,41 @@ test("X-005 pressing the label selects the row with shouldSelectOnPressUp", asyn
   expect(changes).toHaveLength(1);
   expect(changes[0][0]).toEqual(["1"]);
   expect(app.count("role:option[One] >> text:✓")).toBe(1);
+});
+
+// react-aria-components/src/ListBox.tsx:154-160,582-595
+// X-006: replacing the data at an existing key re-renders that row, it does
+// not leave the old content. The keyed list renames id "1" ("One" -> "Uno")
+// under the same id; the keyless list replaces the object at position 0
+// ("A" -> "C"), whose identity is the index. Both rows keep their key and
+// must show the new text; the press payloads prove the keys did not move.
+test("X-006 rebuilds a kept row from a replaced item", async () => {
+  const app = await openFixture("dynamic-replace");
+
+  expect(app.count("role:option")).toBe(4);
+  expect(app.shows("text:One")).toBe(true);
+
+  await app.press("id:rename");
+
+  expect(app.count("text:One")).toBe(0);
+  expect(app.count("text:Uno")).toBe(1);
+  expect(app.count("role:option")).toBe(4);
+
+  await app.press("role:option[Uno]");
+
+  let changes = callsOf(app, "selectionChange");
+  expect(changes[changes.length - 1][0]).toEqual(["1"]);
+
+  expect(app.shows("text:A")).toBe(true);
+
+  await app.press("id:replace");
+
+  expect(app.count("text:A")).toBe(0);
+  expect(app.count("text:C")).toBe(1);
+  expect(app.count("role:option")).toBe(4);
+
+  await app.press("role:option[C]");
+
+  changes = callsOf(app, "selectionChange");
+  expect(changes[changes.length - 1][0]).toEqual(["0"]);
 });
