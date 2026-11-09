@@ -35,6 +35,15 @@ export interface FieldErrorState {
   isToggleField?: () => boolean;
 
   /**
+   * The classes the field root would otherwise apply to the FieldError through
+   * a descendant selector (`ps-[3.25rem]` under a switch, `opacity-50` when the
+   * field is disabled, a `Checkbox`'s indentation, …). The field root decides
+   * them; the FieldError only appends them after its own variant classes, the
+   * same channel `DescriptionContext.partClass` uses.
+   */
+  partClass?: () => string | undefined;
+
+  /**
    * Registers the visible error text with the field, so the field can expose
    * it as the accessible description of its control (`accessibilityHint`),
    * standing in for `slot="errorMessage"` + `aria-describedby`.

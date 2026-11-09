@@ -5,3 +5,4 @@ export * from "./components/label";
 export * from "./components/description";
 export * from "./components/field-error";
 export * from "./components/button";
+export * from "./components/switch";
