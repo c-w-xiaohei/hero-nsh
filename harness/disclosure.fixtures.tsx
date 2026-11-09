@@ -30,6 +30,15 @@ import { probe } from "@scenario/probe";
  *   group-multiple   `allowsMultipleExpanded`, nothing expanded (T-011)
  *   group-disabled   group `isDisabled` (T-013)
  *   group-controlled `expandedKeys` held at {preview} (T-012)
+ *   group-single-two-defaults  single mode with defaultExpandedKeys of both
+ *                    items, so the state must collapse to the first (X-002)
+ *   group-controlled-two  single mode with controlled `expandedKeys` of both,
+ *                    which must collapse the same way (X-002)
+ *   group-state      multiple mode whose root `className` function captures the
+ *                    render-props state; `Set both keys` calls its
+ *                    `setExpandedKeys` (X-001)
+ *   group-render-children  disabled group with children as a one-argument
+ *                    render function reading `values.isDisabled()` (X-003)
  *   group-three      three items (one / two / three), nothing expanded
  *                    (T-040, T-042, T-045, T-048)
  *   group-three-expanded         three items, default {one} (T-033, T-034,
@@ -168,6 +177,56 @@ function GroupCase(props: {
   );
 }
 
+/* X-001: the group's render-props state must carry `setExpandedKeys` (React
+ * Stately's DisclosureGroupState). The className function is where HeroUI's
+ * render props hand that state to a caller; the button then applies a new set,
+ * exactly as an app would. */
+function StateApiCase() {
+  let applyBoth: ((keys: Set<string | number>) => void) | undefined;
+
+  return (
+    <Stage>
+      <View role="button" onPress={() => applyBoth?.(new Set(["preview", "download"]))}>
+        <Text>Set both keys</Text>
+      </View>
+      <DisclosureGroup
+        testID="disclosure-group"
+        allowsMultipleExpanded
+        className={(values) => {
+          applyBoth = (keys) => values.state.setExpandedKeys(keys);
+          return "";
+        }}
+      >
+        {TWO_ITEMS.map((item) => (
+          <GroupItem item={item} />
+        ))}
+      </DisclosureGroup>
+    </Stage>
+  );
+}
+
+/* X-003: children may be a one-argument render function receiving the group's
+ * render values; `isDisabled` is an accessor per D17. The items stay inside the
+ * function so the provider must wrap the resolved children. */
+function RenderChildrenCase() {
+  return (
+    <Stage>
+      <DisclosureGroup testID="disclosure-group" isDisabled>
+        {(values) => (
+          <View class="flex flex-col items-start">
+            <Text testID="children-render-props">
+              {values.isDisabled() ? "group is disabled" : "group is enabled"}
+            </Text>
+            {TWO_ITEMS.map((item) => (
+              <GroupItem item={item} />
+            ))}
+          </View>
+        )}
+      </DisclosureGroup>
+    </Stage>
+  );
+}
+
 /* -------------------------------------------------------------------------------------------------
  * useDisclosureGroupNavigation harness
  * -----------------------------------------------------------------------------------------------*/
@@ -256,6 +315,14 @@ function Fixture() {
   if (name === "group-multiple") return <GroupCase items={TWO_ITEMS} multiple />;
   if (name === "group-disabled") return <GroupCase items={TWO_ITEMS} disabled />;
   if (name === "group-controlled") return <GroupCase items={TWO_ITEMS} expanded={["preview"]} />;
+  if (name === "group-single-two-defaults") {
+    return <GroupCase items={TWO_ITEMS} defaultExpanded={["preview", "download"]} />;
+  }
+  if (name === "group-controlled-two") {
+    return <GroupCase items={TWO_ITEMS} expanded={["preview", "download"]} />;
+  }
+  if (name === "group-state") return <StateApiCase />;
+  if (name === "group-render-children") return <RenderChildrenCase />;
   if (name === "group-three") return <GroupCase items={THREE_ITEMS} />;
   if (name === "group-three-expanded") {
     return <GroupCase items={THREE_ITEMS} defaultExpanded={["one"]} />;

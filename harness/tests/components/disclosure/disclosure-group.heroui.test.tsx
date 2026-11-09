@@ -78,10 +78,19 @@ test("T-010 supports single expanded item by default", async () => {
 
 // heroui/packages/react/tests/components/disclosure-group/disclosure-group.test.tsx:73
 // Partial port (port sheet T-011): the two `aria-expanded` assertions are
-// dropped; both panel bodies showing is the effect they stood for.
+// dropped; both panel bodies showing is the effect they stood for. The case
+// starts collapsed and expands by pressing, as upstream does, so a group that
+// ignores `allowsMultipleExpanded` closes Preview and fails here.
 test("T-011 supports multiple expanded items with allowsMultipleExpanded", async () => {
-  const app = await openScenario("disclosure/group-multiple");
+  const app = await openCase({ case: "group-multiple" });
 
+  expect(app.shows(PREVIEW_CONTENT)).toBe(false);
+  expect(app.shows(DOWNLOAD_CONTENT)).toBe(false);
+
+  await app.press(TRIGGER_PREVIEW);
+  expect(app.shows(PREVIEW_CONTENT)).toBe(true);
+
+  await app.press(TRIGGER_DOWNLOAD);
   expect(app.shows(PREVIEW_CONTENT)).toBe(true);
   expect(app.shows(DOWNLOAD_CONTENT)).toBe(true);
 });
@@ -241,4 +250,52 @@ test("T-028 adds the next item to the existing selection", async () => {
   await app.press("role:button[Next]");
 
   expect(callsOf(app, "onExpandedChange")).toEqual([["preview", "download"]]);
+});
+
+/* -------------------------------------------------------------------------------------------------
+ * Review regressions (round 3)
+ *
+ * Each case drives the public HeroUI API the way an app would; it fails on the
+ * reported bug and passes once the fix lands.
+ * -----------------------------------------------------------------------------------------------*/
+
+// src/components/disclosure-group/disclosure-context.ts:19-35; src/components/disclosure-group/disclosure-group-root.tsx:167-176
+test("X-001 exposes setExpandedKeys on the group render-props state", async () => {
+  const app = await openCase({ case: "group-state" });
+
+  expect(app.shows(PREVIEW_CONTENT)).toBe(false);
+  expect(app.shows(DOWNLOAD_CONTENT)).toBe(false);
+
+  await app.press("role:button[Set both keys]");
+
+  expect(app.shows(PREVIEW_CONTENT)).toBe(true);
+  expect(app.shows(DOWNLOAD_CONTENT)).toBe(true);
+});
+
+// src/components/disclosure-group/disclosure-group-root.tsx:131-165
+test("X-002 collapses several default keys in single mode", async () => {
+  const app = await openCase({ case: "group-single-two-defaults" });
+
+  await app.wait(20);
+
+  expect(app.shows(PREVIEW_CONTENT)).toBe(true);
+  expect(app.shows(DOWNLOAD_CONTENT)).toBe(false);
+  expect(callsOf(app, "onExpandedChange")).toEqual([["preview"]]);
+
+  const controlled = await openCase({ case: "group-controlled-two" });
+
+  await controlled.wait(20);
+
+  expect(controlled.shows(PREVIEW_CONTENT)).toBe(true);
+  expect(controlled.shows(DOWNLOAD_CONTENT)).toBe(false);
+  expect(callsOf(controlled, "onExpandedChange")).toEqual([["preview"]]);
+});
+
+// src/components/disclosure-group/disclosure-group-root.tsx:33-35,196-211; src/components/disclosure-group/render-children.tsx:22-24
+test("X-003 accepts children as a render function receiving group values", async () => {
+  const app = await openCase({ case: "group-render-children" });
+
+  expect(app.shows("text:group is disabled")).toBe(true);
+  expect(app.enabled(TRIGGER_PREVIEW)).toBe(false);
+  expect(app.enabled(TRIGGER_DOWNLOAD)).toBe(false);
 });
