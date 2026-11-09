@@ -28,11 +28,17 @@ test("T-001 renders with role, accessible name, and href", async () => {
 test("T-004 supports hover state", async () => {
   const app = await openScenario("link/basic");
 
-  // The base classes say no-underline; the hover state adds it (R-006).
+  // data-hovered is not projected; the public onHoverStart / onHoverEnd report
+  // the same state that adds the underline (R-006).
+  expect(callsOf(app, "onHoverStart")).toHaveLength(0);
+
   await app.hover("id:link-docs");
+  expect(callsOf(app, "onHoverStart")).toHaveLength(1);
+  // The base classes say no-underline; the hover state adds it.
   expect(app.spanStyle("id:link-docs >> text:HeroUI").underline).toBe(true);
 
   await app.hover("id:link-elsewhere");
+  expect(callsOf(app, "onHoverEnd")).toHaveLength(1);
   expect(app.spanStyle("id:link-docs >> text:HeroUI").underline).toBe(false);
 });
 

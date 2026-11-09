@@ -28,7 +28,13 @@ import type { Component } from "./types";
 function Basic() {
   return (
     <Stage>
-      <Link href="https://heroui.com" testID="link-docs" onPress={probe("onPress")}>
+      <Link
+        href="https://heroui.com"
+        testID="link-docs"
+        onHoverStart={probe("onHoverStart")}
+        onHoverEnd={probe("onHoverEnd")}
+        onPress={probe("onPress")}
+      >
         HeroUI
       </Link>
       <Link href="#elsewhere" testID="link-elsewhere">
