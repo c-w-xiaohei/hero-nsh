@@ -24,6 +24,9 @@ export interface SwitchControlProps extends Omit<ViewProps, "children" | "class"
 
   /** The track's view, as `ComponentPropsWithRef` gives upstream. */
   ref?: (node: ViewRef) => void;
+
+  /** Accepted, no effect: NSH has no DOM render function to replace the element. */
+  render?: unknown;
 }
 
 /**
@@ -41,6 +44,7 @@ export function SwitchControl(props: SwitchControlProps): JSX.Element {
     "ref",
     "id",
     "nativeID",
+    "render",
     "onLayout",
   ] as const);
 
@@ -52,7 +56,7 @@ export function SwitchControl(props: SwitchControlProps): JSX.Element {
   // branch: checked wins over hover, and either interaction on a checked track
   // uses the checked-hover colour.
   const background = () => {
-    const active = !ctx.isDisabled() && (ctx.isHovered() || ctx.isPressed());
+    const active = !ctx.isDisabled() && (ctx.isHovered() || ctx.isActive());
 
     if (ctx.isSelected()) {
       // R-006: `--switch-control-bg-checked: var(--accent)` used through the

@@ -1,5 +1,5 @@
-import type { Bounds, JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { computed, effect, signal, split, View } from "nsh";
+import type { Bounds, JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh";
+import { computed, effect, signal, split, untracked, View } from "nsh";
 
 import { createInteractionModality } from "../../primitives/create-interaction-modality";
 import { createToggleState } from "../../primitives/create-toggle-state";
@@ -11,6 +11,7 @@ import {
   type SwitchContextValue,
   type SwitchFieldRenderProps,
   SwitchContext,
+  type SwitchPressHandlers,
   type SwitchToggleState,
 } from "./switch-context";
 import { switchVariants } from "./switch.styles";
@@ -73,6 +74,29 @@ export interface SwitchRootProps {
 
   /** Called with the next selected state whenever the user changes it. */
   onChange?: (isSelected: boolean) => void;
+
+  /**
+   * A user press on the switch, pointer or keyboard. React Aria hands the field
+   * root these `PressEvents` (`react-aria/src/toggle/useToggle.ts:38-45,
+   * 119-184`) and fires them from the label; NSH fires them from the Content
+   * (the pressable face) and from a `Label` inside it.
+   */
+  onPress?: (e: PressEvent) => void;
+
+  /** The press began. */
+  onPressStart?: (e: PressEvent) => void;
+
+  /** The press ended; `onPress` follows only when it ended on the switch. */
+  onPressEnd?: (e: PressEvent) => void;
+
+  /** Every press-start / press-end transition, as `usePress` reports it. */
+  onPressChange?: (isPressed: boolean) => void;
+
+  /** The press was released over the switch. */
+  onPressUp?: (e: PressEvent) => void;
+
+  /** A completed activation. NSH has no DOM `click`, so this follows `onPress`. */
+  onClick?: (e: PressEvent) => void;
 
   /** Blocks interaction and dims the field. */
   isDisabled?: boolean;
@@ -200,6 +224,12 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
     "isSelected",
     "defaultSelected",
     "onChange",
+    "onPress",
+    "onPressStart",
+    "onPressEnd",
+    "onPressChange",
+    "onPressUp",
+    "onClick",
     "isDisabled",
     "isReadOnly",
     "isRequired",
@@ -269,9 +299,12 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
   };
 
   // `setSelected` and `toggle` are React Stately's names, kept 1:1 (port sheet
-  // §1). `setSelected` maps to the primitive's setter directly; the toggle
-  // re-runs validation after the first commit, as upstream does once a field
-  // has been committed.
+  // §1). `setSelected` maps to the primitive's setter directly. `toggle` is the
+  // user's toggle: upstream attaches a `change` listener that calls
+  // `commitValidation()` on every input change
+  // (`react-aria/src/form/useFormValidation.ts:91-93`), so the error appears on
+  // the first press, not only after a blur, and `setSelected` from a controlled
+  // parent keeps the old "recheck after the first commit" behaviour.
   const setSelected = (value: boolean) => {
     toggleState.setIsSelected(value);
 
@@ -282,10 +315,8 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
 
   const toggle = () => {
     toggleState.toggle();
-
-    if (hasCommitted) {
-      runValidation();
-    }
+    hasCommitted = true;
+    runValidation();
   };
 
   const state: SwitchToggleState = {
@@ -309,6 +340,13 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
   // `focusField` records the pointer before it focuses.
   const isFocusVisible = computed(() => focused() && modality.isKeyboard());
 
+  // The render prop's `isPressed` is React Aria's: the label's press is
+  // disabled for `isDisabled || isReadOnly`, so it stays off on a read-only
+  // switch. The track still paints the held state through `isActive`, which
+  // stands in for the stylesheet's `.switch:active &` (switch.css:112-117) and
+  // fires even when read-only.
+  const isPressed = computed(() => pressed() && !isDisabled() && !isReadOnly());
+
   // R-037: the track is measured by the Control and the thumb slides by the
   // difference; layout properties cannot be animated in NSH.
   const trackWidth = signal(0);
@@ -322,17 +360,109 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
     contentNode = node;
   };
 
+  // A Label inside the field reports only "it was pressed" through
+  // `FieldContext.focusField`, with no event: HeroUI's Label renders a `<span>`
+  // inside the `<label>`, while NSH's Label is its own pressable Text. The
+  // press therefore reaches the switch as this positionless activation, and the
+  // root's press callbacks receive it as such. It is not used for modality:
+  // `focusField` records the pointer itself.
+  const labelPressEvent = (): PressEvent => ({
+    position: { x: 0, y: 0 },
+    pagePosition: { x: 0, y: 0 },
+    modifiers: { control: false, alt: false, shift: false, platform: false },
+    clickCount: 1,
+  });
+
+  // Upstream's press handlers, reported by whichever part saw the press. The
+  // pressed signal changes with the start and the end, so the Content, the
+  // Label and the track all read one source (R-028 / R-030 / R-031). A caller
+  // may have put the callbacks on the field root (the HeroUI place) or, as NSH
+  // code tends to, on the pressable Content; the root's own props win when both
+  // exist, and exactly one handler runs either way.
+  let contentPressHandlers: SwitchPressHandlers | undefined;
+
+  const setContentPressHandlers = (handlers: SwitchPressHandlers | undefined) => {
+    contentPressHandlers = handlers;
+  };
+
+  const pressHandler = <K extends keyof SwitchPressHandlers>(
+    key: K,
+  ): SwitchPressHandlers[K] => local[key] ?? contentPressHandlers?.[key];
+
+  const pressStart = (event: PressEvent) => {
+    pressed.set(true);
+    pressHandler("onPressStart")?.(event);
+    pressHandler("onPressChange")?.(true);
+  };
+
+  const pressUp = (event: PressEvent) => {
+    pressHandler("onPressUp")?.(event);
+  };
+
+  const pressEnd = (event: PressEvent) => {
+    // NSH reports the end twice when a release triggers `onPress` too; upstream
+    // fires `onPressEnd` once, from its one press state machine.
+    if (!pressed()) {
+      return;
+    }
+
+    pressed.set(false);
+    pressHandler("onPressEnd")?.(event);
+    pressHandler("onPressChange")?.(false);
+  };
+
+  // `onPress` runs before the state changes, `onClick` after it, as React
+  // Aria's press state machine orders them.
+  const press = (event: PressEvent) => {
+    pressHandler("onPress")?.(event);
+  };
+
+  const click = (event: PressEvent) => {
+    pressHandler("onClick")?.(event);
+  };
+
+  // The focus a `<label for>` gives its control is a pointer interaction: mark
+  // the modality, then let `onFocus` consume the marker instead of turning it
+  // into a keyboard focus (R-026). An already focused face must not leave the
+  // marker behind for the next Tab.
+  const focusContentAsPointer = () => {
+    modality.setPointerModality();
+
+    if (focused()) {
+      return;
+    }
+
+    focusFromPointer = true;
+    contentNode?.focus();
+  };
+
   // Pressing a `<label for>` focuses the control and toggles it. NSH's Label
   // reports the press through `FieldContext.focusField`; the press does not
   // reach the Content (a press on a pressable Text stays there, measured), so
-  // the toggle happens here. The focus this requests is a pointer interaction:
-  // mark the modality first, and let `onFocus` consume the marker instead of
-  // turning it into a keyboard focus (R-026).
+  // the toggle happens here. The order follows the label's press handler in
+  // `react-aria/src/toggle/useToggle.ts:174-184`: the root callbacks, then the
+  // toggle, then the focus, then the click callback.
   const focusField = () => {
-    modality.setPointerModality();
-    focusFromPointer = true;
-    contentNode?.focus();
-    toggle();
+    if (isDisabled()) {
+      return;
+    }
+
+    const event = labelPressEvent();
+    const interactionDisabled = isReadOnly();
+
+    if (!interactionDisabled) {
+      pressStart(event);
+      pressUp(event);
+      pressEnd(event);
+      press(event);
+      toggle();
+    }
+
+    focusContentAsPointer();
+
+    if (!interactionDisabled) {
+      click(event);
+    }
   };
 
   const consumeFocusFromPointer = () => {
@@ -427,7 +557,8 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
     isRequired,
     isInvalid,
     isHovered: hovered,
-    isPressed: pressed,
+    isPressed,
+    isActive: pressed,
     isFocused: focused,
     isFocusVisible,
     state,
@@ -439,6 +570,13 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
     descriptionText,
     errorText,
     setContentRef,
+    setContentPressHandlers,
+    focusContentFromPointer: focusContentAsPointer,
+    pressStart,
+    pressUp,
+    pressEnd,
+    press,
+    click,
     setHovered: (value) => hovered.set(value),
     setPressed: (value) => pressed.set(value),
     setFocused: (value) => focused.set(value),
@@ -503,7 +641,7 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
   ) => {
     if (typeof children === "function" && children.length >= 1) {
       return renderChildren(
-        (children as (values: SwitchFieldRenderProps) => JSX.Element)(renderProps),
+        untracked(() => (children as (values: SwitchFieldRenderProps) => JSX.Element)(renderProps)),
       );
     }
 

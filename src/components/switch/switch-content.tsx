@@ -67,6 +67,18 @@ export interface SwitchContentProps
   /** Both hover transitions, as React Aria's `useHover` reports them. */
   onHoverChange?: (isHovered: boolean) => void;
 
+  /** The press began. HeroUI puts this on the field root; accepted here too. */
+  onPressStart?: (e: PressEvent) => void;
+
+  /** The press ended. */
+  onPressEnd?: (e: PressEvent) => void;
+
+  /** Every press-start / press-end transition. */
+  onPressChange?: (isPressed: boolean) => void;
+
+  /** A completed activation, after the selection changed. */
+  onClick?: (e: PressEvent) => void;
+
   /** Accepted, no effect: NSH has one kind of host element. */
   elementType?: string;
 
@@ -96,6 +108,10 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
     "onPress",
     "onPressDown",
     "onPressUp",
+    "onPressStart",
+    "onPressEnd",
+    "onPressChange",
+    "onClick",
     "onFocus",
     "onBlur",
     "onMouseEnter",
@@ -118,6 +134,21 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
   ] as const);
 
   const ctx = SwitchContext() ?? FALLBACK_SWITCH_CONTEXT;
+
+  // The Content is the pressable face, so a caller may put HeroUI's press
+  // callbacks here instead of on the root. They are reported back through the
+  // context, which also lets a Label press (reported by the root's
+  // `focusField`, never reaching this view) reach the same callbacks.
+  ctx.setContentPressHandlers({
+    onPress: (event) => local.onPress?.(event),
+    onPressStart: (event) => local.onPressStart?.(event),
+    onPressUp: (event) => local.onPressUp?.(event),
+    onPressEnd: (event) => local.onPressEnd?.(event),
+    onPressChange: (isPressed) => local.onPressChange?.(isPressed),
+    onClick: (event) => local.onClick?.(event),
+  });
+
+  cleanup(() => ctx.setContentPressHandlers(undefined));
 
   // The button-level render props: the field state plus the signals this part
   // originates (port sheet §1). All accessors, per D17.
@@ -253,22 +284,43 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
 
   const handlePressDown = (event: PressEvent) => {
     notePress(event);
-    ctx.setPressed(true);
+    // R-028: the root's press callbacks and the pressed signal, from the one
+    // press state machine both the Content and the Label report into.
+    ctx.pressStart(event);
     local.onPressDown?.(event);
   };
 
   const handlePressUp = (event: PressEvent) => {
-    ctx.setPressed(false);
-    local.onPressUp?.(event);
+    ctx.pressUp(event);
+    // `onPressUp` fires before `onPress`; the press is over even when the
+    // release does not become a press (a release outside).
+    ctx.pressEnd(event);
   };
 
   const handlePress = (event: PressEvent) => {
     notePress(event);
+    // The release already ended the press in `handlePressUp`; this is a no-op
+    // then, and the guard keeps a backend that only reports `onPress` correct.
+    ctx.pressEnd(event);
+
+    // Upstream's input fires `onPress`, then the value changes, then the click
+    // callback (`react-aria/src/toggle/useToggle.ts:174-184`).
+    ctx.press(event);
+
     // The one place the value changes: the Label's `focusField` goes through
-    // the same state, and `createToggleState` blocks disabled / read-only.
+    // the same state, and `createToggleState` blocks disabled / read-only. The
+    // toggle commits validation, as the input's `change` listener does upstream
+    // (`react-aria/src/form/useFormValidation.ts:91-93`).
     ctx.state.toggle();
-    ctx.setPressed(false);
-    local.onPress?.(event);
+
+    // Pressing a `<label>` focuses its control; NSH's pointer press does not
+    // focus a view, so the Content asks for it, as a pointer interaction (no
+    // ring). Without this, a click followed by Space does nothing.
+    if (!isKeyboardPress(event)) {
+      ctx.focusContentFromPointer();
+    }
+
+    ctx.click(event);
   };
 
   const handleMouseEnter = (event: NshMouseEvent) => {
@@ -289,7 +341,15 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
     local.onMouseLeave?.(event);
 
     // NSH has no press-cancel event: a press that leaves the face ends here.
-    ctx.setPressed(false);
+    // Upstream cancels it on pointer leave too (`usePress`'s `onPointerLeave`
+    // ends the press without calling `onPress`), so the root's `onPressEnd` and
+    // `onPressChange(false)` still fire with the pointer's last position.
+    ctx.pressEnd({
+      position: event.position,
+      pagePosition: event.pagePosition,
+      modifiers: event.modifiers,
+      clickCount: 1,
+    });
 
     if (!ctx.isHovered()) {
       return;

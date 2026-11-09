@@ -22,6 +22,9 @@ export interface SwitchIconProps extends Omit<ViewProps, "children" | "class" | 
 
   /** The slot's view, as `ComponentPropsWithRef` gives upstream. */
   ref?: (node: ViewRef) => void;
+
+  /** Accepted, no effect: NSH has no DOM render function to replace the element. */
+  render?: unknown;
 }
 
 /**
@@ -38,6 +41,7 @@ export function SwitchIcon(props: SwitchIconProps): JSX.Element {
     "ref",
     "id",
     "nativeID",
+    "render",
   ] as const);
 
   const ctx = SwitchContext() ?? FALLBACK_SWITCH_CONTEXT;

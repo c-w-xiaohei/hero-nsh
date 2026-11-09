@@ -25,6 +25,9 @@ export interface SwitchThumbProps extends Omit<ViewProps, "children" | "class" |
 
   /** The dot's view, as `ComponentPropsWithRef` gives upstream. */
   ref?: (node: ViewRef) => void;
+
+  /** Accepted, no effect: NSH has no DOM render function to replace the element. */
+  render?: unknown;
 }
 
 /**
@@ -45,6 +48,7 @@ export function SwitchThumb(props: SwitchThumbProps): JSX.Element {
     "ref",
     "id",
     "nativeID",
+    "render",
     "onLayout",
   ] as const);
 

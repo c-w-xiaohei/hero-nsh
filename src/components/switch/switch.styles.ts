@@ -29,7 +29,8 @@ export const switchVariants = tv({
       "group relative inline-flex items-center gap-3 text-sm font-medium text-foreground outline-none select-none",
     // R-021: `.switch__control` → `relative flex shrink-0 items-center
     // overflow-hidden rounded-xl`.
-    // R-022 is the md size below (`h-5 w-10`).
+    // R-022: `.switch__control`'s default dimensions → `h-5 w-10` (the
+    // stylesheet's medium values live in the base block, not in `.switch--md`).
     // R-023: `.switch__control` → `background-color: var(--switch-control-bg)`,
     // whose default is `bg-default`; the state overrides live in the part.
     // R-024: `transition: background-color 250ms var(--ease-smooth), box-shadow
@@ -37,16 +38,17 @@ export const switchVariants = tv({
     // shorthand is 250ms `ease-smooth` (port sheet §8, R-024).
     // R-025: `motion-reduce:transition-none`.
     control:
-      "relative flex shrink-0 items-center overflow-hidden rounded-xl bg-default transition duration-[250ms] ease-smooth motion-reduce:transition-none",
+      "relative flex shrink-0 items-center overflow-hidden rounded-xl bg-default transition duration-[250ms] ease-smooth motion-reduce:transition-none h-5 w-10",
     // R-036: `.switch__thumb` → `relative ms-0.5 flex origin-center
     // transform-gpu rounded-lg bg-white text-black shadow-field`; `transform-gpu`
     // does nothing in NSH, and the dark shadow variant follows the theme notes.
-    // R-039 is the md size below (`h-4 w-[1.375rem]`).
+    // R-039: `.switch__thumb`'s default dimensions → `h-4 w-[1.375rem]` (the
+    // stylesheet's medium values live in the base block, not in `.switch--md`).
     // R-040: the property list is the inline `transitionProperty` in
     // `switch-thumb.tsx`; the class carries duration and curve (300ms,
     // `ease-out-fluid`). R-041: `motion-reduce:transition-none`.
     thumb:
-      "relative ms-0.5 flex origin-center rounded-lg bg-white text-black shadow-field dark:shadow-field-dark duration-300 ease-out-fluid motion-reduce:transition-none",
+      "relative ms-0.5 flex origin-center rounded-lg bg-white text-black shadow-field dark:shadow-field-dark duration-300 ease-out-fluid motion-reduce:transition-none h-4 w-[1.375rem]",
     // R-046: `.switch__thumb > *` → `flex size-full items-center justify-center`.
     icon: "flex h-full w-full items-center justify-center",
   },
@@ -61,15 +63,10 @@ export const switchVariants = tv({
         control: "rounded-lg h-4 w-8",
         thumb: "rounded-md h-3 w-[1.03125rem]",
       },
-      // R-022: `.switch__control` default → `h-5 w-10`.
-      // R-039: `.switch__thumb` default → `h-4 w-[1.375rem]`.
-      // R-034: `.switch--md .switch__control` is an empty block upstream — md is
-      // the default, so this entry carries only the base dimensions above and
+      // R-034: `.switch--md .switch__control` is an empty block upstream — md
+      // is the default, so the base slots carry its dimensions and this entry
       // adds no declaration of its own.
-      md: {
-        control: "h-5 w-10",
-        thumb: "h-4 w-[1.375rem]",
-      },
+      md: {},
       // R-035: `.switch--lg .switch__control` → `h-6 w-12`.
       // R-045: `.switch--lg .switch__thumb` → `rounded-xl h-5 w-[1.71875rem]`.
       lg: {

@@ -1,7 +1,33 @@
 import { context } from "nsh";
-import type { Accessor, ViewRef } from "nsh";
+import type { Accessor, PressEvent, ViewRef } from "nsh";
 
 import type { SwitchSize } from "./switch.styles";
+
+/**
+ * HeroUI's press callbacks, as the field root accepts them (React Aria's
+ * `PressEvents`). NSH fires them from whichever part saw the press: the
+ * Content, or a `Label` inside it (whose press is reported through
+ * `FieldContext.focusField`).
+ */
+export interface SwitchPressHandlers {
+  /** The press began. */
+  onPressStart?: (event: PressEvent) => void;
+
+  /** The press was released over the switch. */
+  onPressUp?: (event: PressEvent) => void;
+
+  /** The press ended, whether or not it became a press. */
+  onPressEnd?: (event: PressEvent) => void;
+
+  /** Every press-start / press-end transition. */
+  onPressChange?: (isPressed: boolean) => void;
+
+  /** A completed press, before the selection changes. */
+  onPress?: (event: PressEvent) => void;
+
+  /** A completed activation, after the selection changed. */
+  onClick?: (event: PressEvent) => void;
+}
 
 /**
  * The live state one Switch field root hands to its parts.
@@ -39,8 +65,20 @@ export interface SwitchContextValue {
   /** The pointer is over the clickable face (off while disabled or read-only). */
   isHovered: Accessor<boolean>;
 
-  /** A press is in progress on the clickable face. */
+  /**
+   * A press is in progress on the clickable face, as the render prop reports
+   * it: React Aria's label press is disabled for `isDisabled || isReadOnly`
+   * (`react-aria/src/toggle/useToggle.ts:186`), so a read-only field stays
+   * `false`.
+   */
   isPressed: Accessor<boolean>;
+
+  /**
+   * The face is held down, the signal the track paints. Unlike `isPressed` it
+   * survives `isReadOnly`, because the stylesheet's `.switch:active &`
+   * (`switch.css:112-117`) paints on any pointer press, read-only or not.
+   */
+  isActive: Accessor<boolean>;
 
   /** The clickable face has the keyboard focus. */
   isFocused: Accessor<boolean>;
@@ -68,6 +106,38 @@ export interface SwitchContextValue {
 
   /** The clickable face reports its view so the Label can focus it. */
   setContentRef: (node: ViewRef | undefined) => void;
+
+  /**
+   * The Content registers the press callbacks a caller placed on it, so a
+   * Label press (which never reaches the Content) reports into them too. The
+   * field root's own props win when both are given.
+   */
+  setContentPressHandlers: (handlers: SwitchPressHandlers | undefined) => void;
+
+  /**
+   * Focuses the clickable face the way pressing a `<label for>` does: the
+   * focus is a pointer interaction, so no focus ring appears (R-026).
+   */
+  focusContentFromPointer: () => void;
+
+  /**
+   * The root's `onPressStart` plus the pressed bookkeeping. Both press paths
+   * (the clickable face and a Label inside it) report here, so the root
+   * callbacks fire once per press.
+   */
+  pressStart: (event: PressEvent) => void;
+
+  /** The root's `onPressUp`, reported by whichever part saw the press. */
+  pressUp: (event: PressEvent) => void;
+
+  /** The root's `onPressEnd`, and the pressed state ending. */
+  pressEnd: (event: PressEvent) => void;
+
+  /** The root's `onPress`, dispatched before the selection changes. */
+  press: (event: PressEvent) => void;
+
+  /** The root's `onClick`, dispatched after the selection changed. */
+  click: (event: PressEvent) => void;
 
   /** The clickable face reports a hover transition (R-027). */
   setHovered: (value: boolean) => void;
@@ -153,6 +223,7 @@ export const FALLBACK_SWITCH_CONTEXT: SwitchContextValue = {
   isInvalid: () => false,
   isHovered: () => false,
   isPressed: () => false,
+  isActive: () => false,
   isFocused: () => false,
   isFocusVisible: () => false,
   state: {
@@ -166,6 +237,13 @@ export const FALLBACK_SWITCH_CONTEXT: SwitchContextValue = {
   descriptionText: () => undefined,
   errorText: () => undefined,
   setContentRef: () => {},
+  setContentPressHandlers: () => {},
+  focusContentFromPointer: () => {},
+  pressStart: () => {},
+  pressUp: () => {},
+  pressEnd: () => {},
+  press: () => {},
+  click: () => {},
   setHovered: () => {},
   setPressed: () => {},
   setFocused: () => {},
