@@ -511,8 +511,9 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
   };
 
   // The collection's keys are bound only while the root has the focus, and
-  // dropped on blur or unmount (createKeymapScope). Return is bound with the
-  // list keys; Space stays on the host press wherever the host sends one
+  // dropped on blur or unmount (createKeymapScope). These are the movement
+  // keys, the only ones that auto-repeat; the activation keys bind in their own
+  // scope below. Space stays on the host press wherever the host sends one
   // (macOS, the web), and is bound only on Windows, which sends none.
   //
   // Keymap matches the modifiers exactly, so the Shift and Control forms of a
@@ -550,12 +551,19 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     activateFocused("keyboard", undefined, modifiers, keyName);
   };
 
-  navigationBindings.enter = () => activateWithKey("Enter");
-  navigationBindings["shift+enter"] = () => activateWithKey("Enter", { shift: true });
+  // Activation keys get their own scope without `repeat`: React Aria returns
+  // early on `e.repeat` before the Enter/Space switch (`useMenuItem.js:157-164`)
+  // and both press hooks drop repeating presses (`usePress.js:253,264`), so a
+  // held Return activates once. Auto-repeat belongs to the arrows alone, whose
+  // scope above keeps `repeat: true`.
+  const activationBindings: Record<string, () => void> = {
+    enter: () => activateWithKey("Enter"),
+    "shift+enter": () => activateWithKey("Enter", { shift: true }),
+  };
 
   if (platform.os === "windows") {
-    navigationBindings.space = () => activateWithKey("Space");
-    navigationBindings["shift+space"] = () => activateWithKey("Space", { shift: true });
+    activationBindings.space = () => activateWithKey("Space");
+    activationBindings["shift+space"] = () => activateWithKey("Space", { shift: true });
   }
 
   // `isCtrlKeyPressed` wants `platform` on Apple and `control` elsewhere; the
@@ -603,6 +611,11 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     isActive: rootFocused,
     bindings: navigationBindings,
     options: { repeat: true },
+  });
+
+  createKeymapScope({
+    isActive: rootFocused,
+    bindings: activationBindings,
   });
 
   createKeymapScope({
