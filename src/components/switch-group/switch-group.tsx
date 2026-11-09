@@ -1,6 +1,8 @@
 import type { JSX, StyleProp, ViewProps, ViewStyle } from "nsh";
 import { computed, split, View } from "nsh";
 
+import type { AriaProps, DataProps, GlobalDomEvents, GlobalDomProps } from "./dom-props";
+import { viewProps } from "./dom-props";
 import { renderChildren } from "./render-children";
 import { switchGroupVariants, type SwitchGroupVariants } from "./switch-group.styles";
 
@@ -15,12 +17,20 @@ import { switchGroupVariants, type SwitchGroupVariants } from "./switch-group.st
  * expressed with NSH's view host props.
  *
  * The DOM-only members upstream (`render`, the element generic, `aria-*`,
- * `data-*` and the raw `div` attributes) are accepted so code written against
- * HeroUI keeps compiling; see the port sheet §1 and §8 for what they can and
- * cannot do here. NSH host events (`onPress`, `onMouseEnter`, …) travel through
- * the rest props to the root `View`.
+ * `data-*`, the global `div` attributes and the DOM event handlers such as
+ * `onClick`) are accepted so code written against HeroUI keeps compiling; they
+ * are dropped before the spread so the host does not report them. See the port
+ * sheet §1 and §8 for what they can and cannot do here. NSH host events
+ * (`onPress`, `onMouseEnter`, …) travel through the rest props to the root
+ * `View`.
  */
-export interface SwitchGroupRootProps extends Omit<ViewProps, "children" | "class" | "style"> {
+export interface SwitchGroupRootProps
+  extends
+    Omit<ViewProps, "children" | "class" | "style">,
+    AriaProps,
+    DataProps,
+    GlobalDomProps,
+    GlobalDomEvents {
   /**
    * The content, rendered into the inner `items` wrapper. Optional although
    * HeroUI's type requires it, because an empty group is valid at runtime
@@ -46,12 +56,6 @@ export interface SwitchGroupRootProps extends Omit<ViewProps, "children" | "clas
    * element, and no notion of an intrinsic element type `E` (port sheet §8).
    */
   render?: unknown;
-
-  /** Accepted, no effect: NSH has no DOM attribute channel. */
-  [key: `aria-${string}`]: unknown;
-
-  /** Accepted, no effect; `testID` names a view. */
-  [key: `data-${string}`]: unknown;
 }
 
 /**
@@ -88,10 +92,11 @@ export function SwitchGroupRoot(props: SwitchGroupRootProps): JSX.Element {
   const orientation = computed(() => local.orientation ?? "vertical");
 
   // The root class string: the variant table, then the caller's `className`.
-  // HeroUI merges them in the same order through `.base({className})`, and the
-  // later class wins on a conflict.
+  // HeroUI merges them in the same order through `slots.base({className})`, at
+  // the slot; a root-level `className` on a slots `tv` is ignored, so the merge
+  // must stay in the `base()` call.
   const rootClass = computed(() =>
-    switchGroupVariants({ orientation: orientation(), className: local.className }).base(),
+    switchGroupVariants({ orientation: orientation() }).base({ className: local.className }),
   );
 
   // The inner wrapper's class string. R-006 / R-007 live on the `items` slot
@@ -102,7 +107,7 @@ export function SwitchGroupRoot(props: SwitchGroupRootProps): JSX.Element {
 
   return (
     <View
-      {...rest}
+      {...viewProps(rest)}
       ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
       nativeID={local.id ?? local.nativeID}
       // A `<div>` is not a keyboard focus stop upstream; without this a
