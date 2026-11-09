@@ -185,19 +185,34 @@ export function createScrollShadow(
   );
 
   // R-020's `animation-range` endpoints, resolved against the real scroll
-  // range instead of a scroll timeline.
-  const maxScroll = computed(() => Math.max(0, contentSize() - clientSize()));
+  // range instead of a scroll timeline. Both axes are kept, because a clamp
+  // has to use the range of the axis it clamps even while the other one is
+  // the rendered axis.
+  const maxScrollX = computed(() => Math.max(0, content().width - viewport().width));
+  const maxScrollY = computed(() => Math.max(0, content().height - viewport().height));
+  const maxScroll = computed(() => (isVertical() ? maxScrollY() : maxScrollX()));
 
+  // The effective offset, not the cached one. HeroUI reads `el.scrollTop` /
+  // `el.scrollLeft` on every check (use-scroll-shadow.ts:44), and the browser
+  // clamps those to the range on the spot: when the content shrinks below the
+  // viewport, or the viewport grows past it, the position becomes `0` without
+  // a scroll event. NSH reports the offset through `onScroll` only, so the
+  // cached signal can outlive its range (review round 3, finding 1). Clamping
+  // here makes every read — the two thresholds, the fades and the mask —
+  // follow the host's clamped position, and because the clamp reads the sizes
+  // it re-runs on every content/viewport change. In RTL the host offset is
+  // the distance from the content's left edge, so it is clamped before it is
+  // mirrored into the distance from the logical start.
   const scrollStart = computed(() => {
-    if (isVertical()) return scroll().y;
+    if (isVertical()) return clamp(scroll().y, 0, maxScrollY());
 
     // Not measured yet: the view is resting at its logical start, whichever
     // direction it lays out in.
     if (!isAxisOffsetReady()) return 0;
 
-    const x = Math.abs(scroll().x);
+    const x = clamp(Math.abs(scroll().x), 0, maxScrollX());
 
-    return rtl() ? Math.max(0, maxScroll() - x) : x;
+    return rtl() ? Math.max(0, maxScrollX() - x) : x;
   });
 
   const hasScrollBefore = computed(() => scrollStart() > offset());
@@ -242,6 +257,19 @@ export function createScrollShadow(
     const mode = requestedVisibility();
     const vertical = isVertical();
     const length = vertical ? viewport().height : viewport().width;
+
+    // No viewport extent yet: the viewport signal starts at `{0, 0}` and the
+    // first `onLayout` is what gives it a size. Every stop of a point-based
+    // gradient would then be `0px`, which is a fully transparent mask, and NSH
+    // draws a view only where its mask is opaque — so the whole scroll box
+    // would disappear until the first measurement (review round 3, finding 2).
+    // Upstream's auto gradient is percentage-based
+    // (scroll-shadow.css:185-188: `transparent 0, #000 var(--start-fade),
+    // #000 calc(100% - var(--end-fade)), transparent 100%`), which is fully
+    // opaque at zero size; drawing no mask for that one frame is the nearest
+    // equivalent. This applies to the controlled states too: they are point
+    // gradients as well.
+    if (!(length > 0)) return undefined;
 
     if (mode === "auto") {
       // Detection off: upstream clears every `data-*` attribute and sets

@@ -31,9 +31,12 @@ export type { ScrollShadowVisibility };
  * which is a `div`'s attributes (minus `size`) plus the variant surface itself,
  * expressed with NSH's scroll host props.
  *
- * The DOM-only members upstream (`aria-*`, `data-*`, `lang`, `hidden`, the
- * `dir` attribute's effect on descendants) are accepted so code written
- * against HeroUI keeps compiling; port sheet §1 and §8 say what each one can
+ * The DOM-only members upstream are accepted so code written against HeroUI
+ * keeps compiling. Three of them have an NSH channel and are mapped:
+ * `aria-label` → `accessibilityLabel`, `aria-hidden` →
+ * `accessibilityElementsHidden`, `hidden` → the `hidden` class. The rest
+ * (`data-*`, `lang`, the unmapped `aria-*`, the `dir` attribute's effect on
+ * descendants) have no channel; port sheet §1 and §8 say what each one can
  * and cannot do here. `className` and `style` keep the HeroUI names and reach
  * the root `Scroll` as `class` and `style`.
  */
@@ -132,7 +135,13 @@ export interface ScrollShadowRootProps
    */
   tabIndex?: number;
 
-  /** Accepted, no effect: NSH has no DOM attribute channel. */
+  /** The accessible name upstream's `aria-label`; maps to NSH's channel. */
+  "aria-label"?: string;
+
+  /** Hides the element from assistive technology; maps to `accessibilityElementsHidden`. */
+  "aria-hidden"?: boolean;
+
+  /** Any other `aria-*`: accepted, no effect (NSH has no DOM attribute channel). */
   [key: `aria-${string}`]: unknown;
 
   /** Accepted, no effect: NSH has no DOM attribute channel; `testID` names a view. */
@@ -141,7 +150,11 @@ export interface ScrollShadowRootProps
   /** Accepted, no effect: the DOM's `lang`; NSH reads the application locale. */
   lang?: string;
 
-  /** Accepted, no effect: NSH shows and hides content with control flow, not a `hidden` attribute. */
+  /**
+   * Maps to the `hidden` class (`display: none`). Kept in the class string
+   * after `className`, so it wins over a display class the caller passes, the
+   * way the DOM's `hidden` attribute wins over the rest of the cascade.
+   */
   hidden?: boolean;
 
   /** The scroll position changed: the measurement runs first, then this handler. */
@@ -183,6 +196,12 @@ export function ScrollShadowRoot(props: ScrollShadowRootProps): JSX.Element {
     "onScroll",
     "onLayout",
     "scrollbar",
+    "aria-label",
+    "aria-hidden",
+    "accessibilityLabel",
+    "accessibilityElementsHidden",
+    "lang",
+    "hidden",
   ] as const);
 
   // Read-only inputs with their HeroUI defaults (port sheet §2).
@@ -225,13 +244,22 @@ export function ScrollShadowRoot(props: ScrollShadowRootProps): JSX.Element {
     onVisibilityChange: (visibility) => local.onVisibilityChange?.(visibility),
   });
 
+  // The DOM's `hidden` attribute is `display: none`; NSH's spelling of that is
+  // the `hidden` class. It goes last so tailwind-merge lets it win over a
+  // display class the caller passes with `className`, the way the attribute
+  // wins over the cascade upstream.
+  const hiddenClass = computed(() => {
+    if (local.hidden !== true) return local.className;
+    return local.className ? `${local.className} hidden` : "hidden";
+  });
+
   // R-009 / R-010: the orientation block is the `Scroll` host, not a class.
   const resolvedClassName = computed(() =>
     scrollShadowVariants({
       hideScrollBar: hideScrollBar(),
       orientation: orientation(),
       variant: local.variant,
-    }).base({ className: local.className }),
+    }).base({ className: hiddenClass() }),
   );
 
   // The root style: our computed mask first, then the caller's `dir` as
@@ -274,6 +302,13 @@ export function ScrollShadowRoot(props: ScrollShadowRootProps): JSX.Element {
       {...rest}
       ref={(node) => local.ref?.(node)}
       nativeID={local.id ?? local.nativeID}
+      // `aria-label` / `aria-hidden` are HeroUI's names for NSH's own
+      // accessibility channels; the explicit prop wins, as `aria-*` overrides
+      // the platform attribute upstream.
+      accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel}
+      accessibilityElementsHidden={
+        local["aria-hidden"] ?? local.accessibilityElementsHidden
+      }
       // R-009 / R-010: vertical by default, sideways for `orientation`.
       horizontal={orientation() === "horizontal"}
       scrollbar={scrollbar()}
