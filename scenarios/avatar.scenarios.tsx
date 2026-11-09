@@ -22,7 +22,8 @@ import type { Component } from "./types";
  *   avatar/variants           story Variants: default / soft x five colors
  *   avatar/image              T-021, T-022 (fallback, no image before load),
  *                             T-023, T-024 (web: image and its alt label)
- *   avatar/image-delay        T-025, T-026, Fallback delayMs={600}
+ *   avatar/image-delay        T-025, T-026, Fallback delayMs={600} with no
+ *                             Image, as upstream image.test.tsx:89-112
  *   avatar/group-default      story Default: four image avatars, default clip
  *   avatar/group-all          T-008, six avatars and no auto count
  *   avatar/group-max          T-009, four avatars, max={2}, auto +2
@@ -117,7 +118,6 @@ function ImageDelay() {
   return (
     <Stage>
       <Avatar>
-        <Avatar.Image alt="Fake Image" src={IMAGE_SRC} />
         <Avatar.Fallback delayMs={600}>AB</Avatar.Fallback>
       </Avatar>
     </Stage>
