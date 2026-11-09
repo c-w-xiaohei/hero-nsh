@@ -24,7 +24,7 @@ import { openScenario } from "../../helpers/open-scenario";
  */
 
 type LayoutCall = {
-  name: "wifi" | "bluetooth";
+  name: "group" | "wifi" | "bluetooth";
   x: number;
   y: number;
   width: number;
@@ -40,7 +40,7 @@ function openCase(params: Record<string, string | number | boolean> = {}): Promi
   });
 }
 
-function lastLayout(app: App, name: "wifi" | "bluetooth"): LayoutCall {
+function lastLayout(app: App, name: LayoutCall["name"]): LayoutCall {
   const calls = callsOf(app, "layout")
     .map((args) => args[0] as LayoutCall)
     .filter((call) => call.name === name);
@@ -121,4 +121,29 @@ test("T-005 supports independent switch toggles", async () => {
 
   expect(app.texts()).toContain("Wifi On");
   expect(app.texts()).toContain("Bluetooth Off");
+});
+
+/* -------------------------------------------------------------------------------------------------
+ * Review regressions
+ * -----------------------------------------------------------------------------------------------*/
+
+// Regression X-001, evidence: src/components/switch-group/switch-group.tsx:93-95
+// HeroUI merges the caller class at the base slot
+// (heroui/packages/react/src/components/switch-group/switch-group.tsx:34:
+// slots.base({ className })). The implementation instead passed className to
+// switchGroupVariants({ orientation, className }), and tailwind-variants 4.0.1
+// ignores a root-level className on a slots tv: v({orientation:'vertical',
+// className:'gap-2'}).base() returns "flex flex-col gap-6", while
+// v({orientation:'vertical'}).base({className:'gap-2'}) returns
+// "flex flex-col gap-2". So the public prop had no effect at all.
+//
+// The class used here is w-40 (160pt). Without it the root is as wide as its
+// widest child, the w-20 (80pt) switch, so the two cases tell a dropped class
+// from an applied one.
+test("X-001 applies the caller className to the group root", async () => {
+  const plain = await openCase();
+  const withClass = await openCase({ case: "class-name" });
+
+  expectClose(lastLayout(plain, "group").width, 80);
+  expectClose(lastLayout(withClass, "group").width, 160);
 });

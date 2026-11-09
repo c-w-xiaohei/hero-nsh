@@ -17,8 +17,13 @@ import { probe } from "@scenario/probe";
  *
  * host.params.case picks the fixture:
  *   layout       (default) two 80pt-wide switches, each reporting its box to
- *                `probe("layout")`; host.params.orientation sets the group's
- *                orientation (omitted means the component default, vertical)
+ *                `probe("layout")`, and the group root reporting its own box;
+ *                host.params.orientation sets the group's orientation (omitted
+ *                means the component default, vertical)
+ *   class-name   the layout case with `className="w-40"` on the group root, so
+ *                the public className prop has a measurable effect (a caller
+ *                class that never reaches the root leaves it at the children's
+ *                80pt)
  *   independent  two switches whose content text shows their own state, so a
  *                press on one is visible and its sibling's state stays visible
  */
@@ -30,7 +35,7 @@ type LayoutEvent = {
   };
 };
 
-function layoutProbe(name: "wifi" | "bluetooth") {
+function layoutProbe(name: "group" | "wifi" | "bluetooth") {
   return (event: LayoutEvent) =>
     probe("layout")({
       name,
@@ -45,13 +50,18 @@ function layoutProbe(name: "wifi" | "bluetooth") {
  * Layout case (T-001 … T-003)
  * -----------------------------------------------------------------------------------------------*/
 
-function LayoutCase() {
+function LayoutCase(props: { groupClass?: string }) {
   const param = host.params.orientation;
   const orientation = param === "horizontal" || param === "vertical" ? param : undefined;
 
   return (
     <Stage>
-      <SwitchGroup orientation={orientation} testID="group">
+      <SwitchGroup
+        className={props.groupClass}
+        orientation={orientation}
+        onLayout={layoutProbe("group")}
+        testID="group"
+      >
         <Switch
           aria-label="Wifi"
           className="w-20"
@@ -117,6 +127,7 @@ function Fixture() {
   const name = String(host.params.case ?? "layout");
 
   if (name === "independent") return <IndependentCase />;
+  if (name === "class-name") return <LayoutCase groupClass="w-40" />;
 
   return <LayoutCase />;
 }
