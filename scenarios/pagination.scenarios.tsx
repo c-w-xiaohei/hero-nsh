@@ -125,6 +125,65 @@ function Disabled() {
   );
 }
 
+/*
+ * The `isPending` contract (react-aria-components/src/Button.tsx:89-93,
+ * 111-125): press and hover are blocked, the view stays focusable, and the
+ * state reaches the render props. `Pending page` takes `autoFocus` so the
+ * mount effect proves a pending link can hold focus, and the pending Previous
+ * is the Tab stop behind it; `Other page` proves focus and hover still move on
+ * and that a plain link reports `isPending` false.
+ *
+ * It is a `.split` scenario (D17): the render prop receives accessors here and
+ * booleans upstream.
+ */
+function PendingSplit() {
+  return (
+    <Stage>
+      <Pagination aria-label="Pending pagination">
+        <Pagination.Content>
+          <Pagination.Item>
+            <Pagination.Link
+              isPending
+              autoFocus
+              aria-label="Pending page"
+              onFocus={probe("onFocusAuto")}
+              onBlur={probe("onBlurAuto")}
+              onPress={probe("onPress")}
+              onHoverStart={probe("onHoverStart")}
+              onHoverChange={probe("onHoverChange")}
+            >
+              {({ isHovered, isPending }) => (
+                <Text>{`${isPending() ? "Pending" : "Ready"}: ${isHovered() ? "hovered" : "idle"}`}</Text>
+              )}
+            </Pagination.Link>
+          </Pagination.Item>
+          <Pagination.Item>
+            <Pagination.Previous
+              isPending
+              aria-label="Pending previous"
+              onFocus={probe("onFocusPrev")}
+              onBlur={probe("onBlurPrev")}
+              onPress={probe("onPressPrevious")}
+            >
+              Previous
+            </Pagination.Previous>
+          </Pagination.Item>
+          <Pagination.Item>
+            <Pagination.Link
+              aria-label="Other page"
+              onFocus={probe("onFocusOther")}
+              onBlur={probe("onBlurOther")}
+              onHoverStart={probe("onHoverStartOther")}
+            >
+              Other
+            </Pagination.Link>
+          </Pagination.Item>
+        </Pagination.Content>
+      </Pagination>
+    </Stage>
+  );
+}
+
 function Summary() {
   return (
     <Stage>
@@ -402,6 +461,7 @@ export const paginationScenarios = {
   "pagination/disabled": Disabled,
   "pagination/summary": Summary,
   "pagination/custom-icons.split": CustomIconsSplit,
+  "pagination/pending.split": PendingSplit,
   "pagination/controlled": Controlled,
   "pagination/simple-prev-next": SimplePrevNext,
   "pagination/all-variants": AllVariants,
