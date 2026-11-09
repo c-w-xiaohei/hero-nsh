@@ -63,6 +63,9 @@ export const switchVariants = tv({
       },
       // R-022: `.switch__control` default → `h-5 w-10`.
       // R-039: `.switch__thumb` default → `h-4 w-[1.375rem]`.
+      // R-034: `.switch--md .switch__control` is an empty block upstream — md is
+      // the default, so this entry carries only the base dimensions above and
+      // adds no declaration of its own.
       md: {
         control: "h-5 w-10",
         thumb: "h-4 w-[1.375rem]",

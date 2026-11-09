@@ -55,9 +55,15 @@ export function SwitchControl(props: SwitchControlProps): JSX.Element {
     const active = !ctx.isDisabled() && (ctx.isHovered() || ctx.isPressed());
 
     if (ctx.isSelected()) {
+      // R-006: `--switch-control-bg-checked: var(--accent)` used through the
+      // selector of R-029 (`.switch[aria-checked="true"] &`), and R-007's
+      // checked-hover token through the two checked interaction selectors of
+      // R-030 / R-031 — one owner, because both resolve to `accent-hover`.
       return active ? "bg-accent-hover" : "bg-accent";
     }
 
+    // R-003: `--switch-control-bg: var(--default)`, with R-004's hover mix and
+    // R-005's pressed token both landing on the same 80% default.
     return active ? "bg-default/80" : "bg-default";
   };
 
