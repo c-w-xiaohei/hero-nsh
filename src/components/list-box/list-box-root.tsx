@@ -378,6 +378,15 @@ export function ListBoxRoot<T>(
 
   const isEmpty = computed(() => list.collection().getSize() === 0);
 
+  // Parts register in their component bodies, so the first render still sees an
+  // empty registry. Wait for the mount effect before deciding the collection is
+  // empty, or `renderEmptyState` would flash for one pass on every list.
+  const mounted = signal(false);
+
+  effect(() => {
+    mounted.set(true);
+  });
+
   const renderProps: ListBoxRenderProps = {
     isEmpty,
     isFocused: rootFocused,
@@ -597,7 +606,8 @@ export function ListBoxRoot<T>(
     return renderChildren(children as JSX.Element);
   };
 
-  const showEmpty = () => isEmpty() && local.renderEmptyState != null;
+  const showEmpty = () =>
+    mounted() && isEmpty() && local.renderEmptyState != null;
 
   return (
     <ListBoxContext.Provider value={contextValue}>
