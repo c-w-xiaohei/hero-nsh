@@ -5,6 +5,7 @@ export * from "./create-interaction-modality";
 export * from "./create-keymap-scope";
 export * from "./create-overlay-presence";
 export * from "./create-overlay-trigger";
+export * from "./create-select-state";
 export * from "./create-toggle-state";
 export * from "./list";
 export * from "./selection";

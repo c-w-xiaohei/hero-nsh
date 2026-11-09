@@ -26,6 +26,7 @@ import type { FieldState } from "../label/context";
 import { renderChildren } from "./children";
 import {
   CollectionItemContext,
+  ListBoxContainerContext,
   ListBoxContext,
   ListBoxItemContext,
   type ListBoxItemContextValue,
@@ -50,6 +51,24 @@ export interface ListBoxItemRenderProps {
   isDragging: Accessor<boolean>;
   isDropTarget: Accessor<boolean>;
 }
+
+/**
+ * The render props React Aria hands a row's render function when the row is
+ * rendered outside its list (Select's value, `SelectValue`): every flag is
+ * `false` and the mode is a single toggle selection.
+ */
+const NEUTRAL_RENDER_PROPS: ListBoxItemRenderProps = {
+  isHovered: () => false,
+  isPressed: () => false,
+  isSelected: () => false,
+  isFocused: () => false,
+  isFocusVisible: () => false,
+  isDisabled: () => false,
+  selectionMode: () => "single",
+  selectionBehavior: () => "toggle",
+  isDragging: () => false,
+  isDropTarget: () => false,
+};
 
 export interface ListBoxItemRootProps<T = unknown> extends ListBoxItemVariants {
   children?: JSX.Element | ((values: ListBoxItemRenderProps) => JSX.Element);
@@ -253,6 +272,8 @@ export function ListBoxItemRoot<T>(
 
   const section = ListBoxSectionContext();
   const collectionItem = CollectionItemContext();
+  // R-043: the container (a Select popover) tightens the row's padding.
+  const container = ListBoxContainerContext();
 
   // Identity values are read once on purpose: the key must not move under the
   // row while the collection is live (port sheet section 2). The dynamic
@@ -332,8 +353,11 @@ export function ListBoxItemRoot<T>(
       : className;
   };
 
+  // R-043: the item's own slot classes, then the container's, then the
+  // caller's. The row's `classList` (`pe-7`, R-010 / R-044) is appended after
+  // this string, so the room the indicator needs still wins over `px-2.5`.
   const classes = computed(() =>
-    [slots().item(), resolvedClassName()]
+    [slots().item(), container?.itemClass?.(), resolvedClassName()]
       .filter((part): part is string => typeof part === "string" && part.length > 0)
       .join(" "),
   );
@@ -389,6 +413,50 @@ export function ListBoxItemRoot<T>(
     fireAction();
   };
 
+  // The row's content, read where it is placed: a function of at least one
+  // parameter is the HeroUI render prop (D17), anything else is a child value.
+  //
+  // It is deliberately not memoized in a `computed`: NSH's `computed` caches
+  // the element array, and a cached copy drops a nested render-prop part (the
+  // ListBox Indicator's `✓`, measured on the ListBox regression suite), so the
+  // one read stays at the placement. A container that renders the selected
+  // option (Select.Value) gets its own copy from `copyContent` below (port
+  // sheet §5, fifth change; §8 registers the second construction).
+  const content = (): JSX.Element => {
+    const value = local.children;
+
+    if (typeof value === "function" && value.length >= 1) {
+      return renderChildren(
+        (value as (values: ListBoxItemRenderProps) => JSX.Element)(renderProps),
+      );
+    }
+
+    return renderChildren(value as JSX.Element);
+  };
+
+  /**
+   * The row's content for a container that renders the selected option
+   * (Select.Value). Upstream React Aria calls the item's render function with a
+   * neutral render props object — every flag `false`, `selectionMode: "single"`
+   * — so the copy never shows the row's focus ring or its checkmark
+   * (`react-aria-components/src/Select.tsx`, `SelectValue`); the indicator is
+   * then hidden by R-020. Reading the content here builds the copy at the
+   * container's placement, never at the row's (port sheet §5, fifth change).
+   */
+  const copyContent = (): JSX.Element => {
+    const value = local.children;
+
+    if (typeof value === "function" && value.length >= 1) {
+      return renderChildren(
+        (value as (values: ListBoxItemRenderProps) => JSX.Element)(
+          NEUTRAL_RENDER_PROPS,
+        ),
+      );
+    }
+
+    return renderChildren(value as JSX.Element);
+  };
+
   const descriptor: ListBoxItemDescriptor = {
     type: "item",
     key,
@@ -400,6 +468,9 @@ export function ListBoxItemRoot<T>(
     disabled: () => local.isDisabled === true || list.isDisabledKey(key),
     ref: () => node,
     activate,
+    // A Select's value renders the selected option's children; the container
+    // hides the indicator inside that copy (R-020).
+    children: copyContent,
   };
 
   const register = section?.register ?? list.register;
@@ -575,22 +646,6 @@ export function ListBoxItemRoot<T>(
     },
   };
 
-  // One read of `props.children`, at the placement: a function of at least one
-  // parameter is the HeroUI render prop (D17), anything else is a child value.
-  const content = () => {
-    const children = local.children;
-
-    if (typeof children === "function" && children.length >= 1) {
-      return renderChildren(
-        (children as (values: ListBoxItemRenderProps) => JSX.Element)(
-          renderProps,
-        ),
-      );
-    }
-
-    return renderChildren(children as JSX.Element);
-  };
-
   return (
     <FieldContext.Provider value={field}>
       <DescriptionContext.Provider value={description}>
@@ -697,12 +752,25 @@ export function ListBoxItemIndicator(
   ] as const);
 
   const item = ListBoxItemContext();
+  const container = ListBoxContainerContext();
   const variant = computed(() => item?.variant() ?? "default");
   const isSelected = () => item?.state.isSelected() ?? false;
+
+  // R-020: inside a copy of a row (Select.Value) the indicator draws nothing.
+  // The copy has no item context, so it would otherwise fall back to the
+  // unchecked checkmark the value must not show.
+  if (container?.itemIndicatorSuppressed?.() === true) {
+    return null;
+  }
 
   if (item) {
     cleanup(item.registerIndicator());
   }
+
+  // R-045: a single-select popover removes the indicator's transition. The
+  // indicator's own slot classes and the checkmark's carry one, so the later
+  // `transition-none` is what overrides both (classList wins over class).
+  const suppressTransition = () => container?.suppressIndicatorTransition?.() === true;
 
   const slots = computed(() => listboxItemVariants({ variant: variant() }));
 
@@ -712,18 +780,7 @@ export function ListBoxItemIndicator(
       .join(" "),
   );
 
-  const fallbackRenderProps: ListBoxItemRenderProps = {
-    isHovered: () => false,
-    isPressed: () => false,
-    isSelected: () => false,
-    isFocused: () => false,
-    isFocusVisible: () => false,
-    isDisabled: () => false,
-    selectionMode: () => "none",
-    selectionBehavior: () => "toggle",
-    isDragging: () => false,
-    isDropTarget: () => false,
-  };
+  const fallbackRenderProps: ListBoxItemRenderProps = NEUTRAL_RENDER_PROPS;
 
   const renderProps = item?.state ?? fallbackRenderProps;
 
@@ -738,6 +795,9 @@ export function ListBoxItemIndicator(
       classList={{
         "opacity-100 scale-100": isSelected(),
         "opacity-0 scale-75": !isSelected(),
+        // R-045: a single-select popover draws no transition, on the checkmark
+        // as well as on its slot.
+        "transition-none": suppressTransition(),
       }}
     />
   );
@@ -772,7 +832,11 @@ export function ListBoxItemIndicator(
       class={classes()}
       // R-022: the danger variant tints the whole slot, and the built-in check
       // inherits it through `currentColor`.
-      classList={{ "text-danger": variant() === "danger" }}
+      classList={{
+        "text-danger": variant() === "danger",
+        // R-045: no transition for a single-select popover's list.
+        "transition-none": suppressTransition(),
+      }}
       style={local.style}
     >
       {content()}

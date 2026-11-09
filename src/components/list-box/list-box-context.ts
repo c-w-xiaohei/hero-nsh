@@ -1,4 +1,4 @@
-import type { Accessor, Bounds, PressEvent, ViewRef } from "nsh";
+import type { Accessor, Bounds, JSX, PressEvent, ViewRef } from "nsh";
 import { context } from "nsh";
 
 import type {
@@ -39,6 +39,15 @@ export interface ListBoxItemDescriptor {
 
   /** The row view, for the screen reader focus that follows `focusedKey`. */
   ref: () => ViewRef | undefined;
+
+  /**
+   * The row's rendered children, for a container that renders the selected
+   * option outside the list (Select.Value). HeroUI's `Select.Value` renders the
+   * selected item's `children` again; the value cannot reach the JSX the
+   * caller wrote, so the row shares the one element tree it built (port sheet
+   * §5, fifth change). Reading it never reads `props.children` again.
+   */
+  children?: () => JSX.Element | undefined;
 
   /**
    * The one activation entry: a pointer press, Return / Space on the focused
@@ -209,3 +218,50 @@ export interface ListBoxItemContextValue {
 export const ListBoxItemContext = context<
   ListBoxItemContextValue | undefined
 >(undefined);
+
+/**
+ * What a container around the list tells it, replacing HeroUI's descendant
+ * selectors from the popover to the listbox and its rows (port sheet §5,
+ * second change). Every member is optional: a ListBox with no container keeps
+ * exactly its own classes, its own indicators and its own accessible name.
+ */
+export interface ListBoxContainerContextValue {
+  /**
+   * R-042: appended after the list's base classes, before the caller's. The
+   * Select popover tightens the padding (`p-1.5` over `p-1`).
+   */
+  listClass?: () => string | undefined;
+
+  /**
+   * R-043: appended after a row's base classes, before the caller's. The
+   * `classList` classes of the row (the indicator's `pe-7`, R-044) come after,
+   * so the row's reserved room still wins.
+   */
+  itemClass?: () => string | undefined;
+
+  /**
+   * R-045: a single-select popover disables the indicator's transition, as
+   * `.select__popover [data-slot="list-box"]:not([aria-multiselectable]) …`
+   * does upstream.
+   */
+  suppressIndicatorTransition?: () => boolean;
+
+  /**
+   * R-020: the indicator is not drawn inside a copy of a row (Select.Value
+   * hides the checkmark it inherited from the option).
+   */
+  itemIndicatorSuppressed?: () => boolean;
+
+  /**
+   * The list's accessible name, when the container has one. Upstream the
+   * popover points the listbox at the field's label with
+   * `aria-labelledby`; NSH has no cross-element references, so the container
+   * hands the name down.
+   */
+  accessibilityLabel?: () => string | undefined;
+}
+
+export const ListBoxContainerContext = context<
+  ListBoxContainerContextValue | undefined
+>(undefined);
+
