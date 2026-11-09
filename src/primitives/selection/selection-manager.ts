@@ -81,9 +81,23 @@ export class SelectionManager implements MultipleSelectionManager {
     this.state.setFocused(isFocused);
   }
 
-  /** The current focused key in the collection. */
+  /**
+   * The current focused key in the collection, `undefined` when its item has
+   * left the collection.
+   *
+   * `createListState` clears the stored key in an effect, as NSH must not
+   * write state while a render reads it; an effect runs after the batch, so
+   * a caller that reads the key in the same turn as the data source change
+   * (a press handler that deletes the focused item) would still see the old
+   * key. Kobalte resets it eagerly in `createComputed`, so the read itself
+   * validates the key the same way `setFocusedKey` does; the effect then
+   * clears the stored value, and a re-added item does not take the focus
+   * back.
+   */
   focusedKey(): string | undefined {
-    return this.state.focusedKey();
+    const key = this.state.focusedKey();
+
+    return key != null && this.collection().getItem(key) ? key : undefined;
   }
 
   /** Sets the focused key. */
