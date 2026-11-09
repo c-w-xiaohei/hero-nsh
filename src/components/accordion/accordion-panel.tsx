@@ -39,12 +39,6 @@ export interface AccordionPanelProps {
   /** Accepted, no effect: NSH has no cross-element references. */
   "aria-describedby"?: string;
 
-  /** A DOM id upstream; maps to `nativeID`. */
-  id?: string;
-
-  /** The name other elements refer to. */
-  nativeID?: string;
-
   /** An identifier for UI tests. */
   testID?: string;
 
@@ -56,9 +50,6 @@ export interface AccordionPanelProps {
 
   /** NSH's accessible name, over `aria-label`. */
   accessibilityLabel?: string;
-
-  /** Hides the panel from assistive technologies. */
-  accessibilityElementsHidden?: boolean;
 
   /** Accepted, no effect: NSH cannot replace the host element. */
   render?: unknown;
@@ -96,13 +87,10 @@ export function AccordionPanel(props: AccordionPanelProps): JSX.Element | null {
     "aria-label",
     "aria-labelledby",
     "aria-describedby",
-    "id",
-    "nativeID",
     "testID",
     "tooltip",
     "onLayout",
     "accessibilityLabel",
-    "accessibilityElementsHidden",
     "render",
     "slot",
     "ref",
@@ -161,6 +149,7 @@ export function AccordionPanel(props: AccordionPanelProps): JSX.Element | null {
       keepMounted
       ref={(node) => local.ref?.(node)}
       testID={local.testID}
+      tooltip={local.tooltip}
       accessibilityLabel={accessibilityLabel()}
       class={classes()}
       classList={{ "opacity-100": item.isExpanded() }}

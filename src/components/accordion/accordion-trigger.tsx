@@ -517,7 +517,9 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
       }}
       class={classes()}
       classList={classList()}
-      style={[resolvedStyle(), transitionStyle()]}
+      // The caller's style wins over the transition, as the stylesheet's rule
+      // loses to an inline `transition-*` in HeroUI.
+      style={[transitionStyle(), resolvedStyle()]}
       onPress={handlePress}
       onPressDown={handlePressDown}
       onPressUp={handlePressUp}
