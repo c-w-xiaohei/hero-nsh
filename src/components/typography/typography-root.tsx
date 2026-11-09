@@ -1,6 +1,8 @@
 import { computed, split, Text, View } from "nsh";
 import type { AccessibilityRole, JSX, TextProps, ViewRef } from "nsh";
 
+import { TypographyWeightContext } from "./typography-context";
+import type { TypographyResolvedWeight } from "./typography-context";
 import { textProps } from "./typography-dom-props";
 import type { AriaProps, DataProps, GlobalDomProps } from "./typography-dom-props";
 import { codeSurfaceClasses, typographyVariants } from "./typography.styles";
@@ -106,11 +108,11 @@ export interface TypographyRootProps extends TypographyTextProps {
  * `Typography` / `Typography.Root`: HeroUI's `TypographyRoot`, the shared text
  * renderer of the four parts.
  *
- * It holds no state, reads no context and dispatches no events: the whole
- * component is a class-string computation plus a semantic mapping (port sheet
- * §2). `type` decides the visual variant; for `h1`–`h6` it also makes the
- * element a heading (`role="header"` + `accessibilityLevel`), since NSH has no
- * `<h1>`–`<h6>` elements (port sheet §3, §8).
+ * It holds no state, dispatches no events and reads only the weight context:
+ * the whole component is a class-string computation plus a semantic mapping
+ * (port sheet §2). `type` decides the visual variant; for `h1`–`h6` it also
+ * makes the element a heading (`role="header"` + `accessibilityLevel`), since
+ * NSH has no `<h1>`–`<h6>` elements (port sheet §3, §8).
  */
 export function TypographyRoot(props: TypographyRootProps): JSX.Element {
   return renderTypography(props, () => props.type ?? "body");
@@ -179,6 +181,11 @@ export function renderTypography(
 ): JSX.Element {
   const [local, rest] = split(props, TEXT_SPLIT_KEYS);
 
+  // The weight of the nearest Typography part above this one (see
+  // `typography-context.ts`): a nested code's chip paints it, because the
+  // inline `View` around the chip's characters is a text-style boundary.
+  const inheritedWeight = TypographyWeightContext();
+
   const resolvedType = computed(() => type());
 
   // R-003–R-008, R-021–R-026: an `h1`–`h6` type is a heading. NSH has no
@@ -193,6 +200,22 @@ export function renderTypography(
   const role = computed<AccessibilityRole | undefined>(() =>
     headingLevel() === undefined ? undefined : "header",
   );
+
+  // The weight this part paints its own text with. A heading type carries
+  // `font-semibold` (`typography.css:81-99`), which everything inside it
+  // inherits upstream; the other types carry no weight, so a part without a
+  // `weight` prop declares nothing and inherits (400 at the top). The context
+  // publishes the same value so a nested code can paint it on its chip; see
+  // `typography-context.ts` for why the chip cannot inherit it on its own.
+  const ownWeight = computed<TypographyResolvedWeight | undefined>(() =>
+    local.weight ?? (headingLevel() === undefined ? undefined : "semibold"),
+  );
+
+  const effectiveWeight = computed<TypographyResolvedWeight | undefined>(
+    () => ownWeight() ?? inheritedWeight?.weight(),
+  );
+
+  const weightContext = { weight: effectiveWeight };
 
   // R-001 / R-002 / R-009 / R-015 / R-021–R-041: the variant table resolves the
   // slot class; the caller's `className` is passed through the slot function,
@@ -260,8 +283,26 @@ export function renderTypography(
   // `color="muted"` reaches the code box as it does upstream. A Code that only
   // inherits a muted Paragraph keeps its own default `color="default"`, hence
   // `text-foreground`.
+  //
+  // `weight` belongs here too. Upstream resolves every variant on the single
+  // `<code>` element (`typography.styles.ts:41-46` puts the weight class on the
+  // same element as `typography--code`), and `typography.css` gives
+  // `.typography--code` no font-weight of its own (117-119), so the weight
+  // utilities (149-163), or the weight inherited from a bold paragraph or a
+  // semibold heading, are what paint the glyphs. Here the glyphs are this
+  // span's text, not the root's: a text utility on the root `Text` does not
+  // cross the inline `View`, and the `View` is a text-style boundary, so a
+  // weight left on the root alone leaves `Code weight="bold"` at 400, and an
+  // inherited one never arrives either (both measured; `typography-context.ts`
+  // carries the inherited half). The root keeps its weight for the same reason
+  // it keeps its color — the shared dimensions stay on the part — and the span
+  // owns what the browser actually paints.
   const inlineCodeClasses = computed(() =>
-    typographyVariants({ color: local.color, type: "code" }).base({
+    typographyVariants({
+      color: local.color,
+      type: "code",
+      weight: effectiveWeight(),
+    }).base({
       className: local.className,
     }),
   );
@@ -274,45 +315,58 @@ export function renderTypography(
       : `${codeSurfaceClasses} ${local.className}`,
   );
 
-  // The single read of `children`, at the placement: a read builds new native
-  // views (research 4.1, 4.6). It is shared by the code span and the plain
-  // placement below; `computed` keeps `<X>{signal()}</X>` reactive, as a plain
-  // captured value would freeze it.
-  const children = computed(() => local.children);
+  // The single read of `props.children`, at the placement: a read builds new
+  // native views (research 4.1, 4.6), so it must not happen anywhere else.
+  // `local.children` is split's live getter, not a captured value, so calling
+  // this at the placement keeps `<X>{signal()}</X>` reactive.
+  //
+  // It is a plain function rather than a `computed` on purpose: a `computed`
+  // created in the body evaluates there, outside the provider below, and a part
+  // nested in this one would then be built without the weight context — a `Code`
+  // inside a bold `Paragraph` measured 400 that way and 700 through this thunk.
+  // The provider exception in the common rules asks for the same thing: read the
+  // children inside the provider, at the placement.
+  const children = () => local.children;
 
   return (
-    <Text
-      {...textProps(rest)}
-      ref={(node) => local.ref?.(node)}
-      nativeID={local.id ?? local.nativeID}
-      // A `<p>` / `<h1>` / `<code>` is not a keyboard focus stop upstream;
-      // without this a pressable Text would become one. A caller's own
-      // `focusable` still wins.
-      focusable={local.focusable ?? false}
-      role={local.role ?? role()}
-      accessibilityLevel={local.accessibilityLevel ?? headingLevel()}
-      class={classes()}
-      classList={{ hidden: local.hidden === true }}
-      // For `type="code"` the inline box is the element upstream styles, so the
-      // caller's class and style go there (see `inlineCodeClasses`); the root
-      // only lays the paragraph out.
-      style={isCode() ? undefined : local.style}
-    >
-      {isCode() ? (
-        // `align-text-bottom` puts the box's bottom on the parent's descent
-        // line, so the chip hangs below the baseline as a CSS inline box does;
-        // the default `baseline` alignment would lift the code by its full
-        // height and grow the line.
-        <View class={`${surfaceClasses()} align-text-bottom`}>
-          <Text>
-            <Text class={inlineCodeClasses()} style={local.style}>
-              {children()}
+    // The provider wraps the part's own element: the parts nested in it are the
+    // only consumers, and the single `children` read stays at the placement
+    // below, inside the provider (common rules, "a component that provides a
+    // context to its children").
+    <TypographyWeightContext.Provider value={weightContext}>
+      <Text
+        {...textProps(rest)}
+        ref={(node) => local.ref?.(node)}
+        nativeID={local.id ?? local.nativeID}
+        // A `<p>` / `<h1>` / `<code>` is not a keyboard focus stop upstream;
+        // without this a pressable Text would become one. A caller's own
+        // `focusable` still wins.
+        focusable={local.focusable ?? false}
+        role={local.role ?? role()}
+        accessibilityLevel={local.accessibilityLevel ?? headingLevel()}
+        class={classes()}
+        classList={{ hidden: local.hidden === true }}
+        // For `type="code"` the inline box is the element upstream styles, so
+        // the caller's class and style go there (see `inlineCodeClasses`); the
+        // root only lays the paragraph out.
+        style={isCode() ? undefined : local.style}
+      >
+        {isCode() ? (
+          // `align-text-bottom` puts the box's bottom on the parent's descent
+          // line, so the chip hangs below the baseline as a CSS inline box does;
+          // the default `baseline` alignment would lift the code by its full
+          // height and grow the line.
+          <View class={`${surfaceClasses()} align-text-bottom`}>
+            <Text>
+              <Text class={inlineCodeClasses()} style={local.style}>
+                {children()}
+              </Text>
             </Text>
-          </Text>
-        </View>
-      ) : (
-        children()
-      )}
-    </Text>
+          </View>
+        ) : (
+          children()
+        )}
+      </Text>
+    </TypographyWeightContext.Provider>
   );
 }
