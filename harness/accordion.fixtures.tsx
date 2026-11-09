@@ -24,6 +24,8 @@ import { probe } from "@scenario/probe";
  *   kobalte-controlled      expandedKeys={["one"]} held from outside: the root
  *                           renders what the prop says and the press only
  *                           reports (T-018)
+ *   panel-tooltip           one open item whose panel carries a host tooltip,
+ *                           for the panel prop forwarding case (X-001)
  *
  * The expansion callbacks are recorded because `nsh/test` cannot read aria
  * attributes: the group probe flattens the `Set` into an array (`JSON.stringify`
@@ -93,6 +95,30 @@ function HeroFaq(props: { multiple?: boolean }) {
         onExpandedChange={(keys) => probe("expandedChange")(Array.from(keys))}
       >
         <HeroItems />
+      </Accordion>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Panel tooltip fixture
+ * -----------------------------------------------------------------------------------------------*/
+
+function HeroPanelTooltip() {
+  return (
+    <View class="w-96">
+      <Accordion defaultExpandedKeys={["faq-1"]}>
+        <Accordion.Item id="faq-1">
+          <Accordion.Heading>
+            <Accordion.Trigger>
+              How do I place an order?
+              <Accordion.Indicator />
+            </Accordion.Trigger>
+          </Accordion.Heading>
+          <Accordion.Panel testID="panel-one" tooltip="Panel hint">
+            <Accordion.Body>Browse our products and proceed to checkout.</Accordion.Body>
+          </Accordion.Panel>
+        </Accordion.Item>
       </Accordion>
     </View>
   );
@@ -180,6 +206,10 @@ function Fixture() {
 
   if (name === "kobalte-plain") {
     return <KobalteAccordion after />;
+  }
+
+  if (name === "panel-tooltip") {
+    return <HeroPanelTooltip />;
   }
 
   return <HeroFaq />;

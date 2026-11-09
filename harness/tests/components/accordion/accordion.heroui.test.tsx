@@ -112,3 +112,20 @@ test("T-008 supports disabled items without expanding", async () => {
   expect(expandedCalls(app)).toHaveLength(0);
   expect(itemExpandedCalls(app)).toHaveLength(0);
 });
+
+// src/components/accordion/accordion-panel.tsx:52
+// X-001: AccordionPanelProps declares `tooltip` and split() takes it off the
+// rest object, but the BaseAccordionPanel element never receives it, so a
+// tooltip set on the panel is silently dropped while every other part
+// (root, item, trigger, body) forwards the same prop. The host tooltip is the
+// observable channel: resting the pointer on the panel shows the hint.
+test("X-001 shows the panel tooltip while the pointer rests on the panel", async () => {
+  const app = await openFixture("panel-tooltip");
+
+  expect(app.shows("text:Panel hint")).toBe(false);
+
+  await app.hover("id:panel-one");
+  await app.waitFor("text:Panel hint", { timeout: 2000 });
+
+  expect(app.shows("text:Panel hint")).toBe(true);
+});
