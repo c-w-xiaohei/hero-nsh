@@ -187,6 +187,9 @@ test("T-018 skips the exit hold when shouldSkipAnimation is true", async () => {
   expect(app.shows("text:Retained content")).toBe(true);
 
   await app.host.send("popover.close");
+  // The host event lands after a frame; 20ms is still inside the 100ms hold,
+  // so a broken skip still shows the retained content here.
+  await app.clock!.runFor(20);
 
   expect(app.count("text:Retained content")).toBe(0);
 });
