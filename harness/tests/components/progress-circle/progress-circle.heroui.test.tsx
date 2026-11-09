@@ -83,20 +83,55 @@ test("T-005 mounts the track, track circle and fill circle", async () => {
   expect(app.shows("role:progressbar[Loading] >> id:pcircle-fill-circle")).toBe(true);
 });
 
-// src/primitives/progress/create-progress-state.ts:127-136
-// The regression report probed `<ProgressCircle isIndeterminate valueLabel="half">`
-// and got valueText "half". Upstream keeps `aria-valuetext` undefined when
-// indeterminate (react-aria@3.53.1 useProgressBar.mjs:39-49), and Kobalte
-// returns undefined for an indeterminate label before formatting
-// (kobalte/packages/core/src/progress/progress-root.tsx:92-97); port sheet §2
-// says an indeterminate circle uses only the caller's aria-valuetext. The
-// scenario renders the render prop's valueText as copy, since `nsh/test` cannot
-// query aria state. A value label leaking while indeterminate fails it.
-test("X-001 an indeterminate circle exposes only the caller's aria-valuetext", async () => {
+// harness/tests/components/progress-circle/progress-circle.heroui.test.tsx:86-102;
+// scenarios/progress-circle.scenarios.tsx:150-183
+// An indeterminate bar has no value text. RAC 1.22.1 passes
+// `progressBarProps["aria-valuetext"]` to the render prop's valueText, and
+// react-aria@3.53.1 useProgressBar sets that to undefined when indeterminate, so
+// the render prop reports no value text even when the caller also passes
+// `aria-valuetext`. filterDOMProps(labelable) drops the caller's aria-valuetext
+// too, so the DOM has none either. The scenario keeps `aria-valuetext="Halfway
+// there"` and `valueLabel="half"` to prove both are ignored; it renders the
+// render prop's valueText as copy because `nsh/test` cannot query aria state. A
+// value label or caller aria-valuetext leaking while indeterminate fails it.
+test("X-001 an indeterminate circle has no value text", async () => {
   const app = await openScenario("progress-circle/indeterminate-value-text");
   const texts = app.texts();
 
-  expect(texts).toContain("Halfway there");
   expect(texts).toContain("no value text");
   expect(texts).not.toContain("half");
+  expect(texts).not.toContain("Halfway there");
+});
+
+// src/primitives/progress/create-progress-state.ts:127-149;
+// src/components/progress-circle/progress-circle-root.tsx:281-301
+// The port returns the caller's aria-valuetext from the indeterminate branch, so
+// the render prop and accessibilityValue.text expose "Halfway there". Upstream
+// keeps both undefined (RAC 1.22.1 ProgressBar.tsx:101-107; react-aria@3.53.1
+// useProgressBar.mjs:49), and the caller's aria-valuetext never reaches the DOM
+// through filterDOMProps(labelable). Both indeterminate circles in the scenario
+// must therefore report no value text. This is red while the bug is present.
+test("X-002 an indeterminate circle ignores the caller's aria-valuetext", async () => {
+  const app = await openScenario("progress-circle/indeterminate-value-text");
+  const texts = app.texts();
+
+  expect(texts.filter((text) => text === "no value text").length).toBe(2);
+  expect(texts).not.toContain("Halfway there");
+  expect(texts).not.toContain("half");
+});
+
+// src/components/progress-circle/progress-circle-root.tsx:262-280;
+// src/components/progress-circle/dom-props.ts:8-9,29-31
+// RAC starts useSlot(false) when aria-label exists, but the Label ref attaches
+// the slot and useLabel/useLabels emit aria-labelledby="<root id> <label id>"
+// beside aria-label, so both parts form the name: a real RAC 1.22.1 render of
+// `<ProgressBar aria-label="Outer"><Label>Inner</Label></ProgressBar>` has the
+// accessible name "Outer Inner". The port returns aria-label first and drops the
+// registered Label, so the combined name reads "Outer". Label-only must still
+// produce its own name. This is red while the bug is present.
+test("X-003 a registered Label joins the caller's aria-label in the name", async () => {
+  const app = await openScenario("progress-circle/aria-label-with-label");
+
+  expect(app.shows("role:progressbar[Outer Inner]")).toBe(true);
+  expect(app.shows("role:progressbar[Label only]")).toBe(true);
 });

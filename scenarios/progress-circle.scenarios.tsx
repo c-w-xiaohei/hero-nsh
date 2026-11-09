@@ -11,9 +11,13 @@ import { Stage } from "@scenario/stage";
  * and FillCircle give the composition case something to observe in place of
  * the dropped `data-slot` values. `sizes`, `colors`, `indeterminate` and
  * `label` are the stories of the same names; `values`, `nested-label`,
- * `indeterminate-value-text` and `disabled` are the port sheet's supplementary
- * scenarios (no upstream test). The last one renders the render props' value
- * text as copy, which is the only channel `nsh/test` can read for it.
+ * `indeterminate-value-text`, `aria-label-with-label` and `disabled` are the
+ * port sheet's supplementary scenarios (no upstream test).
+ * `indeterminate-value-text` renders the render props' value text as copy, the
+ * only channel `nsh/test` can read for it; its `aria-valuetext` and `valueLabel`
+ * props prove an indeterminate bar ignores both. `aria-label-with-label` pairs
+ * the caller's `aria-label` with a registered `Label` so the combined accessible
+ * name can be read, and keeps a Label-only circle beside it.
  */
 
 function Default() {
@@ -212,6 +216,29 @@ function NestedLabel() {
   );
 }
 
+function AriaLabelWithLabel() {
+  return (
+    <Stage>
+      <View class="flex-row items-start gap-6">
+        <ProgressCircle aria-label="Outer" value={70}>
+          <Label>Inner</Label>
+          <ProgressCircle.Track>
+            <ProgressCircle.TrackCircle />
+            <ProgressCircle.FillCircle />
+          </ProgressCircle.Track>
+        </ProgressCircle>
+        <ProgressCircle value={60}>
+          <Label>Label only</Label>
+          <ProgressCircle.Track>
+            <ProgressCircle.TrackCircle />
+            <ProgressCircle.FillCircle />
+          </ProgressCircle.Track>
+        </ProgressCircle>
+      </View>
+    </Stage>
+  );
+}
+
 function Disabled() {
   return (
     <Stage>
@@ -234,5 +261,6 @@ export const progressCircleScenarios = {
   "progress-circle/indeterminate-value-text": IndeterminateValueText,
   "progress-circle/label": WithLabel,
   "progress-circle/nested-label": NestedLabel,
+  "progress-circle/aria-label-with-label": AriaLabelWithLabel,
   "progress-circle/disabled": Disabled,
 };
