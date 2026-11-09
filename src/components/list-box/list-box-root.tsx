@@ -9,10 +9,12 @@ import type {
   ViewStyle,
 } from "nsh";
 import {
+  announce,
   cleanup,
   computed,
   effect,
   platform,
+  screenReaderEnabled,
   setAccessibilityFocus,
   signal,
   split,
@@ -644,16 +646,32 @@ export function ListBoxRoot<T>(
   // listbox, which fires the root's `onBlur`, drops every keymap scope and
   // leaves the arrows, typeahead and Escape dead (measured: Tab gives the root
   // focus, then this effect blurs it at once). Upstream keeps DOM focus on the
-  // listbox and only moves `aria-activedescendant`, so the browser target
-  // keeps the focus where it is.
+  // listbox and only moves `aria-activedescendant`, which NSH does not expose;
+  // there the active option is announced instead, so a screen reader still
+  // hears it. `screenReaderEnabled` is reactive, so a reader switched on later
+  // starts hearing it.
   effect(() => {
     const key = manager().focusedKey();
 
-    if (key == null || !rootFocused() || platform.os === "web") {
+    if (key == null || !rootFocused()) {
       return;
     }
 
-    const node = findItemDescriptor(descriptors(), key)?.ref();
+    const descriptor = findItemDescriptor(descriptors(), key);
+
+    if (!descriptor) {
+      return;
+    }
+
+    if (platform.os === "web") {
+      if (screenReaderEnabled()) {
+        announce(descriptor.textValue());
+      }
+
+      return;
+    }
+
+    const node = descriptor.ref();
 
     if (node) {
       setAccessibilityFocus(node);
@@ -704,9 +722,14 @@ export function ListBoxRoot<T>(
   // changed render function, reaches the tree (each read builds new views).
   const hasItems = computed(() => local.items != null);
 
-  // One row of the dynamic collection. `item()` is read where the row goes, so
-  // a positional row (an object with no id) rebuilds its content when the data
-  // at its index changes; an identity-keyed row never sees another item.
+  // One row of the dynamic collection. The content is a *function* child of the
+  // provider, not a call made when the row is created: a component's child
+  // element is built once per row, while a zero-arg child re-runs when what it
+  // reads changes. Inside it the row re-reads `item()`, so a kept row whose
+  // item is replaced (the same id renamed, or a new object at a positional
+  // index) rebuilds its content from the current collection, as React
+  // re-renders the item upstream (`react-aria-components/src/ListBox.tsx:154-160`,
+  // `:582-595`).
   const renderRow = (item: T, index: number): JSX.Element => {
     const children = local.children;
 
@@ -761,7 +784,11 @@ export function ListBoxRoot<T>(
           <Each of={local.items} key={collectionItemKey}>
             {(item, index) => (
               <CollectionItemContext.Provider value={{ value: item, index }}>
-                {renderRow(item(), untracked(() => index()))}
+                {/* A function child: the call inside it re-runs when `item()`
+                    or `index()` changes, so a kept row follows a replaced
+                    item. A plain element child is built once per row. */}
+                {(() =>
+                  renderRow(item(), untracked(() => index()))) as unknown as JSX.Element}
               </CollectionItemContext.Provider>
             )}
           </Each>

@@ -183,8 +183,9 @@ export function ListBoxSectionRoot<T>(
 
   // One read of `props.children` at the placement. A dynamic Section mirrors
   // the root: `items` is read by the `<Each>` itself (a JSX expression, so it
-  // follows the prop), rows are keyed by the entry's identity, and a row's
-  // content is rebuilt from its item where the row goes.
+  // follows the prop), rows are keyed by the entry's identity, and the row
+  // content is a function child that re-reads its item, so a replaced item
+  // rebuilds the row (React re-renders it upstream).
   const hasItems = computed(() => local.items != null);
 
   const renderRow = (item: T, index: number): JSX.Element => {
@@ -220,7 +221,8 @@ export function ListBoxSectionRoot<T>(
           <Each of={local.items} key={collectionItemKey}>
             {(item, index) => (
               <CollectionItemContext.Provider value={{ value: item, index }}>
-                {renderRow(item(), untracked(() => index()))}
+                {(() =>
+                  renderRow(item(), untracked(() => index()))) as unknown as JSX.Element}
               </CollectionItemContext.Provider>
             )}
           </Each>
