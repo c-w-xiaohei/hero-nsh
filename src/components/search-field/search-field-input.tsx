@@ -85,7 +85,13 @@ export interface SearchFieldInputDomProps {
   required?: boolean;
   size?: number;
   multiple?: boolean;
+  min?: number | string;
+  max?: number | string;
   step?: number | string;
+  accept?: string;
+  capture?: boolean | "user" | "environment";
+  autoSave?: string;
+  results?: number;
   enterKeyHint?: SearchFieldEnterKeyHint;
   onKeyDown?: unknown;
   onKeyUp?: unknown;
@@ -93,7 +99,8 @@ export interface SearchFieldInputDomProps {
   onInput?: unknown;
   onCopy?: unknown;
   onCut?: unknown;
-  onSelect?: unknown;
+  /** The HTML `onSelect`, mapped to the selection payload (port sheet §1.4). */
+  onSelect?: (event: { start: number; end: number }) => void;
   onClick?: unknown;
   onDoubleClick?: unknown;
   onMouseDown?: unknown;
@@ -477,7 +484,9 @@ export function SearchFieldInput(props: SearchFieldInputProps): JSX.Element {
       return local.returnKeyType;
     }
 
-    switch (bindings?.enterKeyHint()) {
+    // A direct `enterKeyHint` on the input wins over the field's, as upstream's
+    // Input prop does (port sheet §1.4).
+    switch (local.enterKeyHint ?? bindings?.enterKeyHint()) {
       case "enter":
       case "previous":
         // NSH has no "previous" key label; the platform default stands in.
@@ -600,6 +609,9 @@ export function SearchFieldInput(props: SearchFieldInputProps): JSX.Element {
   const handleSelectionChange = (event: { start: number; end: number }) => {
     bindings?.onSelectionChange?.(event);
     local.onSelectionChange?.(event);
+    // The port sheet maps the HTML `onSelect` to `onSelectionChange`; the field
+    // fans it out the same way (search-field-root.tsx, `onSelectionChange`).
+    local.onSelect?.(event);
   };
 
   const handleMouseEnter = (event: NshMouseEvent) => {
@@ -658,9 +670,13 @@ export function SearchFieldInput(props: SearchFieldInputProps): JSX.Element {
     local.onBlur?.();
   };
 
-  // The input unmounting while focused must not leave the group lit.
+  // The input unmounting while focused must not leave the group lit. Upstream's
+  // `:focus-within` ends as soon as the focused descendant is gone, and no blur
+  // event fires, so the field's focus drops without `onBlur` / `onFocusChange`;
+  // a standalone group keeps its own signal.
   cleanup(() => {
     if (focused()) {
+      bindings?.releaseFocus();
       group?.setFocusWithin(false);
     }
   });

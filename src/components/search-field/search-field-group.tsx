@@ -81,8 +81,12 @@ export interface SearchFieldGroupProps
     AriaProps,
     DataProps,
     GlobalDomProps {
-  /** The group's content: the search icon, the input and the clear button. */
-  children?: JSX.Element;
+  /**
+   * The group's content: the search icon, the input and the clear button. A
+   * one-argument function is upstream's render-prop child (React Aria
+   * `RenderProps<GroupRenderProps>`) and receives the group's values.
+   */
+  children?: JSX.Element | ((values: SearchFieldGroupRenderProps) => JSX.Element);
 
   /** Appended after the variant classes; later classes win. Function form gets the same accessors. */
   className?: string | ((values: SearchFieldGroupClassNameRenderProps) => string | undefined);
@@ -232,6 +236,16 @@ export function SearchFieldGroup(props: SearchFieldGroupProps): JSX.Element {
 
   const setFocusWithin = (value: boolean) => {
     localFocus.set(value);
+  };
+
+  // React Aria's `useRenderProps` hands these values to a function child, once,
+  // at the placement (upstream `Group.tsx:70`).
+  const groupRenderProps: SearchFieldGroupRenderProps = {
+    isHovered: hovered,
+    isFocusWithin,
+    isFocusVisible: isFocusWithin,
+    isDisabled,
+    isInvalid,
   };
 
   // --- Icon / clear button registration ------------------------------------
@@ -388,8 +402,28 @@ export function SearchFieldGroup(props: SearchFieldGroupProps): JSX.Element {
       >
         {/* The single read of the group's children, at the placement inside
             its provider (research 4.1 / 4.6). */}
-        {renderChildren(local.children)}
+        {renderGroupChildren(local.children, groupRenderProps)}
       </View>
     </SearchFieldGroupContext.Provider>
   );
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Helpers
+ * -----------------------------------------------------------------------------------------------*/
+
+/**
+ * Renders the group's children: a one-argument function is upstream's render
+ * prop and receives the group's values; NSH's reactive children are
+ * zero-argument and take `renderChildren`'s per-value path.
+ */
+function renderGroupChildren(
+  node: JSX.Element | ((values: SearchFieldGroupRenderProps) => JSX.Element),
+  values: SearchFieldGroupRenderProps,
+): JSX.Element {
+  if (typeof node === "function" && node.length >= 1) {
+    return renderChildren((node as (values: SearchFieldGroupRenderProps) => JSX.Element)(values));
+  }
+
+  return renderChildren(node as JSX.Element);
 }

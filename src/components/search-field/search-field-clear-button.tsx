@@ -16,7 +16,8 @@ import { SearchFieldContext, SearchFieldGroupContext } from "./search-field-cont
  * CloseButton>` — the whole close-button surface, passed through.
  *
  * The three defaults `useSearchField` supplies stand beside it (port sheet
- * §1.5): the accessible name `"Clear search"`, `excludeFromTabOrder: true` and
+ * §1.5): the accessible name `"Clear search"` (inside a field; outside one the
+ * CloseButton default stands), `excludeFromTabOrder: true` and
  * `preventFocusOnPress: true`. Explicit props win.
  */
 export interface SearchFieldClearButtonProps extends CloseButtonRootProps {}
@@ -109,9 +110,15 @@ export function SearchFieldClearButton(props: SearchFieldClearButtonProps): JSX.
     <CloseButton
       {...rest}
       ref={(node) => local.ref?.(node)}
-      // The default name `useSearchField` supplies; a caller's `aria-label` /
-      // `accessibilityLabel` wins. `aria-labelledby` has no NSH counterpart.
-      aria-label={local["aria-label"] ?? local.accessibilityLabel ?? "Clear search"}
+      // The default name `useSearchField` supplies inside a field; a caller's
+      // `aria-label` / `accessibilityLabel` wins. `aria-labelledby` has no NSH
+      // counterpart. Outside a field upstream has no `ButtonContext`, so
+      // CloseButton's own `"Close"` default stands: leave the prop undefined.
+      aria-label={
+        local["aria-label"] ??
+        local.accessibilityLabel ??
+        (field ? "Clear search" : undefined)
+      }
       isDisabled={isDisabled()}
       // A clear button is not a Tab stop upstream, and a pointer press must not
       // take the focus from the input.

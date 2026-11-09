@@ -100,6 +100,13 @@ export interface SearchFieldInputBindings {
   /** The input lost focus: commits validation, then the root's `onBlur` / `onFocusChange`. */
   blur: () => void;
 
+  /**
+   * The input is going away while focused: drops the field's focus state
+   * without firing `onBlur` / `onFocusChange`, as upstream's `:focus-within`
+   * does when the focused descendant is removed.
+   */
+  releaseFocus: () => void;
+
   /** The user pasted; NSH reports the content, not a DOM `ClipboardEvent`. */
   onPaste?: (event: PasteEvent) => void;
 

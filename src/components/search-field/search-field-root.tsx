@@ -550,6 +550,10 @@ export function SearchFieldRoot(props: SearchFieldRootProps): JSX.Element {
     submit,
     focus: handleInputFocus,
     blur: handleInputBlur,
+    // The input unmounted while focused: `:focus-within` ends with no blur
+    // event, so the focus state drops without `onBlur` / `onFocusChange`
+    // (which also unbinds the Escape scope).
+    releaseFocus: () => focused.set(false),
     onPaste: (event) => local.onPaste?.(event),
     // NSH reports the three DOM composition events on one; the field fans it
     // back out to the event HeroUI's caller asked for (§8).
