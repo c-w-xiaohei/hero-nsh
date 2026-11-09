@@ -310,3 +310,82 @@ test("T-023 exposes inherited size on child ToggleButtons", async () => {
 
   expect(app.spanStyle("text:Bold").fontSize).toBe(16);
 });
+
+// src/components/toggle-button/toggle-button-group-root.tsx:33-38,266-270 — the
+// group render props hand out the raw ListState (`collection()`,
+// `selectionManager()`) as `state`, while upstream passes a ToggleGroupState
+// (react-spectrum/packages/react-aria-components/src/ToggleButtonGroup.tsx:46)
+// whose plain members are `selectedKeys`, `isSelected`,
+// `setSelected`, `toggleKey`, `selectionMode`, `disallowEmptySelection` and
+// `isDisabled` (read at .../ToggleButton.tsx:86,90). A HeroUI app's `children`
+// function form reads exactly those, so the raw state makes it fail to compile.
+test("X-002 exposes HeroUI's ToggleGroupState to the group render props", async () => {
+  const app = await openScenario("toggle-button-group/group-state.split");
+  const initial =
+    "keys=bold mode=multiple disallow=true disabled=false bold=true italic=false";
+  await app.waitFor(`text:${initial}`, { timeout: 15_000 });
+
+  expect(app.shows(`text:${initial}`)).toBe(true);
+
+  // `isSelected` and `selectedKeys` follow a member press.
+  await app.press("role:button[Italic]");
+  expect(
+    app.shows(
+      "text:keys=bold+italic mode=multiple disallow=true disabled=false bold=true italic=true",
+    ),
+  ).toBe(true);
+
+  // `toggleKey` flips one key, as the member's own press does upstream.
+  await app.press("text:Toggle bold");
+  expect(
+    app.shows(
+      "text:keys=italic mode=multiple disallow=true disabled=false bold=false italic=true",
+    ),
+  ).toBe(true);
+
+  // `setSelected(key, true)` adds the key back beside the other one...
+  await app.press("text:Select bold");
+  expect(
+    app.shows(
+      "text:keys=bold+italic mode=multiple disallow=true disabled=false bold=true italic=true",
+    ),
+  ).toBe(true);
+
+  // ...and `setSelected(key, false)` removes only that key.
+  await app.press("text:Clear bold");
+  expect(
+    app.shows(
+      "text:keys=italic mode=multiple disallow=true disabled=false bold=false italic=true",
+    ),
+  ).toBe(true);
+
+  // `isDisabled` reflects the group's prop, not a constant false.
+  expect(app.shows("text:disabled=true mode=single keys=none")).toBe(true);
+});
+
+// src/components/toggle-button/toggle-button-root.tsx:159-161 — a member
+// without `id` never joins the group's selection: upstream reads the group
+// state only on the `id` path (react-spectrum/packages/react-aria-components/
+// src/ToggleButton.tsx:86,97), so it keeps its own toggle state and its own
+// disabled state while `id` members inherit the group's.
+test("X-003 keeps an idless member independent of a disabled group", async () => {
+  const app = await openScenario("toggle-button-group/idless.split");
+  await app.waitFor("text:Bold off", { timeout: 15_000 });
+
+  // The `id` member inherits the group's disabled state.
+  expect(app.enabled("role:button[Italic off]")).toBe(false);
+  await expect(app.press("role:button[Italic off]")).rejects.toMatchObject({
+    code: "ERR_NSH_TEST_DISABLED",
+  });
+  expect(app.shows("text:Italic off")).toBe(true);
+
+  // The member without `id` stays enabled and owns its toggle.
+  expect(app.enabled("role:button[Bold off]")).toBe(true);
+  await app.press("role:button[Bold off]");
+  expect(app.shows("text:Bold on")).toBe(true);
+  await app.press("role:button[Bold on]");
+  expect(app.shows("text:Bold off")).toBe(true);
+
+  // Its presses never reach the group's selection.
+  expect(callsOf(app, "onSelectionChange")).toHaveLength(0);
+});

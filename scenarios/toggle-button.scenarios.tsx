@@ -47,7 +47,8 @@ import type { Component } from "./types";
  *   toggle-button-group/separators     T-015
  *   toggle-button-group/disabled       T-022, T-035
  *   toggle-button-group/sizes          T-023
- *   toggle-button-group/idless.split   group member without an id
+ *   toggle-button-group/idless.split   X-003 (group disabled, member without an id)
+ *   toggle-button-group/group-state.split  X-002 (HeroUI-shaped group state)
  *   toggle-button-group/animals.split  T-028 (dogs / cats / dragons)
  *   toggle-button-group/multi-click.split  T-033
  *   toggle-button-group/shift-multi.split  X-001 (three members, multiple)
@@ -458,13 +459,71 @@ function GroupSizes() {
 function IdlessSplit() {
   return (
     <Stage>
-      <ToggleButtonGroup selectionMode="multiple">
+      <ToggleButtonGroup
+        isDisabled
+        selectionMode="multiple"
+        onSelectionChange={(keys) => selectionChanged(keys)}
+      >
         <ToggleButton>
           {({ isSelected }) => <Text>{isSelected() ? "Bold on" : "Bold off"}</Text>}
         </ToggleButton>
         <ToggleButton id="italic">
           {({ isSelected }) => <Text>{isSelected() ? "Italic on" : "Italic off"}</Text>}
         </ToggleButton>
+      </ToggleButtonGroup>
+    </Stage>
+  );
+}
+
+/**
+ * X-002: the group render props carry HeroUI's `ToggleGroupState`
+ * (react-spectrum/packages/react-aria-components/src/ToggleButtonGroup.tsx:46),
+ * read here through its plain members. The state is printed once, so it fits
+ * the group's fixed height; the mutators are called from buttons after it.
+ */
+function GroupStateSplit() {
+  let toggleBold = () => {};
+  let selectBold = () => {};
+  let clearBold = () => {};
+
+  return (
+    <Stage>
+      <ToggleButtonGroup
+        defaultSelectedKeys={["bold"]}
+        disallowEmptySelection
+        selectionMode="multiple"
+      >
+        {({ state }) => {
+          toggleBold = () => state.toggleKey("bold");
+          selectBold = () => state.setSelected("bold", true);
+          clearBold = () => state.setSelected("bold", false);
+
+          return (
+            <View class="flex-row items-center gap-2">
+              <ToggleButton id="bold">Bold</ToggleButton>
+              <ToggleButton id="italic">Italic</ToggleButton>
+              <Text testID="group-state">
+                {`keys=${[...state.selectedKeys].sort().join("+") || "none"} mode=${
+                  state.selectionMode
+                } disallow=${state.disallowEmptySelection} disabled=${state.isDisabled} bold=${state.isSelected(
+                  "bold",
+                )} italic=${state.isSelected("italic")}`}
+              </Text>
+            </View>
+          );
+        }}
+      </ToggleButtonGroup>
+      <Button onPress={() => toggleBold()}>Toggle bold</Button>
+      <Button onPress={() => selectBold()}>Select bold</Button>
+      <Button onPress={() => clearBold()}>Clear bold</Button>
+      <ToggleButtonGroup isDisabled>
+        {({ state }) => (
+          <Text testID="group-disabled-state">
+            {`disabled=${state.isDisabled} mode=${state.selectionMode} keys=${
+              [...state.selectedKeys].sort().join("+") || "none"
+            }`}
+          </Text>
+        )}
       </ToggleButtonGroup>
     </Stage>
   );
@@ -652,6 +711,7 @@ export const toggleButtonScenarios: Record<string, Component> = {
   "toggle-button-group/disabled": GroupDisabled,
   "toggle-button-group/sizes": GroupSizes,
   "toggle-button-group/idless.split": IdlessSplit,
+  "toggle-button-group/group-state.split": GroupStateSplit,
   "toggle-button-group/animals.split": AnimalsSplit,
   "toggle-button-group/multi-click.split": MultiClickSplit,
   "toggle-button-group/shift-multi.split": ShiftMultiSplit,
