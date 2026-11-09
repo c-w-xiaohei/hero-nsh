@@ -33,3 +33,5 @@ export * from "./components/switch-group";
 export * from "./components/color-swatch";
 export * from "./components/color-input-group";
 export * from "./components/date-input-group";
+export * from "./components/disclosure";
+export * from "./components/disclosure-group";
