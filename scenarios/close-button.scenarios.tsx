@@ -8,14 +8,18 @@ import type { Component } from "./types";
  * Shared CloseButton scenarios, written with HeroUI's API only.
  *
  * The unit cases' JSX is `basic`, `label`, `slot`, `hover`, `press`, `focus`
- * and `disabled` (port sheet 4b). `custom-icon` and `interactive` merge the
- * `WithCustomIcon` and `Interactive` stories
- * (close-button.stories.tsx:29,37,45).
+ * and `disabled` (port sheet 4b). `pending.split` covers the `isPending`
+ * contract (RAC Button.tsx:89-93) that 4b left out: autoFocus and the Tab
+ * stop on one side, blocked press / hover / hover look on the other.
+ * `custom-icon` and `interactive` merge the `WithCustomIcon` and `Interactive`
+ * stories (close-button.stories.tsx:29,37,45).
  *
  * Split scenarios (SOP 3.3.3, port sheet 4b):
  *   close-button/focus.split        the render prop receives accessors in this
  *     library and booleans upstream (D17), so the two sides cannot share one
  *     JSX; this side reads `isFocusVisible()`.
+ *   close-button/pending.split      the same D17 split for the `isPending` /
+ *     `isHovered` look state.
  *   close-button/custom-icon.split  upstream draws an `@iconify/react` icon,
  *     which is React-only; this side stands a 16 × 16 View in its place.
  */
@@ -110,6 +114,49 @@ function Disabled() {
   );
 }
 
+/*
+ * `isPending` (RAC Button.tsx:89-93, port sheet §1.2 / §2 / R-008): blocks
+ * press and hover while retaining focusability. The first pending button takes
+ * `autoFocus`, so the mount effect proves a pending button can hold focus; the
+ * second pending button is the plain Tab stop behind it, and `Other` proves
+ * focus moves on. The render prop makes the pending and hover state visible,
+ * which is the look the hover guard decides.
+ *
+ * It is a `.split` scenario (D17): the render prop receives accessors here and
+ * booleans upstream.
+ */
+function PendingSplit() {
+  return (
+    <Stage>
+      <CloseButton
+        isPending
+        autoFocus
+        aria-label="Pending close"
+        onFocus={probe("onFocusAuto")}
+        onBlur={probe("onBlurAuto")}
+        onPress={probe("onPress")}
+        onHoverStart={probe("onHoverStart")}
+        onHoverChange={probe("onHoverChange")}
+      >
+        {({ isHovered, isPending }) => (
+          <Text>{`${isPending() ? "Pending" : "Ready"}: ${isHovered() ? "hovered" : "idle"}`}</Text>
+        )}
+      </CloseButton>
+      <CloseButton
+        isPending
+        aria-label="Second pending"
+        onFocus={probe("onFocusTab")}
+        onBlur={probe("onBlurTab")}
+      />
+      <CloseButton
+        aria-label="Other close"
+        onFocus={probe("onFocusOther")}
+        onHoverStart={probe("onHoverStartOther")}
+      />
+    </Stage>
+  );
+}
+
 /* The NSH side of the split: a 16 × 16 placeholder where upstream has an icon. */
 function CustomIconSplit() {
   return (
@@ -146,6 +193,7 @@ export const closeButtonScenarios = {
   "close-button/press": Press,
   "close-button/focus.split": FocusSplit,
   "close-button/disabled": Disabled,
+  "close-button/pending.split": PendingSplit,
   "close-button/custom-icon.split": CustomIconSplit,
   "close-button/interactive": Interactive,
 } satisfies Record<string, Component>;
