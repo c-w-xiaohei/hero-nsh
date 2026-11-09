@@ -47,6 +47,12 @@ export const listboxItemVariants = tv({
     // R-006: `cursor: var(--cursor-interactive)` → `cursor-pointer`.
     // R-014: hover background (`hover:` is pointer-only in NSH, so the upstream
     // `@media (hover: hover)` wrapper has no counterpart).
+    // R-008 / R-009: `w-fit`, `text-wrap` and `select-none` on the Label /
+    // Description slots are realized by the row's `select-none` (R-004), the
+    // Text component's own content sizing and Description's `text-wrap`.
+    // R-012: `.list-box-item:focus` is an empty block; nothing to translate.
+    // R-015: the selected blocks are empty too: selection has no background,
+    // only the indicator (R-019 / R-020) shows it.
     item: [
       "relative flex min-h-9 w-full items-center justify-start gap-3 rounded-2xl px-2 py-1.5 outline-none select-none",
       "transition duration-[250ms] ease-out-quart motion-reduce:transition-none cursor-pointer",
