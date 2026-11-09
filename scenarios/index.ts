@@ -20,6 +20,7 @@ import { emptyStateScenarios } from "./empty-state.scenarios";
 import { closeButtonScenarios } from "./close-button.scenarios";
 import { linkScenarios } from "./link.scenarios";
 import { progressBarScenarios } from "./progress-bar.scenarios";
+import { avatarScenarios } from "./avatar.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -43,4 +44,5 @@ export const scenarios: Record<string, Component> = {
   ...closeButtonScenarios,
   ...linkScenarios,
   ...progressBarScenarios,
+  ...avatarScenarios,
 };
