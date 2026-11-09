@@ -10,8 +10,7 @@ import { cleanup, untracked, View } from "nsh";
 
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { renderChildren } from "./children";
-import type { PopoverContextValue } from "./popover-context";
-import { PopoverContentContext, PopoverContext } from "./popover-context";
+import { PopoverContentContext, PopoverContext, PopoverHeadingContext } from "./popover-context";
 import { popoverVariants } from "./popover.styles";
 
 export interface PopoverDialogRenderValues {
@@ -121,7 +120,10 @@ export function PopoverDialog(props: PopoverDialogProps) {
       onFocus={props.onFocus}
       onBlur={props.onBlur}
     >
-      {renderDialog()}
+      {/* React Aria's Dialog supplies `level: 2` to the heading in its `title`
+          slot (`react-aria-components/src/Dialog.tsx`), so a
+          `Popover.Heading` renders as h2 here and as h3 outside a Dialog. */}
+      <PopoverHeadingContext.Provider value={2}>{renderDialog()}</PopoverHeadingContext.Provider>
     </View>
   );
 }

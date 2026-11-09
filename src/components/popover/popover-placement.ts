@@ -81,19 +81,3 @@ export function resolvePopoverPlacement(
     align: starts.includes(second) ? "start" : ends.includes(second) ? "end" : "center",
   };
 }
-
-/** Rebuilds a React Aria placement string from a resolved side and alignment. */
-export function popoverPlacementString(
-  side: PopoverSide,
-  align: Align,
-): PopoverPlacement {
-  if (align === "center") {
-    return side;
-  }
-
-  if (side === "top" || side === "bottom") {
-    return `${side} ${align === "start" ? "start" : "end"}` as PopoverPlacement;
-  }
-
-  return `${side} ${align === "start" ? "top" : "bottom"}` as PopoverPlacement;
-}

@@ -39,7 +39,11 @@ export interface CreateOverlayPresenceProps {
 }
 
 export interface CreateOverlayPresenceResult {
-  /** Whether the content is mounted (`isOpen || exiting || isExiting`). */
+  /**
+   * Whether the content is mounted: open, or held from the moment it opened
+   * until the exit hold ends (never re-derived from `isOpen` alone, so the
+   * close cannot drop the subtree before the exit classes are applied).
+   */
   isPresent: Accessor<boolean>;
 
   /** Whether the enter starting classes apply. */
@@ -64,8 +68,19 @@ export function createOverlayPresence(
   const entering = signal(props.isOpen() && !skip() && !forcedExiting());
   const exiting = signal(false);
 
+  // `held` is what keeps the subtree mounted across a close. It goes true while
+  // the content is open (an effect, so before any close can arrive) and only
+  // goes false when the exit hold ends. Deriving presence from it directly,
+  // instead of from `exiting`, is what makes the close atomic: `isOpen` turning
+  // false leaves `held` already true, so the same render keeps the one Overlay
+  // and Dialog subtree and the exit classes land on the node that is on screen.
+  // HeroUI does the same synchronously during render in `useOverlayExitHold`
+  // (`packages/react/src/utils/use-overlay-exit-hold.ts`: `isOpen !== prevOpen`
+  // sets `isExiting` in the same render pass).
+  const held = signal(props.isOpen());
+
   const isPresent = computed(
-    () => props.isOpen() || exiting() || forcedExiting(),
+    () => props.isOpen() || forcedExiting() || (!skip() && held()),
   );
 
   const isEntering = computed(
@@ -100,6 +115,7 @@ export function createOverlayPresence(
       exitStarted = false;
       entering.set(false);
       exiting.set(false);
+      held.set(false);
 
       return;
     }
@@ -109,7 +125,14 @@ export function createOverlayPresence(
       exitStarted = false;
       exiting.set(false);
 
-      if (!enterStarted) {
+      // A reopen during the exit hold finds the content still mounted, so it
+      // plays no enter phase: React Aria's `useEnterAnimation` only runs on a
+      // mount, and the retained node already has a state to transition from.
+      const wasMounted = held();
+
+      held.set(true);
+
+      if (!enterStarted && !wasMounted) {
         enterStarted = true;
         entering.set(true);
       }
@@ -130,6 +153,8 @@ export function createOverlayPresence(
     enterStarted = false;
 
     if (!hasOpened) {
+      held.set(false);
+
       return;
     }
 
@@ -139,9 +164,14 @@ export function createOverlayPresence(
     }
 
     // R-010: hold the content for the exit, then release it. Reopening clears
-    // this through the cleanup below and `open` above.
+    // this through the cleanup below and `open` above; `held` stays true across
+    // the whole hold so the subtree is never rebuilt.
     timer = setTimeout(() => {
+      // Release the mount before the classes: the node goes away in the same
+      // commit, so the exit fill cannot paint the resting opacity for a frame
+      // (HeroUI pins the opacity for the same reason in `useOverlayExitHold`).
       exitStarted = false;
+      held.set(false);
       exiting.set(false);
     }, duration);
 

@@ -4,11 +4,16 @@ import { computed, View } from "nsh";
 import { renderChildren } from "./children";
 import type { PopoverPositionContextValue } from "./popover-context";
 import { PopoverPositionContext } from "./popover-context";
-import type { PopoverPlacement } from "./popover-placement";
+import type { PopoverSide } from "./popover-placement";
 
 /** The live state HeroUI hands to `Arrow`'s `className` and `style` functions. */
 export interface PopoverArrowRenderValues {
-  placement: Accessor<PopoverPlacement>;
+  /**
+   * React Aria's `OverlayArrowRenderProps.placement`, `PlacementAxis | null`:
+   * `null` until the content is positioned or when the arrow stands outside a
+   * Content (`react-aria-components/src/OverlayArrow.tsx`).
+   */
+  placement: Accessor<PopoverSide | null>;
 }
 
 /**
@@ -146,10 +151,11 @@ export function PopoverArrow(props: PopoverArrowProps) {
   );
 }
 
-/** Used when an Arrow is written outside a Content; it then sits at the centre. */
+/** Used when an Arrow is written outside a Content; it then sits at the centre
+ * with no measured placement, as a standalone `OverlayArrow` does. */
 const DEFAULT_POSITION: PopoverPositionContextValue = {
   anchorBounds: () => undefined,
   overlayBounds: () => undefined,
   side: () => "bottom",
-  placement: () => "bottom",
+  placement: () => null,
 };

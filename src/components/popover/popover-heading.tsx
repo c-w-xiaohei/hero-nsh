@@ -1,8 +1,7 @@
-import type { JSX, StyleProp, TextStyle } from "nsh";
+import type { JSX, StyleProp, TextStyle, ViewRef } from "nsh";
 import { Text } from "nsh";
 
-import type { PopoverContextValue } from "./popover-context";
-import { PopoverContext } from "./popover-context";
+import { PopoverContext, PopoverHeadingContext } from "./popover-context";
 import { popoverVariants } from "./popover.styles";
 
 /**
@@ -17,8 +16,14 @@ export interface PopoverHeadingProps {
   className?: string;
   style?: StyleProp<TextStyle>;
 
-  /** HeroUI's `level` (default 3) → `accessibilityLevel`. */
+  /**
+   * HeroUI's `level`; React Aria defaults to 3, except inside a Dialog, which
+   * supplies 2 for its `title` slot (`react-aria-components/src/Dialog.tsx`).
+   */
   level?: 1 | 2 | 3 | 4 | 5 | 6;
+
+  /** The heading `Text`; a ref reaches it. */
+  ref?: (node: ViewRef) => void;
 
   /** A DOM id upstream; maps to `nativeID`. */
   id?: string;
@@ -35,10 +40,12 @@ export interface PopoverHeadingProps {
 
 /**
  * Popover.Heading / PopoverHeading: HeroUI's `HeadingPrimitive`, a `Text` with
- * the header role at the given level.
+ * the header role at the given level. The level is `props.level`, else the one
+ * the surrounding Dialog supplies (2), else React Aria's fallback (3).
  */
 export function PopoverHeading(props: PopoverHeadingProps) {
   const popover = PopoverContext();
+  const dialogLevel = PopoverHeadingContext();
   const slots = popover?.slots ?? popoverVariants();
 
   const classes = () =>
@@ -46,10 +53,11 @@ export function PopoverHeading(props: PopoverHeadingProps) {
 
   return (
     <Text
+      ref={props.ref}
       testID={props.testID}
       nativeID={props.id ?? props.nativeID}
       role="header"
-      accessibilityLevel={props.level ?? 3}
+      accessibilityLevel={props.level ?? dialogLevel ?? 3}
       accessibilityLabel={props.accessibilityLabel}
       class={classes()}
       style={props.style}

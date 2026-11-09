@@ -21,10 +21,7 @@ import {
   PopoverPositionContext,
 } from "./popover-context";
 import type { PopoverPlacement, PopoverSide } from "./popover-placement";
-import {
-  popoverPlacementString,
-  resolvePopoverPlacement,
-} from "./popover-placement";
+import { resolvePopoverPlacement } from "./popover-placement";
 import { popoverVariants } from "./popover.styles";
 
 /* -------------------------------------------------------------------------------------------------
@@ -39,10 +36,18 @@ const EXIT_DURATION_STYLE = { transitionDuration: "100ms" } as const;
 
 /** The live state HeroUI hands to `Content`'s `className` and `style` functions. */
 export interface PopoverRenderValues {
-  /** The trigger that opened it (`"DialogTrigger"` unless the caller says otherwise). */
-  trigger: Accessor<string>;
-  /** The resolved React Aria placement string. */
-  placement: Accessor<PopoverPlacement>;
+  /**
+   * The component that opened the content, React Aria's
+   * `PopoverRenderProps.trigger`: `"DialogTrigger"` under a root, `null` for a
+   * standalone Content unless the caller names one.
+   */
+  trigger: Accessor<string | null>;
+  /**
+   * React Aria's `PlacementAxis`: the side the overlay ended up on, `null`
+   * until the core Overlay has positioned it (`react-aria-components/src/
+   * Popover.tsx`, `PopoverRenderProps`).
+   */
+  placement: Accessor<PopoverSide | null>;
   isEntering: Accessor<boolean>;
   isExiting: Accessor<boolean>;
 }
@@ -194,7 +199,6 @@ export function PopoverContent(props: PopoverContentProps) {
   const positionedSide = signal<PopoverSide | undefined>(undefined);
 
   const side = computed(() => positionedSide() ?? resolved().side);
-  const placement = computed(() => popoverPlacementString(side(), resolved().align));
 
   const anchorBounds = signal<Bounds | undefined>(undefined);
   const overlayBounds = signal<Bounds | undefined>(undefined);
@@ -287,9 +291,14 @@ export function PopoverContent(props: PopoverContentProps) {
   /* -------------------------------------------------------------------------------------------
    * Scoped trigger context (controller ruling): inside the content a Button
    * must not toggle the popover or steal the anchor; the Dialog still closes.
+   * `isOpen` reports "no opinion" (`undefined`) rather than `false`, so an
+   * inner Button keeps its own `aria-expanded` instead of being forced to
+   * report a collapsed popover it is not the trigger of. React Aria's
+   * `Popover` clears its `PopoverContext` for the same reason
+   * (`react-aria-components/src/Popover.tsx`, the `clearContexts` loop).
    * ----------------------------------------------------------------------------------------- */
   const scopedTrigger: OverlayTriggerContextValue = {
-    isOpen: () => false,
+    isOpen: () => undefined,
     setIsOpen: () => {},
     toggle: () => {},
     close: () => close(),
@@ -301,8 +310,8 @@ export function PopoverContent(props: PopoverContentProps) {
    * Render values, classes and styles.
    * ----------------------------------------------------------------------------------------- */
   const values: PopoverRenderValues = {
-    trigger: () => props.trigger ?? "DialogTrigger",
-    placement,
+    trigger: () => props.trigger ?? popover?.trigger ?? null,
+    placement: () => positionedSide() ?? null,
     isEntering: presence.isEntering,
     isExiting: presence.isExiting,
   };
@@ -368,7 +377,7 @@ export function PopoverContent(props: PopoverContentProps) {
     anchorBounds,
     overlayBounds,
     side,
-    placement,
+    placement: () => positionedSide() ?? null,
   };
 
   const handleCancel = () => {
@@ -380,8 +389,11 @@ export function PopoverContent(props: PopoverContentProps) {
   return (
     <>
       {/* Modal underlay: the second overlay that absorbs presses, as RAC's
-          `usePopover` underlay and the core Overlay docs describe. */}
-      <If when={!isNonModal() && presence.isPresent()}>
+          `usePopover` underlay and the core Overlay docs describe. RAC renders
+          it only while the state is open (`react-aria-components/src/
+          Popover.tsx`: `!props.isNonModal && state.isOpen`), so the exit hold
+          does not keep a press-absorbing layer over the trigger. */}
+      <If when={!isNonModal() && isOpen()}>
         <Overlay class="inset-0" focusable={false} onPress={close} />
       </If>
 

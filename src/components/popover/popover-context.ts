@@ -1,7 +1,7 @@
 import type { Accessor, Bounds, ViewRef } from "nsh";
 import { context } from "nsh";
 
-import type { PopoverPlacement, PopoverSide } from "./popover-placement";
+import type { PopoverSide } from "./popover-placement";
 import type { popoverVariants } from "./popover.styles";
 
 /** The slots `popoverVariants` produces, as the parts call them. */
@@ -10,9 +10,23 @@ export type PopoverSlots = ReturnType<typeof popoverVariants>;
 /** What the root provides to the parts: HeroUI's `PopoverContext` in NSH form. */
 export interface PopoverContextValue {
   slots: PopoverSlots;
+
+  /**
+   * The name of the component that opened the content, as React Aria's
+   * `DialogTrigger` supplies `"DialogTrigger"` through `PopoverContext`
+   * (`react-aria-components/src/Dialog.tsx`). Absent for a root-less Content.
+   */
+  trigger?: string;
 }
 
 export const PopoverContext = context<PopoverContextValue | null>(null);
+
+/**
+ * The heading level a Dialog supplies, React Aria's `HeadingContext` in its
+ * `title` slot (`react-aria-components/src/Dialog.tsx`: `{...titleProps,
+ * level: 2}`). `null` means no Dialog is above, so `Heading` falls back to 3.
+ */
+export const PopoverHeadingContext = context<number | null>(null);
 
 /**
  * Where the content and the arrow are, kept by `Popover.Content` so the Arrow
@@ -29,8 +43,12 @@ export interface PopoverPositionContextValue {
   /** The side the overlay is on now (after any flip). */
   side: Accessor<PopoverSide>;
 
-  /** The React Aria placement string rebuilt from the side and alignment. */
-  placement: Accessor<PopoverPlacement>;
+  /**
+   * React Aria's `PlacementAxis` (`react-aria-components/src/Popover.tsx`,
+   * `PopoverRenderProps`): the side that was measured, `null` until the core
+   * Overlay has positioned the content once.
+   */
+  placement: Accessor<PopoverSide | null>;
 }
 
 export const PopoverPositionContext = context<PopoverPositionContextValue | null>(null);

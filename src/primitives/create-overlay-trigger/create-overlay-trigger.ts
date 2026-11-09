@@ -40,8 +40,12 @@ export interface CreateOverlayTriggerProps {
  * reads this context on press instead.
  */
 export interface OverlayTriggerContextValue {
-  /** The shared open state. */
-  isOpen: Accessor<boolean>;
+  /**
+   * The shared open state, or `undefined` in a scope that has no opinion:
+   * inside `Popover.Content` the section hands a no-op context, and a Button
+   * there must not report a collapsed popover as its own `aria-expanded`.
+   */
+  isOpen: Accessor<boolean | undefined>;
 
   /** Sets the state directly (a Content that takes over the root's channel). */
   setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;

@@ -42,7 +42,14 @@ export function PopoverRoot(props: PopoverRootProps) {
     onOpenChange: props.onOpenChange,
   });
 
-  const contextValue: PopoverContextValue = { slots: popoverVariants() };
+  // React Aria's `DialogTrigger` names itself in the Popover context
+  // (`react-aria-components/src/Dialog.tsx`: `trigger: 'DialogTrigger'`), which
+  // is where the render values get their default from; a standalone Content has
+  // no root and reports `null`.
+  const contextValue: PopoverContextValue = {
+    slots: popoverVariants(),
+    trigger: "DialogTrigger",
+  };
 
   // `_common` exception: a component that provides a context reads
   // `props.children` once, inside the provider, at the placement. A computed
