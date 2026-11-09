@@ -53,4 +53,6 @@ test("T-017 supports keyboard toggle via createTester", async () => {
   await toggleCheckboxByKeyboard(app, ["Coding", "Design"], "Design");
 
   expect(callsOf(app, "groupChange")).toEqual([[["design"]]]);
+  // Space goes through the same item callback as a press.
+  expect(callsOf(app, "designChange")).toEqual([[true]]);
 });

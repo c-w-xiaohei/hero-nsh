@@ -7,8 +7,8 @@ import { openScenario } from "../../helpers/open-scenario";
  * and NSH's view model per port sheet 4b (T-020 … T-060). Kobalte's DOM ids,
  * `input` properties, `aria-*` attributes and `data-*` attributes are replaced
  * by the visible state markers in harness/checkbox.fixtures.tsx (`Checked` /
- * `Unchecked`, `Mixed` / `NoMixed`, the required asterisk, `enabled`), never
- * dropped silently. T-032 moves the keyboard focus with Tab and lives in
+ * `Unchecked`, `Mixed` / `NoMixed`, `enabled`), never dropped silently. T-032
+ * moves the keyboard focus with Tab and lives in
  * checkbox.kobalte.web.test.tsx.
  */
 
@@ -263,14 +263,13 @@ test("T-057 should have 'data-indeterminate' attribute when checkbox is indeterm
   expect(app.shows("text:Mixed")).toBe(true);
 });
 
-// kobalte/packages/core/src/checkbox/checkbox.test.tsx:692
-// Rewritten port (port sheet T-058): data-required becomes the asterisk the
-// FieldContext adds to the Label.
-test("T-058 should have 'data-required' attribute when checkbox is required", async () => {
-  const app = await openCase("required");
-
-  expect(app.shows("text:/^Label\\*/")).toBe(true);
-});
+// kobalte/packages/core/src/checkbox/checkbox.test.tsx:692 is not ported
+// (port sheet T-058 deleted). It only asserts `data-required` on the parts
+// (kobalte/packages/core/src/checkbox/checkbox.test.tsx:692-709); HeroUI carries
+// the requirement on the hidden input's `required` / `aria-required`, which has
+// no visual result, and packages/styles/components/label.css:15 keeps the
+// asterisk off checkbox item labels. So there is no NSH channel for it, and no
+// asterisk may appear either: that absence is X-002.
 
 // kobalte/packages/core/src/checkbox/checkbox.test.tsx:710
 // Rewritten port (port sheet T-059): data-disabled becomes the content's

@@ -1,4 +1,4 @@
-import { signal, Text } from "nsh";
+import { signal, Text, View } from "nsh";
 import { Button, Checkbox, CheckboxGroup, Description, FieldError, Label } from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import type { Component } from "./types";
@@ -307,12 +307,14 @@ function FeaturesAndAddOns() {
         {ADD_ONS.map((addOn) => (
           <Checkbox id={addOn.value} value={addOn.value}>
             <Checkbox.Content className="group relative flex w-full flex-row items-start justify-start gap-4 rounded-3xl bg-surface-tertiary px-5 py-4 transition data-[selected=true]:bg-accent/10">
-              <Text class="text-sm">{addOn.glyph}</Text>
               <Checkbox.Control className="absolute end-4 top-3 size-5 rounded-full">
                 <Checkbox.Indicator />
               </Checkbox.Control>
-              <Text class="font-medium">{addOn.title}</Text>
-              <Description>{addOn.description}</Description>
+              <Text class="size-5 text-accent">{addOn.glyph}</Text>
+              <View class="flex flex-col gap-1">
+                <Text class="font-medium">{addOn.title}</Text>
+                <Description>{addOn.description}</Description>
+              </View>
             </Checkbox.Content>
           </Checkbox>
         ))}

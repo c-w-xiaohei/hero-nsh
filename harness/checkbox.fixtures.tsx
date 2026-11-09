@@ -32,15 +32,21 @@ import { probe } from "@scenario/probe";
  *   readonly-uncontrolled  isReadOnly starting off
  *   invalid                isInvalid with a Label and a FieldError message
  *   valid-error            a FieldError message on a valid field
- *   required               isRequired with a Label (the asterisk)
+ *   required               isRequired with a Label (no asterisk: X-002)
+ *   validation-aria        validate() with validationBehavior="aria": the error
+ *                          shows before the first press (X-003)
+ *   validation-native      the same validate() with native's commit timing
  *   aria-label             aria-label only, no visible label
  *   control-click          Control has testID="control" (pressing a child view)
  *   indicator              a custom Indicator draws a ✓ only when selected
  *   visible-label          a Label inside Content
  *   group-item-description       a Label inside Content and a Description beside it
  *   test-id                testID="terms" on the root (T-004)
- *   group-log              a group with two items, group and item onChange
+ *   group-log              a group with two items, group and per-item onChange
  *                          probes, a `✓` marker beside each selected item
+ *   group-label-toggle     one item whose Label sits in Content, both onChange
+ *                          probes (X-001, the Label activation path)
+ *   group-validation-aria  a group with validate() and validationBehavior="aria"
  *   group-disabled         a disabled group
  *   group-invalid          an invalid group with a FieldError
  */
@@ -326,6 +332,45 @@ function RequiredCase() {
   );
 }
 
+function ValidationAriaCase() {
+  return (
+    <Stage>
+      <Checkbox
+        aria-label={NAME}
+        validate={(isSelected) => (isSelected ? true : "Subscribe to continue")}
+        validationBehavior="aria"
+      >
+        <Checkbox.Content>
+          <Checkbox.Control>
+            <Checkbox.Indicator />
+          </Checkbox.Control>
+          Accept terms
+        </Checkbox.Content>
+        <FieldError />
+      </Checkbox>
+    </Stage>
+  );
+}
+
+function ValidationNativeCase() {
+  return (
+    <Stage>
+      <Checkbox
+        aria-label={NAME}
+        validate={(isSelected) => (isSelected ? true : "Subscribe to continue")}
+      >
+        <Checkbox.Content>
+          <Checkbox.Control>
+            <Checkbox.Indicator />
+          </Checkbox.Control>
+          Accept terms
+        </Checkbox.Content>
+        <FieldError />
+      </Checkbox>
+    </Stage>
+  );
+}
+
 function AriaLabelCase() {
   return (
     <Stage>
@@ -395,7 +440,7 @@ function GroupLogCase() {
     <Stage>
       <CheckboxGroup name="interests" onChange={probe("groupChange")}>
         <Label>Select your interests</Label>
-        <Checkbox value="coding" onChange={probe("itemChange")}>
+        <Checkbox value="coding" onChange={probe("codingChange")}>
           {({ isSelected }) => (
             <>
               <Checkbox.Content>
@@ -408,7 +453,7 @@ function GroupLogCase() {
             </>
           )}
         </Checkbox>
-        <Checkbox value="design" onChange={probe("itemChange")}>
+        <Checkbox value="design" onChange={probe("designChange")}>
           {({ isSelected }) => (
             <>
               <Checkbox.Content>
@@ -421,6 +466,61 @@ function GroupLogCase() {
             </>
           )}
         </Checkbox>
+      </CheckboxGroup>
+    </Stage>
+  );
+}
+
+function GroupLabelToggleCase() {
+  return (
+    <Stage>
+      <CheckboxGroup name="digest" onChange={probe("groupChange")}>
+        <Label>Digest</Label>
+        <Checkbox value="weekly" onChange={probe("itemChange")}>
+          {({ isSelected }) => (
+            <>
+              <Checkbox.Content>
+                <Checkbox.Control>
+                  <Checkbox.Indicator />
+                </Checkbox.Control>
+                <Label>Weekly digest</Label>
+              </Checkbox.Content>
+              <Text>{isSelected() ? "✓" : "·"}</Text>
+            </>
+          )}
+        </Checkbox>
+      </CheckboxGroup>
+    </Stage>
+  );
+}
+
+function GroupValidationAriaCase() {
+  return (
+    <Stage>
+      <CheckboxGroup
+        validate={(value) => (value.length > 0 ? true : "Pick at least one")}
+        validationBehavior="aria"
+        name="interests"
+        onChange={probe("groupChange")}
+      >
+        <Label>Select your interests</Label>
+        <Checkbox value="coding">
+          <Checkbox.Content>
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+            Coding
+          </Checkbox.Content>
+        </Checkbox>
+        <Checkbox value="design">
+          <Checkbox.Content>
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+            Design
+          </Checkbox.Content>
+        </Checkbox>
+        <FieldError />
       </CheckboxGroup>
     </Stage>
   );
@@ -493,6 +593,8 @@ function Fixture() {
   if (name === "invalid") return <InvalidCase />;
   if (name === "valid-error") return <ValidErrorCase />;
   if (name === "required") return <RequiredCase />;
+  if (name === "validation-aria") return <ValidationAriaCase />;
+  if (name === "validation-native") return <ValidationNativeCase />;
   if (name === "aria-label") return <AriaLabelCase />;
   if (name === "control-click") return <ControlClickCase />;
   if (name === "indicator") return <IndicatorCase />;
@@ -500,6 +602,8 @@ function Fixture() {
   if (name === "group-item-description") return <ItemDescriptionCase />;
   if (name === "test-id") return <TestIdCase />;
   if (name === "group-log") return <GroupLogCase />;
+  if (name === "group-label-toggle") return <GroupLabelToggleCase />;
+  if (name === "group-validation-aria") return <GroupValidationAriaCase />;
   if (name === "group-disabled") return <GroupDisabledCase />;
   if (name === "group-invalid") return <GroupInvalidCase />;
 

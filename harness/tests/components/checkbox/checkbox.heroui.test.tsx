@@ -181,10 +181,16 @@ test("T-016 calls onChange when selection is toggled via createTester", async ()
   await toggleCheckbox(app, "Coding");
   expect(callsOf(app, "groupChange")).toEqual([[["coding"]]]);
   expect(getSelectedCheckboxes(app)).toBe(1);
+  // An item in a group reports its own next value too
+  // (react-spectrum/packages/react-aria/src/checkbox/useCheckboxGroupItem.ts:45-58).
+  expect(callsOf(app, "codingChange")).toEqual([[true]]);
+  expect(callsOf(app, "designChange")).toHaveLength(0);
 
   await toggleCheckbox(app, "Design");
   expect(callsOf(app, "groupChange")).toEqual([[["coding"]], [["coding", "design"]]]);
   expect(getSelectedCheckboxes(app)).toBe(2);
+  expect(callsOf(app, "codingChange")).toEqual([[true]]);
+  expect(callsOf(app, "designChange")).toEqual([[true]]);
 });
 
 // heroui/packages/react/tests/components/checkbox-group/checkbox-group.test.tsx:144
@@ -209,4 +215,93 @@ test("T-019 renders FieldError when invalid", async () => {
   const app = await openCase("group-invalid");
 
   expect(app.shows("text:Pick at least one")).toBe(true);
+});
+
+/* -------------------------------------------------------------------------------------------------
+ * X cases: behaviour the React Aria sources pin down and the regression review
+ * found uncovered. Each sits above the src reference the review named.
+ * -----------------------------------------------------------------------------------------------*/
+
+// src/components/checkbox/checkbox-root.tsx:333-338,375-411 (regression X-001);
+// react-spectrum/packages/react-aria/src/checkbox/useCheckboxGroupItem.ts:45-58:
+// the item's ToggleState onChange updates the group with state.addValue /
+// removeValue, then calls props.onChange(isSelected), so an item in a group
+// reports its own next value for a press and for a Label activation alike.
+test("X-001 reports an item's own change inside a group for a press and for a Label activation", async () => {
+  const pressed = await openCase("group-log");
+
+  await toggleCheckbox(pressed, "Coding");
+  expect(callsOf(pressed, "codingChange")).toEqual([[true]]);
+  expect(callsOf(pressed, "designChange")).toHaveLength(0);
+
+  const labelled = await openCase("group-label-toggle");
+
+  expect(labelled.shows("text:·")).toBe(true);
+
+  await labelled.press("text:Weekly digest");
+  expect(callsOf(labelled, "groupChange")).toEqual([[["weekly"]]]);
+  expect(callsOf(labelled, "itemChange")).toEqual([[true]]);
+  expect(labelled.shows("text:✓")).toBe(true);
+});
+
+// src/components/checkbox/checkbox-root.tsx:725-733 (regression X-002);
+// packages/styles/components/label.css:12-16: the asterisk only goes to a
+// `.label` directly under a required field and [data-slot="checkbox"] is
+// excluded (tmp/port-sheets/label.md:107). A required item therefore shows none,
+// while a required group's own Label, a direct child, still gets one.
+test("X-002 draws the required asterisk on a group's Label but not on an item's", async () => {
+  const item = await openCase("required");
+
+  expect(item.shows("text:/^Label$/")).toBe(true);
+  expect(item.shows("text:/\\*/")).toBe(false);
+
+  const group = await openScenario("checkbox/group-required");
+
+  expect(group.shows("text:/^Preferences\\*/")).toBe(true);
+  expect(group.shows("role:checkbox[Email notifications]")).toBe(true);
+});
+
+// src/components/checkbox/checkbox-root.tsx:152-153,344-373 (regression X-003);
+// react-spectrum/packages/react-stately/src/form/useFormValidationState.ts:184-193
+// and react-aria-components/src/Checkbox.tsx:280-284: `aria` exposes the live
+// `validate()` error from the start and on every value change, `native` (the
+// default) waits for commitValidation, whose first commit is the first toggle.
+test("X-003 shows a validate() error before any press in aria mode and only after the first commit in native mode", async () => {
+  const control = "role:checkbox[Accept terms]";
+  const error = "text:Subscribe to continue";
+
+  const aria = await openCase("validation-aria");
+  expect(aria.shows(error)).toBe(true);
+
+  await aria.press(control);
+  expect(aria.shows(error)).toBe(false);
+
+  await aria.press(control);
+  expect(aria.shows(error)).toBe(true);
+
+  const native = await openCase("validation-native");
+  expect(native.shows(error)).toBe(false);
+
+  await native.press(control);
+  expect(native.shows(error)).toBe(false);
+
+  await native.press(control);
+  expect(native.shows(error)).toBe(true);
+
+  await native.press(control);
+  expect(native.shows(error)).toBe(false);
+});
+
+// src/components/checkbox/create-checkbox-group-state.ts:147-169 (regression
+// X-004); the group's validate() follows the same validationBehavior split as
+// the item's: aria shows the live error before the first press.
+test("X-004 shows a group validate() error before any press in aria mode", async () => {
+  const app = await openCase("group-validation-aria");
+  const error = "text:Pick at least one";
+
+  expect(app.shows(error)).toBe(true);
+
+  await app.press("role:checkbox[Coding]");
+  expect(callsOf(app, "groupChange")).toEqual([[["coding"]]]);
+  expect(app.shows(error)).toBe(false);
 });
