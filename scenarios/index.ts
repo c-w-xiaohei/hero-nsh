@@ -31,6 +31,7 @@ import { formScenarios } from "./form.scenarios";
 import { switchGroupScenarios } from "./switch-group.scenarios";
 import { colorSwatchScenarios } from "./color-swatch.scenarios";
 import { alertScenarios } from "./alert.scenarios";
+import { paginationScenarios } from "./pagination.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -65,4 +66,5 @@ export const scenarios: Record<string, Component> = {
   ...switchGroupScenarios,
   ...colorSwatchScenarios,
   ...alertScenarios,
+  ...paginationScenarios,
 };
