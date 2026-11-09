@@ -639,11 +639,17 @@ export function ListBoxRoot<T>(
   });
 
   // The screen reader follows the focused key, the stand-in for
-  // `aria-activedescendant` (port sheet section 5).
+  // `aria-activedescendant` (port sheet section 5). On the web a "screen reader
+  // focus" is the page's own focus: moving it takes the keyboard focus off the
+  // listbox, which fires the root's `onBlur`, drops every keymap scope and
+  // leaves the arrows, typeahead and Escape dead (measured: Tab gives the root
+  // focus, then this effect blurs it at once). Upstream keeps DOM focus on the
+  // listbox and only moves `aria-activedescendant`, so the browser target
+  // keeps the focus where it is.
   effect(() => {
     const key = manager().focusedKey();
 
-    if (key == null || !rootFocused()) {
+    if (key == null || !rootFocused() || platform.os === "web") {
       return;
     }
 
