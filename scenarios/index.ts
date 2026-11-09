@@ -4,6 +4,7 @@ import { smokeScenarios } from "./smoke.scenarios";
 import { labelScenarios } from "./label.scenarios";
 import { descriptionScenarios } from "./description.scenarios";
 import { buttonScenarios } from "./button.scenarios";
+import { switchScenarios } from "./switch.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -11,4 +12,5 @@ export const scenarios: Record<string, Component> = {
   ...labelScenarios,
   ...descriptionScenarios,
   ...buttonScenarios,
+  ...switchScenarios,
 };
