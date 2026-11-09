@@ -147,7 +147,7 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
   return (
     <Text
       {...rest}
-      ref={local.ref}
+      ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
       nativeID={local.id ?? local.nativeID}
       style={local.style}
       class={labelVariants({

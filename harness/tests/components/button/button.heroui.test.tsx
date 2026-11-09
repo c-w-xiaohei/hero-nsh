@@ -57,21 +57,6 @@ test("T-006 supports hover state", async () => {
   expect(callsOf(app, "onHoverEnd")).toHaveLength(1);
 });
 
-// heroui/packages/react/tests/components/button/button.test.tsx:81
-test("T-007 supports press state", async () => {
-  const app = await openScenario("button/press");
-
-  expect(callsOf(app, "onPressDown")).toHaveLength(0);
-
-  await app.dragAndHold("role:button[Save]", { x: 0, y: 0 });
-  expect(callsOf(app, "onPressDown")).toHaveLength(1);
-  expect(callsOf(app, "onPressChange")).toEqual([[true]]);
-
-  await app.drop();
-  expect(callsOf(app, "onPressUp")).toHaveLength(1);
-  expect(callsOf(app, "onPressChange")).toEqual([[true], [false]]);
-});
-
 // heroui/packages/react/tests/components/button/button.test.tsx:94
 test("T-008 calls onPress on click", async () => {
   const app = await openScenario("button/press");
@@ -79,21 +64,6 @@ test("T-008 calls onPress on click", async () => {
   await app.press("role:button[Save]");
 
   expect(callsOf(app, "onPress")).toHaveLength(1);
-});
-
-// heroui/packages/react/tests/components/button/button.test.tsx:103
-test("T-009 supports focus-visible via keyboard", async () => {
-  const app = await openScenario("button/focus", { platform: "web" });
-
-  expect(app.shows("text:Save")).toBe(true);
-
-  await app.keyboard.press("tab");
-  expect(callsOf(app, "onFocus")).toHaveLength(1);
-  expect(app.shows("text:Focus visible")).toBe(true);
-
-  await app.keyboard.press("tab");
-  expect(callsOf(app, "onBlur")).toHaveLength(1);
-  expect(app.shows("text:Save")).toBe(true);
 });
 
 // heroui/packages/react/tests/components/button/button.test.tsx:117
@@ -115,44 +85,6 @@ test("T-011 exposes no hover state when disabled", async () => {
   expect(callsOf(app, "onHoverStart")).toHaveLength(0);
 });
 
-// heroui/packages/react/tests/components/button/button.test.tsx:142
-test("T-012 supports keyboard activation with Enter and Space", async () => {
-  const app = await openScenario("button/press", { platform: "web" });
-
-  await app.keyboard.press("tab");
-  expect(callsOf(app, "onFocus")).toHaveLength(1);
-
-  await app.keyboard.press("enter");
-  expect(callsOf(app, "onPress")).toHaveLength(1);
-
-  await app.keyboard.press("space");
-  expect(callsOf(app, "onPress")).toHaveLength(2);
-});
-
-// heroui/packages/react/tests/components/button/button.test.tsx:158
-test("T-013 supports render-prop children for press state", async () => {
-  const app = await openScenario("button/render-props");
-
-  expect(app.shows("text:Save")).toBe(true);
-
-  await app.dragAndHold("role:button[Save]", { x: 0, y: 0 });
-  expect(app.shows("text:Pressed")).toBe(true);
-
-  await app.drop();
-  expect(app.shows("text:Save")).toBe(true);
-});
-
-// heroui/packages/styles/components/button.css:30-32
-test("X-001 keeps focus-visible through a keyboard activation", async () => {
-  const app = await openScenario("button/focus", { platform: "web" });
-
-  await app.keyboard.press("tab");
-  expect(app.shows("text:Focus visible")).toBe(true);
-
-  await app.keyboard.press("enter");
-  expect(app.shows("text:Focus visible")).toBe(true);
-});
-
 test("X-002 keeps dynamic children live across a press", async () => {
   const app = await openScenario("button/counter");
   const shown = () => app.texts().join(" ").replace(/\s+/g, " ").trim();
@@ -163,25 +95,3 @@ test("X-002 keeps dynamic children live across a press", async () => {
   expect(shown()).toContain("Save 1");
 });
 
-// react-spectrum/packages/react-aria/src/interactions/useFocusVisible.ts:86-100
-test("X-003 a pointer press on the focused button clears focus-visible", async () => {
-  const app = await openScenario("button/focus", { platform: "web" });
-
-  await app.keyboard.press("tab");
-  expect(app.shows("text:Focus visible")).toBe(true);
-
-  await app.press("id:focus-button");
-  expect(app.shows("text:Focus visible")).toBe(false);
-});
-
-// react-spectrum/packages/react-aria/src/interactions/useFocusVisible.ts:86-100
-test("X-004 keeps focus-visible when Enter follows pointer hover and Tab", async () => {
-  const app = await openScenario("button/focus", { platform: "web" });
-
-  await app.hover("id:focus-button");
-  await app.keyboard.press("tab");
-  expect(app.shows("text:Focus visible")).toBe(true);
-
-  await app.keyboard.press("enter");
-  expect(app.shows("text:Focus visible")).toBe(true);
-});

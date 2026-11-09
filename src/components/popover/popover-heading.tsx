@@ -53,7 +53,7 @@ export function PopoverHeading(props: PopoverHeadingProps) {
 
   return (
     <Text
-      ref={props.ref}
+      ref={(node) => props.ref?.(node)}
       testID={props.testID}
       nativeID={props.id ?? props.nativeID}
       role="header"

@@ -28,3 +28,13 @@ test("T-004 paints the label with the danger color", async () => {
   const app = await openScenario("label/invalid");
   expect(app.spanStyle("text:Invalid").color).toBe("#ff383cff");
 });
+
+// Ref forwarding regression: this scenario passes no ref to Label. NSH treats
+// a plain `ref={local.ref}` with an undefined value as a ref store, which
+// throws at mount on the web target and leaves the page empty. The forwarded
+// callback ref renders the text on every target.
+test("X-001 renders a ref-less Label on a real engine", async () => {
+  const app = await openScenario("label/basic");
+
+  expect(app.shows("text:Your name")).toBe(true);
+});

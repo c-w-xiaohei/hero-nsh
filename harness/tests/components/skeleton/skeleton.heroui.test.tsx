@@ -40,3 +40,13 @@ test("X-001 maps aria aliases and accepts div props on the root", async () => {
   expect(app.shows("id:skeleton-pressed")).toBe(false);
   expect(app.shows("id:skeleton-selected")).toBe(false);
 });
+
+// Ref forwarding regression: this scenario passes no ref to Skeleton. A plain
+// `ref={props.ref}` with an undefined value is a ref store to NSH, which throws
+// at mount on the web target and renders an empty page. The callback ref keeps
+// the skeleton on screen on every target.
+test("X-002 renders a ref-less Skeleton on a real engine", async () => {
+  const app = await openScenario("skeleton/default");
+
+  expect(app.shows("id:skeleton")).toBe(true);
+});

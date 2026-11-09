@@ -43,3 +43,13 @@ test("T-003 supports render props when invalid", async () => {
 
   expect(app.shows("text:Rendered via props")).toBe(true);
 });
+
+// Ref forwarding regression: this fixture renders FieldError without a ref. A
+// plain `ref={local.ref}` with an undefined value is a ref store to NSH, which
+// throws at mount on the web target and renders an empty page. The callback ref
+// keeps the error text on screen on every target.
+test("X-004 renders a ref-less FieldError on a real engine", async () => {
+  const app = await openCase("invalid");
+
+  expect(app.shows("text:Enter a valid email")).toBe(true);
+});

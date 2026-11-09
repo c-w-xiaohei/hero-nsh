@@ -19,3 +19,13 @@ test("T-002 should paint the transparent variant with the base text color", asyn
   const app = await openScenario("surface/variants");
   expect(app.spanStyle("text:Transparent surface").color).toBe("#18181bff");
 });
+
+// Ref forwarding regression: this scenario passes no ref to Surface. NSH treats
+// a plain `ref={local.ref}` with an undefined value as a ref store, which throws
+// at mount on the web target and leaves the page empty (headless hides it). The
+// forwarded callback ref renders the same children on every target.
+test("X-002 renders a ref-less Surface on a real engine", async () => {
+  const app = await openScenario("surface/basic");
+
+  expect(app.shows("text:Panel content")).toBe(true);
+});

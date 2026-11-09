@@ -61,3 +61,13 @@ test("T-003 should pass the test id through", async () => {
 
   expect(app.shows("id:section-header")).toBe(true);
 });
+
+// Ref forwarding regression: this scenario passes no ref to Header. A plain
+// `ref={local.ref}` with an undefined value is a ref store to NSH, which throws
+// at mount on the web target and renders an empty page. The callback ref keeps
+// the header text on screen on every target.
+test("X-004 renders a ref-less Header on a real engine", async () => {
+  const app = await openScenario("header/basic");
+
+  expect(app.shows("text:Actions")).toBe(true);
+});
