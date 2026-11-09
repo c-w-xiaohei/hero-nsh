@@ -105,6 +105,18 @@ function SeparatorRtlCase() {
           <Breadcrumbs.Item> </Breadcrumbs.Item>
         </Breadcrumbs>
       </View>
+      <View class="flex-col" onLayout={layoutProbe("ltr-custom")} style={{ direction: "ltr" }}>
+        <Breadcrumbs separator={<Text>L</Text>}>
+          <Breadcrumbs.Item> </Breadcrumbs.Item>
+          <Breadcrumbs.Item> </Breadcrumbs.Item>
+        </Breadcrumbs>
+      </View>
+      <View class="flex-col" onLayout={layoutProbe("rtl-custom")} style={{ direction: "rtl" }}>
+        <Breadcrumbs separator={<Text>L</Text>}>
+          <Breadcrumbs.Item> </Breadcrumbs.Item>
+          <Breadcrumbs.Item> </Breadcrumbs.Item>
+        </Breadcrumbs>
+      </View>
     </View>
   );
 }

@@ -220,25 +220,58 @@ test("X-001 the current crumb stays at opacity 1 while disabled", async () => {
   expect(mutedDisabled).toBeGreaterThan(mutedFull + 40);
 });
 
+/**
+ * Where a glyph's ink sits inside its own box, in fractions of the box, x then
+ * y. A "L" is drawn at the lower left (-x, +y); rotated 180 degrees it sits at
+ * the upper right (+x, -y), so the two halves of one picture are comparable
+ * whatever the layout direction does to the row.
+ */
+function inkOffset(shot: Shot, band: Band): { x: number; y: number } {
+  const ink = bandPixels(shot, band).filter((pixel) => Math.min(pixel.r, pixel.g, pixel.b) < 200);
+  if (ink.length === 0) throw new Error("no ink in the band");
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const pixel of ink) {
+    if (pixel.x < minX) minX = pixel.x;
+    if (pixel.x > maxX) maxX = pixel.x;
+    if (pixel.y < minY) minY = pixel.y;
+    if (pixel.y > maxY) maxY = pixel.y;
+  }
+
+  const meanX = ink.reduce((sum, pixel) => sum + pixel.x, 0) / ink.length;
+  const meanY = ink.reduce((sum, pixel) => sum + pixel.y, 0) / ink.length;
+
+  return {
+    x: (meanX - (minX + maxX) / 2) / (maxX - minX + 1),
+    y: (meanY - (minY + maxY) / 2) / (maxY - minY + 1),
+  };
+}
+
 test("X-002 the default separator chevron follows the writing direction", async () => {
   // src/components/breadcrumbs/breadcrumbs.styles.ts:44-52 (separator slot)
   // heroui/packages/styles/components/breadcrumbs.css:25-27
   /*
    * Upstream's `.breadcrumbs__separator { rtl: rotate-180 }` mirrors the
-   * chevron in a right-to-left layout, and it is applied both to the default
-   * icon and to the custom-separator wrapper. The port dropped the rule with
-   * the claim that NSH has no writing direction, but `ltr:` / `rtl:` are
-   * supported variants and `rotate-180` exists.
+   * separator in a right-to-left layout, and the slot's classes reach both the
+   * default chevron and a custom separator (breadcrumbs.tsx:66-84 clones them
+   * onto it). The port dropped the rule with the claim that NSH has no writing
+   * direction, but `ltr:` / `rtl:` are supported variants and `rotate-180`
+   * exists.
    *
-   * One chevron between two empty labels is the only ink in each row, so the
-   * measure reads the glyph itself: `>` has its top at the left of its box,
-   * the rotated `<` at the right. Both rows share one screenshot, so a font
-   * or scale change cannot make the comparison pass by accident.
+   * The chevron rows hold one chevron between two empty labels, so the glyph is
+   * the only ink and its upper stroke's slope reads `>` (+0.7) against `<`
+   * (-0.7). The custom rows paint an "L", whose ink sits at the lower left and
+   * moves to the upper right when the slot rotates it. All four rows share one
+   * screenshot, so a font or scale change cannot make a comparison pass by
+   * accident.
    */
   const app = await open("../../../breadcrumbs.fixtures.tsx", {
     platform: "web",
     width: 320,
-    height: 220,
+    height: 400,
     colorScheme: "light",
     host: { params: { case: "separator-rtl" } },
   });
@@ -246,9 +279,16 @@ test("X-002 the default separator chevron follows the writing direction", async 
   const shot = decodePng(await app.screenshot());
   const bands = bandsOf(app, 320, shot);
 
-  const ltr = upperStrokeSlope(shot, bands.ltr!);
-  const rtl = upperStrokeSlope(shot, bands.rtl!);
+  expect(upperStrokeSlope(shot, bands.ltr!)).toBeGreaterThan(0.3);
+  expect(upperStrokeSlope(shot, bands.rtl!)).toBeLessThan(-0.3);
 
-  expect(ltr).toBeGreaterThan(0.3);
-  expect(rtl).toBeLessThan(-0.3);
+  const customLtr = inkOffset(shot, bands["ltr-custom"]!);
+  const customRtl = inkOffset(shot, bands["rtl-custom"]!);
+
+  // The same "L", upright in the ltr row: lower left.
+  expect(customLtr.x).toBeLessThan(-0.05);
+  expect(customLtr.y).toBeGreaterThan(0.05);
+  // Rotated by the separator slot: upper right.
+  expect(customRtl.x).toBeGreaterThan(0.05);
+  expect(customRtl.y).toBeLessThan(-0.05);
 });
