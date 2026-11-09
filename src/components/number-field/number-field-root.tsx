@@ -464,7 +464,7 @@ export function NumberFieldRoot(props: NumberFieldRootProps): JSX.Element {
     hasDecrement,
     hasIncrement,
     labelText,
-    ariaLabel: () => local["aria-label"],
+    ariaLabel: () => local["aria-label"] ?? local.accessibilityLabel,
     accessibilityHint,
     inputId: () => local.id ?? local.nativeID,
     autoFocus: () => local.autoFocus ?? false,

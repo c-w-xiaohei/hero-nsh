@@ -239,47 +239,71 @@ export function createNumberFieldState(
     Number.isNaN(value) ? "" : formatter().format(value);
 
   // --- Committed value ------------------------------------------------------
-  // The port sheet's "initial snap" only applies to the uncontrolled start
-  // value and only when the caller gave a step: a controlled `value` is what
-  // the parent says, and a default with no step must keep its decimals
-  // (`defaultValue={1.1}` shows "1,1", not "1").
-  const initialNumberValue = (() => {
-    const start = props.defaultValue;
-
-    if (typeof start !== "number" || Number.isNaN(start)) {
-      return NaN;
-    }
-
-    const min = props.minValue;
-    const max = props.maxValue;
+  // Upstream snaps in render (react-stately/useNumberFieldState.ts:141-153): a
+  // controlled `value`, and under commitBehavior "snap" a `defaultValue`, land
+  // on the step grid and inside the bounds before they are ever shown. The snap
+  // fires no `onChange` — it is the value the field presents, not a commit.
+  // Without a step the snap is only a clamp, so `defaultValue={1.1}` still
+  // shows "1,1".
+  const snapValue = (value: number): number => {
     const step = props.step;
 
     if (step === undefined || Number.isNaN(step)) {
-      return clamp(start, min ?? Number.NEGATIVE_INFINITY, max ?? Number.POSITIVE_INFINITY);
+      return clamp(value, minValue(), maxValue());
     }
 
-    return snapValueToStep(start, min ?? NaN, max ?? NaN, step);
-  })();
+    return snapValueToStep(value, minValue() ?? NaN, maxValue() ?? NaN, step);
+  };
+
+  const controlledValue = computed<number | undefined>(() => {
+    const value = props.value;
+
+    if (value === undefined || Number.isNaN(value)) {
+      return value;
+    }
+
+    return commitBehavior() === "snap" ? snapValue(value) : value;
+  });
+
+  const initialDefaultValue = () => {
+    const start = props.defaultValue;
+
+    if (typeof start !== "number" || Number.isNaN(start)) {
+      return undefined;
+    }
+
+    return commitBehavior() === "snap" ? snapValue(start) : start;
+  };
 
   const [numberValueRaw, setNumberValueRaw] = createControllableSignal<number>({
-    value: () => props.value,
-    defaultValue: () => initialNumberValue,
+    value: () => controlledValue(),
+    defaultValue: initialDefaultValue,
     onChange: (value) => props.onChange?.(value),
   });
 
+  // The committed value (what a commit or a step writes, `NaN` when empty).
   // `createControllableSignal` reports `undefined` until a value is set; an
   // empty number field is `NaN`, which is also what `onChange` reports.
-  const numberValue = computed<number>(() => numberValueRaw() ?? NaN);
+  const committedNumberValue = computed<number>(() => numberValueRaw() ?? NaN);
+
+  // What the field started with: the starting controlled value, otherwise the
+  // (snapped) defaultValue, as upstream's `initialValue` state records
+  // (:160, :346).
+  const defaultNumberValue = (() => {
+    const start = initialDefaultValue();
+
+    return typeof start === "number" ? start : committedNumberValue();
+  })();
 
   // --- Display text ---------------------------------------------------------
   // `text` is the input's text, not the value: the user edits it freely (within
   // the parser's partial grammar) and only a commit turns it into a value.
-  const text = signal(format(numberValue()));
+  const text = signal(format(committedNumberValue()));
 
   // The text follows the committed value, the locale and the format options.
   // The write is untracked so a user edit never feeds back into the effect.
   effect(() => {
-    const value = numberValue();
+    const value = committedNumberValue();
     const current = formatter();
 
     untracked(() => {
@@ -290,6 +314,13 @@ export function createNumberFieldState(
       }
     });
   });
+
+  // --- The parsed value -----------------------------------------------------
+  // Upstream derives every visible numeric fact from the text: `numberValue`
+  // is `numberParser.parse(inputValue)` (:345), and the steppers, the step
+  // buttons and the accessibility value all read that parse. A partial or empty
+  // string parses to `NaN`, which means "no value" everywhere.
+  const parsedValue = computed<number>(() => parser().parse(text()));
 
   // --- Editing and rejection ------------------------------------------------
   // Upstream's controlled React input bounces an edit the parser refuses; NSH's
@@ -397,8 +428,8 @@ export function createNumberFieldState(
   };
 
   // --- Writing a committed value -------------------------------------------
-  /** Snaps `value` onto the step grid and into the bounds (commit `"snap"`). */
-  const snapToBounds = (value: number): number => {
+  /** Snaps `value` onto the step grid anchored at the lower bound. */
+  const snapToStep = (value: number): number => {
     if (Number.isNaN(value)) {
       return value;
     }
@@ -416,11 +447,11 @@ export function createNumberFieldState(
    * value (a controlled parent may ignore the change) and re-runs validation.
    */
   const publish = (next: number) => {
-    const previous = numberValue();
+    const previous = parsedValue();
 
     setNumberValueRaw(next);
     validationErrors.set(validateNumber(next));
-    text.set(format(numberValue()));
+    text.set(format(committedNumberValue()));
 
     // A step announces the new value while the field has the focus
     // (`useNumberField`'s announce on a value change).
@@ -432,27 +463,36 @@ export function createNumberFieldState(
   // --- Commands -------------------------------------------------------------
   const commit = () => {
     const current = text();
-    const before = format(numberValue());
-
-    let next: number;
+    const before = format(committedNumberValue());
 
     if (current.trim() === "") {
-      next = NaN;
-    } else {
-      const parsed = parser().parse(current);
+      setNumberValueRaw(NaN);
+      validationErrors.set(validateNumber(NaN));
+      text.set(format(committedNumberValue()));
 
-      if (Number.isNaN(parsed)) {
-        // An unparsable string is not a value: show the committed one again.
-        text.set(before);
-        return;
+      if (text() !== before) {
+        announce(text());
       }
 
-      next = commitBehavior() === "snap" ? snapToBounds(parsed) : parsed;
+      return;
     }
+
+    const parsed = parser().parse(current);
+
+    if (Number.isNaN(parsed)) {
+      // An unparsable string is not a value: show the committed one again.
+      text.set(before);
+      return;
+    }
+
+    const snapped = commitBehavior() === "snap" ? snapValue(parsed) : parsed;
+    // Upstream reads the committed value back through the formatter, so what
+    // the user sees is exactly the value that gets stored (:205).
+    const next = parser().parse(format(snapped));
 
     setNumberValueRaw(next);
     validationErrors.set(validateNumber(next));
-    text.set(format(numberValue()));
+    text.set(format(committedNumberValue()));
 
     // A blur commit announces only when the visible text really changed.
     if (text() !== before) {
@@ -461,61 +501,77 @@ export function createNumberFieldState(
   };
 
   /**
-   * The value one step away in `direction`: snap the current value onto the
-   * grid, use it when it already moved that way, otherwise add or subtract one
-   * step from the precision-safe sum. An empty field starts at the lower bound
-   * (or 0).
+   * The value one step in `direction` from the parsed text, as upstream's
+   * `safeNextStep` (:243-265): an empty field lands on the bound it steps
+   * toward (0 when there is none), a filled one on the nearest step in that
+   * direction.
    */
   const stepFrom = (direction: 1 | -1): number => {
-    const current = numberValue();
+    const prev = parsedValue();
     const min = minValue() ?? NaN;
     const max = maxValue() ?? NaN;
     const step = clampStep();
 
-    if (Number.isNaN(current)) {
-      const base = snapValueToStep(
-        Number.isNaN(min) ? 0 : min,
-        min,
-        max,
-        step,
-      );
+    if (Number.isNaN(prev)) {
+      const bound = direction > 0 ? minValue() : maxValue();
+      const base = bound === undefined || Number.isNaN(bound) ? 0 : bound;
 
-      return direction > 0
-        ? snapValueToStep(base + step, min, max, step)
-        : base;
+      return snapValueToStep(base, min, max, step);
     }
 
-    const snapped = snapValueToStep(current, min, max, step);
+    const snapped = snapValueToStep(prev, min, max, step);
 
     if (
-      (direction > 0 && snapped > current) ||
-      (direction < 0 && snapped < current)
+      (direction > 0 && snapped > prev) ||
+      (direction < 0 && snapped < prev)
     ) {
       return snapped;
     }
 
     return snapValueToStep(
-      handleDecimalOperation(direction > 0 ? "+" : "-", current, step),
+      handleDecimalOperation(direction > 0 ? "+" : "-", prev, step),
       min,
       max,
       step,
     );
   };
 
+  /** Upstream's `canIncrement` / `canDecrement`, read from the parsed text (:308-330). */
   const canStep = (direction: 1 | -1): boolean => {
     if (props.isDisabled === true || props.isReadOnly === true) {
       return false;
     }
 
-    const current = numberValue();
+    const current = parsedValue();
 
+    // An empty field can always step: the step lands on a bound.
     if (Number.isNaN(current)) {
       return true;
     }
 
-    const next = stepFrom(direction);
+    const min = minValue() ?? NaN;
+    const max = maxValue() ?? NaN;
+    const step = clampStep();
 
-    return direction > 0 ? next > current : next < current;
+    if (direction > 0) {
+      if (maxValue() === undefined || Number.isNaN(maxValue())) {
+        return true;
+      }
+
+      return (
+        snapValueToStep(current, min, max, step) > current ||
+        handleDecimalOperation("+", current, step) <= max
+      );
+    }
+
+    if (minValue() === undefined || Number.isNaN(minValue())) {
+      return true;
+    }
+
+    return (
+      snapValueToStep(current, min, max, step) < current ||
+      handleDecimalOperation("-", current, step) >= min
+    );
   };
 
   const increment = () => {
@@ -541,7 +597,7 @@ export function createNumberFieldState(
       return;
     }
 
-    publish(snapToBounds(max));
+    publish(snapToStep(max));
   };
 
   const decrementToMin = () => {
@@ -551,7 +607,7 @@ export function createNumberFieldState(
       return;
     }
 
-    publish(snapToBounds(min));
+    publish(snapToStep(min));
   };
 
   // --- Public surface -------------------------------------------------------
@@ -560,8 +616,10 @@ export function createNumberFieldState(
 
   const state: NumberFieldState = {
     inputValue: text,
-    numberValue,
-    defaultNumberValue: () => initialNumberValue,
+    // Upstream exposes the text's parse as `numberValue` (:345), so a typed
+    // value is the state before any commit.
+    numberValue: parsedValue,
+    defaultNumberValue: () => defaultNumberValue,
     minValue,
     maxValue,
     canIncrement,
@@ -581,7 +639,7 @@ export function createNumberFieldState(
     text,
     setInputValue,
     commit,
-    numberValue,
+    numberValue: parsedValue,
     minValue,
     maxValue,
     canIncrement,

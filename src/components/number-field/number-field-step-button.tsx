@@ -8,7 +8,7 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, signal, split, View } from "nsh";
+import { cleanup, computed, reduceMotion, signal, split, View } from "nsh";
 
 import { IconMinus, IconPlus } from "../icons";
 import { joinClassNames } from "./class-names";
@@ -368,6 +368,16 @@ function createStepButton(direction: StepDirection) {
       return typeof value === "function" ? value(renderProps) : value;
     };
 
+    // R-025 / R-026: the transitioned properties upstream
+    // (`background-color 150ms, border-color 150ms`), as an inline list; the
+    // class carries the duration and curve, reduced motion turns the list off.
+    const style = computed<StyleProp<ViewStyle>>(() => [
+      {
+        transitionProperty: reduceMotion() ? "none" : "background-color, border-color",
+      },
+      resolvedStyle(),
+    ]);
+
     const classes = computed(() =>
       joinClassNames(
         isIncrement ? field?.slots.incrementButton() : field?.slots.decrementButton(),
@@ -412,7 +422,7 @@ function createStepButton(direction: StepDirection) {
         classList={{
           "opacity-50 cursor-not-allowed": isDisabled(),
         }}
-        style={resolvedStyle()}
+        style={style()}
         disabled={isDisabled()}
         // Upstream forces `excludeFromTabOrder`: a step button is reachable by
         // the pointer and by assistive technologies, never by Tab.
