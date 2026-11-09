@@ -24,3 +24,16 @@ test("T-002 exposes a title label for the abbreviated key", async () => {
 
   expect(app.shows("text:Command")).toBe(true);
 });
+
+// heroui/packages/react/src/components/kbd/kbd.tsx:49-51
+// Root renders `{children}` directly inside <kbd>, so `<Kbd>Esc</Kbd>` shows
+// the bare string. The port must read the root's children through
+// renderChildren at the placement inside the Provider: strings and numbers
+// become Text instead of disappearing inside a View.
+test("X-001 renders bare text and numeric root children", async () => {
+  const text = await openScenario("kbd/probe-root-text");
+  expect(text.shows("text:Esc")).toBe(true);
+
+  const numeric = await openScenario("kbd/probe-numeric");
+  expect(numeric.shows("text:42")).toBe(true);
+});

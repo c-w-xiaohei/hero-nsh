@@ -104,10 +104,28 @@ function Inline() {
   );
 }
 
+function ProbeRootText() {
+  return (
+    <Stage>
+      <Kbd>Esc</Kbd>
+    </Stage>
+  );
+}
+
+function ProbeNumeric() {
+  return (
+    <Stage>
+      <Kbd>42</Kbd>
+    </Stage>
+  );
+}
+
 export const kbdScenarios = {
   "kbd/basic": Basic,
   "kbd/title": Title,
   "kbd/variants": Variants,
   "kbd/keys": Keys,
   "kbd/inline": Inline,
+  "kbd/probe-root-text": ProbeRootText,
+  "kbd/probe-numeric": ProbeNumeric,
 };
