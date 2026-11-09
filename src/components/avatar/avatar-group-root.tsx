@@ -1,4 +1,4 @@
-import { computed, signal, split, View } from "nsh";
+import { computed, signal, split, untracked, View } from "nsh";
 import type { JSX, ViewProps, ViewRef } from "nsh";
 
 import { renderChildren } from "./avatar-children";
@@ -128,7 +128,10 @@ export function AvatarGroupRoot(props: AvatarGroupRootProps): JSX.Element {
   const explicitCounts = signal(0);
 
   const registerAvatar = (id: string) => {
-    avatarIds.set([...avatarIds(), id]);
+    // `untracked`: registering happens while the group builds its children, so
+    // reading the registry here must not make that insertion computation depend
+    // on it (a self-dependency would rebuild the whole list on every insert).
+    avatarIds.set([...untracked(avatarIds), id]);
 
     return {
       rank: () => avatarIds().indexOf(id),
@@ -137,15 +140,15 @@ export function AvatarGroupRoot(props: AvatarGroupRootProps): JSX.Element {
   };
 
   const unregisterAvatar = (id: string) => {
-    avatarIds.set(avatarIds().filter((current) => current !== id));
+    avatarIds.set(untracked(avatarIds).filter((current) => current !== id));
   };
 
   const registerExplicitCount = () => {
-    explicitCounts.set(explicitCounts() + 1);
+    explicitCounts.set(untracked(explicitCounts) + 1);
   };
 
   const unregisterExplicitCount = () => {
-    explicitCounts.set(Math.max(0, explicitCounts() - 1));
+    explicitCounts.set(Math.max(0, untracked(explicitCounts) - 1));
   };
 
   /*
