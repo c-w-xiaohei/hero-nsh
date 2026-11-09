@@ -22,7 +22,13 @@ import { openScenario } from "../../helpers/open-scenario";
  */
 const ACCENT_SOFT_FOREGROUND = "#1e63aeff";
 
-type LayoutCall = { name: string; x: number; width: number; height: number };
+type LayoutCall = {
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
 function openFixture(name: string) {
   return open("../../../avatar.fixtures.tsx", {
@@ -167,16 +173,25 @@ test("T-011 explicit Count suppresses auto count when max is also set", async ()
 
 // heroui/packages/react/tests/components/avatar-group/avatar-group.test.tsx:148
 // Rewritten port (port sheet T-012): upstream asserts the `avatar-group--grid`
-// modifier and the still-present clip modifier. The visible effect of isGrid is
-// no overlap and a 12pt gap instead of the 8pt overlap, so the second md avatar
-// starts 40 + 12 = 52 points after the first.
+// modifier and the still-present clip modifier. The clip half has no visible
+// effect — every clip rule is gated on `:not(.avatar-group--grid)` — so the
+// second observable is what the grid class does to a row: no overlap and a 12pt
+// gap, so the second md avatar starts 40 + 12 = 52 points after the first. That
+// gap also makes `flex-wrap` reachable: in a 224pt group the fifth of five md
+// avatars starts a second row at x = first and y = 40 + 12 = 52, while the same
+// five avatars without isGrid overlap (40 - 8 = 32) and stay on one row.
 test("T-012 exposes isGrid BEM modifier", async () => {
   const app = await openFixture("geometry-grid");
 
-  const first = lastLayout(app, "first");
-  const second = lastLayout(app, "second");
+  const first = lastLayout(app, "grid-first");
+  const second = lastLayout(app, "grid-second");
+  const fifth = lastLayout(app, "grid-fifth");
+  const clipFirst = lastLayout(app, "clip-first");
+  const clipFifth = lastLayout(app, "clip-fifth");
 
   expect(second.x - first.x).toBe(52);
+  expect([fifth.x - first.x, fifth.y - first.y]).toEqual([0, 52]);
+  expect(clipFifth.y - clipFirst.y).toBe(0);
 });
 
 // heroui/packages/react/tests/components/avatar-group/avatar-group.test.tsx:164
