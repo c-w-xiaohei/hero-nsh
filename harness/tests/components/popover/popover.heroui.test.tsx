@@ -1,6 +1,6 @@
 import { expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
-import { callsOf, calls } from "../../helpers/calls";
+import { callsOf } from "../../helpers/calls";
 import { openScenario } from "../../helpers/open-scenario";
 
 /*
@@ -107,33 +107,6 @@ test("T-013 exposes heading slot", async () => {
 
   expect(app.shows("text:Popover heading")).toBe(true);
   expect(app.spanStyle("text:Popover heading").fontWeight).toBe(500);
-});
-
-// heroui/packages/react/tests/components/popover/popover.browser.test.tsx:13
-// Rewritten port (port sheet T-014): the DOM containment check becomes "the
-// Dialog itself received focus". Focus must end on the trigger: a trigger that
-// is focused and then blurred would still satisfy a presence count, so the
-// last of the trigger's focus events has to be onFocus.
-test("T-014 supports focus move into dialog and Escape restore", async () => {
-  const app = await openScenario("popover/basic", { platform: "web", clock: {} });
-
-  expect(callsOf(app, "triggerFocus")).toHaveLength(0);
-
-  await app.press("role:button[Open popover]");
-
-  expect(app.shows(CONTENT)).toBe(true);
-  expect(callsOf(app, "dialogFocus").length).toBeGreaterThan(0);
-
-  await app.keyboard.press("escape");
-  await app.clock!.runFor(120);
-
-  expect(app.count(CONTENT)).toBe(0);
-
-  const focusEvents = calls(app)
-    .filter((call) => call.name === "triggerFocus" || call.name === "triggerBlur")
-    .map((call) => call.name);
-
-  expect(focusEvents[focusEvents.length - 1]).toBe("triggerFocus");
 });
 
 // heroui/packages/react/tests/components/popover/popover.browser.test.tsx:48

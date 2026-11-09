@@ -2,7 +2,6 @@ import {
   computed,
   signal,
   split,
-  token,
   untracked,
   View,
 } from "nsh";
@@ -17,6 +16,7 @@ import type {
 } from "nsh";
 
 import { createProgressState } from "../../primitives/create-progress-state";
+import { themeToken } from "../../theme";
 import { FieldContext } from "../label/context";
 import type { FieldState } from "../label/context";
 import { ProgressCircleContext } from "./context";
@@ -203,21 +203,21 @@ export function ProgressCircleRoot(props: ProgressCircleRootProps): JSX.Element 
   const stroke = computed(() => {
     switch (local.color ?? "accent") {
       case "default":
-        return token("default-foreground"); // R-016
+        return themeToken("default-foreground"); // R-016
       case "success":
-        return token("success"); // R-018
+        return themeToken("success"); // R-018
       case "warning":
-        return token("warning"); // R-019
+        return themeToken("warning"); // R-019
       case "danger":
-        return token("danger"); // R-020
+        return themeToken("danger"); // R-020
       case "accent":
       default:
-        return token("accent"); // R-002 / R-017
+        return themeToken("accent"); // R-002 / R-017
     }
   });
 
   /** R-003: the track paint is always `--default`, whatever `color` says. */
-  const trackStroke = computed(() => token("default"));
+  const trackStroke = computed(() => themeToken("default"));
 
   /**
    * R-011: the three selectors that reach a `div` are `[data-disabled="true"]`

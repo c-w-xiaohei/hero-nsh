@@ -1,4 +1,4 @@
-import { Canvas, computed, Path2D, token, View } from "nsh";
+import { Canvas, computed, Path2D, View } from "nsh";
 import type {
   Bounds,
   CanvasRenderingContext2D,
@@ -9,6 +9,7 @@ import type {
   ViewStyle,
 } from "nsh";
 
+import { themeToken } from "../../theme";
 import { renderChildren } from "./children";
 import { joinClassNames } from "./class-names";
 import { LinkContext } from "./context";
@@ -52,7 +53,7 @@ function drawExternalLink(
  */
 function DefaultExternalLinkIcon(): JSX.Element {
   // `token()` is reactive, so the canvas repaints on an appearance switch.
-  const paint = computed(() => token("link"));
+  const paint = computed(() => themeToken("link"));
 
   return (
     <Canvas
