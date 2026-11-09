@@ -297,17 +297,21 @@ export function SelectTrigger(props: SelectTriggerProps): JSX.Element {
       list["bg-field-hover border-field-border-hover"] = true;
     }
 
-    // R-008: `:focus-visible` → `status-focused`. R-015: a secondary trigger
-    // keeps its own background. NSH's class string and classList are joined in
-    // that order, so these later classes win over the base ones.
+    // R-008: `:focus-visible` → `status-focused`. The utility gives a 2pt
+    // page-coloured offset (`--ring-offset-width: 2px`, Button's R-006);
+    // R-015: a secondary trigger keeps its own background. NSH's class string
+    // and classList are joined in that order, so these later classes win over
+    // the base ones.
     if (isFocusVisible()) {
-      list["ring-2 ring-focus ring-offset-0 outline-none border-field-border-focus bg-field-focus"] = true;
+      list["ring-2 ring-focus ring-offset-2 ring-offset-background outline-none border-field-border-focus bg-field-focus"] = true;
     }
 
     // R-010: the invalid field ring; R-017: secondary keeps `--default`.
+    // `status-invalid-field`'s ring sets `--tw-ring-offset-width: 0`, so the
+    // invalid branch forces `ring-offset-0` over R-008's 2pt offset.
     if (select.isInvalid()) {
       if (focused()) {
-        list["ring-2 ring-danger outline-none bg-field-focus"] = true;
+        list["ring-2 ring-danger ring-offset-0 outline-none bg-field-focus"] = true;
       } else {
         list["outline outline-1 outline-danger bg-field-focus"] = true;
       }

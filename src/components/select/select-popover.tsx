@@ -61,6 +61,9 @@ export interface SelectPopoverProps {
   /** Accepted, no effect: the core Overlay has no cross-axis offset. */
   crossOffset?: number;
 
+  /** Accepted, no effect: the core Overlay always flips when the other side fits. */
+  shouldFlip?: boolean;
+
   /** The safe-area margin (default 12; RAC's `containerPadding`). */
   containerPadding?: number;
 
@@ -108,6 +111,9 @@ export interface SelectPopoverProps {
   "aria-labelledby"?: string;
   "aria-describedby"?: string;
 
+  /** Accepted, no effect: NSH has no `aria-details` channel. */
+  "aria-details"?: string;
+
   /** Accepted, no effect: NSH has no slot collection. */
   slot?: string;
 
@@ -142,6 +148,7 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
     "placement",
     "offset",
     "crossOffset",
+    "shouldFlip",
     "containerPadding",
     "isOpen",
     "defaultOpen",
@@ -162,6 +169,7 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
     "accessibilityLabel",
     "aria-labelledby",
     "aria-describedby",
+    "aria-details",
     "slot",
     "render",
     "onLayout",

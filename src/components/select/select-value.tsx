@@ -10,6 +10,12 @@ import type {
 import { computed, split, Text, untracked, View } from "nsh";
 
 import { renderChildren } from "../list-box/children";
+import { FieldErrorContext } from "../field-error/context";
+import type { FieldErrorState } from "../field-error/context";
+import { FieldContext } from "../label/context";
+import type { FieldState } from "../label/context";
+import { DescriptionContext } from "../description/context";
+import type { DescriptionContextValue } from "../description/context";
 import {
   ListBoxContainerContext,
   type ListBoxContainerContextValue,
@@ -125,10 +131,21 @@ export function SelectValue(props: SelectValueProps): JSX.Element {
    * R-020: a row's indicator copied here has no item context, so it would draw
    * the unchecked checkmark; the container suppresses it. HeroUI hides the copy
    * with `.select__value [data-slot="list-box-item-indicator"]`.
+   *
+   * The copied row also carries the caller's `Label` / `Description` /
+   * `FieldError` parts. Their bodies run where they are built (each read builds
+   * the tree, research 4.1), and outside the row they would resolve the field
+   * root's contexts and rename it (`<Label>Bob</Label>` in a row once became
+   * part of the trigger's name). Blank contexts keep the copy a visual copy:
+   * it registers nothing.
    */
   const suppress: ListBoxContainerContextValue = {
     itemIndicatorSuppressed: () => true,
   };
+
+  const isolated: FieldState = {};
+  const isolatedDescription: DescriptionContextValue = {};
+  const isolatedError: FieldErrorState = {};
 
   /**
    * The value HeroUI renders with no children: the selected option's children
@@ -234,7 +251,13 @@ export function SelectValue(props: SelectValueProps): JSX.Element {
       onLayout={local.onLayout}
     >
       <ListBoxContainerContext.Provider value={suppress}>
-        {() => content()}
+        <FieldContext.Provider value={isolated}>
+          <DescriptionContext.Provider value={isolatedDescription}>
+            <FieldErrorContext.Provider value={isolatedError}>
+              {() => content()}
+            </FieldErrorContext.Provider>
+          </DescriptionContext.Provider>
+        </FieldContext.Provider>
       </ListBoxContainerContext.Provider>
     </View>
   );

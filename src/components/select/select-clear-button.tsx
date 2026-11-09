@@ -94,20 +94,21 @@ export function SelectClearButton(props: SelectClearButtonProps): JSX.Element {
 
   cleanup(() => trigger?.setClearHovered(false));
 
-  // R-024: an empty selection makes the button invisible and unpickable; the
-  // press then does nothing at all (T-010).
+  // HeroUI's handlers call the caller's callbacks on every press and gate only
+  // the clearing (select.tsx:264-283: `onPointerDown` always, `onClick` always,
+  // the selection change behind `!isDisabled && !isEmpty`). The press itself is
+  // blocked upstream by the empty state's `pointer-events: none` (R-024) and by
+  // the disabled field's `pointer-events: none` (R-011).
   const clear = (event?: PressEvent) => {
-    if (isDisabled() || isEmpty()) {
-      return;
+    if (!isDisabled() && !isEmpty()) {
+      select.clear();
+
+      // Upstream the clear button is a span inside the trigger button and its
+      // pointerdown is not prevented, so the browser leaves the focus on the
+      // trigger; here the trigger is a view and the focus has to be asked for.
+      // It is where the Backspace / Delete shortcut lives (T-027).
+      select.focusTrigger();
     }
-
-    select.clear();
-
-    // Upstream the clear button is a span inside the trigger button and its
-    // pointerdown is not prevented, so the browser leaves the focus on the
-    // trigger; here the trigger is a view and the focus has to be asked for.
-    // It is where the Backspace / Delete shortcut lives (T-027).
-    select.focusTrigger();
 
     if (event) {
       local.onClick?.(event);
@@ -115,9 +116,7 @@ export function SelectClearButton(props: SelectClearButtonProps): JSX.Element {
   };
 
   const handlePressDown = (event: PressEvent) => {
-    if (!isDisabled()) {
-      local.onPointerDown?.(event);
-    }
+    local.onPointerDown?.(event);
   };
 
   // R-022: the visible box stays 20pt and a child view widens the pointer

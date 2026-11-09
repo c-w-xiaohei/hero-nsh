@@ -590,29 +590,15 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
   );
 
   const stateFacade: SelectStateFacade = {
-    // Getters, not snapshots: the fields are plain values as upstream, but a
-    // tree that reads them where it binds still follows a change.
-    get selectedItems() {
-      return selectedItems();
-    },
-    get selectedKeys() {
-      return selectionManager()?.selectedKeys() ?? new Set<string>();
-    },
-    get selectionMode() {
-      return selectionMode();
-    },
-    get isOpen() {
-      return overlay.isOpen();
-    },
-    get isDisabled() {
-      return isDisabled();
-    },
-    get isInvalid() {
-      return isInvalid();
-    },
-    get isRequired() {
-      return isRequired();
-    },
+    // Accessors, per D17: the value's render function runs once, and the tree it
+    // builds reads these where it binds.
+    selectedItems,
+    selectedKeys: () => selectionManager()?.selectedKeys() ?? new Set<string>(),
+    selectionMode,
+    isOpen: overlay.isOpen,
+    isDisabled,
+    isInvalid,
+    isRequired,
   };
 
   const contextValue: SelectContextValue = {

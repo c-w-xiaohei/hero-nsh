@@ -167,9 +167,10 @@ export interface SelectableCollectionState {
   /**
    * Forgets the typeahead prefix. A collection that stays mounted while its
    * field closes calls it there: upstream the popover unmounts, which drops
-   * `useTypeSelect`'s buffer (Select's list, port sheet T-068).
+   * `useTypeSelect`'s buffer (Select's list, port sheet T-068). Optional: a
+   * collection built elsewhere may not carry a typeahead at all.
    */
-  resetTypeAhead: () => void;
+  resetTypeAhead?: () => void;
 }
 
 /**
