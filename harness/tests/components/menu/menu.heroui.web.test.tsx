@@ -16,6 +16,12 @@ import { close, menu, open as openMenu } from "../../testers/menu";
  * `autoFocus`, so the root's focus and its Escape binding only exist on macOS
  * and the web. Approved difference "Windows keyboard focus and activation
  * (NSH 0.4.0 host gap)", port sheet section 8.
+ *
+ * Regression X-003 (a held Return must activate once, as RAC ignores
+ * `e.repeat`) has no case here: `nsh test` sends one `repeat=false` keydown per
+ * `keyboard.press` (`crates/nsh-testing/src/headless/keyboard.rs:59-66`) and
+ * `keyboard.down` holds modifier keys only (`:14-40`), so auto-repeat has no
+ * test channel. Recorded as a host limitation in port sheet section 8.
  */
 
 function openFixture(name: string, options_: ScenarioOptions = {}) {
