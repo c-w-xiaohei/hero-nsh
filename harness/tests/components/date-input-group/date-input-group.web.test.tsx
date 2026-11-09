@@ -1,6 +1,13 @@
 import { expect, open, test } from "nsh/test";
 import type { App, OpenOptions } from "nsh/test";
-import { lastSegment, lastSegmentProps, rootRecord } from "../../testers/date-input-group";
+import {
+  fieldChanges,
+  lastInputProps,
+  lastSegment,
+  lastSegmentProps,
+  rootRecord,
+  triggerRecord,
+} from "../../testers/date-input-group";
 
 /*
  * DateInputGroup cases that read the keyboard focus and the segment editing
@@ -257,4 +264,115 @@ test("X-004 should set the ring from the interaction, not from the focus event",
   await app.keyboard.press("enter");
 
   expect(rootRecord(app).isFocusVisible).toBe(true);
+});
+
+// port sheet 4b.3 `range-slots`, rule R-012, section 2 "context 下发 / 子部件登记"
+// The range separator reports itself (the group's only input for `flex-none
+// pe-0` / `ps-0`) and a press on an Input's padding focuses the earliest of the
+// trailing placeholders, as React Aria's `useDatePickerGroup` `focusLast` does
+// (`react-spectrum/packages/react-aria/src/datepicker/useDatePickerGroup.ts:82-110`).
+// The two Inputs own a field each, so the side that took the focus is readable:
+// the Input render props carry `isFocusWithin`, and the segment that focusLast
+// picked is the month, not the segment under the pointer. The painted padding
+// classes stay outside `nsh/test`'s reach (it reads no class); the registration
+// probe above plus the rule list are their evidence.
+test("S-008 should focus the first placeholder from a slot input's padding", async () => {
+  const app = await openCase("range-slots");
+
+  expect(app.shows("text:separator-registered")).toBe(true);
+  expect(rootRecord(app).isFocusWithin).toBe(false);
+
+  await app.press("id:start-input");
+
+  expect(lastSegmentProps(app, "month", "start-segment-props").isFocused).toBe(true);
+  expect(lastSegmentProps(app, "day", "start-segment-props").isFocused).toBe(false);
+  expect(lastInputProps(app, "start").isFocusWithin).toBe(true);
+  expect(lastInputProps(app, "end").isFocusWithin).toBe(false);
+  expect(rootRecord(app).isFocusWithin).toBe(true);
+  expect(rootRecord(app).isFocusVisible).toBe(false);
+
+  await app.press("id:end-input");
+
+  expect(lastInputProps(app, "start").isFocusWithin).toBe(false);
+  expect(lastInputProps(app, "end").isFocusWithin).toBe(true);
+  expect(lastSegmentProps(app, "month", "end-segment-props").isFocused).toBe(true);
+  expect(rootRecord(app).isFocusWithin).toBe(true);
+});
+
+// port sheet 4b.3 `trigger-focus`, rule R-006, section 2 state table
+// ("组焦点环可见 | rootFocusWithin() && !triggerFocused()").
+// A trigger inside the group is a registered focus target, so its focus keeps
+// the group's focus-within true while the last segment lets go, and it also
+// raises `triggerFocused`, the accessor R-006's ring rule reads to suppress the
+// ring. Both are context reads, which is what a future DatePicker.Trigger
+// consumes; the painted class is not readable from `nsh/test`.
+test("S-009 should keep focus-within and raise triggerFocused while a trigger holds the focus", async () => {
+  const app = await openCase("trigger-focus");
+
+  await app.keyboard.press("tab");
+
+  expect(lastSegmentProps(app, "month").isFocused).toBe(true);
+  expect(rootRecord(app).isFocusWithin).toBe(true);
+  expect(rootRecord(app).isFocusVisible).toBe(true);
+
+  await app.keyboard.press("tab");
+  await app.keyboard.press("tab");
+  await app.keyboard.press("tab");
+
+  expect(triggerRecord(app).focused).toBe(true);
+  expect(triggerRecord(app).triggerFocused).toBe(true);
+  expect(triggerRecord(app).isFocusWithin).toBe(true);
+  expect(lastSegmentProps(app, "year").isFocused).toBe(false);
+  expect(rootRecord(app).isFocusWithin).toBe(true);
+
+  await app.keyboard.press("tab");
+
+  expect(triggerRecord(app).focused).toBe(false);
+  expect(triggerRecord(app).triggerFocused).toBe(false);
+  expect(rootRecord(app).isFocusWithin).toBe(false);
+});
+
+// X-005
+// src/components/date-input-group/date-input-group-segment.tsx:297 (the port's
+// `enter: keyboard(() => field?.commit())`) against
+// R/tmp/vendor/react-spectrum/packages/react-aria/src/datepicker/useDateSegment.ts:104-127
+// (Backspace / Delete / Mod+a only) and
+// `packages/react-aria/src/spinbutton/useSpinButton.ts:78-128` (PageUp /
+// PageDown / ArrowUp / ArrowDown / Home / End only), with the commit owned by
+// the blur boundary in `packages/react-aria/src/datepicker/useDateField.ts:105-116`
+// (`_common.md:43`: Return / Space stay unbound and arrive as `isKeyboardPress`).
+// An invalid display holds until the focus leaves the group: Return must not
+// commit early nor clamp the day it is showing. The commit on leave clamps
+// February 30th to the 28th, as `@internationalized/date`'s `set` does in
+// React Aria too.
+test("X-005 should leave Return to the field's blur boundary", async () => {
+  const app = await openCase("trigger-focus");
+
+  await app.keyboard.press("tab");
+
+  expect(lastSegmentProps(app, "month").isFocused).toBe(true);
+
+  for (const key of ["0", "2", "3", "0", "2", "0", "2", "6"]) {
+    await app.keyboard.press(key);
+  }
+
+  expect(lastSegment(app, "month").isPlaceholder).toBe(false);
+  expect(Number(lastSegment(app, "month").text)).toBe(2);
+  expect(Number(lastSegment(app, "day").text)).toBe(30);
+  expect(fieldChanges(app)).toHaveLength(0);
+
+  await app.keyboard.press("enter");
+
+  // Still the uncommitted February 30th, and no commit went out.
+  expect(fieldChanges(app)).toHaveLength(0);
+  expect(Number(lastSegment(app, "month").text)).toBe(2);
+  expect(Number(lastSegment(app, "day").text)).toBe(30);
+  expect(lastSegmentProps(app, "year").isFocused).toBe(true);
+
+  // Out of the group: the trigger first, then the view after it.
+  await app.keyboard.press("tab");
+  await app.keyboard.press("tab");
+
+  expect(fieldChanges(app)).toEqual(["2026-2-28"]);
+  expect(Number(lastSegment(app, "day").text)).toBe(28);
 });

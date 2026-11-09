@@ -52,8 +52,8 @@ function lastOf<T>(app: App, name: string): T {
 }
 
 /** The last render of the segment list for `type` (a literal segment shares one record). */
-export function lastSegment(app: App, type: string): SegmentRecord {
-  const all = records<SegmentRecord>(app, "segments").filter((record) => record.type === type);
+export function lastSegment(app: App, type: string, name = "segments"): SegmentRecord {
+  const all = records<SegmentRecord>(app, name).filter((record) => record.type === type);
   const found = all[all.length - 1];
 
   if (!found) throw new Error(`no segment of type ${type} was rendered`);
@@ -62,10 +62,12 @@ export function lastSegment(app: App, type: string): SegmentRecord {
 }
 
 /** The last Segment `className` render-prop call for `type`. */
-export function lastSegmentProps(app: App, type: string): SegmentPropsRecord {
-  const all = records<SegmentPropsRecord>(app, "segment-props").filter(
-    (record) => record.type === type,
-  );
+export function lastSegmentProps(
+  app: App,
+  type: string,
+  name = "segment-props",
+): SegmentPropsRecord {
+  const all = records<SegmentPropsRecord>(app, name).filter((record) => record.type === type);
   const found = all[all.length - 1];
 
   if (!found) throw new Error(`no className record for the ${type} segment`);
@@ -76,4 +78,43 @@ export function lastSegmentProps(app: App, type: string): SegmentPropsRecord {
 /** The last Root `className` render-prop call. */
 export function rootRecord(app: App): RootRecord {
   return lastOf<RootRecord>(app, "root-props");
+}
+
+/** An Input `className` render-prop call, tagged with its `slot`. */
+export type InputPropsRecord = {
+  slot: string;
+  isHovered: boolean;
+  isFocusWithin: boolean;
+  isFocusVisible: boolean;
+  isDisabled: boolean;
+  isInvalid: boolean;
+};
+
+/** The last Input `className` render-prop call for `slot` (the range fixture's two sides). */
+export function lastInputProps(app: App, slot: string): InputPropsRecord {
+  const all = records<InputPropsRecord>(app, "input-props").filter(
+    (record) => record.slot === slot,
+  );
+  const found = all[all.length - 1];
+
+  if (!found) throw new Error(`no className record for the ${slot} input`);
+
+  return found;
+}
+
+/** A fake trigger's focus report, with the group accessors it read at the time. */
+export type TriggerRecord = {
+  focused: boolean;
+  triggerFocused: boolean;
+  isFocusWithin: boolean;
+};
+
+/** The last report of the fake trigger. */
+export function triggerRecord(app: App): TriggerRecord {
+  return lastOf<TriggerRecord>(app, "trigger");
+}
+
+/** Every value the provided field committed, as the fixture normalized it. */
+export function fieldChanges(app: App): string[] {
+  return callsOf(app, "field-change").map((args) => String(args[0]));
 }
