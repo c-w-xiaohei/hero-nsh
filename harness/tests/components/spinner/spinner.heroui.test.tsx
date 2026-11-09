@@ -26,10 +26,12 @@ test("T-001 renders with the status role and default accessible name", async () 
 // Partial port (port sheet T-002): the upstream case asserts `data-slot="spinner"`,
 // the BEM `spinner` block class and the icon's `data-slot="spinner-icon"`.
 // D18 drops the two data-slot and BEM assertions; the icon sub-part stays as a
-// visible assertion through its own testID.
+// visible assertion through its own testID, scoped to the spinner root as
+// upstream's `spinner.querySelector('[data-slot="spinner-icon"]')` is: an icon
+// rendered outside the root fails it.
 test("T-002 exposes the icon sub-part", async () => {
   const app = await openScenario("spinner/basic");
-  expect(app.shows("id:spinner-icon")).toBe(true);
+  expect(app.shows("role:progressbar[Loading] >> id:spinner-icon")).toBe(true);
 });
 
 // heroui/packages/react/tests/components/spinner/spinner.test.tsx:21
@@ -76,4 +78,45 @@ test("T-004 exposes the large size as a 32pt box", async () => {
   expect(lg.height).toBe(32);
   expect(md.width).toBe(24);
   expect(md.height).toBe(24);
+});
+
+// src/components/spinner/spinner.tsx:63,70
+// Upstream keeps both gradient stops at currentColor and fades only
+// stop-opacity, 1 -> 0.55 and 0 -> 0.55
+// (heroui/packages/react/src/components/spinner/spinner.tsx:32-33,42-43). The
+// port put the named `transparent` in the canvas gradient; canvas interpolates
+// it as black at alpha 0, so the arc darkened toward black instead of keeping
+// the paint's hue. Each arc records four stops here: the paint at full alpha
+// and the same paint (same RGB) at alpha 0.
+type GradientStop = { offset: number; color: string };
+
+test("X-001 fades each arc toward its own color, not toward black", async () => {
+  const app = await open("../../../spinner.fixtures.tsx", {
+    platform: "windows",
+    width: 240,
+    height: 240,
+    host: { params: { case: "gradient" } },
+  });
+
+  const stops = callsOf(app, "gradient-stop").map((args) => args[0] as GradientStop);
+
+  expect(stops).toHaveLength(8);
+
+  const gradients = [stops.slice(0, 4), stops.slice(4, 8)];
+  const hues = gradients.map((gradient) => gradient[0].color.slice(0, 7));
+
+  // The two spinners carry different colors, so a constant paint fails this.
+  expect(new Set(hues).size).toBe(2);
+
+  for (const [index, gradient] of gradients.entries()) {
+    const hue = hues[index];
+
+    expect(gradient.map((stop) => stop.color)).toEqual([
+      `${hue}ff`,
+      `${hue}00`,
+      `${hue}00`,
+      `${hue}ff`,
+    ]);
+    expect(gradient.map((stop) => stop.offset)).toEqual([0.05271, 0.91793, 0.1524, 0.8715]);
+  }
 });
