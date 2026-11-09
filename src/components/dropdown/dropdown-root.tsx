@@ -99,14 +99,39 @@ export function DropdownRoot(props: DropdownRootProps) {
 
   const contextMenuPoint = signal<Point | undefined>(undefined);
 
+  // React Aria's `MenuTriggerState.focusStrategy`: the key that opened the menu
+  // decides where its focus lands. A pointer open passes none, so the menu root
+  // takes the focus without selecting a row, as upstream.
+  const openFocusStrategy = signal<"first" | "last" | undefined>(undefined);
+
   // A press on a Button placed in this root arrives here instead of a plain
   // toggle, so `longPress` and `contextMenu` keep their own entry points.
   // Keyboard activation opens in every mode but `contextMenu`, where upstream
   // only listens for the secondary button.
   const triggerPress = (source: "keyboard" | "pointer") => {
     if (source === "keyboard" ? triggerMode() !== "contextMenu" : triggerMode() === "press") {
-      trigger.toggle();
+      if (source === "keyboard") {
+        openFocusStrategy.set("first");
+        trigger.setIsOpen(true);
+      } else {
+        openFocusStrategy.set(undefined);
+        trigger.toggle();
+      }
     }
+  };
+
+  // The arrow keys of `MenuTrigger`'s trigger props (`useMenuTrigger.ts:78-108`),
+  // shared by `Dropdown.Trigger` and a Button placed in the root: ArrowDown
+  // opens on the first row, ArrowUp on the last, and the plain keys are off in
+  // `longPress` mode (which opens only on the hold; a keyboard activation still
+  // opens, through the press channel). The Alt forms stay live in every mode.
+  const triggerKeyOpen = (strategy: "first" | "last", plain?: boolean) => {
+    if (plain === true && triggerMode() === "longPress") {
+      return;
+    }
+
+    openFocusStrategy.set(strategy);
+    trigger.setIsOpen(true);
   };
 
   const contextValue: DropdownContextValue = {
@@ -120,6 +145,8 @@ export function DropdownRoot(props: DropdownRootProps) {
     shouldCloseOnSelect: () => local.shouldCloseOnSelect,
     contextMenuPoint,
     setContextMenuPoint: (point) => contextMenuPoint.set(point),
+    openFocusStrategy,
+    setOpenFocusStrategy: (strategy) => openFocusStrategy.set(strategy),
   };
 
   const triggerLongPress = () => {
@@ -128,7 +155,12 @@ export function DropdownRoot(props: DropdownRootProps) {
     }
   };
 
-  const overlayContext = { ...trigger.context, triggerPress, triggerLongPress };
+  const overlayContext = {
+    ...trigger.context,
+    triggerPress,
+    triggerLongPress,
+    triggerKeyOpen,
+  };
 
   // `_common` exception: a component that provides a context reads
   // `props.children` once, inside the providers, at the placement. It is read

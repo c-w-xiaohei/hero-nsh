@@ -7,7 +7,7 @@ import {
   type MenuItemRenderProps,
   type MenuItemRootProps,
 } from "../menu/menu-item";
-import { DropdownPopoverContext, DropdownSubmenuContext } from "./dropdown-context";
+import { DropdownPopoverContext, DropdownSubmenuRowContext } from "./dropdown-context";
 
 /* -------------------------------------------------------------------------------------------------
  * Item
@@ -22,13 +22,17 @@ export interface DropdownItemProps<T = unknown> extends MenuItemRootProps<T> {}
 
 /**
  * Dropdown.Item / DropdownItem: Menu's row with `.dropdown__popover
- * [data-slot="menu-item"]`'s `px-2.5` (R-032) and — inside a
+ * [data-slot="menu-item"]`'s `px-2.5` (R-032) and — as the trigger item of a
  * `Dropdown.SubmenuTrigger` — the submenu wiring React Aria injects through
- * `MenuItemContext` (the parts of it NSH has: the trigger's `aria-haspopup` /
- * `aria-expanded`, the anchor, and the hover timing).
+ * `MenuItemContext` (the trigger's `aria-haspopup` / `aria-expanded`, the
+ * anchor, the hover timing and the open/close entries).
+ *
+ * Only the trigger row reads `DropdownSubmenuRowContext`: a `Menu` replaces
+ * that context for the rows it holds (`Menu.tsx:384`), so a row inside the
+ * submenu is a plain `menuitem` that acts on press, as upstream.
  */
 export function DropdownItem<T>(props: DropdownItemProps<T>) {
-  const submenu = DropdownSubmenuContext();
+  const submenu = DropdownSubmenuRowContext();
   const popover = DropdownPopoverContext();
   const menu = MenuContext();
 
@@ -76,6 +80,19 @@ export function DropdownItem<T>(props: DropdownItemProps<T>) {
     cleanup(() => unregisterRow?.());
   }
 
+  // ArrowLeft on this row closes its submenu, and only an open one counts:
+  // a closed submenu lets the key fall through to the collection
+  // (`useSubmenuTrigger.ts:188-210`).
+  const closeSubmenu = () => {
+    if (!submenu?.isOpen()) {
+      return false;
+    }
+
+    submenu.closeSubmenu();
+
+    return true;
+  };
+
   return (
     <MenuItemRoot
       {...props}
@@ -83,7 +100,10 @@ export function DropdownItem<T>(props: DropdownItemProps<T>) {
       className={className}
       aria-haspopup={submenu ? "menu" : props["aria-haspopup"]}
       aria-expanded={submenu ? submenu.isOpen() : props["aria-expanded"]}
-      openSubmenu={submenu ? () => submenu.open(true) : props.openSubmenu}
+      openSubmenu={
+        submenu ? (focusFirst?: boolean) => submenu.openSubmenu(focusFirst) : props.openSubmenu
+      }
+      closeSubmenu={submenu ? closeSubmenu : props.closeSubmenu}
       onAction={() => {
         // A press that reaches a row during the 100ms exit hold must not act:
         // upstream's `pointer-events: none` blocks it at the pointer, which the

@@ -41,6 +41,18 @@ export interface DropdownContextValue {
   contextMenuPoint: Accessor<Point | undefined>;
 
   setContextMenuPoint: (point: Point | undefined) => void;
+
+  /**
+   * Where the open that is happening puts the menu's focus, as React Aria's
+   * `MenuTriggerState.focusStrategy`: `"first"` for Return / ArrowDown,
+   * `"last"` for ArrowUp and the Alt forms, `undefined` for a pointer open
+   * (React Aria's `state.open()` passes no strategy there, so the menu root
+   * takes the focus without selecting a row).
+   */
+  openFocusStrategy: Accessor<"first" | "last" | undefined>;
+
+  /** Sets the strategy for the open about to happen. */
+  setOpenFocusStrategy: (strategy: "first" | "last" | undefined) => void;
 }
 
 export const DropdownContext = context<DropdownContextValue | undefined>(
@@ -81,12 +93,43 @@ export interface DropdownSubmenuRow {
 }
 
 /**
- * What `Dropdown.SubmenuTrigger` provides to its two children (the
- * `Dropdown.Item` and the `Dropdown.Popover`). Upstream this travels through
- * React Aria's `MenuItemContext` / `PopoverContext` clone; NSH has no
- * `cloneElement`, so the two parts read this context.
+ * The trigger-row half of `Dropdown.SubmenuTrigger`'s state: only the
+ * `Dropdown.Item` that is the trigger opens a submenu, so only it reads this.
+ * Upstream the same values travel through React Aria's `MenuItemContext`
+ * (`SubmenuTrigger.tsx` spreads `submenuTriggerProps` into it), and every
+ * `Menu` replaces that context for its own rows (`Menu.tsx:384`) — the submenu
+ * menu's rows are plain `menuitem`s, not submenu triggers in turn.
  */
-export interface DropdownSubmenuContextValue {
+export interface DropdownSubmenuRowContextValue {
+  /** Whether the submenu is open; feeds the row's `aria-expanded`. */
+  isOpen: Accessor<boolean>;
+
+  /** Opens the submenu; `true` for the keyboard entry, which also takes the focus. */
+  openSubmenu: (focusFirst?: boolean) => void;
+
+  /** Closes the submenu and puts the parent menu's focus back on this row. */
+  closeSubmenu: () => void;
+
+  /** The row registers its view and focus function; returns the unregister. */
+  registerRow: (row: DropdownSubmenuRow) => () => void;
+
+  /** Pointer entered / left the trigger row (hover open and grace close). */
+  rowEnter: () => void;
+  rowLeave: () => void;
+}
+
+export const DropdownSubmenuRowContext = context<
+  DropdownSubmenuRowContextValue | undefined
+>(undefined);
+
+/**
+ * The layer half of `Dropdown.SubmenuTrigger`'s state: the submenu's open
+ * state, its anchor, its timing and its focus move. The submenu's
+ * `Dropdown.Popover` and `Dropdown.Menu` read it; upstream the same values come
+ * through `OverlayTriggerStateContext` and `PopoverContext`
+ * (`SubmenuTrigger.tsx`).
+ */
+export interface DropdownSubmenuLayerContextValue {
   isOpen: Accessor<boolean>;
 
   setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
@@ -106,18 +149,11 @@ export interface DropdownSubmenuContextValue {
   /** Closes and puts the parent menu's virtual focus back on the trigger row. */
   closeAndFocusRow: () => void;
 
-  /** The trigger row registers its view and focus function; returns the unregister. */
-  registerRow: (row: DropdownSubmenuRow) => () => void;
-
-  /** Pointer entered / left the trigger row (hover open and grace close). */
-  rowEnter: () => void;
-  rowLeave: () => void;
-
   /** Pointer entered / left the submenu content (cancels the grace close). */
   contentEnter: () => void;
   contentLeave: () => void;
 }
 
-export const DropdownSubmenuContext = context<
-  DropdownSubmenuContextValue | undefined
+export const DropdownSubmenuLayerContext = context<
+  DropdownSubmenuLayerContextValue | undefined
 >(undefined);

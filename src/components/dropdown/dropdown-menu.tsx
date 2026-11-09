@@ -9,7 +9,8 @@ import {
 import {
   DropdownContext,
   DropdownPopoverContext,
-  DropdownSubmenuContext,
+  DropdownSubmenuLayerContext,
+  DropdownSubmenuRowContext,
 } from "./dropdown-context";
 import { dropdownVariants } from "./dropdown.styles";
 
@@ -28,13 +29,13 @@ export interface DropdownMenuProps<T = unknown> extends MenuRootProps<T> {}
 /**
  * Dropdown.Menu / DropdownMenu: RAC's `Menu` with `.dropdown__menu`'s padding
  * (`p-1.5` over Menu's `p-1`) and its `gap-0.5`, the root dropdown's close
- * channel, and the submenu keyboard exits. It also registers itself as its
- * popover's focus target.
+ * channel, the submenu keyboard exits and the open focus strategy. It also
+ * registers itself as its popover's focus target.
  */
 export function DropdownMenu<T>(props: DropdownMenuProps<T>) {
   const dropdown = DropdownContext();
   const popover = DropdownPopoverContext();
-  const submenu = DropdownSubmenuContext();
+  const submenu = DropdownSubmenuLayerContext();
 
   const slots = dropdown?.slots ?? dropdownVariants();
 
@@ -84,36 +85,59 @@ export function DropdownMenu<T>(props: DropdownMenuProps<T>) {
     props.onFocus?.();
   };
 
+  // React Aria's `MenuTrigger` hands the open's focus strategy to the Menu
+  // (`autoFocus: state.focusStrategy || true`, `Menu.tsx:161`): a keyboard
+  // open focuses the first or last row, a pointer open focuses the menu root
+  // alone. A submenu opened by the keyboard does the same; one opened by hover
+  // or press leaves the focus on the trigger row.
+  const focusFirstItemOnFocus = (): boolean | "first" | "last" => {
+    if (submenu) {
+      return submenu.focusOnOpen() ? "first" : false;
+    }
+
+    if (dropdown) {
+      return dropdown.openFocusStrategy() ?? false;
+    }
+
+    return props.autoFocus !== undefined && props.autoFocus !== false;
+  };
+
   return (
-    <MenuRoot
-      {...props}
-      ref={(node) => {
-        menuNode.set(node);
-        props.ref?.(node);
-      }}
-      className={className}
-      shouldCloseOnSelect={
-        props.shouldCloseOnSelect ?? dropdown?.shouldCloseOnSelect()
-      }
-      focusFirstItemOnFocus={
-        submenu
-          ? submenu.focusOnOpen()
-          : props.autoFocus !== undefined && props.autoFocus !== false
-      }
-      autoFocus={
-        props.autoFocus && popover ? popover.isOpen() : props.autoFocus
-      }
-      onClose={onClose}
-      onAction={(key) => {
-        // Only the action channel needs the guard: React Aria's pointer-events
-        // already keeps the exiting layer inert on a real host, and the menu's
-        // action callback is what a press during the hold must not reach.
-        if (!popover || popover.isOpen()) {
-          props.onAction?.(key);
+    // Upstream every `Menu` replaces `MenuItemContext` for its own rows
+    // (`Menu.tsx:384`, `:493`), so the rows of a submenu are plain menuitems,
+    // not submenu triggers in turn. The row context is the same channel here;
+    // the layer context is a second provider and stays visible below.
+    <DropdownSubmenuRowContext.Provider value={undefined}>
+      <MenuRoot
+        {...props}
+        ref={(node) => {
+          menuNode.set(node);
+          props.ref?.(node);
+        }}
+        className={className}
+        shouldCloseOnSelect={
+          props.shouldCloseOnSelect ?? dropdown?.shouldCloseOnSelect()
         }
-      }}
-      onArrowLeft={onArrowLeft}
-      onFocus={handleFocus}
-    />
+        focusFirstItemOnFocus={focusFirstItemOnFocus()}
+        // The popover keeps the collection mounted while its layer is closed,
+        // so the next open must start from its strategy instead of the row the
+        // last one left behind (upstream unmounts the closed Menu).
+        resetFocusKeyWhen={() => (popover ? !popover.isOpen() : false)}
+        autoFocus={
+          props.autoFocus && popover ? popover.isOpen() : props.autoFocus
+        }
+        onClose={onClose}
+        onAction={(key) => {
+          // Only the action channel needs the guard: React Aria's pointer-events
+          // already keeps the exiting layer inert on a real host, and the menu's
+          // action callback is what a press during the hold must not reach.
+          if (!popover || popover.isOpen()) {
+            props.onAction?.(key);
+          }
+        }}
+        onArrowLeft={onArrowLeft}
+        onFocus={handleFocus}
+      />
+    </DropdownSubmenuRowContext.Provider>
   );
 }

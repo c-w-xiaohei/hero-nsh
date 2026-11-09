@@ -15,6 +15,7 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createKeymapScope } from "../../primitives/create-keymap-scope";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { renderChildren } from "./children";
 import { DropdownContext } from "./dropdown-context";
@@ -167,6 +168,24 @@ export function DropdownTrigger(props: DropdownTriggerProps) {
 
   const isFocusVisible = computed(() => focused() && modality.isKeyboard());
 
+  // React Aria's `useMenuTrigger` binds the trigger's arrows and the Alt forms
+  // of Return, Space and the arrows (`useMenuTrigger.ts:78-108`): ArrowDown
+  // opens on the first row, ArrowUp on the last, and each key's focus strategy
+  // rides on the open. Return and Space need no binding here: a keyboard press
+  // on a focused view arrives as a native press, which `openFromPress` routes.
+  // The bindings exist only while the trigger holds the keyboard focus.
+  createKeymapScope({
+    isActive: focused,
+    bindings: {
+      arrowdown: () => overlay?.triggerKeyOpen?.("first", true),
+      "alt+arrowdown": () => overlay?.triggerKeyOpen?.("first"),
+      arrowup: () => overlay?.triggerKeyOpen?.("last", true),
+      "alt+arrowup": () => overlay?.triggerKeyOpen?.("last"),
+      "alt+enter": () => overlay?.triggerKeyOpen?.("last"),
+      "alt+space": () => overlay?.triggerKeyOpen?.("last"),
+    },
+  });
+
   const renderProps: DropdownTriggerRenderProps = {
     isHovered: hovered,
     isPressed: pressed,
@@ -214,15 +233,20 @@ export function DropdownTrigger(props: DropdownTriggerProps) {
     const keyboard = isKeyboardPress(event);
 
     if (keyboard) {
-      // A keyboard activation opens in every mode but `contextMenu`.
-      if (triggerMode() !== "contextMenu") {
-        overlay?.toggle();
+      // A keyboard activation opens in every mode but `contextMenu`, and the
+      // menu takes its first row (`useMenuTrigger.ts:78-108`). It never closes
+      // here: Enter and Space can also reach the trigger's keymap bindings,
+      // and a toggle would close what the other channel just opened.
+      if (triggerMode() !== "contextMenu" && !overlay?.isOpen()) {
+        dropdown?.setOpenFocusStrategy("first");
+        overlay?.setIsOpen(true);
       }
 
       return;
     }
 
     if (triggerMode() === "press") {
+      dropdown?.setOpenFocusStrategy(undefined);
       overlay?.toggle();
     }
   };

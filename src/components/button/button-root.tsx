@@ -15,6 +15,7 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createKeymapScope } from "../../primitives/create-keymap-scope";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { FormContext } from "../form/context";
 import { ButtonGroupContext } from "./button-group-context";
@@ -128,6 +129,25 @@ export function ButtonRoot(props: ButtonRootProps) {
   const modality = createInteractionModality();
 
   const isFocusVisible = computed(() => isFocused() && modality.isKeyboard());
+
+  // A Button placed in a Dropdown root is that overlay's trigger, so it takes
+  // the trigger's arrow keys (`useMenuTrigger.ts:78-108`, dropdown port sheet
+  // §5): ArrowDown opens on the first row, ArrowUp on the last, the Alt forms
+  // in every mode and the plain ones outside `longPress`. Outside such a root
+  // the context has no channel and the Button binds nothing.
+  createKeymapScope({
+    isActive: isFocused,
+    bindings: overlayTrigger?.triggerKeyOpen
+      ? {
+          arrowdown: () => overlayTrigger?.triggerKeyOpen?.("first", true),
+          "alt+arrowdown": () => overlayTrigger?.triggerKeyOpen?.("first"),
+          arrowup: () => overlayTrigger?.triggerKeyOpen?.("last", true),
+          "alt+arrowup": () => overlayTrigger?.triggerKeyOpen?.("last"),
+          "alt+enter": () => overlayTrigger?.triggerKeyOpen?.("last"),
+          "alt+space": () => overlayTrigger?.triggerKeyOpen?.("last"),
+        }
+      : {},
+  });
 
   const isPending = () => props.isPending ?? false;
   const ownIsDisabled = () =>

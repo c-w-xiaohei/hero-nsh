@@ -22,7 +22,7 @@ import type { DropdownPopoverContextValue } from "./dropdown-context";
 import {
   DropdownContext,
   DropdownPopoverContext,
-  DropdownSubmenuContext,
+  DropdownSubmenuLayerContext,
 } from "./dropdown-context";
 import { dropdownVariants } from "./dropdown.styles";
 
@@ -200,7 +200,7 @@ export function DropdownPopover(props: DropdownPopoverProps) {
   ] as const);
 
   const dropdown = DropdownContext();
-  const submenu = DropdownSubmenuContext();
+  const submenu = DropdownSubmenuLayerContext();
   const overlayTrigger = OverlayTriggerContext();
 
   const slots = dropdown?.slots ?? dropdownVariants();
@@ -491,9 +491,20 @@ export function DropdownPopover(props: DropdownPopoverProps) {
   });
 
   const handleCancel = () => {
-    if (!isKeyboardDismissDisabled()) {
-      close();
+    if (isKeyboardDismissDisabled()) {
+      return;
     }
+
+    // Escape in a submenu closes that submenu alone and puts the focus back on
+    // its trigger row (`useSubmenuTrigger.ts:161-169`); the root's `onClose`
+    // never runs for it.
+    if (submenu) {
+      submenu.closeAndFocusRow();
+
+      return;
+    }
+
+    close();
   };
 
   // The underlay only hit-tests while the layer is open; during the exit hold
@@ -530,7 +541,12 @@ export function DropdownPopover(props: DropdownPopoverProps) {
       anchor={anchor() ?? null}
       placement={resolved().side}
       align={resolved().align}
-      offset={local.offset ?? 8}
+      // React Aria's `MenuTrigger` passes `offset: 0` for `trigger="contextMenu"`
+      // (`Menu.tsx:162`), so the menu sits at the pointer rather than 8pt away.
+      offset={
+        local.offset ??
+        (dropdown?.triggerMode() === "contextMenu" ? 0 : 8)
+      }
       margin={local.containerPadding ?? 12}
       testID={local.testID}
       nativeID={local.id ?? local.nativeID}
@@ -538,8 +554,12 @@ export function DropdownPopover(props: DropdownPopoverProps) {
       class={classes()}
       classList={classList()}
       style={style()}
-      onPressOutside={close}
-      onCancel={handleCancel}
+      // The content stays mounted while closed (port sheet §6.1), so a layer
+      // that is not open must not take the dismissal channels: NSH hands
+      // Escape to the top overlay that listens, and this hidden one would
+      // swallow it before the dialog above (or the root menu) sees it.
+      onPressOutside={isOpen() ? close : undefined}
+      onCancel={isOpen() ? handleCancel : undefined}
       onPosition={handlePosition}
     >
       {content}

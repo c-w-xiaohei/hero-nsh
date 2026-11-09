@@ -1,11 +1,16 @@
 import type { JSX, ViewRef } from "nsh";
-import { cleanup, signal, split } from "nsh";
+import { cleanup, effect, signal, split } from "nsh";
 
 import type {
-  DropdownSubmenuContextValue,
+  DropdownSubmenuLayerContextValue,
   DropdownSubmenuRow,
+  DropdownSubmenuRowContextValue,
 } from "./dropdown-context";
-import { DropdownSubmenuContext } from "./dropdown-context";
+import {
+  DropdownPopoverContext,
+  DropdownSubmenuLayerContext,
+  DropdownSubmenuRowContext,
+} from "./dropdown-context";
 
 /* -------------------------------------------------------------------------------------------------
  * Submenu trigger
@@ -36,11 +41,23 @@ const CLOSE_DELAY_MS = 300;
  * state, its anchor and the hover timing, and tells the two children about it.
  * It renders no view of its own (`SubmenuTrigger` renders only the item and
  * the popover upstream as well).
+ *
+ * Two layers, as upstream: the row half (`DropdownSubmenuRowContext`) only
+ * reaches the trigger item, because a `Menu` replaces the row context for its
+ * own rows (`Menu.tsx:384`); the layer half (`DropdownSubmenuLayerContext`)
+ * reaches the submenu's popover and menu.
  */
 export function DropdownSubmenuTrigger(props: DropdownSubmenuTriggerProps) {
   const [local] = split(props, ["children", "delay"] as const);
 
   const isOpen = signal(false);
+
+  // The layer this trigger sits in: the root popover or an outer submenu. An
+  // open submenu whose parent layer closes must close with it: upstream the
+  // submenu's state is derived from the parent trigger state
+  // (`useSubmenuTriggerState`), so closing the dropdown drops every submenu
+  // under it.
+  const parentLayer = DropdownPopoverContext();
 
   const focusOnOpen = signal(false);
   const anchor = signal<ViewRef | undefined>(undefined);
@@ -88,6 +105,12 @@ export function DropdownSubmenuTrigger(props: DropdownSubmenuTriggerProps) {
     close();
     row?.run();
   };
+
+  effect(() => {
+    if (parentLayer && !parentLayer.isOpen()) {
+      close();
+    }
+  });
 
   const rowEnter = () => {
     clearCloseTimer();
@@ -153,7 +176,7 @@ export function DropdownSubmenuTrigger(props: DropdownSubmenuTriggerProps) {
     };
   };
 
-  const contextValue: DropdownSubmenuContextValue = {
+  const layerContext: DropdownSubmenuLayerContextValue = {
     isOpen,
     // The popover closes its own channel through here (outside press, Escape),
     // so the timers end with it.
@@ -171,18 +194,26 @@ export function DropdownSubmenuTrigger(props: DropdownSubmenuTriggerProps) {
     open,
     close,
     closeAndFocusRow,
-    registerRow,
-    rowEnter,
-    rowLeave,
     contentEnter,
     contentLeave,
   };
 
+  const rowContext: DropdownSubmenuRowContextValue = {
+    isOpen,
+    openSubmenu: (focusFirst) => open(focusFirst === true),
+    closeSubmenu: closeAndFocusRow,
+    registerRow,
+    rowEnter,
+    rowLeave,
+  };
+
   // `_common` exception: a component that provides a context reads
-  // `props.children` once, inside the provider, at the placement.
+  // `props.children` once, inside the providers, at the placement.
   return (
-    <DropdownSubmenuContext.Provider value={contextValue}>
-      {local.children}
-    </DropdownSubmenuContext.Provider>
+    <DropdownSubmenuLayerContext.Provider value={layerContext}>
+      <DropdownSubmenuRowContext.Provider value={rowContext}>
+        {local.children}
+      </DropdownSubmenuRowContext.Provider>
+    </DropdownSubmenuLayerContext.Provider>
   );
 }

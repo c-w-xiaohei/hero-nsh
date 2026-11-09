@@ -81,6 +81,15 @@ export interface OverlayTriggerContextValue {
    * when a press is held. Absent elsewhere.
    */
   triggerLongPress?: () => void;
+
+  /**
+   * The arrow-key half of the same channel (dropdown port sheet §5): the
+   * trigger's ArrowDown opens the menu on its first row, ArrowUp on its last,
+   * the Alt forms always and the plain ones only while the trigger is not in
+   * `longPress` mode (`useMenuTrigger.ts:78-108`). Absent elsewhere, so no
+   * other trigger part binds arrows.
+   */
+  triggerKeyOpen?: (strategy: "first" | "last", plain?: boolean) => void;
 }
 
 export interface CreateOverlayTriggerResult {
