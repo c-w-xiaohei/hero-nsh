@@ -140,6 +140,11 @@ function SizesSplit() {
           <Text>Large</Text>
         </ToggleButton>
       </View>
+      <View class="flex-row items-center gap-3">
+        <ToggleButton size="sm">Small</ToggleButton>
+        <ToggleButton size="md">Medium</ToggleButton>
+        <ToggleButton size="lg">Large</ToggleButton>
+      </View>
     </Stage>
   );
 }
@@ -425,10 +430,10 @@ function GroupDisabled() {
   return (
     <Stage>
       <ToggleButtonGroup isDisabled selectionMode="multiple">
-        <ToggleButton id="bold" onFocus={probe("focus")("Bold")}>
+        <ToggleButton id="bold" onFocus={() => probe("focus")("Bold")}>
           Bold
         </ToggleButton>
-        <ToggleButton id="italic" onFocus={probe("focus")("Italic")}>
+        <ToggleButton id="italic" onFocus={() => probe("focus")("Italic")}>
           Italic
         </ToggleButton>
       </ToggleButtonGroup>
@@ -523,15 +528,23 @@ function KeyboardHorizontal() {
   return (
     <Stage>
       <ToggleButtonGroup selectionMode="multiple">
-        <ToggleButton id="dogs" onFocus={probe("focus")("Dogs")} onLayout={frame("horizontal-0")}>
+        <ToggleButton
+          id="dogs"
+          onFocus={() => probe("focus")("Dogs")}
+          onLayout={frame("horizontal-0")}
+        >
           Dogs
         </ToggleButton>
-        <ToggleButton id="cats" onFocus={probe("focus")("Cats")} onLayout={frame("horizontal-1")}>
+        <ToggleButton
+          id="cats"
+          onFocus={() => probe("focus")("Cats")}
+          onLayout={frame("horizontal-1")}
+        >
           Cats
         </ToggleButton>
         <ToggleButton
           id="dragons"
-          onFocus={probe("focus")("Dragons")}
+          onFocus={() => probe("focus")("Dragons")}
           onLayout={frame("horizontal-2")}
         >
           Dragons
@@ -545,13 +558,25 @@ function KeyboardVertical() {
   return (
     <Stage>
       <ToggleButtonGroup orientation="vertical" selectionMode="multiple">
-        <ToggleButton id="dogs" onFocus={probe("focus")("Dogs")} onLayout={frame("kv-0")}>
+        <ToggleButton
+          id="dogs"
+          onFocus={() => probe("focus")("Dogs")}
+          onLayout={frame("kv-0")}
+        >
           Dogs
         </ToggleButton>
-        <ToggleButton id="cats" onFocus={probe("focus")("Cats")} onLayout={frame("kv-1")}>
+        <ToggleButton
+          id="cats"
+          onFocus={() => probe("focus")("Cats")}
+          onLayout={frame("kv-1")}
+        >
           Cats
         </ToggleButton>
-        <ToggleButton id="dragons" onFocus={probe("focus")("Dragons")} onLayout={frame("kv-2")}>
+        <ToggleButton
+          id="dragons"
+          onFocus={() => probe("focus")("Dragons")}
+          onLayout={frame("kv-2")}
+        >
           Dragons
         </ToggleButton>
       </ToggleButtonGroup>
