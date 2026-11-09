@@ -164,12 +164,14 @@ test("T-017 fades only the start edge at the end of the scroll range", async () 
 // dropped. The offset threshold is kept: scrolling 40 with `offset={80}` leaves
 // the start edge hidden (`bottom`), passing 120 shows it (`both`). The scroll
 // count proves the first scroll really happened instead of passing on the
-// initial state.
+// initial state. On the web target one command arrives as a short eased glide,
+// so the count jumps from 0 to several: the waits and checks require at least
+// one delivered scroll, never exactly one.
 test("T-019 holds the start fade back until the offset is passed", async () => {
   const app = await openScenario("scroll-shadow/offset");
 
   await app.press("role:button[Scroll 40]");
-  await app.waitFor("text:scrolls:1");
+  await app.waitFor("text:/^scrolls:[1-9]/");
   expect(app.shows("text:state:bottom")).toBe(true);
 
   await app.press("role:button[Scroll 120]");
@@ -250,10 +252,10 @@ test("T-030 supports disabling and re-enabling an overflowing vertical container
 
   await app.press("role:button[Toggle enabled]");
   await app.press("role:button[Scroll]");
-  await app.waitFor("text:scrolls:1");
+  await app.waitFor("text:/^scrolls:[1-9]/");
   await app.wait(50);
   expect(app.shows("text:calls:1")).toBe(true);
-  expect(app.shows("text:scrolls:1")).toBe(true);
+  expect(app.shows("text:/^scrolls:[1-9]/")).toBe(true);
 
   await app.press("role:button[Toggle enabled]");
   await app.press("role:button[Scroll to middle]");
@@ -269,7 +271,7 @@ test("T-031 renders no fade when detection is turned off", async () => {
   const app = await openScenario("scroll-shadow/disabled");
 
   await app.press("role:button[Scroll]");
-  await app.waitFor("text:scrolls:1");
+  await app.waitFor("text:/^scrolls:[1-9]/");
   await app.wait(50);
 
   expect(app.shows("text:calls:0")).toBe(true);
@@ -283,7 +285,7 @@ test("T-032 keeps using the attribute-driven mask", async () => {
   const app = await openScenario("scroll-shadow/controlled");
 
   await app.press("role:button[Scroll]");
-  await app.waitFor("text:scrolls:1");
+  await app.waitFor("text:/^scrolls:[1-9]/");
   await app.wait(50);
 
   expect(app.shows("text:calls:0")).toBe(true);
