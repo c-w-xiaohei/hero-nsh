@@ -16,9 +16,11 @@ import { typographyVariants } from "./typography.styles";
  * stays required here.
  *
  * `render` is absent on purpose: upstream's Prose is a bare `<div>` and has no
- * `render` prop. The other DOM-only members (`id`, `title`, `aria-*`, `data-*`,
- * `dir` / `lang` / `hidden` / `inert` / `translate`) are accepted for API parity
- * and have no effect (port sheet §1, §8).
+ * `render` prop. The other DOM-only members (`id`, `title`, `data-*`,
+ * `dir` / `lang` / `inert` / `translate`) are accepted for API parity and have
+ * no effect (port sheet §1, §8); `aria-label` / `aria-hidden` map to NSH's
+ * accessibility props and `hidden` becomes the `hidden` class, as on the text
+ * parts.
  */
 export interface TypographyProseProps
   extends Omit<ViewProps, "children" | "class">,
@@ -101,6 +103,7 @@ export function TypographyProse(props: TypographyProseProps): JSX.Element {
       // pressable View would become one. A caller's own `focusable` still wins.
       focusable={local.focusable ?? false}
       class={classes()}
+      classList={{ hidden: local.hidden === true }}
       style={local.style}
     >
       {/* The single read of `children`, at the placement. `renderChildren`

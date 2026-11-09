@@ -36,6 +36,26 @@ import { tv } from "tailwind-variants";
  * R-019 (`em`), R-020 (`img`). Callers write those classes on `Text` / `View` /
  * `Image` themselves; `Scroll` replaces `overflow-x-auto`.
  */
+
+/**
+ * R-010 / R-030: the half of the code rule that the inline `View` painting the
+ * chip owns — background, radius, the 6pt horizontal padding, and the code's
+ * own `text-sm` (14 / 20) line, which is what sizes the attachment and gives
+ * the glyphs their inset.
+ *
+ * `py-0.5` is deliberately absent. Upstream's `<code>` is an inline box: its
+ * background paints the font's content area (about 17pt at 14pt) plus 2pt above
+ * and below — 20–21pt — while its line box stays at the paragraph's `leading-6`
+ * (24) or `leading-7` (28), because vertical padding on an inline element does
+ * not grow the line. An NSH inline attachment is sized by its content, so a
+ * 20pt line plus 2 + 2 would paint 24pt and push its line to 28 (measured);
+ * the 20pt line box already gives the reference's ~2pt inset around the
+ * glyphs. The full rule, vertical padding included, stays on the nested span
+ * (`type.code` below), where padding is inert and the span background is the
+ * font's ascent to descent — the reference's content box.
+ */
+export const codeSurfaceClasses = "rounded-md bg-default px-1.5 text-sm";
+
 export const typographyVariants = tv({
   slots: {
     // R-001: `.typography` → `text-foreground`; the semantic color follows the

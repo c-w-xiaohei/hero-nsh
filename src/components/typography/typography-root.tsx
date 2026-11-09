@@ -3,7 +3,7 @@ import type { AccessibilityRole, JSX, TextProps, ViewRef } from "nsh";
 
 import { textProps } from "./typography-dom-props";
 import type { AriaProps, DataProps, GlobalDomProps } from "./typography-dom-props";
-import { typographyVariants } from "./typography.styles";
+import { codeSurfaceClasses, typographyVariants } from "./typography.styles";
 import type { TypographyVariants } from "./typography.styles";
 
 /* -------------------------------------------------------------------------------------------------
@@ -27,11 +27,13 @@ export type TypographyWeight = NonNullable<TypographyVariants["weight"]>;
  * The props every text part (`Root`, `Heading`, `Paragraph`, `Code`) shares:
  * NSH's text host props plus HeroUI 3.2.7's DOM-only surface.
  *
- * The DOM-only members (`id`, `slot`, `title`, `render`, `aria-*`, `data-*`,
- * `dir` / `lang` / `hidden` / `inert` / `translate`) are accepted so code
- * written against HeroUI keeps compiling; see the port sheet §1 and §8 for what
- * they can and cannot do here. `ref` reaches the root `Text`, as
- * `ComponentPropsWithRef` does upstream.
+ * The DOM-only members (`id`, `slot`, `title`, `render`, `data-*`,
+ * `dir` / `lang` / `inert` / `translate`) are accepted so code written against
+ * HeroUI keeps compiling; see the port sheet §1 and §8 for what they can and
+ * cannot do here. Two attributes do work: `aria-label` → `accessibilityLabel`,
+ * `aria-hidden` → `accessibilityElementsHidden` (as Button maps them), and
+ * `hidden` becomes the `hidden` class. `id` maps to `nativeID`, and `ref`
+ * reaches the root `Text`, as `ComponentPropsWithRef` does upstream.
  */
 export interface TypographyTextProps
   extends Omit<TextProps, "children" | "class">,
@@ -195,12 +197,15 @@ export function renderTypography(
   // R-001 / R-002 / R-009 / R-015 / R-021–R-041: the variant table resolves the
   // slot class; the caller's `className` is passed through the slot function,
   // so it lands last and wins (port sheet §1). `type.code` keeps its upstream
-  // target (`base`), and for `type="code"` the root is computed without the type
-  // variant so those declarations land only on the inline box below: an
-  // upstream `<code>` is inline, and `bg-default` on NSH's block root would fill
-  // the row. The caller's class goes to that inline box too, as it lands on the
-  // `<code>` element upstream, while the root keeps color, alignment, truncate
-  // and weight.
+  // target (`base`), and for `type="code"` the root is computed without any
+  // `type` variant (`type: null` skips it, including the default `body`), so
+  // those declarations land only on the inline box below: an upstream `<code>`
+  // is inline, `bg-default` on NSH's block root would fill the row, and the
+  // code inherits the surrounding paragraph's font and leading — a `text-base
+  // leading-7` root would grow a `Paragraph size="sm"` line from 24 to 28.
+  // The caller's class goes to that inline box too, as it lands on the `<code>`
+  // element upstream, while the root keeps color, alignment, truncate and
+  // weight.
   const isCode = computed(() => resolvedType() === "code");
 
   const classes = computed(() => {
@@ -212,7 +217,13 @@ export function renderTypography(
     };
 
     return isCode()
-      ? typographyVariants(shared).base()
+      ? typographyVariants({
+          ...shared,
+          // `null` is tv's "skip this variant" (tailwind-variants 4.0.1); its
+          // types only admit the variant values, and omitting the key would
+          // re-apply the default `body`.
+          type: null as unknown as TypographyVariants["type"],
+        }).base()
       : typographyVariants({ ...shared, type: resolvedType() }).base({
           className: local.className,
         });
@@ -229,16 +240,19 @@ export function renderTypography(
   //   attachments"). Padding on a nested `Text` is ignored: a span takes only
   //   `backgroundColor` / `borderRadius` from its view style, and its box is
   //   the font's ascent to descent (text.md, "Span backgrounds").
-  // - The characters keep a nested `Text` (a span) carrying the same classes,
+  // - The characters keep a nested `Text` (a span) carrying the full rule,
   //   because `app.spanStyle` reports a background only for a nested text's
   //   `backgroundColor`; on the attachment's own text root it is that view's
   //   background instead.
   //
-  // Both nodes take the table's `base` output for `type: "code"`: each honors
-  // the declarations that apply to it (padding / background / radius on the
-  // `View`, font / size / color and the span background on the `Text`), and the
-  // pixels a declaration paints are the same on either node. The inner `Text`
-  // sits one level deeper than the attachment's text root for the span rule.
+  // The two nodes honor different halves of the rule. The `View` owns the
+  // painted box: background, radius, horizontal padding and the `text-sm`
+  // (14 / 20) line that sizes it — but not `py-0.5`, which would add 2pt above
+  // and below that 20pt line and push the paragraph's line to 28 (the reference
+  // paints 20–21pt inside a line that keeps the paragraph's leading; see
+  // `codeSurfaceClasses`). The span keeps the full rule, padding included,
+  // where the vertical padding is inert and the span background paints the
+  // font's ascent-to-descent, the reference's content box.
   //
   // The table declares `type` before `color`, as `typography.css` does
   // (`.typography--code` at 117 before `.typography--color-muted` at 141), so
@@ -250,6 +264,14 @@ export function renderTypography(
     typographyVariants({ color: local.color, type: "code" }).base({
       className: local.className,
     }),
+  );
+
+  // The caller's class lands on the `<code>` element upstream, so the painted
+  // surface takes it too (a caller's `p-4` pads the chip, not just the text).
+  const surfaceClasses = computed(() =>
+    local.className === undefined
+      ? codeSurfaceClasses
+      : `${codeSurfaceClasses} ${local.className}`,
   );
 
   // The single read of `children`, at the placement: a read builds new native
@@ -270,6 +292,7 @@ export function renderTypography(
       role={local.role ?? role()}
       accessibilityLevel={local.accessibilityLevel ?? headingLevel()}
       class={classes()}
+      classList={{ hidden: local.hidden === true }}
       // For `type="code"` the inline box is the element upstream styles, so the
       // caller's class and style go there (see `inlineCodeClasses`); the root
       // only lays the paragraph out.
@@ -277,10 +300,10 @@ export function renderTypography(
     >
       {isCode() ? (
         // `align-text-bottom` puts the box's bottom on the parent's descent
-        // line, so the 2pt padding below the glyphs hangs under the baseline as
-        // it does for a CSS inline block (the default `baseline` alignment
-        // would lift the code by padding + descent).
-        <View class={`${inlineCodeClasses()} align-text-bottom`}>
+        // line, so the chip hangs below the baseline as a CSS inline box does;
+        // the default `baseline` alignment would lift the code by its full
+        // height and grow the line.
+        <View class={`${surfaceClasses()} align-text-bottom`}>
           <Text>
             <Text class={inlineCodeClasses()} style={local.style}>
               {children()}
