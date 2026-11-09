@@ -11,3 +11,4 @@ export * from "./components/separator";
 export * from "./components/surface";
 export * from "./components/kbd";
 export * from "./components/spinner";
+export * from "./components/skeleton";
