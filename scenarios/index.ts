@@ -26,6 +26,7 @@ import { avatarScenarios } from "./avatar.scenarios";
 import { errorMessageScenarios } from "./error-message.scenarios";
 import { selectScenarios } from "./select.scenarios";
 import { iconsScenarios } from "./icons.scenarios";
+import { formScenarios } from "./form.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -55,4 +56,5 @@ export const scenarios: Record<string, Component> = {
   ...errorMessageScenarios,
   ...selectScenarios,
   ...iconsScenarios,
+  ...formScenarios,
 };

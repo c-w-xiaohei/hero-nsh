@@ -27,3 +27,4 @@ export * from "./components/avatar";
 export * from "./components/error-message";
 export * from "./components/select";
 export * from "./components/icons";
+export * from "./components/form";
