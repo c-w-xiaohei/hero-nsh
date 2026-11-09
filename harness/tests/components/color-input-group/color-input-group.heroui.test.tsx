@@ -78,13 +78,20 @@ test("S-002 should type into the input and report every keystroke to onChange", 
 // port sheet 4b.2 S-003 (section 1.3, Input's own disabled / readOnly)
 // The group's isDisabled is appearance only and does not reach the Input
 // (R-014), so both states come from the Input's own props here.
+//
+// A disabled input takes no edit. The harness has no error code for that: an
+// input step refuses only a non-editable config, code-lessly, and a disabled
+// element on a real host simply never takes focus, so typing resolves having
+// typed nothing. Upstream has no code either (RAC hands `disabled` straight to
+// the native input), so the contract asserted here is the user-visible one:
+// the value stays put and onChange never fires. The step is therefore attempted
+// and any refusal tolerated.
 test("S-003 should honour the Input's own disabled and readOnly props", async () => {
   const disabled = await openCase("disabled");
 
   expect(disabled.enabled("id:group-input")).toBe(false);
-  await expect(disabled.type("id:group-input", "#ff0000")).rejects.toMatchObject({
-    code: "ERR_NSH_TEST_DISABLED",
-  });
+  await disabled.type("id:group-input", "#ff0000").catch(() => undefined);
+  expect(disabled.value("id:group-input")).toBe("");
   expect(callsOf(disabled, "onChange")).toHaveLength(0);
 
   const readOnly = await openCase("readonly");
