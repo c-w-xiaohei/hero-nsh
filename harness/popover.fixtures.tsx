@@ -29,7 +29,7 @@ function RetainedCounter() {
 
   return (
     <Button testID="counter" onPress={() => count.update((value) => value + 1)}>
-      Count {count()}
+      {`Count ${count()}`}
     </Button>
   );
 }
