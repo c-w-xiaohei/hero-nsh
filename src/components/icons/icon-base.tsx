@@ -1,4 +1,5 @@
-import { Canvas, computed, split, token } from "nsh";
+import { Canvas, computed, split } from "nsh";
+import { themeToken, type ThemeColorToken } from "../../theme";
 import type {
   AccessibilityRole,
   Bounds,
@@ -48,7 +49,7 @@ export interface IconProps {
   height?: number | string;
 
   /** The theme token the glyph is painted with; `foreground` by default (R-006). */
-  color?: keyof Tokens;
+  color?: ThemeColorToken;
 
   /** Any CSS color; wins over `color`. The upstream `color="#333"` case. */
   paint?: string;
@@ -293,7 +294,7 @@ export function IconCanvas(props: IconCanvasProps): JSX.Element {
   // token (`color`) or a literal (`paint`), and `token()` is read inside
   // `draw` so the appearance switch repaints. Upstream's own default is the
   // inherited text color, which is `foreground` on an ordinary surface.
-  const paint = computed(() => local.paint ?? String(token(local.color ?? "foreground")));
+  const paint = computed(() => local.paint ?? themeToken(local.color ?? "foreground"));
 
   // A host element takes the callback through an indirection: passing the
   // split prop straight through drops it (the list-box parts do the same).
