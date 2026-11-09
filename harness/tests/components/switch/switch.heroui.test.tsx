@@ -141,10 +141,15 @@ test("T-007 supports controlled isSelected", async () => {
 // visible results are the selected state text and the thumb mark's `text-accent`.
 test("T-008 exposes data-selected when selected", async () => {
   const app = await openScenario("switch/thumb-mark.split");
+  const mark = "text:•";
+
+  // Unselected the thumb paints the mark with text-black, so the accent read
+  // after the press is a change and not a value the default state already had.
+  expect(app.spanStyle(mark).color).not.toBe(ACCENT);
 
   await app.press("role:switch[Enable notifications]");
 
-  expect(app.shows("text:On") && app.spanStyle("id:thumb-mark").color === ACCENT).toBe(true);
+  expect(app.shows("text:On") && app.spanStyle(mark).color === ACCENT).toBe(true);
 });
 
 // heroui/packages/react/tests/components/switch/switch.test.tsx:141
