@@ -27,3 +27,50 @@ export interface GlobalDomProps {
   inert?: boolean;
   translate?: "yes" | "no";
 }
+
+/**
+ * The attributes that exist only because HeroUI renders real DOM elements
+ * (`<kbd>`, `<abbr>`, `<span>`). NSH's host logs every prop it does not know,
+ * so they are accepted by the props type and dropped before the spread onto
+ * `View`; forwarding them would make the host warn on every render.
+ */
+const DOM_ONLY_PROPS = new Set([
+  "render",
+  "dir",
+  "lang",
+  "hidden",
+  "inert",
+  "translate",
+]);
+
+/**
+ * The props a part actually hands to its `View`: everything `split` left in
+ * `rest` except the DOM-only members above and the caller's `aria-*` /
+ * `data-*` attributes.
+ *
+ * Each kept prop becomes an enumerable getter that reads `rest`, so the value
+ * keeps following its source exactly as `split`'s `rest` does; the keys are
+ * fixed at render time, as with every spread.
+ */
+export function viewProps(rest: object): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const source = rest as Record<string, unknown>;
+
+  for (const key of Object.keys(source)) {
+    if (isDomOnlyProp(key)) {
+      continue;
+    }
+
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => source[key],
+    });
+  }
+
+  return result;
+}
+
+function isDomOnlyProp(key: string): boolean {
+  return key.startsWith("aria-") || key.startsWith("data-") || DOM_ONLY_PROPS.has(key);
+}

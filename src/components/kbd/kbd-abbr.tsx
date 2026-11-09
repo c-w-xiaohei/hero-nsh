@@ -6,6 +6,7 @@ import { KbdContext } from "./context";
 import { kbdKeysLabelMap, kbdKeysMap } from "./kbd.constants";
 import type { KbdKey } from "./kbd.constants";
 import type { AriaProps, DataProps, GlobalDomProps } from "./kbd-dom-props";
+import { viewProps } from "./kbd-dom-props";
 import { kbdVariants } from "./kbd.styles";
 
 /* -------------------------------------------------------------------------------------------------
@@ -60,6 +61,12 @@ export function KbdAbbr(props: KbdAbbrProps): JSX.Element {
     "focusable",
     "tooltip",
     "accessibilityHint",
+    "render",
+    "dir",
+    "lang",
+    "hidden",
+    "inert",
+    "translate",
   ] as const);
 
   // The glyph and the readable label, both derived from `keyValue` only.
@@ -88,7 +95,7 @@ export function KbdAbbr(props: KbdAbbrProps): JSX.Element {
 
   return (
     <View
-      {...rest}
+      {...viewProps(rest)}
       nativeID={local.id ?? local.nativeID}
       focusable={local.focusable ?? false}
       accessibilityHint={local.accessibilityHint ?? label()}
