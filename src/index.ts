@@ -9,3 +9,4 @@ export * from "./components/popover";
 export * from "./components/switch";
 export * from "./components/separator";
 export * from "./components/surface";
+export * from "./components/kbd";
