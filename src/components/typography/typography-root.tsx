@@ -194,7 +194,12 @@ export function renderTypography(
 
   // R-001 / R-002 / R-009 / R-015 / R-021–R-041: the variant table resolves the
   // slot class; the caller's `className` is passed through the slot function,
-  // so it lands last and wins (port sheet §1).
+  // so it lands last and wins (port sheet §1). For `type="code"` the table puts
+  // the code declarations in the `inlineCode` slot instead of `base`; the
+  // caller's class goes to that inline box, as it lands on the `<code>` element
+  // upstream, while the root keeps only color, alignment, truncate and weight.
+  const isCode = computed(() => resolvedType() === "code");
+
   const classes = computed(() =>
     typographyVariants({
       align: local.align,
@@ -202,8 +207,23 @@ export function renderTypography(
       truncate: local.truncate,
       type: resolvedType(),
       weight: local.weight,
-    }).base({ className: local.className }),
+    }).base({ className: isCode() ? undefined : local.className }),
   );
+
+  // R-010 / R-030: upstream `<code>` is an inline element, so its background,
+  // radius and padding cover the characters. NSH's root `Text` is a block
+  // (`bg-default` there would fill the row), while a nested `Text` is an inline
+  // span; the code box is that span, which also makes `app.spanStyle` report
+  // the background (port sheet §6.5).
+  const inlineCodeClasses = computed(() =>
+    typographyVariants({ type: "code" }).inlineCode({ className: local.className }),
+  );
+
+  // The single read of `children`, at the placement: a read builds new native
+  // views (research 4.1, 4.6). It is shared by the code span and the plain
+  // placement below; `computed` keeps `<X>{signal()}</X>` reactive, as a plain
+  // captured value would freeze it.
+  const children = computed(() => local.children);
 
   return (
     <Text
@@ -217,11 +237,18 @@ export function renderTypography(
       role={local.role ?? role()}
       accessibilityLevel={local.accessibilityLevel ?? headingLevel()}
       class={classes()}
-      style={local.style}
+      // For `type="code"` the inline box is the element upstream styles, so the
+      // caller's class and style go there (see `inlineCodeClasses`); the root
+      // only lays the paragraph out.
+      style={isCode() ? undefined : local.style}
     >
-      {/* The single read of `children`, at the placement: a read builds new
-          native views (research 4.1, 4.6). Nothing else needs them. */}
-      {local.children}
+      {isCode() ? (
+        <Text class={inlineCodeClasses()} style={local.style}>
+          {children()}
+        </Text>
+      ) : (
+        children()
+      )}
     </Text>
   );
 }

@@ -66,9 +66,11 @@ export interface TypographyCodeProps extends Omit<TypographyRootProps, "type"> {
 
 /**
  * `Typography.Code`: HeroUI's `Code`, a `TypographyRoot` with `type="code"`.
- * Nested in a `Paragraph` it is an inline span of the same paragraph, as the
- * upstream `<code>` is inside `<p>`; placed alone the root `Text` is a block
- * and the background fills a row (port sheet §8).
+ * The code declarations sit on a nested inline `Text`: upstream `<code>` is an
+ * inline element, so its background, radius and padding cover the characters
+ * rather than the paragraph's row (port sheet §6.5). Nested in a `Paragraph` it
+ * is an inline span of the same paragraph, as the upstream `<code>` is inside
+ * `<p>`.
  */
 export function TypographyCode(props: TypographyCodeProps): JSX.Element {
   return renderTypography(props, () => "code");

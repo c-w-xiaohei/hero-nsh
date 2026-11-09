@@ -14,6 +14,12 @@ import { tv } from "tailwind-variants";
  * Tailwind declarations; D18 drops the BEM names and each rule becomes the
  * declarations it applies.
  *
+ * A third slot, `inlineCode`, holds the declarations of the code box. Upstream
+ * has no such slot because `<code>` is an inline element; NSH's root `Text` is
+ * a block, so the code box must be a nested inline `Text` to keep the
+ * background, radius and padding around the characters and to let
+ * `app.spanStyle` report that background. The four text parts still use `base`.
+ *
  * Every rule of port sheet §4 has its destination here. The eight structural
  * rewrites (R-003–R-008, R-010) live in the `type` dimension, because Prose no
  * longer reaches descendant elements: each Heading / Code part carries the same
@@ -37,6 +43,14 @@ export const typographyVariants = tv({
     // R-015: `.typography-prose li` → `text-base leading-7`, lifted to the same
     // place: there is no list item element to reach.
     prose: "text-foreground text-base leading-7",
+    // R-010 / R-030: the code box is an inline span, not the paragraph root.
+    // Upstream `<code>` is an inline element: its background, padding and
+    // radius cover the characters, not the whole line. An NSH root `Text` is a
+    // block, so the declarations of `.typography-prose code` /
+    // `.typography--code` live on this nested `Text` instead of `base`; the
+    // root keeps the shared `text-foreground` plus align / color / truncate /
+    // weight, and the span inherits them.
+    inlineCode: "",
   },
   defaultVariants: {
     align: "start",
@@ -75,9 +89,11 @@ export const typographyVariants = tv({
       // R-029: `.typography--body-xs` → `text-xs leading-5` (12 / 20).
       "body-xs": "text-xs leading-5",
       // R-010 / R-030: `.typography-prose code` and `.typography--code` share
-      // the same declarations; `Typography.Code` carries them. `rounded-md` is
-      // 6, `px-1.5` 6, `py-0.5` 2.
-      code: "rounded-md bg-default px-1.5 py-0.5 font-mono text-sm text-foreground",
+      // the same declarations; `Typography.Code` carries them on its inline
+      // span (`inlineCode` above). `rounded-md` is 6, `px-1.5` 6, `py-0.5` 2.
+      code: {
+        inlineCode: "rounded-md bg-default px-1.5 py-0.5 font-mono text-sm text-foreground",
+      },
       // R-003 / R-021: `.typography-prose h1` / `.typography--h1` →
       // `text-4xl font-semibold tracking-tight` (36 / 40, letter-spacing
       // −0.025em).
