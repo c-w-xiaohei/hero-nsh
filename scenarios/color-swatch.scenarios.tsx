@@ -24,6 +24,9 @@ import type { Component } from "./types";
  *                               `style`; the argument is a values object on the
  *                               HeroUI side and an accessors object here, so the
  *                               two sides are written separately (D17)
+ *   color-swatch/box-shadow     a caller's non-inset `boxShadow` next to the
+ *                               default border, the screenshot target where the
+ *                               caller style replaces the default rim (X-001)
  *   color-swatch/all            the size matrix plus five opaque colors and five
  *                               alphas, for the light and dark baselines
  *
@@ -103,7 +106,10 @@ function StyleRenderPropsSplit() {
                 color={color}
                 size="lg"
                 style={({ color: current }) => ({
-                  boxShadow: `0 0 0 3px ${current().toString("css")}40`,
+                  // The story appended "40" to the `css` string, which CSS
+                  // rejects (`rgb(4, 133, 247)40`). Append the alpha to a
+                  // six-digit hex instead: `#0485F740` is valid.
+                  boxShadow: `0 0 0 3px ${current().toString("hex")}40`,
                 })}
               />
             ))}
@@ -117,7 +123,7 @@ function StyleRenderPropsSplit() {
                 color={color}
                 size="lg"
                 style={({ color: current }) => ({
-                  boxShadow: `0 4px 14px ${current().toString("css")}80`,
+                  boxShadow: `0 4px 14px ${current().toString("hex")}80`,
                 })}
               />
             ))}
@@ -137,6 +143,27 @@ function StyleRenderPropsSplit() {
             ))}
           </View>
         </View>
+      </View>
+    </Stage>
+  );
+}
+
+/* For X-001 / screenshot comparison: the first swatch carries the default 1px
+ * inset border, the second one passes a valid non-inset `boxShadow`. Upstream
+ * writes the caller's inline box-shadow on the same element, so it replaces the
+ * stylesheet's default border; the second swatch must show no dark rim inside
+ * its edge. The shadow is a solid ring offset 0, so a screenshot can also check
+ * that the caller's style arrived at all (pixels just outside the box). */
+function BoxShadow() {
+  return (
+    <Stage>
+      <View class="flex-row items-start gap-8">
+        <ColorSwatch color="#0485F7" size="xl" />
+        <ColorSwatch
+          color="#0485F7"
+          size="xl"
+          style={{ boxShadow: "0 0 0 6px rgb(0 0 0 / 0.35)" }}
+        />
       </View>
     </Stage>
   );
@@ -188,5 +215,6 @@ export const colorSwatchScenarios: Record<string, Component> = {
   "color-swatch/sizes": Sizes,
   "color-swatch/transparency": Transparency,
   "color-swatch/style-render-props.split": StyleRenderPropsSplit,
+  "color-swatch/box-shadow": BoxShadow,
   "color-swatch/all": All,
 };
