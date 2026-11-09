@@ -18,6 +18,7 @@ import { badgeScenarios } from "./badge.scenarios";
 import { chipScenarios } from "./chip.scenarios";
 import { emptyStateScenarios } from "./empty-state.scenarios";
 import { progressCircleScenarios } from "./progress-circle.scenarios";
+import { meterScenarios } from "./meter.scenarios";
 import { closeButtonScenarios } from "./close-button.scenarios";
 import { linkScenarios } from "./link.scenarios";
 import { progressBarScenarios } from "./progress-bar.scenarios";
@@ -44,6 +45,7 @@ export const scenarios: Record<string, Component> = {
   ...chipScenarios,
   ...emptyStateScenarios,
   ...progressCircleScenarios,
+  ...meterScenarios,
   ...closeButtonScenarios,
   ...linkScenarios,
   ...progressBarScenarios,
