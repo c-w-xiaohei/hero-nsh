@@ -36,8 +36,9 @@ import { probe } from "@scenario/probe";
  *   channel-hue        channel="hue" colorSpace="hsl", controlled
  *                      hsl(200, 50%, 50%), onChange records the hue channel
  *                      (T-007)
- *   channel-saturation channel="saturation" colorSpace="hsl", controlled
- *                      hsl(200, 50%, 50%), onChange records the channel (S-002)
+ *   channel-saturation channel="saturation" colorSpace="hsl", an uncontrolled
+ *                      initial hsl(200, 50%, 50%): stepping a controlled value
+ *                      would report onChange and snap the text back (S-002)
  *   keys-hex           defaultValue #0485F7, only the input carries a test id,
  *                      for the arrow / Home / End cases (S-001)
  *   full-width         a 400-point column with one `fullWidth` field and one
@@ -148,14 +149,17 @@ function ControlledCase() {
   );
 }
 
-function ChannelCase(props: { channel: "hue" | "saturation"; label: string }) {
+function ChannelCase(props: { channel: "hue" | "saturation"; label: string; controlled?: boolean }) {
+  const color = parseColor("hsl(200, 50%, 50%)");
+
   return (
     <Stage>
       <ColorField
         channel={props.channel}
         colorSpace="hsl"
         name={props.channel}
-        value={parseColor("hsl(200, 50%, 50%)")}
+        value={props.controlled === false ? undefined : color}
+        defaultValue={props.controlled === false ? color : undefined}
         onChange={(color: ColorValue | null) =>
           probe("onChange")(color ? color.getChannelValue(props.channel) : null)
         }
@@ -252,7 +256,9 @@ function Fixture() {
   if (name === "prefix-suffix") return <PrefixSuffixCase />;
   if (name === "controlled") return <ControlledCase />;
   if (name === "channel-hue") return <ChannelCase channel="hue" label="Hue" />;
-  if (name === "channel-saturation") return <ChannelCase channel="saturation" label="Saturation" />;
+  if (name === "channel-saturation") {
+    return <ChannelCase channel="saturation" label="Saturation" controlled={false} />;
+  }
   if (name === "keys-hex") return <KeysHexCase />;
   if (name === "full-width") return <FullWidthCase />;
   if (name === "focus-probe") return <FocusProbeCase />;

@@ -89,7 +89,9 @@ test("T-005 should type a hex value and commit it on blur", async () => {
   await app.type("id:color-input", "#22c55e");
   expect(callsOf(app, "onChange")).toHaveLength(0);
 
-  await app.press("id:outside");
+  // An Input takes the focus from a step that types into it; a press on an
+  // Input is not a pressable step.
+  await app.type("id:outside", "x");
 
   const calls = callsOf(app, "onChange");
   expect(calls.length).toBeGreaterThanOrEqual(1);
@@ -121,7 +123,7 @@ test("T-007 should support channel editing for a single HSL channel", async () =
 
   await app.clear("id:color-input");
   await app.type("id:color-input", "90");
-  await app.press("id:outside");
+  await app.type("id:outside", "x");
 
   const calls = callsOf(app, "onChange");
   expect(calls.length).toBeGreaterThanOrEqual(1);
@@ -135,7 +137,7 @@ test("T-007 should support channel editing for a single HSL channel", async () =
 test("T-008 should support isRequired and show FieldError when invalid", async () => {
   const app = await openCase("required-invalid");
 
-  expect(app.shows("text:/^\\*$/")).toBe(true);
+  expect(app.shows("text:/^Color\\*$/")).toBe(true);
   expect(app.shows("text:Please enter a valid hex color")).toBe(true);
 });
 
@@ -181,7 +183,8 @@ test("T-011 should support prefix and suffix composition", async () => {
 test("S-001 should step and jump a hex field with the keyboard", async () => {
   const app = await openCase("keys-hex");
 
-  await app.press("id:color-input");
+  // An empty typing step takes the focus without touching the text.
+  await app.type("id:color-input", "");
 
   await app.keyboard.press("arrowup");
   expect(app.value("id:color-input")).toBe("#0485F8");
@@ -204,7 +207,7 @@ test("S-002 should step a channel field within its range", async () => {
 
   expect(app.value("id:color-input")).toBe("50%");
 
-  await app.press("id:color-input");
+  await app.type("id:color-input", "");
 
   await app.keyboard.press("arrowup");
   expect(app.value("id:color-input")).toBe("51%");
