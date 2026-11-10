@@ -35,12 +35,12 @@ function lastLayout(app: App, name: string): LayoutCall {
   return found;
 }
 
-function openFixture(name: string): Promise<App> {
+function openFixture(name: string, locale = "en-US"): Promise<App> {
   return open("../../../color-area.fixtures.tsx", {
     platform: "windows",
     width: 1024,
     height: 768,
-    locale: "en-US",
+    locale,
     host: { params: { case: name } },
   });
 }
@@ -118,4 +118,53 @@ test("X-003 a disabled area takes no pointer input", async () => {
 
   expect(callsOf(app, "onChange")).toHaveLength(0);
   expect(callsOf(app, "onChangeEnd")).toHaveLength(0);
+});
+
+// packages/react-stately/src/color/useColorAreaState.ts:105 (react-spectrum@740c6c5):
+// `const DEFAULT_COLOR = parseColor('#ffffff');`. HeroUI's Root passes no
+// defaultValue of its own, so `<ColorArea><ColorArea.Thumb/></ColorArea>`
+// starts white. This port started on hsl(0, 100%, 50%) (Kobalte's default),
+// which is red: the thumb sits elsewhere and onChange starts from another hue,
+// saturation and lightness.
+test("X-006 starts an uncontrolled area on white", async () => {
+  const app = await openFixture("default-color");
+
+  // White is hue 0, saturation 0%, lightness 100%; the red default would print
+  // hsl(0 100% 50%) here instead.
+  expect(app.texts()).toContain("hsl(0 0% 100%)");
+});
+
+// react-aria/src/color/useColorArea.ts:212 (`currentPosition.current.x +=
+// (direction === 'rtl' ? -1 : 1) * deltaX / width`) and :298-299 (the press
+// origin also flips under RTL). The finger lands at the middle of the 200pt
+// area (hue 180) and moves 50pt right; in an RTL locale that sum is negated,
+// so the last onChange must land near hue 90, not 270.
+test("X-007 mirrors a horizontal drag in an RTL locale", async () => {
+  const app = await openFixture("rtl-drag", "ar-EG");
+
+  expect(app.shows("id:area")).toBe(true);
+
+  await app.drag("id:area", { x: 50, y: 0 });
+
+  const changes = callsOf(app, "onChange").map((args) => args[0] as RecordedColor);
+  const last = changes[changes.length - 1];
+
+  expect(last).toBeDefined();
+  expect(Math.abs((last as RecordedColor).hue - 90)).toBeLessThanOrEqual(10);
+});
+
+// react-aria/src/color/useColorAreaGradient.ts:120-121,138: the thumb's `left`
+// takes `x = 1 - x` in RTL. hsl(90, 50%, 50%) is 25% along the hue axis, so in
+// an RTL locale the thumb's centre is 75% of the area's width from the left;
+// the unmirrored build leaves it at 25%. The vertical fraction is untouched.
+test("X-008 mirrors the thumb on the horizontal axis in RTL", async () => {
+  const app = await openFixture("rtl-geometry", "ar-EG");
+
+  const area = lastLayout(app, "area");
+  const thumb = lastLayout(app, "thumb");
+  const centerX = thumb.x + thumb.width / 2;
+  const centerY = thumb.y + thumb.height / 2;
+
+  expect(Math.abs(centerX - area.width * 0.75)).toBeLessThanOrEqual(1);
+  expect(Math.abs(centerY - area.height * 0.5)).toBeLessThanOrEqual(1);
 });

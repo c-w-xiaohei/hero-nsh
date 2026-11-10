@@ -25,6 +25,13 @@ import { probe } from "@scenario/probe";
  *             hsl(90, 50%, 50%) puts the Thumb at 25% from the left and 50%
  *             from the top
  *   disabled  X-003: isDisabled, same probes; a pointer drag must stay silent
+ *   default-color
+ *             X-006: no value and no defaultValue, the current HSL string in a
+ *             Text — React Aria starts an area on #ffffff
+ *   rtl-drag  X-007: the drag case under `Stage direction="rtl"`; open it with
+ *             an RTL `locale`, which is what the component reads
+ *   rtl-geometry
+ *             X-008: the geometry case under `Stage direction="rtl"`
  */
 
 type LayoutEvent = {
@@ -73,9 +80,24 @@ function KeyboardCase() {
   );
 }
 
-function DragCase() {
+function DefaultColorCase() {
   return (
     <Stage>
+      <ColorArea aria-label="Color">
+        {({ state }) => (
+          <View class="flex-col gap-2">
+            <ColorArea.Thumb />
+            <Text testID="value">{state.value().toString("hsl")}</Text>
+          </View>
+        )}
+      </ColorArea>
+    </Stage>
+  );
+}
+
+function DragCase(props: { dir?: "ltr" | "rtl" }) {
+  return (
+    <Stage direction={props.dir}>
       <ColorArea
         aria-label="Color"
         className="w-[200px]"
@@ -97,9 +119,9 @@ function DragCase() {
   );
 }
 
-function GeometryCase() {
+function GeometryCase(props: { dir?: "ltr" | "rtl" }) {
   return (
-    <Stage>
+    <Stage direction={props.dir}>
       <ColorArea
         aria-label="Color"
         className="w-[200px]"
@@ -136,6 +158,9 @@ function Fixture() {
   if (name === "drag") return <DragCase />;
   if (name === "geometry") return <GeometryCase />;
   if (name === "disabled") return <DisabledCase />;
+  if (name === "default-color") return <DefaultColorCase />;
+  if (name === "rtl-drag") return <DragCase dir="rtl" />;
+  if (name === "rtl-geometry") return <GeometryCase dir="rtl" />;
 
   return <KeyboardCase />;
 }
