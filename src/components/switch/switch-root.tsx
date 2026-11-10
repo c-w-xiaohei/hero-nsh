@@ -8,6 +8,7 @@ import {
 import { createToggleState } from "../../primitives/create-toggle-state";
 import { DescriptionContext } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
+import { FieldsetContext } from "../fieldset/context";
 import { FieldContext } from "../label/context";
 import { renderChildren } from "./render-children";
 import {
@@ -263,7 +264,11 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
   ] as const);
 
   const size = computed(() => local.size ?? "md");
-  const isDisabled = computed(() => local.isDisabled ?? false);
+  // Fieldset sheet §5.2: a disabled `Fieldset` disables the switch too.
+  const fieldset = FieldsetContext();
+  const isDisabled = computed(
+    () => fieldset?.isDisabled() === true || (local.isDisabled ?? false),
+  );
   const isReadOnly = computed(() => local.isReadOnly ?? false);
   const isRequired = computed(() => local.isRequired ?? false);
   const focusable = computed(() => local.excludeFromTabOrder !== true);

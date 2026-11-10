@@ -17,6 +17,7 @@ import {
   createToggleState,
   isKeyboardPress,
 } from "../../primitives";
+import { FieldsetContext } from "../fieldset/context";
 import { renderChildren } from "./children";
 import { type AriaProps, type DataProps, type GlobalDomProps } from "./dom-props";
 import { toggleButtonGroupItemClasses } from "./toggle-button-group-classes";
@@ -179,7 +180,14 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
   // RAC's useToggleButtonGroupItem reads `disabled || group.isDisabled`; the
   // child cannot turn a disabled group back on. A member without an `id`
   // works as a standalone toggle and ignores the group's disabled state.
+  // Fieldset sheet §5.2: a disabled `Fieldset` comes first and cannot be turned
+  // back on, as a native `<fieldset disabled>` has it.
+  const fieldset = FieldsetContext();
   const isDisabled = computed(() => {
+    if (fieldset?.isDisabled() === true) {
+      return true;
+    }
+
     if (isGroupItem && group) {
       return ownIsDisabled() === true || group.isDisabled() === true;
     }

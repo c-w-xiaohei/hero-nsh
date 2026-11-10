@@ -14,6 +14,7 @@ import {
   createListState,
   type SelectionValue,
 } from "../../primitives";
+import { FieldsetContext } from "../fieldset/context";
 import { renderChildren } from "./children";
 import { type AriaProps, type DataProps, type GlobalDomProps } from "./dom-props";
 import {
@@ -157,9 +158,13 @@ export function ToggleButtonGroupRoot(props: ToggleButtonGroupRootProps) {
     props.selectionMode ?? "single";
 
   // `undefined` when the prop is absent; a member treats it as `false` while
-  // still being able to tell the group was never disabled.
+  // still being able to tell the group was never disabled. Fieldset sheet §5.2:
+  // a disabled `Fieldset` disables the whole group and wins over its own props.
+  const fieldset = FieldsetContext();
   const groupIsDisabled = () =>
-    props.isDisabled ?? (props["aria-disabled"] === true ? true : undefined);
+    fieldset?.isDisabled() === true
+      ? true
+      : (props.isDisabled ?? (props["aria-disabled"] === true ? true : undefined));
 
   // R-027 … R-030, R-046, R-048, R-028, R-029, R-044, R-045.
   const slots = computed(() =>

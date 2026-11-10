@@ -17,6 +17,7 @@ import {
 import { createToggleState } from "../../primitives/create-toggle-state";
 import { DescriptionContext } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
+import { FieldsetContext } from "../fieldset/context";
 import { FieldContext } from "../label/context";
 import type {
   CheckboxFieldRenderProps,
@@ -321,7 +322,15 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
   // The group's flag reaches every item (`useCheckboxGroupItem` merges it with
   // the item's own); `isRequired` deliberately does not, matching the Label
   // unit's ruling that a group never hands its `required` down (§2).
-  const isDisabled = computed(() => group?.isDisabled() === true || local.isDisabled === true);
+  // Fieldset sheet §5.2: a disabled `Fieldset` is ORed in ahead of the group; a
+  // fieldset cannot be undone by the item's own `isDisabled`.
+  const fieldset = FieldsetContext();
+  const isDisabled = computed(
+    () =>
+      fieldset?.isDisabled() === true ||
+      group?.isDisabled() === true ||
+      local.isDisabled === true,
+  );
   const isReadOnly = computed(() => group?.isReadOnly() === true || local.isReadOnly === true);
   const isRequired = computed(() => local.isRequired === true);
   const isIndeterminate = computed(() => local.isIndeterminate === true);
