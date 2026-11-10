@@ -120,7 +120,12 @@ export type PaginationSize = NonNullable<PaginationVariants["size"]>;
  * R-027: `.pagination--lg .pagination__link--nav` → `px-3`.
  */
 const paginationNavVariants = tv({
-  base: "w-auto gap-1.5 px-2.5",
+  // `md:w-auto` restates the plain `w-auto` at the breakpoint: the link slot
+  // carries `md:size-8` (and `md:size-7` / `md:size-9` per size), and a variant
+  // always outranks a plain class, so without it the nav button is pinned to
+  // the icon square's width from 768 up and clips "Previous" / "Next"
+  // (skill §3.2).
+  base: "w-auto gap-1.5 px-2.5 md:w-auto",
   variants: {
     size: {
       sm: "px-2",

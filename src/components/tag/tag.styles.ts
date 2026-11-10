@@ -28,7 +28,10 @@ export const tagVariants = tv({
     // is the only thing NSH must take as an inline style and is set in
     // `tag-root.tsx` (one element, one list/duration/curve).
     base: [
-      "relative inline-flex items-center rounded-xl px-2 py-1 text-xs font-medium select-none",
+      // `w-fit` writes out the shrink-to-content width of the inline box: a
+      // blockified `inline-flex` in a column parent stretches to the parent's
+      // width, and the tag's own background would paint across it (skill §4.2).
+      "relative inline-flex w-fit items-center rounded-xl px-2 py-1 text-xs font-medium select-none",
       "origin-center transform-gpu motion-reduce:transition-none duration-[100ms] ease-smooth",
       "cursor-pointer",
     ].join(" "),

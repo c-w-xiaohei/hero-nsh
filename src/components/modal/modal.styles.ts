@@ -36,8 +36,12 @@ export const modalVariants = tv({
     // R-053 `.modal__body` → `min-h-0 flex-1 text-sm leading-[1.43]
     // text-muted -m-[3px] my-0 overflow-visible p-[3px]`. R-054 (the scroll
     // element replacing `overflow-y-auto`) is in `modal-body.tsx`: the
-    // `inside` variant renders a `Scroll`, and this slot keeps `flex-1`.
-    body: "min-h-0 flex-1 text-sm leading-[1.43] text-muted -m-[3px] my-0 overflow-visible p-[3px]",
+    // `inside` variant renders a `Scroll`.
+    // `flex-auto` instead of `flex-1`: the dialog's height is content driven
+    // (the carrier row centers it, so it never stretches), and NSH's zero
+    // *length* basis makes the body contribute 0 to the dialog's cross-axis
+    // size — the header and footer would be the whole dialog (skill §2.5).
+    body: "min-h-0 flex-auto text-sm leading-[1.43] text-muted -m-[3px] my-0 overflow-visible p-[3px]",
     // R-057 `.modal__close-trigger` → `absolute end-4 top-4`. `z-10` is not
     // in R-057: it carries the stacking the browser gives an absolutely
     // positioned button over the in-flow siblings written after it. NSH's web
@@ -78,13 +82,14 @@ export const modalVariants = tv({
     // shrink-0 rounded-3xl select-none`.
     icon: "flex items-center justify-center size-10 shrink-0 rounded-3xl select-none",
     // R-001 `.modal__trigger` → `inline-block cursor-(--cursor-interactive)`,
-    // that token being the pointer; R-002 its transition (the 250ms
+    // that token being the pointer; `w-fit` restores the inline element's
+    // shrink-to-content box (skill §4.2). R-002 its transition (the 250ms
     // `ease-out-quart` half; the property list is Trigger's inline
     // `transitionProperty`, and the two 150ms halves fold into it); R-005
     // disabled → `opacity-50 cursor-not-allowed pointer-events-none` under
     // `disabled:`; R-006 pressed → `scale-[0.97]` under `active:`.
     trigger:
-      "inline-block cursor-pointer duration-[250ms] ease-out-quart motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]",
+      "inline-block w-fit cursor-pointer duration-[250ms] ease-out-quart motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]",
   },
   variants: {
     scroll: {
