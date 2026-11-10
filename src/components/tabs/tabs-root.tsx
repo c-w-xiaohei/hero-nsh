@@ -323,7 +323,13 @@ export function TabsRoot(props: TabsRootProps): JSX.Element {
 
     let currentItem = current != null ? list.getItem(current) : undefined;
 
-    if (current == null || currentItem == null || currentItem.disabled) {
+    // RAC (`useTabListState`) and Kobalte (`tabs-root.tsx:119-131`) fall back
+    // only when nothing is selected or the selected key is no longer in the
+    // collection. A disabled tab that is selected on purpose (an explicit
+    // `defaultSelectedKey` / `selectedKey`, or a tab disabled after the fact)
+    // stays selected and silent: disabled keys are skipped only while picking
+    // the fallback and in the all-disabled rescue below.
+    if (current == null || currentItem == null) {
       const firstKey = list.getFirstKey();
       let fallback = firstKey;
       let fallbackItem = fallback != null ? list.getItem(fallback) : undefined;

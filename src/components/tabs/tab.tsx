@@ -283,7 +283,11 @@ export function Tab(props: TabProps): JSX.Element | null {
 
   // A pointer press focuses the tab programmatically, so the focus event that
   // follows must not switch the modality to the keyboard (upstream's
-  // `:focus-visible` would not paint for a mouse).
+  // `:focus-visible` would not paint for a mouse). The flag is raised by
+  // `handlePressDown`, the only path that focuses from a pointer: writing it
+  // here unconditionally would also swallow a `node.focus()` issued by keyboard
+  // navigation, whose focus event is the only chance the receiving tab has to
+  // record the keyboard modality and paint its ring.
   let pointerFocusPending = false;
 
   effect(() => {
@@ -302,7 +306,6 @@ export function Tab(props: TabProps): JSX.Element | null {
       return;
     }
 
-    pointerFocusPending = true;
     node.focus();
   });
 

@@ -26,6 +26,7 @@ export const Tabs = Object.assign(TabsRoot, {
 export type Tabs = {
   Props: TabsRootProps;
   RootProps: TabsRootProps;
+  ListContainer: TabListContainerProps;
   ListContainerProps: TabListContainerProps;
   ListProps: TabListProps;
   TabProps: TabProps;
