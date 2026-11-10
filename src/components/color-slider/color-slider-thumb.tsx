@@ -358,14 +358,17 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
     isActive: () => isFocused() && !isDisabled(),
     bindings: slider
       ? {
-          arrowleft: () => stepAlongAxis(-1),
-          arrowright: () => stepAlongAxis(1),
-          arrowup: () => stepBy(1),
-          arrowdown: () => stepBy(-1),
-          "shift+arrowleft": () => stepAlongAxis(-1, pageSize()),
-          "shift+arrowright": () => stepAlongAxis(1, pageSize()),
-          "shift+arrowup": () => stepBy(1, pageSize()),
-          "shift+arrowdown": () => stepBy(-1, pageSize()),
+          // `keymap` names the arrows "left" / "right" / "up" / "down"
+          // (`nsh/index.d.ts` `Keymap`); "arrowleft" is not a keystroke and a
+          // binding of it never fires.
+          left: () => stepAlongAxis(-1),
+          right: () => stepAlongAxis(1),
+          up: () => stepBy(1),
+          down: () => stepBy(-1),
+          "shift+left": () => stepAlongAxis(-1, pageSize()),
+          "shift+right": () => stepAlongAxis(1, pageSize()),
+          "shift+up": () => stepBy(1, pageSize()),
+          "shift+down": () => stepBy(-1, pageSize()),
           pageup: () => stepBy(1, pageSize()),
           pagedown: () => stepBy(-1, pageSize()),
           home: () => jumpToEnd("min"),
@@ -415,9 +418,11 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
       classList={{
         // R-026: `[data-dragging="true"]` → `cursor-grabbing`.
         "cursor-grabbing": isDragging(),
-        // R-027: `[data-focus-visible="true"]` → `z-10` and `status-focused`
-        // (`ring-2 ring-focus`, a 2-point page-coloured offset, no outline).
-        "z-10 ring-2 ring-focus ring-offset-[2px] ring-offset-background outline-none":
+        // R-027: `[data-focus-visible="true"]` → `status-focused` (`ring-2
+        // ring-focus`, a 2-point page-coloured offset, no outline). R-027's
+        // `z-10` is the static `z-10` of the thumb slot: changing `z-index` on
+        // the focused view drops the web focus (color-slider.styles.ts, R-023).
+        "ring-2 ring-focus ring-offset-[2px] ring-offset-background outline-none":
           isFocusVisible(),
         // R-028: `[data-disabled="true"]` → `cursor-default bg-default`; the
         // inline background color is dropped while disabled (R-079).

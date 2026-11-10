@@ -56,7 +56,12 @@ export const colorSliderVariants = tv({
     // R-022: `.color-slider__thumb` → `border-color: white` → `border-white`.
     // R-022: `.color-slider__thumb` → `box-shadow: var(--overlay-shadow)` →
     // `shadow-overlay`, with the dark half the theme notes require.
-    // R-023: `.color-slider__thumb` → `z-index: 1` → `z-1`.
+    // R-023: `.color-slider__thumb` → `z-index: 1` → `z-1`; upstream's focused
+    // `z-index: 10` (below) is folded in here, because a change of `z-index` on
+    // the focused view drops the web focus (measured: the harness moves the
+    // node, and a moved node loses the DOM focus). The thumb is the last child
+    // of the track and the caps are `z-0`, so 1 and 10 paint the same thing;
+    // one static value keeps the focus stop stable on every target.
     // R-024: `.color-slider__thumb` → `transition: transform 250ms
     // var(--ease-out), box-shadow 150ms var(--ease-out)`. No state of this
     // component changes `transform` (`translate` is a constant), so only the
@@ -65,7 +70,7 @@ export const colorSliderVariants = tv({
     // R-025: `.color-slider__thumb` → `motion-reduce:transition-none` →
     // `motion-reduce:transition-none`.
     thumb:
-      "absolute flex items-center justify-center rounded-2xl cursor-grab border-3 border-white shadow-overlay dark:shadow-overlay-dark z-1 transition-shadow duration-150 ease-out motion-reduce:transition-none",
+      "absolute flex items-center justify-center rounded-2xl cursor-grab border-3 border-white shadow-overlay dark:shadow-overlay-dark z-10 transition-shadow duration-150 ease-out motion-reduce:transition-none",
   },
 });
 
