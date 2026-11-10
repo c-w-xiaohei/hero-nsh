@@ -40,6 +40,9 @@ import { disclosureScenarios } from "./disclosure.scenarios";
 import { menuScenarios } from "./menu.scenarios";
 import { checkboxScenarios } from "./checkbox.scenarios";
 import { dropdownScenarios } from "./dropdown.scenarios";
+import { textFieldScenarios } from "./textfield.scenarios";
+import { inputScenarios } from "./input.scenarios";
+import { textAreaScenarios } from "./textarea.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -83,4 +86,7 @@ export const scenarios: Record<string, Component> = {
   ...menuScenarios,
   ...checkboxScenarios,
   ...dropdownScenarios,
+  ...textFieldScenarios,
+  ...inputScenarios,
+  ...textAreaScenarios,
 };
