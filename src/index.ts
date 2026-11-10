@@ -47,3 +47,4 @@ export * from "./components/checkbox";
 export * from "./components/dropdown";
 export * from "./components/radio";
 export * from "./components/textfield";
+export * from "./components/tabs";
