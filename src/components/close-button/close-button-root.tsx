@@ -16,6 +16,7 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { FieldsetContext } from "../fieldset/context";
 import { renderChildren } from "./children";
 import { CloseIcon } from "./close-icon";
 import { closeButtonVariants, type CloseButtonVariants } from "./close-button.styles";
@@ -191,7 +192,12 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
   // R-007: `aria-disabled` and `isDisabled` are the same state, and RAC writes
   // `aria-disabled="true"` for a pending button too (Button.tsx:172), so the
   // pending look reuses R-007's declarations below (R-008).
+  // Fieldset sheet §5.2: a disabled `Fieldset` replaces the browser's native
+  // propagation and RAC's `ButtonContext`, so it is ORed in and a close button
+  // cannot re-enable itself.
+  const fieldset = FieldsetContext();
   const isDisabled = () =>
+    fieldset?.isDisabled() === true ||
     props.isDisabled === true ||
     props["aria-disabled"] === true ||
     props["aria-disabled"] === "true";

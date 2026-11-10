@@ -17,6 +17,7 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { FieldsetContext } from "../fieldset/context";
 import { renderChildren } from "./children";
 import { joinClassNames } from "./class-names";
 import { LinkContext, type LinkContextValue } from "./context";
@@ -192,11 +193,15 @@ export function LinkRoot(props: LinkRootProps): JSX.Element {
 
   // Effective disabled: the prop, then `aria-disabled`, as React Aria resolves
   // them. `??`, not `||`, so an explicit `false` wins over `aria-disabled`.
+  // Fieldset sheet §5.2: a disabled `Fieldset` replaces RAC's `LinkContext` and
+  // wins over both, as a native `<fieldset disabled>` would.
+  const fieldset = FieldsetContext();
   const isDisabled = computed(
     () =>
-      props.isDisabled ??
-      (props["aria-disabled"] === true ? true : undefined) ??
-      false,
+      fieldset?.isDisabled() === true ||
+      (props.isDisabled ??
+        (props["aria-disabled"] === true ? true : undefined) ??
+        false),
   );
 
   // RAC's `!!aria-current`: the string `"false"` is truthy, so it reads as

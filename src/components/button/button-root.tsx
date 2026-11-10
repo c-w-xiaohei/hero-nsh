@@ -18,6 +18,7 @@ import {
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { FormContext } from "../form/context";
+import { FieldsetContext } from "../fieldset/context";
 import { ButtonGroupContext } from "./button-group-context";
 import { buttonGroupItemClasses } from "./button-group-classes";
 import { buttonVariants, type ButtonVariants } from "./button.styles";
@@ -154,7 +155,15 @@ export function ButtonRoot(props: ButtonRootProps) {
   const ownIsDisabled = () =>
     props.isDisabled ?? (props["aria-disabled"] === true ? true : undefined);
   // `??`, not `||`: a Button's own `false` overrides a disabled group.
-  const isDisabled = computed(() => ownIsDisabled() ?? group?.isDisabled() ?? false);
+  // Fieldset sheet §5.2: a disabled `Fieldset` replaces the browser's native
+  // `<fieldset disabled>` propagation and RAC's `ButtonContext`, so it is ORed
+  // in ahead of both and a Button cannot re-enable itself with `false`.
+  const fieldset = FieldsetContext();
+  const isDisabled = computed(
+    () =>
+      fieldset?.isDisabled() === true ||
+      (ownIsDisabled() ?? group?.isDisabled() ?? false),
+  );
 
   const size = computed(() => props.size ?? group?.size());
   const variant = computed(() => props.variant ?? group?.variant());

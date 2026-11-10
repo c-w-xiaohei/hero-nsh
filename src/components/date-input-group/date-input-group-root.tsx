@@ -5,6 +5,7 @@ import {
   createInteractionModality,
   type InteractionModalityState,
 } from "../../primitives/create-interaction-modality";
+import { FieldsetContext } from "../fieldset/context";
 import {
   DateInputGroupContext,
   type DateInputGroupContextValue,
@@ -180,8 +181,15 @@ export function DateInputGroupRoot(props: DateInputGroupRootProps): JSX.Element 
 
   const slots = computed(() => dateInputGroupVariants({ variant: variant(), fullWidth: fullWidth() }));
 
+  // Fieldset sheet §5.2: a disabled `Fieldset` comes first, ahead of the field
+  // root and the `aria-disabled` fallback.
+  const fieldset = FieldsetContext();
   const isDisabled = computed(
-    () => local.isDisabled ?? field?.isDisabled() ?? local["aria-disabled"] === true,
+    () =>
+      fieldset?.isDisabled() === true ||
+      (local.isDisabled ??
+        field?.isDisabled() ??
+        local["aria-disabled"] === true),
   );
   const isInvalid = computed(
     () => local.isInvalid ?? field?.isInvalid() ?? local["aria-invalid"] === true,

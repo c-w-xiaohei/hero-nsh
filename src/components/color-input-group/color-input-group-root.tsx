@@ -9,6 +9,7 @@ import type {
 } from "nsh";
 import { computed, signal, split, untracked, View } from "nsh";
 
+import { FieldsetContext } from "../fieldset/context";
 import { joinClassNames } from "./class-names";
 import {
   ColorInputGroupContext,
@@ -204,8 +205,14 @@ export function ColorInputGroupRoot(props: ColorInputGroupRootProps): JSX.Elemen
 
   // --- Effective state ------------------------------------------------------
   // Explicit prop, then `aria-*` / `data-*` (the two upstream also reads), then
-  // the field root. `??`, not `||`, so an explicit `false` wins.
+  // the field root. `??`, not `||`, so an explicit `false` wins. Fieldset sheet
+  // §5.2: a disabled `Fieldset` comes first and nothing can turn it back on.
+  const fieldset = FieldsetContext();
   const isDisabled = computed(() => {
+    if (fieldset?.isDisabled() === true) {
+      return true;
+    }
+
     if (local.isDisabled !== undefined) {
       return local.isDisabled;
     }
