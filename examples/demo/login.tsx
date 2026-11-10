@@ -103,7 +103,7 @@ function TwoFactor() {
 function App() {
   return (
     <View class="flex-1 items-center justify-center bg-background-secondary p-8">
-      <View class="flex-row flex-wrap items-start justify-center gap-6">
+      <View class="w-full flex-row flex-wrap items-start justify-center gap-6">
         <SignIn />
         <TwoFactor />
       </View>

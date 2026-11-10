@@ -90,19 +90,21 @@ function OrderList() {
   return (
     <ListBox aria-label="Orders" className="w-full" selectionMode="single">
       {ORDERS.map((order) => (
-        <ListBox.Item className="flex-wrap gap-y-1" id={order.id} textValue={`#${order.id} ${order.name}`}>
+        <ListBox.Item id={order.id} textValue={`#${order.id} ${order.name}`}>
           <Badge.Anchor>
             <Avatar>
               <Avatar.Fallback>{order.name.charAt(0)}</Avatar.Fallback>
             </Avatar>
             {order.urgent ? <Badge>!</Badge> : null}
           </Badge.Anchor>
-          <View class="flex-auto min-w-[140px] flex-col">
-            <Label>{order.name}</Label>
+          <View class="flex-auto min-w-[120px] flex-col gap-1">
+            <View class="flex-row flex-wrap items-center gap-2">
+              <Label>{order.name}</Label>
+              {order.urgent ? <Chip color="danger">Urgent</Chip> : null}
+              <Chip color={order.state === "Open" ? "accent" : "default"}>{order.state}</Chip>
+            </View>
             <Description>{order.detail}</Description>
           </View>
-          {order.urgent ? <Chip color="danger">Urgent</Chip> : null}
-          <Chip color={order.state === "Open" ? "accent" : "default"}>{order.state}</Chip>
           <Text class="text-sm text-foreground">{order.amount}</Text>
           <ListBox.ItemIndicator />
         </ListBox.Item>
