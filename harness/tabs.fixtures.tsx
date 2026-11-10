@@ -22,6 +22,12 @@ import { probe } from "@scenario/probe";
  *                           disabled (T-018)
  *   kobalte-disabled-middle the second tab is disabled (T-019, T-020)
  *   kobalte-all-disabled    every tab disabled (T-021)
+ *   kobalte-default-disabled
+ *                           `defaultSelectedKey="reports"` on a disabled Reports
+ *                           tab (X-001)
+ *   kobalte-focus-ring      every tab renders its `isFocusVisible` render value
+ *                           as visible text, so the focus ring's presence is
+ *                           observable without computed style (X-002, X-003)
  *
  * `nsh/test` has no `document.activeElement`, so each tab records a focus event
  * and a pressable `after` station sits behind the group: Tab that leaves the
@@ -131,6 +137,38 @@ function KobalteTabs(props: {
   );
 }
 
+/*
+ * The focus ring is a painted result (`focus-visible:` has no query in
+ * `nsh/test`), so each tab renders its `isFocusVisible` render value as the
+ * visible text: "Ring analytics" means that tab has the ring, "NoRing
+ * analytics" means it does not. An assertion on either can fail when the
+ * modality wiring behind it breaks.
+ */
+function FocusTabs() {
+  return (
+    <View class="w-[480px]">
+      <Tabs onSelectionChange={(key: string | number) => probe("selectionChange")(key)}>
+        <Tabs.ListContainer>
+          <Tabs.List aria-label="Options">
+            {TAB_IDS.map((id) => (
+              <Tabs.Tab id={id}>
+                {(renderProps) => (
+                  <Text>{`${renderProps.isFocusVisible() ? "Ring" : "NoRing"} ${id}`}</Text>
+                )}
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs.ListContainer>
+        {TAB_IDS.map((id) => (
+          <Tabs.Panel id={id}>
+            <Text>{`${TAB_LABELS[id]} panel`}</Text>
+          </Tabs.Panel>
+        ))}
+      </Tabs>
+    </View>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "heroui");
 
@@ -160,6 +198,14 @@ function Fixture() {
 
   if (name === "kobalte-all-disabled") {
     return <KobalteTabs disabledTabs={[...TAB_IDS]} />;
+  }
+
+  if (name === "kobalte-default-disabled") {
+    return <KobalteTabs defaultSelectedKey="reports" disabledTabs={["reports"]} />;
+  }
+
+  if (name === "kobalte-focus-ring") {
+    return <FocusTabs />;
   }
 
   return <HeroTabs />;

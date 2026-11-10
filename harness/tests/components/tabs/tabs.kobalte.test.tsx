@@ -5,7 +5,7 @@ import { panelText, selectionCalls, tab } from "../../testers/tabs";
 /*
  * Kobalte 0.13.14 regression cases for Tabs that a pointer can drive, ported to
  * HeroUI's API and to NSH's view model per port sheet 4b (T-010, T-016, T-020,
- * T-021, T-023).
+ * T-021, T-023), plus the X-001 regression for a disabled default selection.
  *
  * Kobalte's props do not exist in HeroUI: `value` / `defaultValue` become
  * `id` / `defaultSelectedKey`, `onChange` becomes `onSelectionChange`,
@@ -114,4 +114,20 @@ test("T-023 fires onValueChange when clicking on the current tab", async () => {
   expect(selectionCalls(app)).toHaveLength(1);
   expect(selectionCalls(app)[0][0]).toBe("overview");
   expect(panelText(app, "Overview panel")).toBe(true);
+});
+
+// Regression (this round): src/components/tabs/tabs-root.tsx:326.
+// Kobalte's fallback (kobalte/packages/core/src/tabs/tabs-root.tsx:119-131) and
+// RAC's `useTabListState` (react-spectrum packages/react-stately/src/tabs/
+// useTabListState.ts) fall back only when the selection is empty, the key is
+// null, or the key is gone from the collection; disabled keys are skipped only
+// when picking the fallback key. A disabled tab that is selected on purpose —
+// here an explicit `defaultSelectedKey="reports"` — must therefore stay
+// selected, with no `onSelectionChange` the user never caused.
+test("X-001 keeps an explicitly disabled defaultSelectedKey selected and silent", async () => {
+  const app = await openFixture("kobalte-default-disabled");
+
+  expect(panelText(app, "Reports panel")).toBe(true);
+  expect(panelText(app, "Overview panel")).toBe(false);
+  expect(selectionCalls(app)).toHaveLength(0);
 });

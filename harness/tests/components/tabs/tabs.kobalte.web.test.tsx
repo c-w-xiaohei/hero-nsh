@@ -6,7 +6,7 @@ import { focusTrail, panelText, selectionCalls } from "../../testers/tabs";
  * Kobalte 0.13.14 regression cases for Tabs that need Tab to move the keyboard
  * focus and the arrow / Home / End / Return keys to act on it, ported to
  * HeroUI's API and to NSH's view model per port sheet 4b (T-011 … T-015,
- * T-017, T-018, T-019).
+ * T-017, T-018, T-019), plus the X-002 / X-003 focus-ring regressions.
  *
  * Why this file is `.web.`: NSH 0.4.0's Win32 host gives keyboard focus only to
  * an Input — Tab walks text fields, `ref.focus()` on a view is a no-op and
@@ -218,3 +218,56 @@ test("T-019 disabled tabs cannot be keyboard navigated to", async () => {
   expect(selectionCalls(app)).toHaveLength(1);
   expect(selectionCalls(app)[0][0]).toBe("reports");
 });
+
+/*
+ * Focus ring regressions (this round), read through the render value instead of
+ * computed style: every tab's visible text says "Ring <id>" while
+ * `isFocusVisible()` is true and "NoRing <id>" while it is false.
+ *
+ * src/components/tabs/tab.tsx:305: the effect that programmatically focuses the
+ * roving tab marks the pending focus as pointer-originated before every
+ * `node.focus()`, and `handleFocus` (tab.tsx:395-403) then skips
+ * `modality.onFocus()`. A focus event without prior pointer input is
+ * keyboard-driven (src/primitives/create-interaction-modality/
+ * create-interaction-modality.ts:13-16, :139 records keyboard modality), so the
+ * skip leaves the newly focused tab's modality null, `isFocusVisible` false and
+ * the ring unpainted.
+ */
+
+// Regression (this round): src/components/tabs/tab.tsx:305 — the ring must
+// survive the first arrow-key move and the one after it.
+test("X-002 keeps the focus ring while the arrow keys move between tabs", async () => {
+  const app = await openFixture("kobalte-focus-ring", { platform: "web" });
+
+  await app.keyboard.press("tab");
+
+  expect(app.shows("text:Ring overview")).toBe(true);
+
+  await app.keyboard.press("arrowright");
+
+  expect(app.shows("text:Ring analytics")).toBe(true);
+  expect(app.shows("text:Ring overview")).toBe(false);
+
+  await app.keyboard.press("arrowright");
+
+  expect(app.shows("text:Ring reports")).toBe(true);
+  expect(app.shows("text:Ring analytics")).toBe(false);
+});
+
+// Regression (this round): src/components/tabs/tab.tsx:305 — after a pointer
+// press focused a tab, the next keyboard move must paint the ring on the tab it
+// lands on: that tab's focus event is its only chance to record the keyboard
+// modality. `NoRing analytics` then proves the ring is still focus-scoped.
+test("X-003 restores the focus ring on a keyboard move after a pointer press", async () => {
+  const app = await openFixture("kobalte-focus-ring", { platform: "web" });
+
+  await app.press("role:tab[NoRing analytics]");
+
+  expect(panelText(app, "Analytics panel")).toBe(true);
+
+  await app.keyboard.press("arrowright");
+
+  expect(app.shows("text:Ring reports")).toBe(true);
+  expect(app.shows("text:NoRing analytics")).toBe(true);
+});
+
