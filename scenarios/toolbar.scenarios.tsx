@@ -24,6 +24,7 @@ import type { Component } from "./types";
  *   toolbar/vertical     T-003         vertical axis (one column)
  *   toolbar/attached     T-004         `p-1`: root frame plus child frame
  *   toolbar/nested-group T-007, T-008  nested ToggleButtonGroup and Save
+ *   toolbar/nested-toolbar  X-001      a vertical Toolbar inside a horizontal one
  *   toolbar/stories-*    R-006 … R-019, reference geometry for the screenshots
  *
  * Focus is written to the probe from `onFocus`, because nsh/test cannot read
@@ -141,6 +142,44 @@ function NestedGroup() {
   );
 }
 
+/*
+ * A vertical Toolbar nested in a horizontal one: each toolbar's groups must
+ * take that toolbar's own axis, not the outermost one. The inner groups carry
+ * the frames (X-001): the ToggleButtonGroup reads its direction from the axis,
+ * the ButtonGroup from `justify-content`, which only shows while the group is
+ * wider than its members — hence `fullWidth` and the longer labels above it.
+ */
+function NestedToolbar() {
+  return (
+    <Stage>
+      <Toolbar aria-label="Editor">
+        <ToggleButtonGroup aria-label="Text style" selectionMode="multiple">
+          <ToggleButton id="bold" onLayout={frame("nested-outer-0")}>
+            Bold
+          </ToggleButton>
+          <ToggleButton id="italic" onLayout={frame("nested-outer-1")}>
+            Italic
+          </ToggleButton>
+        </ToggleButtonGroup>
+        <Toolbar aria-label="Tools" orientation="vertical">
+          <ToggleButtonGroup aria-label="Align" selectionMode="multiple">
+            <ToggleButton id="left" onLayout={frame("nested-inner-0")}>
+              Align left
+            </ToggleButton>
+            <ToggleButton id="right" onLayout={frame("nested-inner-1")}>
+              Align right
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <ButtonGroup fullWidth onLayout={frame("nested-inner-group")}>
+            <Button onLayout={frame("nested-inner-button-0")}>Cut</Button>
+            <Button onLayout={frame("nested-inner-button-1")}>Copy</Button>
+          </ButtonGroup>
+        </Toolbar>
+      </Toolbar>
+    </Stage>
+  );
+}
+
 function StoriesDefault() {
   return (
     <Stage>
@@ -243,6 +282,7 @@ export const toolbarScenarios: Record<string, Component> = {
   "toolbar/vertical": Vertical,
   "toolbar/attached": Attached,
   "toolbar/nested-group": NestedGroup,
+  "toolbar/nested-toolbar": NestedToolbar,
   "toolbar/stories-default": StoriesDefault,
   "toolbar/stories-vertical": StoriesVertical,
   "toolbar/stories-attached": StoriesAttached,

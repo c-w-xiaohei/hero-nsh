@@ -130,3 +130,47 @@ test("T-007 supports composition with a nested ToggleButtonGroup", async () => {
 
   expect(callsOf(app, "onSelectionChange")).toEqual([[["bold"]]]);
 });
+
+// Port regression X-001: src/components/toolbar/toolbar.tsx:186-192
+// HeroUI wraps each Toolbar's children in its own ToggleButtonGroupContext
+// (heroui/packages/react/src/components/toolbar/toolbar.tsx:33-47), so a
+// nested Toolbar hands its own axis to the groups under it. The port reused
+// the outer context for a nested Toolbar, leaving a vertical inner group on
+// the outer horizontal axis: `flex-row` instead of `flex-col`, and no
+// `justify-start` on its ButtonGroup. Both consequences are measured here.
+test("X-001 gives a nested toolbar its own orientation axis", async () => {
+  const app = await openScenario("toolbar/nested-toolbar");
+  await firstFrame(
+    app,
+    "nested-outer-0",
+    "nested-outer-1",
+    "nested-inner-0",
+    "nested-inner-1",
+    "nested-inner-group",
+    "nested-inner-button-0",
+    "nested-inner-button-1",
+  );
+
+  // The outer toolbar keeps the horizontal axis its groups inherited before.
+  const outerFirst = frame(app, "nested-outer-0");
+  const outerSecond = frame(app, "nested-outer-1");
+  expect(Math.abs(outerSecond.y - outerFirst.y)).toBeLessThan(0.6);
+  expect(outerSecond.x).toBeGreaterThan(outerFirst.x);
+
+  // The vertical inner toolbar's ToggleButtonGroup follows the inner axis: a
+  // column, so the second member drops below the first instead of beside it.
+  // A column puts them on different rows, a row keeps one shared y. The x
+  // values are not compared: the labels differ in width and a column centres
+  // the narrower member.
+  const innerFirst = frame(app, "nested-inner-0");
+  const innerSecond = frame(app, "nested-inner-1");
+  expect(innerSecond.y).toBeGreaterThan(innerFirst.y);
+
+  // The inner ButtonGroup comes from the same context and gets `justify-start`
+  // on a vertical toolbar: its members sit at the group's leading edge, not
+  // centered (the group is `fullWidth`, so it has slack to centre in).
+  const groupFirst = frame(app, "nested-inner-button-0");
+  const groupSecond = frame(app, "nested-inner-button-1");
+  expect(groupFirst.x).toBe(0);
+  expect(groupSecond.x).toBeGreaterThan(groupFirst.x);
+});

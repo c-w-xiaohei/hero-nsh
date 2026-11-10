@@ -32,15 +32,19 @@ test("T-006 supports keyboard arrow navigation between toolbar items", async () 
 });
 
 // heroui/packages/react/tests/components/toolbar/toolbar.test.tsx:111
-// Partial port (port sheet T-008): the two upstream aria assertions (the group
-// has no aria-orientation, the toolbar has aria-orientation="horizontal") are
-// dropped — `AccessibilityState` has no orientation field and nsh/test cannot
-// read aria. The four behaviour assertions stay: Tab reaches Bold inside the
-// group, ArrowRight + Space focuses and selects Italic, and another ArrowRight
-// leaves the group and reaches Save.
+// Partial port (port sheet T-008): the upstream aria assertions split in two.
+// The group's role survives — `role:group[Text style]` reads role plus name
+// through nsh/test — so it is asserted below. Only the attribute half stays
+// unread: the group has no aria-orientation and the toolbar has
+// aria-orientation="horizontal", and `AccessibilityState` has no orientation
+// field, nor can nsh/test read attributes. The four behaviour assertions stay:
+// Tab reaches Bold inside the group, ArrowRight + Space focuses and selects
+// Italic, and another ArrowRight leaves the group and reaches Save.
 test("T-008 supports nested group keyboard navigation without unsupported orientation attributes", async () => {
   const app = await openScenario("toolbar/nested-group", { platform: "web" });
   await app.waitFor("role:button[Bold]", { timeout: 15_000 });
+
+  expect(app.shows("role:group[Text style]")).toBe(true);
 
   await app.keyboard.press("tab");
   expect(callsOf(app, "focus")).toEqual([["Bold"]]);
