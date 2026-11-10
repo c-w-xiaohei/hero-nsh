@@ -11,7 +11,8 @@ import { probe } from "./probe";
  * trigger. `host.params.case` picks the state:
  *
  *   close-delay  delay 0, closeDelay 300, uncontrolled, with an `away` Button
- *                to move the pointer off the trigger (the default);
+ *                far below the trigger to move the pointer off both trigger
+ *                and tip (the default);
  *   default-open `defaultOpen`, so Escape is the only thing that closes it.
  *
  * It sits next to harness/nsh.json on purpose: NSH takes the entry's own
@@ -35,7 +36,17 @@ function Fixture() {
           <Tooltip.Content>Hover tip</Tooltip.Content>
         </Tooltip>
       )}
-      <Button testID="away">Elsewhere</Button>
+      {/*
+        Far below the trigger on purpose: upstream moves the pointer with
+        `user.unhover(trigger)`, which leaves it over no element. The open tip
+        is hit-testable on the web (only the exiting tip gets
+        `pointer-events-none`) and keeps itself open when hovered, so a target
+        inside the tip's footprint would keep the tooltip open instead of
+        unhovering it.
+      */}
+      <View style={{ marginTop: 240 }}>
+        <Button testID="away">Elsewhere</Button>
+      </View>
     </View>
   );
 }
