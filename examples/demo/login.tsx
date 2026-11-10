@@ -34,7 +34,7 @@ function SignIn() {
           </TextField>
           <TextField isRequired name="password" type="password">
             <Label>Password</Label>
-            <Input placeholder="••••••••" />
+            <Input placeholder="Enter your password" />
             <FieldError />
           </TextField>
           <View class="flex-row items-center justify-between gap-4">
@@ -48,7 +48,7 @@ function SignIn() {
             </Checkbox>
             <Link href="https://example.com/reset">Forgot password?</Link>
           </View>
-          <Button type="submit">Sign in</Button>
+          <Button fullWidth type="submit">Sign in</Button>
         </Form>
       </Card.Content>
       <Card.Footer className="gap-1.5">
@@ -102,7 +102,7 @@ function TwoFactor() {
 
 function App() {
   return (
-    <View class="flex-1 items-center justify-center bg-background-secondary p-8">
+    <View class="flex-1 items-center justify-center bg-background-secondary p-4 sm:p-8">
       <View class="w-full flex-row flex-wrap items-start justify-center gap-6">
         <SignIn />
         <TwoFactor />

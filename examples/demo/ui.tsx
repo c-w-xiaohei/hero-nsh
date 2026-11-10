@@ -8,11 +8,13 @@ export function Page(props: {
   note?: string;
   actions?: JSX.Element;
   children?: JSX.Element;
+  /** Tailwind max-width class for the page column; defaults to 1200. */
+  maxWidth?: string;
 }) {
   return (
     <View class="flex-1 bg-background">
       <Scroll class="flex-1">
-        <View class="gap-8 p-8">
+        <View class={`w-full ${props.maxWidth ?? "max-w-[1200px]"} mx-auto gap-8 p-4 sm:p-8`}>
           <View class="flex-col items-start gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
             <View class="flex-auto gap-1">
               <Text class="text-lg font-semibold text-foreground">{props.title}</Text>
@@ -37,7 +39,11 @@ export function Section(props: { title: string; children?: JSX.Element }) {
   );
 }
 
-/** Side-by-side blocks that wrap when the window narrows. */
-export function Row(props: { children?: JSX.Element }) {
-  return <View class="flex-row flex-wrap items-start gap-4">{props.children}</View>;
+/** A responsive card grid: one column on phones, three from the sm breakpoint. */
+export function Grid(props: { children?: JSX.Element; cols?: string }) {
+  return (
+    <View class={`grid grid-cols-1 gap-4 ${props.cols ?? "sm:grid-cols-3"}`}>
+      {props.children}
+    </View>
+  );
 }

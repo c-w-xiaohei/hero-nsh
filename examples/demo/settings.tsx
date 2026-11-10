@@ -87,7 +87,7 @@ function Profile() {
                 </Select.Popover>
               </Select>
               <View class="flex-row flex-wrap items-end gap-3">
-                <TimeField className="w-[180px] max-w-full" name="quiet-from">
+                <TimeField className="w-full sm:w-[180px]" name="quiet-from">
                   <Label>Quiet hours from</Label>
                   <TimeField.Group>
                     <TimeField.Input>
@@ -95,7 +95,7 @@ function Profile() {
                     </TimeField.Input>
                   </TimeField.Group>
                 </TimeField>
-                <TimeField className="w-[180px] max-w-full" name="quiet-to">
+                <TimeField className="w-full sm:w-[180px]" name="quiet-to">
                   <Label>to</Label>
                   <TimeField.Group>
                     <TimeField.Input>
@@ -174,7 +174,7 @@ function Notifications() {
             </Radio.Content>
           </Radio>
         </RadioGroup>
-        <View class="w-full sm:w-80">
+        <View class="w-full sm:w-[420px]">
           <Slider defaultValue={20}>
             <Label>Digest days</Label>
             <Slider.Output />
@@ -201,7 +201,7 @@ function Appearance() {
           <ColorArea aria-label="Accent color" defaultValue="hsl(213, 90%, 55%)">
             <ColorArea.Thumb />
           </ColorArea>
-          <View class="w-full sm:w-[320px]">
+          <View class="flex-1 min-w-[240px]">
             <ColorSlider channel="hue" colorSpace="hsl" defaultValue="hsl(213, 90%, 55%)">
               <Label>Hue</Label>
               <ColorSlider.Output />
@@ -212,7 +212,7 @@ function Appearance() {
           </View>
         </View>
         <View class="flex-row flex-wrap items-end gap-4">
-          <ColorField className="w-[240px] max-w-full" defaultValue="#0485F7" name="accent">
+          <ColorField className="flex-1 min-w-[220px]" defaultValue="#0485F7" name="accent">
             <Label>Accent</Label>
             <ColorField.Group>
               <ColorField.Prefix>
@@ -221,10 +221,10 @@ function Appearance() {
               <ColorField.Input />
             </ColorField.Group>
           </ColorField>
-          <View class="w-[240px] max-w-full">
+          <View class="flex-1 min-w-[220px]">
             <Label>Hex value</Label>
             <ColorInputGroup>
-              <ColorInputGroup.Input placeholder="#000000" />
+              <ColorInputGroup.Input defaultValue="#000000" />
             </ColorInputGroup>
             <Description>Paste a color from your brand guide.</Description>
           </View>
@@ -259,7 +259,7 @@ function Usage() {
         <Card.Description>This workspace is on the Team plan.</Card.Description>
       </Card.Header>
       <Card.Content className="gap-4">
-        <View class="w-full sm:w-[320px]">
+        <View class="w-full sm:w-[420px]">
           <Meter value={68}>
             <Label>Storage</Label>
             <Meter.Output />
@@ -345,6 +345,7 @@ function Advanced() {
 function App() {
   return (
     <Page
+      maxWidth="max-w-[640px]"
       title="Settings"
       note="Workspace preferences for this account."
       actions={
@@ -354,7 +355,7 @@ function App() {
         </View>
       }
     >
-      <View class="max-w-[640px] gap-6">
+      <View class="w-full gap-6">
         <Profile />
         <Notifications />
         <Appearance />

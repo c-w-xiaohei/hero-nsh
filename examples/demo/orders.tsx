@@ -37,7 +37,7 @@ const SORTS = [
 function Filters() {
   return (
     <View class="flex-row flex-wrap items-end gap-3">
-      <SearchField className="w-[240px]" name="search">
+      <SearchField className="w-full sm:w-[240px]" name="search">
         <Label>Search orders</Label>
         <SearchField.Group>
           <SearchField.SearchIcon />
@@ -46,7 +46,7 @@ function Filters() {
         </SearchField.Group>
       </SearchField>
 
-      <Select className="w-[180px]" defaultSelectedKey="newest">
+      <Select className="w-full sm:w-[180px]" defaultSelectedKey="newest">
         <Label>Sort by</Label>
         <Select.Trigger>
           <Select.Value />
@@ -154,7 +154,7 @@ function App() {
       </Breadcrumbs>
 
       <Tabs>
-        <Tabs.ListContainer>
+        <Tabs.ListContainer className="w-fit">
           <Tabs.List aria-label="Order state">
             <Tabs.Tab id="all">
               All
@@ -173,7 +173,13 @@ function App() {
 
         <Tabs.Panel className="gap-4 pt-4" id="all">
           <Filters />
-          <OrderList />
+          <View class="rounded-3xl bg-surface p-2 shadow-surface dark:shadow-surface-dark">
+            <View class="flex-row items-center justify-between px-3 pb-1 pt-2">
+              <Text class="text-xs font-medium text-muted">Order</Text>
+              <Text class="text-xs font-medium text-muted">Amount</Text>
+            </View>
+            <OrderList />
+          </View>
           <View class="flex-row items-center gap-3">
             <Skeleton className="h-10 w-10 rounded-full" />
             <Text class="text-sm text-muted">Loading more orders…</Text>
