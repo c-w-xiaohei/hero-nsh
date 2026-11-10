@@ -63,7 +63,16 @@ function lastLayout(app: App, name: string, index = 0): LayoutCall {
   return call;
 }
 
-/** Where a value sits on the Track's usable segment, as a left/top coordinate. */
+/**
+ * The usable length of a Track: its border box minus the 0.75rem transparent
+ * border at each end. Thumb and Fill both hang off the Track, so their frames
+ * are in the Track's own coordinates.
+ */
+function usableLength(track: LayoutCall, orientation: Orientation): number {
+  return (orientation === "vertical" ? track.height : track.width) - 2 * INSET;
+}
+
+/** Where a value sits in the Track's own coordinates, as a left/top offset. */
 function trackPoint(
   track: LayoutCall,
   orientation: Orientation,
@@ -71,10 +80,22 @@ function trackPoint(
   percent: number,
 ): number {
   if (orientation === "vertical") {
-    return track.y + INSET + (1 - percent) * (track.height - 2 * INSET);
+    return INSET + (1 - percent) * usableLength(track, orientation);
   }
 
-  return track.x + INSET + (dir === "rtl" ? 1 - percent : percent) * (track.width - 2 * INSET);
+  return INSET + (dir === "rtl" ? 1 - percent : percent) * usableLength(track, orientation);
+}
+
+/** Where a value sits in the Marks' own coordinates (the Mark's parent). */
+function markPoint(
+  marks: LayoutCall,
+  orientation: Orientation,
+  dir: Direction,
+  percent: number,
+): number {
+  if (orientation === "vertical") return (1 - percent) * marks.height;
+
+  return (dir === "rtl" ? 1 - percent : percent) * marks.width;
 }
 
 /** The edge a Thumb's `left` / `top` anchor occupies in its layout box. */
@@ -99,12 +120,6 @@ function fillEnd(fill: LayoutCall, orientation: Orientation, dir: Direction): nu
   if (orientation === "vertical") return fill.y;
 
   return dir === "rtl" ? fill.x : fill.x + fill.width;
-}
-
-function usableStart(track: LayoutCall, orientation: Orientation, dir: Direction): number {
-  if (orientation === "vertical") return track.y + track.height - INSET;
-
-  return dir === "rtl" ? track.x + track.width - INSET : track.x + INSET;
 }
 
 function expectClose(actual: number, expected: number): void {
@@ -231,7 +246,7 @@ test("T-018 supports controlled range updates and recomputes dots when the step 
     next2Max: 50,
   });
 
-  const color = (value: number) => app.spanStyle(`id:marks >> text:${value}`).color;
+  const color = (value: number) => app.spanStyle(`id:marks >> text:${value} >> nth=0`).color;
   const first = color(50);
 
   expect(color(25)).toBe(first);
@@ -267,8 +282,11 @@ test("T-019 renders custom labels and locale-formatted defaults without changing
   expect(app.shows("text:$25.00")).toBe(true);
   expect(app.shows("text:Maximum")).toBe(true);
   expect(app.shows("role:adjustable[Budget]")).toBe(true);
-  expectClose(markAnchor(lastLayout(app, "mark-0"), "horizontal", "ltr"), marks.x);
-  expectClose(markAnchor(lastLayout(app, "mark-25"), "horizontal", "ltr"), marks.x + marks.width * 0.25);
+  expectClose(markAnchor(lastLayout(app, "mark-0"), "horizontal", "ltr"), markPoint(marks, "horizontal", "ltr", 0));
+  expectClose(
+    markAnchor(lastLayout(app, "mark-25"), "horizontal", "ltr"),
+    markPoint(marks, "horizontal", "ltr", 0.25),
+  );
 });
 
 // heroui/packages/react/tests/components/slider/slider.test.tsx:349
@@ -336,11 +354,12 @@ for (const { dir, locale } of DIRECTIONS) {
         { locale },
       );
       const track = lastLayout(app, "track");
+      const marks = lastLayout(app, "marks");
 
       for (const value of [0, 25, 50, 75, 100]) {
         expectClose(
           markAnchor(lastLayout(app, `mark-${value}`), orientation, dir),
-          trackPoint(track, orientation, dir, value / 100),
+          markPoint(marks, orientation, dir, value / 100),
         );
       }
 
@@ -351,12 +370,22 @@ for (const { dir, locale } of DIRECTIONS) {
         );
       }
 
-      const middle = lastLayout(app, "mark-50");
-
+      // The Marks container must cover the Track's usable box, so the two
+      // coordinate systems above describe the same stretch of the slider.
       if (orientation === "vertical") {
-        expect(dir === "rtl" ? middle.x + middle.width <= track.x : middle.x >= track.x + track.width).toBe(true);
+        expect(
+          Math.abs(marks.y - (track.y + INSET)) < 1 &&
+            Math.abs(marks.height - usableLength(track, orientation)) < 1,
+        ).toBe(true);
+        expect(
+          dir === "rtl" ? marks.x + marks.width <= track.x : marks.x >= track.x + track.width,
+        ).toBe(true);
       } else {
-        expect(middle.y).toBeGreaterThanOrEqual(track.y + track.height);
+        expect(
+          Math.abs(marks.x - (track.x + INSET)) < 1 &&
+            Math.abs(marks.width - usableLength(track, orientation)) < 1,
+        ).toBe(true);
+        expect(marks.y).toBeGreaterThanOrEqual(track.y + track.height);
       }
 
       expectClose(
@@ -384,7 +413,7 @@ for (const { dir, locale } of DIRECTIONS) {
         const fill = lastLayout(app, "fill");
         const first = range
           ? thumbAnchor(lastLayout(app, "thumb", 0), orientation)
-          : usableStart(track, orientation, dir);
+          : trackPoint(track, orientation, dir, 0);
         const last = thumbAnchor(lastLayout(app, "thumb", range ? 1 : 0), orientation);
 
         expect(fill.width).toBeGreaterThan(0);

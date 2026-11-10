@@ -120,6 +120,8 @@ function GeometryCase() {
         defaultValue={sliderValue("defaultValue")}
         maxValue={num("maxValue")}
         minValue={num("minValue")}
+        onChange={probe("onChange")}
+        onChangeEnd={probe("onChangeEnd")}
         orientation={vertical ? "vertical" : "horizontal"}
         step={num("step")}
       >
@@ -130,7 +132,6 @@ function GeometryCase() {
           <Slider.Steps testID="steps" />
           {indexes.map((index) => (
             <Slider.Thumb
-              key={index}
               index={index}
               onLayout={layoutProbe("thumb", index)}
               testID="thumb"
@@ -140,7 +141,6 @@ function GeometryCase() {
         <Slider.Marks testID="marks" onLayout={layoutProbe("marks")}>
           {marks.map((value) => (
             <Slider.Mark
-              key={String(value)}
               onLayout={layoutProbe(`mark-${value}`)}
               testID={`mark-${value}`}
               value={value}
@@ -278,7 +278,7 @@ function ControlledRangeCase() {
           </Slider.Track>
           <Slider.Marks testID="marks">
             {marks.map((mark) => (
-              <Slider.Mark key={String(mark)} testID={`mark-${mark}`} value={mark} />
+              <Slider.Mark testID={`mark-${mark}`} value={mark} />
             ))}
           </Slider.Marks>
         </Slider>
@@ -320,7 +320,7 @@ function DisabledCase() {
           </Slider.Track>
           <Slider.Marks testID="marks">
             {DEFAULT_MARKS.map((mark) => (
-              <Slider.Mark key={mark} testID={`mark-${mark}`} value={mark} />
+              <Slider.Mark testID={`mark-${mark}`} value={mark} />
             ))}
           </Slider.Marks>
         </Slider>
@@ -357,7 +357,6 @@ function IndicatorsCase() {
                 {state.values().map((_, index) => (
                   <Slider.Thumb
                     index={index}
-                    key={index}
                     onBlur={probe("onBlur")}
                     onFocus={probe("onFocus")}
                   />
@@ -365,12 +364,21 @@ function IndicatorsCase() {
               </Slider.Track>
               <Slider.Marks testID="marks">
                 {marks.map((value) => (
-                  <Slider.Mark key={String(value)} testID={`mark-${value}`} value={value} />
+                  <Slider.Mark testID={`mark-${value}`} value={value} />
                 ))}
               </Slider.Marks>
             </>
           )}
         </Slider>
+      </View>
+      <View
+        class="bg-default px-3 py-1"
+        onFocus={probe("afterFocus")}
+        onPress={probe("afterPress")}
+        role="button"
+        testID="after"
+      >
+        <Text>after</Text>
       </View>
     </Stage>
   );
@@ -426,7 +434,7 @@ function DragCase() {
           </Slider.Track>
           <Slider.Marks testID="marks">
             {DEFAULT_MARKS.map((mark) => (
-              <Slider.Mark key={mark} testID={`mark-${mark}`} value={mark} />
+              <Slider.Mark testID={`mark-${mark}`} value={mark} />
             ))}
           </Slider.Marks>
         </Slider>

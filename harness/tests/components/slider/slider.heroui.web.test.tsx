@@ -53,6 +53,12 @@ function lastLayout(app: App, name: string, index = 0): LayoutCall {
   return call;
 }
 
+/** The usable length of a Track: its border box minus its two transparent borders. */
+function usableLength(track: LayoutCall, orientation: Orientation): number {
+  return (orientation === "vertical" ? track.height : track.width) - 2 * INSET;
+}
+
+/** Where a value sits in the Track's own coordinates (Thumb and Fill hang off it). */
 function trackPoint(
   track: LayoutCall,
   orientation: Orientation,
@@ -60,10 +66,10 @@ function trackPoint(
   percent: number,
 ): number {
   if (orientation === "vertical") {
-    return track.y + INSET + (1 - percent) * (track.height - 2 * INSET);
+    return INSET + (1 - percent) * usableLength(track, orientation);
   }
 
-  return track.x + INSET + (dir === "rtl" ? 1 - percent : percent) * (track.width - 2 * INSET);
+  return INSET + (dir === "rtl" ? 1 - percent : percent) * usableLength(track, orientation);
 }
 
 function thumbAnchor(thumb: LayoutCall, orientation: Orientation): number {
@@ -80,12 +86,6 @@ function fillEnd(fill: LayoutCall, orientation: Orientation, dir: Direction): nu
   if (orientation === "vertical") return fill.y;
 
   return dir === "rtl" ? fill.x : fill.x + fill.width;
-}
-
-function usableStart(track: LayoutCall, orientation: Orientation, dir: Direction): number {
-  if (orientation === "vertical") return track.y + track.height - INSET;
-
-  return dir === "rtl" ? track.x + track.width - INSET : track.x + INSET;
 }
 
 function expectClose(actual: number, expected: number): void {
@@ -114,11 +114,12 @@ test("T-004 calls onChange when value is incremented or decremented", async () =
 
   await app.keyboard.press("arrowright");
   expect(lastChange(app, "onChange")).toEqual([31]);
-  expect(app.shows("id:value >> text:31")).toBe(true);
+  // Two texts read 31: the Output and the Root render prop's value readout.
+  expect(app.count("text:31")).toBe(2);
 
   await app.keyboard.press("arrowleft");
   expect(lastChange(app, "onChange")).toEqual([30]);
-  expect(app.shows("id:value >> text:30")).toBe(true);
+  expect(app.count("text:30")).toBe(2);
 });
 
 // heroui/packages/react/tests/components/slider/slider.test.tsx:101
@@ -130,10 +131,10 @@ test("T-005 supports Home / End keys to jump to min / max", async () => {
   await app.keyboard.press("tab");
 
   await app.keyboard.press("end");
-  expect(lastChange(app, "onChange")?.[0] === 100 && app.shows("id:value >> text:100")).toBe(true);
+  expect(lastChange(app, "onChange")?.[0] === 100 && app.count("text:100") === 2).toBe(true);
 
   await app.keyboard.press("home");
-  expect(lastChange(app, "onChange")?.[0] === 0 && app.shows("id:value >> text:0")).toBe(true);
+  expect(lastChange(app, "onChange")?.[0] === 0 && app.count("text:0") === 2).toBe(true);
 });
 
 // heroui/packages/react/tests/components/slider/slider.test.tsx:117
@@ -173,14 +174,16 @@ test("T-012 supports moving the focused thumb via arrow keys", async () => {
   await app.keyboard.press("tab");
   await app.keyboard.press("arrowright");
 
-  expect(lastChange(app, "onChange")).toEqual([150, 500]);
-  expect(app.shows("id:value >> text:150,500")).toBe(true);
+  expect(lastChange(app, "onChange")).toEqual([[150, 500]]);
+  // The Output formats the range as "150 – 500"; the comma-joined readout is
+  // the Root render prop's own text, so exactly one text reads it.
+  expect(app.count("text:150,500")).toBe(1);
 
   await app.keyboard.press("tab");
   await app.keyboard.press("arrowleft");
 
-  expect(lastChange(app, "onChange")).toEqual([150, 450]);
-  expect(app.shows("id:value >> text:150,450")).toBe(true);
+  expect(lastChange(app, "onChange")).toEqual([[150, 450]]);
+  expect(app.count("text:150,450")).toBe(1);
 });
 
 // heroui/packages/react/tests/components/slider/slider.test.tsx:183
@@ -209,9 +212,10 @@ test("T-009 supports vertical orientation via data-orientation", async () => {
 
 // heroui/packages/react/tests/components/slider/slider.test.tsx:251
 // Partial port (port sheet T-014): the dot list, its `data-value` values and
-// its aria-hidden attribute are unreadable. Kept: the two Tab stops prove the
-// decorative dots add none — the first Tab lands on the thumb, the second
-// leaves it.
+// its aria-hidden attribute are unreadable. Kept: the Tab order proves the
+// decorative dots add no stop — the first Tab lands on the thumb and the second
+// goes straight to the known view after the slider (upstream's Tab to `body`,
+// which NSH's web target does not report as a blur).
 test("T-014 renders decorative step dots without adding tab stops", async () => {
   const app = await openCase("indicators");
 
@@ -220,6 +224,7 @@ test("T-014 renders decorative step dots without adding tab stops", async () => 
 
   await app.keyboard.press("tab");
   expect(callsOf(app, "onBlur")).toHaveLength(1);
+  expect(callsOf(app, "afterFocus")).toHaveLength(1);
 });
 
 // heroui/packages/react/tests/components/slider/slider.test.tsx:293
@@ -229,7 +234,7 @@ test("T-014 renders decorative step dots without adding tab stops", async () => 
 // with a filled mark and difference from an unfilled one are both testable.
 test("T-017 supports keyboard updates to the filled step and mark states", async () => {
   const app = await openCase("indicators");
-  const color = (value: number) => app.spanStyle(`id:marks >> text:${value}`).color;
+  const color = (value: number) => app.spanStyle(`id:marks >> text:${value} >> nth=0`).color;
   const filled = color(50);
 
   expect(color(25)).toBe(filled);
@@ -250,7 +255,7 @@ test("T-017 supports keyboard updates to the filled step and mark states", async
 // nothing, and the filled marks still read filled (the values did not move).
 test("T-021 exposes disabled state and preserves values during keyboard interaction", async () => {
   const app = await openCase("disabled");
-  const color = (value: number) => app.spanStyle(`id:marks >> text:${value}`).color;
+  const color = (value: number) => app.spanStyle(`id:marks >> text:${value} >> nth=0`).color;
 
   expect(app.enabled("role:adjustable[Volume]")).toBe(false);
 
@@ -285,7 +290,7 @@ for (const { dir, locale } of DIRECTIONS) {
     const track = lastLayout(app, "track");
     const fill = lastLayout(app, "fill");
 
-    expectClose(fillStart(fill, "horizontal", dir), usableStart(track, "horizontal", dir));
+    expectClose(fillStart(fill, "horizontal", dir), trackPoint(track, "horizontal", dir, 0));
     expectClose(
       fillEnd(fill, "horizontal", dir),
       thumbAnchor(lastLayout(app, "thumb"), "horizontal"),
@@ -311,6 +316,6 @@ test("T-026 supports pointer interaction through dots and updates their filled s
   expect(lastChange(app, "onChange")).toEqual([75]);
   expect(lastChange(app, "onChangeEnd")).toEqual([75]);
   expect(app.shows("id:output >> text:75")).toBe(true);
-  expect(app.spanStyle("id:marks >> text:75").color).toBe(app.spanStyle("id:marks >> text:0").color);
+  expect(app.spanStyle("id:marks >> text:75 >> nth=0").color).toBe(app.spanStyle("id:marks >> text:0 >> nth=0").color);
   expect(callsOf(app, "onFocus")).toHaveLength(1);
 });
