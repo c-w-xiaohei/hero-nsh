@@ -80,8 +80,10 @@ function getColorLuminance(color: Color): number {
  * and a 1.5pt round stroke; NSH has no inline SVG and no checkmark in `icons`,
  * so the default is a `size-1/3`, `rotate-45` view whose `border-b` / `border-r`
  * draw the two strokes (1pt, no round caps; port sheet §8). R-021 / R-022 /
- * R-024 are that view's `scale-0` start, its 150ms transition and its
- * `scale-100` selected state. R-023 is the root's `text-white` / `text-black`:
+ * R-024 are the `scale-0` start, the 150ms transition and the `scale-100`
+ * selected state of the indicator's direct child — the default checkmark, and
+ * the wrapper that hosts caller children. R-023 is the root's `text-white` /
+ * `text-black`:
  * without a color a border follows `currentColor`, so the whole subtree —
  * caller children included — takes the contrast color.
  */
@@ -153,11 +155,19 @@ export function ColorSwatchPickerIndicator(
 
     if (children !== undefined && children !== null) {
       // R-020: the caller's node replaces the default but keeps the 1/3 box
-      // and the inherited color, which upstream's `> *` rule gave it. Its own
-      // size wins inside the box; whether it follows the selected state is its
-      // own decision (R-024).
+      // and the inherited color, which upstream's `> *` rule gave it. R-021 /
+      // R-022 / R-024: upstream puts the `scale(0)` start and the 150ms
+      // transform transition on `.indicator > *`, so the wrapper that hosts
+      // the caller's node is that direct child and carries them too; the
+      // caller's own node is a grandchild upstream never styles.
       return (
-        <View class="flex size-1/3 items-center justify-center">
+        <View
+          class="flex size-1/3 items-center justify-center transition-transform duration-150 ease-out motion-reduce:transition-none"
+          classList={{
+            "scale-0": !isSelected(),
+            "scale-100": isSelected(),
+          }}
+        >
           {children as JSX.Element}
         </View>
       );

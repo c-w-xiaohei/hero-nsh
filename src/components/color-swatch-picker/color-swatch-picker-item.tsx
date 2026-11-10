@@ -1,6 +1,7 @@
 import type {
   Accessor,
   AccessibilityState,
+  Bounds,
   JSX,
   MouseEvent as NshMouseEvent,
   PressEvent,
@@ -331,6 +332,10 @@ export function ColorSwatchPickerItem(
 
   cleanup(list.register(descriptor));
   cleanup(list.registerColor(key, registeredColor));
+  // PageUp / PageDown move by a viewport, which the keyboard delegate can only
+  // compute from the rows' bounds (create-selectable-list.ts:55-61, as
+  // ListBoxItem does at src/components/list-box/list-box-item.tsx:597).
+  cleanup(() => list.unregisterItemLayout(key));
 
   const content = () => {
     const children = local.children;
@@ -435,6 +440,10 @@ export function ColorSwatchPickerItem(
     local.onHoverChange?.(false);
   };
 
+  const handleLayout = (event: { bounds: Bounds }) => {
+    list.registerItemLayout(key, event.bounds);
+  };
+
   const accessibilityLabel = computed(
     () =>
       (local["aria-label"] as string | undefined) ??
@@ -489,6 +498,7 @@ export function ColorSwatchPickerItem(
         onMouseLeave={handleMouseLeave}
         onFocus={local.onFocus}
         onBlur={local.onBlur}
+        onLayout={handleLayout}
       >
         {content()}
       </View>

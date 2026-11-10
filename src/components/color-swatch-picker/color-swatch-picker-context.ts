@@ -1,4 +1,4 @@
-import type { Accessor, PressEvent, ViewRef } from "nsh";
+import type { Accessor, Bounds, PressEvent, ViewRef } from "nsh";
 import { context } from "nsh";
 
 import type {
@@ -96,6 +96,15 @@ export interface ColorSwatchPickerContextValue {
 
   /** Records a pointer interaction on the root's modality tracker. */
   notePointer: () => void;
+
+  /**
+   * Reports one option's frame to the list keyboard, which needs it for
+   * PageUp / PageDown (`create-selectable-list.ts:55-61`).
+   */
+  registerItemLayout: (key: string, bounds: Bounds) => void;
+
+  /** Forgets an option's frame when its view unmounts. */
+  unregisterItemLayout: (key: string) => void;
 }
 
 export const ColorSwatchPickerContext = context<

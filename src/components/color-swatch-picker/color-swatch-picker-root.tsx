@@ -524,6 +524,9 @@ export function ColorSwatchPickerRoot(
     focusRoot,
     focusRootFromPointer,
     notePointer: () => modality.setPointerModality(),
+    registerItemLayout: (key, bounds) =>
+      selectableList.registerItemLayout(key, bounds),
+    unregisterItemLayout: (key) => selectableList.unregisterItemLayout(key),
   };
 
   const accessibilityLabel = () =>

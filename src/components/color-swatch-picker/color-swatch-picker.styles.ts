@@ -75,10 +75,11 @@ export const colorSwatchPickerVariants = tv({
     // (16pt / 8pt / 1pt), with R-014's swatch radius (`rounded-lg`) alongside.
     { size: "xs", class: { item: "size-4 rounded-lg border", swatch: "rounded-lg" } },
     // R-028: `--sm` → `size-6 rounded-xl border-2` (24pt / 12pt / 2pt) and the
-    // swatch's `rounded-2xl`.
+    // swatch's `rounded-xl`: it inherits the item's radius upstream (R-014),
+    // and 12pt is the xl step of this theme.
     {
       size: "sm",
-      class: { item: "size-6 rounded-xl border-2", swatch: "rounded-2xl" },
+      class: { item: "size-6 rounded-xl border-2", swatch: "rounded-xl" },
     },
     // R-029: `--md` declares nothing; the base item is already the md size.
     // R-014's md swatch radius is the one value it adds.
