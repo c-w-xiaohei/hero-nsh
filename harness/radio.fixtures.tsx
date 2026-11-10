@@ -28,6 +28,12 @@ import { probe } from "@scenario/probe";
  *                   `error`, `disabledValue`, `controlTestID`
  *   controlled      Pets bound to a signal that starts at cats; onChange only
  *                   records, a `force` view sets it to dogs
+ *   controlled-state  the same controlled group, printing selectedValue and
+ *                   defaultSelectedValue through the group's `state` accessor
+ *   set-value       Pets starting at cats, with `clear` (setSelectedValue(null))
+ *                   and `pick` (setSelectedValue("dragons")) views; params:
+ *                   `disabled`, `readonly`
+ *   null-default    Pets with defaultValue={null}
  *   layout          Plan with two items whose roots report onLayout; params:
  *                   `orientation`
  *   without-content-label  one item named by aria-label, Content holds no text
@@ -37,6 +43,7 @@ import { probe } from "@scenario/probe";
  *                   defaultSelectedValue, lastFocusedValue and the four state
  *                   bits
  *   control-children       Radio.Control given a bare string and a bare number
+ *   validate-array  a group whose validate() returns two messages (X-005)
  */
 
 type Option = { value: string; label: string };
@@ -279,6 +286,97 @@ function LayoutCase() {
   );
 }
 
+function ControlledStateCase() {
+  const value = signal<string | null>("cats");
+
+  return (
+    <Stage>
+      <RadioGroup aria-label="Favorite Pet" onChange={probe("onChange")} value={value()}>
+        {({ state }) => (
+          <View class="flex flex-col gap-2">
+            <Text>{`selected:${state.selectedValue() ?? "none"}`}</Text>
+            <Text>{`default:${state.defaultSelectedValue() ?? "none"}`}</Text>
+            {groupBody({ options: PETS })}
+          </View>
+        )}
+      </RadioGroup>
+      <View
+        class="px-3 py-1 bg-default"
+        onPress={() => value.set("dogs")}
+        role="button"
+        testID="force"
+      >
+        <Text>force</Text>
+      </View>
+    </Stage>
+  );
+}
+
+function SetValueCase() {
+  return (
+    <Stage>
+      <RadioGroup
+        aria-label="Favorite Pet"
+        defaultValue="cats"
+        isDisabled={boolParam("disabled")}
+        isReadOnly={boolParam("readonly")}
+      >
+        {({ state }) => (
+          <View class="flex flex-col gap-2">
+            <Text>{`selected:${state.selectedValue() ?? "none"}`}</Text>
+            <View class="flex-row gap-2">
+              <View
+                class="px-3 py-1 bg-default"
+                onPress={() => state.setSelectedValue(null)}
+                role="button"
+                testID="clear"
+              >
+                <Text>clear</Text>
+              </View>
+              <View
+                class="px-3 py-1 bg-default"
+                onPress={() => state.setSelectedValue("dragons")}
+                role="button"
+                testID="pick"
+              >
+                <Text>pick</Text>
+              </View>
+            </View>
+            {groupBody({ options: PETS })}
+          </View>
+        )}
+      </RadioGroup>
+    </Stage>
+  );
+}
+
+function NullDefaultCase() {
+  return (
+    <Stage>
+      <RadioGroup aria-label="Favorite Pet" defaultValue={null}>
+        {groupBody({ options: PETS })}
+      </RadioGroup>
+    </Stage>
+  );
+}
+
+function ValidateArrayCase() {
+  return (
+    <Stage>
+      <RadioGroup
+        defaultValue="dogs"
+        name="plan"
+        validate={() => ["Pick a plan", "Confirm the plan"]}
+        validationBehavior="aria"
+      >
+        <Label>Favorite Pet</Label>
+        {groupBody({ options: PETS })}
+        <FieldError />
+      </RadioGroup>
+    </Stage>
+  );
+}
+
 /* -------------------------------------------------------------------------------------------------
  * Field cases
  * -----------------------------------------------------------------------------------------------*/
@@ -376,6 +474,10 @@ function Fixture() {
   if (name === "pets") return <PetsCase />;
   if (name === "controlled") return <ControlledCase />;
   if (name === "layout") return <LayoutCase />;
+  if (name === "controlled-state") return <ControlledStateCase />;
+  if (name === "set-value") return <SetValueCase />;
+  if (name === "null-default") return <NullDefaultCase />;
+  if (name === "validate-array") return <ValidateArrayCase />;
   if (name === "without-content-label") return <WithoutContentLabelCase />;
   if (name === "item-description") return <ItemDescriptionCase />;
   if (name === "indicator") return <IndicatorCase />;

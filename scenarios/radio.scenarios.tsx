@@ -12,10 +12,10 @@ import type { Component } from "./types";
  * Deviations from the stories, recorded in the port sheet 4b and the final
  * answer:
  * - DeliveryAndPaymentExample draws the `@iconify/react` icons as text glyphs
- *   (an icon font is not part of this unit). Its Content keeps the
- *   `data-[selected=true]` tints on purpose: NSH has no `data-*` attribute to
- *   match, so the tinted rows are a registered screenshot difference rather
- *   than classes quietly removed on both sides.
+ *   (an icon font is not part of this unit). Its Content expresses the
+ *   selected / focus-visible tints with the `checked:` / `focus-visible:`
+ *   variants in place of upstream's `data-[selected=true]` /
+ *   `data-[focus-visible=true]` attributes, which NSH does not expose.
  * - The Validation story drops the Form wrapper and the Submit button (NSH has
  *   no form submission); the FieldError stays.
  */
@@ -271,7 +271,7 @@ function DeliveryAndPayment() {
         <Label>Delivery method</Label>
         {DELIVERY.map((option) => (
           <Radio value={option.value}>
-            <Radio.Content className="group relative flex w-full flex-col gap-6 rounded-xl bg-surface-tertiary px-5 py-4 transition-all data-[selected=true]:border-accent data-[selected=true]:bg-accent/10 data-[focus-visible=true]:bg-accent/10">
+            <Radio.Content className="group relative flex w-full flex-col gap-6 rounded-xl bg-surface-tertiary px-5 py-4 transition-all checked:border-accent checked:bg-accent/10 focus-visible:bg-accent/10">
               <Radio.Control className="absolute end-4 top-3 size-5">
                 <Radio.Indicator />
               </Radio.Control>
@@ -288,7 +288,7 @@ function DeliveryAndPayment() {
         <Label>Payment method</Label>
         {PAYMENT.map((option) => (
           <Radio value={option.value}>
-            <Radio.Content className="group relative flex w-full flex-row items-start justify-start gap-4 rounded-xl bg-surface-tertiary px-5 py-4 transition-all data-[selected=true]:bg-accent/10">
+            <Radio.Content className="group relative flex w-full flex-row items-start justify-start gap-4 rounded-xl bg-surface-tertiary px-5 py-4 transition-all checked:bg-accent/10">
               <Radio.Control className="absolute end-4 top-3 size-5">
                 <Radio.Indicator />
               </Radio.Control>

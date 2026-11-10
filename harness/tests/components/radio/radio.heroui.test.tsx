@@ -182,3 +182,70 @@ test("X-002 exposes the group state accessors, defaultSelectedValue included", a
   expect(app.shows("text:selected:dogs")).toBe(true);
   expect(app.shows("text:default:cats")).toBe(true);
 });
+
+// react-stately/packages/@react-stately/radio/src/useRadioGroupState.ts:150-154
+// — src/components/radio/create-radio-group-state.ts:150-154, 203-219;
+// src/components/radio/radio-group-root.tsx:247-257.
+// Regression X-004: useRadioGroupState records
+// `props.value !== undefined ? initialValue : props.defaultValue ?? null`, so a
+// controlled group's defaultSelectedValue is the first value and must not
+// follow later changes.
+test("X-004 keeps the controlled initial value as defaultSelectedValue", async () => {
+  const app = await openCase("controlled-state");
+
+  expect(app.shows("text:selected:cats")).toBe(true);
+  expect(app.shows("text:default:cats")).toBe(true);
+
+  await app.press("id:force");
+
+  expect(app.shows("text:selected:dogs")).toBe(true);
+  expect(app.shows("text:default:cats")).toBe(true);
+});
+
+// react-types/packages/@react-types/shared/src/inputs.d.ts
+// (`ValidationError = string | string[]`) + useFormValidationState's asArray()
+// — src/components/radio/radio-group-root.tsx:88-90;
+// src/components/radio/create-radio-group-state.ts:118-128.
+// Regression X-005: an array result from validate() is flattened into its
+// messages, so both of them reach the FieldError.
+test("X-005 flattens a validate() array into its messages", async () => {
+  const app = await openCase("validate-array");
+
+  expect(app.shows("text:/Pick a plan/")).toBe(true);
+  expect(app.shows("text:/Confirm the plan/")).toBe(true);
+});
+
+// react-types/packages/@react-types/radio/src/index.d.ts
+// (`RadioGroupProps extends ValueBase<string | null, string>`) and
+// react-stately's `setSelectedValue(value: string | null)`, guarded by
+// `!isReadOnly && !isDisabled` — src/components/radio/radio-group-root.tsx:66-70,
+// 237-245; src/components/radio/create-radio-group-state.ts:35-43, 79-93.
+// Regression X-006: null is a valid value and a valid setter argument, and the
+// public setter is a no-op while the group is disabled or read-only.
+test("X-006 clears the value with a null setter and ignores the setter while disabled or read-only", async () => {
+  const app = await openCase("set-value");
+
+  expect(app.shows("text:selected:cats")).toBe(true);
+
+  await app.press("id:clear");
+  expect(app.shows("text:selected:none")).toBe(true);
+
+  await app.press("id:pick");
+  expect(app.shows("text:selected:dragons")).toBe(true);
+
+  const disabled = await openCase("set-value", { disabled: true });
+
+  await disabled.press("id:clear");
+  expect(disabled.shows("text:selected:cats")).toBe(true);
+
+  const readonly = await openCase("set-value", { readonly: true });
+
+  await readonly.press("id:clear");
+  expect(readonly.shows("text:selected:cats")).toBe(true);
+
+  const nullDefault = await openCase("null-default");
+
+  expect(nullDefault.shows("text:Dogs:unselected")).toBe(true);
+  expect(nullDefault.shows("text:Cats:unselected")).toBe(true);
+  expect(nullDefault.shows("text:Dragons:unselected")).toBe(true);
+});
