@@ -82,9 +82,13 @@ test("X-001 a pointer drag moves the color and ends once", async () => {
 // react-aria/src/color/useColorArea.ts:250-262 (R-020) and the styles' size
 // pair (R-009, R-017): the thumb is 16pt and sits where its two channel
 // percentages put it. hsl(90, 50%, 50%) is 25% from the left and 50% from the
-// top. NSH's `translate` may land in onLayout either before or after the
-// transform, so the centre is allowed 10pt of slack, less than the 50pt the
-// wrong channel or a missing percentage would move it.
+// top of the area's padding box; the thumb is placed by `left` / `top`
+// percentages with negative half-size margins, not a transform, so the box it
+// reports is the box it draws. `onLayout` reports a view's frame in its parent
+// (types.d.ts:1345), so the thumb's origin is already in the area's frame and
+// must not be shifted by the area's origin (the Stage's 24pt padding, which the
+// area itself reports). The centre is allowed 1pt for layout rounding; the
+// wrong channel or a lost percentage moves it 50pt.
 test("X-002 places the thumb at its channel percentages and keeps it 16pt", async () => {
   const app = await openFixture("geometry");
 
@@ -97,8 +101,8 @@ test("X-002 places the thumb at its channel percentages and keeps it 16pt", asyn
   const centerX = thumb.x + thumb.width / 2;
   const centerY = thumb.y + thumb.height / 2;
 
-  expect(Math.abs(centerX - (area.x + area.width * 0.25))).toBeLessThanOrEqual(10);
-  expect(Math.abs(centerY - (area.y + area.height * 0.5))).toBeLessThanOrEqual(10);
+  expect(Math.abs(centerX - area.width * 0.25)).toBeLessThanOrEqual(1);
+  expect(Math.abs(centerY - area.height * 0.5)).toBeLessThanOrEqual(1);
 });
 
 // styles/components/color-area.css:22-26 (R-006, R-018): disabled dims the root
