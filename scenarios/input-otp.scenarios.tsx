@@ -19,6 +19,7 @@ import type { Component } from "./types";
  *   input-otp/controlled  a controlled value the fixture records but never writes back
  *   input-otp/secondary   `variant="secondary"`
  *   input-otp/filled      `defaultValue="123"`, unfocused
+ *   input-otp/readonly    `readOnly` with a default value and the onChange probe
  *
  * What is not here: `data-slot`, `data-active`, `data-filled`, `data-invalid`
  * and `data-disabled` are D18 differences (port sheet T-001 / T-002 / T-005 /
@@ -155,6 +156,17 @@ function Filled() {
   );
 }
 
+/* `readOnly` blocks edits at the host input; the slots and callbacks must agree. */
+function Readonly() {
+  return (
+    <Stage>
+      <InputOTP maxLength={6} readOnly defaultValue="123" onChange={probe("onChange")}>
+        <Slots />
+      </InputOTP>
+    </Stage>
+  );
+}
+
 export const inputOtpScenarios = {
   "input-otp/basic": Basic,
   "input-otp/typing": Typing,
@@ -166,4 +178,5 @@ export const inputOtpScenarios = {
   "input-otp/controlled": Controlled,
   "input-otp/secondary": Secondary,
   "input-otp/filled": Filled,
+  "input-otp/readonly": Readonly,
 } satisfies Record<string, Component>;

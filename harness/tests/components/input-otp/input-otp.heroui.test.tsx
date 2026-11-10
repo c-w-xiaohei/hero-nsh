@@ -5,18 +5,21 @@ import { openScenario } from "../../helpers/open-scenario";
 /*
  * HeroUI 3.2.7 regression cases for InputOTP, per port sheet 4b (T-001 …
  * T-007). T-002 is deleted there: it asserts the BEM block class, which D18
- * drops and which has no visible effect; T-001's container/part counts cover
- * the structure it was protecting.
+ * drops and which has no visible effect; T-001's root check covers the
+ * container it was protecting.
  *
  * Every case runs headless on the default desktop platform
  * (`platform: "windows"`). InputOTP's keyboard interaction is a native text
- * input (`app.type` / `app.paste` focus it on every platform), and no case here
- * moves focus with Tab or activates a view with Return / Space, so no `.web.`
- * or `.windows.` file is needed (port sheet 4b, closing note).
+ * input (`app.type` / `app.paste` focus it on every platform) and X-003 presses
+ * Return inside that input, where the focused input takes the return key; no
+ * case moves focus with Tab or activates a view with Return / Space, so no
+ * `.web.` or `.windows.` file is needed (port sheet 4b, closing note).
  *
  * The `S-` cases at the end are this unit's supplement for the core behaviour
  * HeroUI's own seven cases do not cover (port sheet 4b, closing note). They
- * carry no upstream `T-` number on purpose.
+ * carry no upstream `T-` number on purpose. The `X-` cases are review
+ * regressions: each one states the upstream behaviour the port dropped and
+ * carries the reported `path:line` above it.
  */
 
 // heroui/packages/react/tests/components/input-otp/input-otp.test.tsx:38
@@ -26,6 +29,7 @@ import { openScenario } from "../../helpers/open-scenario";
 test("T-001 should expose root and compound parts", async () => {
   const app = await openScenario("input-otp/basic");
 
+  expect(app.shows("id:input-otp")).toBe(true);
   expect(app.shows("id:input-otp-input")).toBe(true);
   expect(app.count("id:input-otp-group")).toBe(2);
   expect(app.count("id:input-otp-slot")).toBe(6);
@@ -136,8 +140,8 @@ test("S-002 should not self-update a controlled value", async () => {
 });
 
 /*
- * Supplement: a filled field cannot grow past `maxLength`; the value reported
- * on the next edit is unchanged.
+ * Supplement: a filled field cannot grow past `maxLength`, and the caret rests
+ * on the last cell after the sixth digit, so the next digit replaces it.
  */
 test("S-003 should not grow past maxLength", async () => {
   const app = await openScenario("input-otp/filled");
@@ -149,7 +153,7 @@ test("S-003 should not grow past maxLength", async () => {
 
   await app.type("id:input-otp-input", "7");
   expect(app.count("id:input-otp-slot-value")).toBe(6);
-  expect(callsOf(app, "onChange").at(-1)?.[0]).toBe("123456");
+  expect(callsOf(app, "onChange").at(-1)?.[0]).toBe("123457");
 });
 
 /*
@@ -176,4 +180,91 @@ test("S-005 should render defaultValue in the slots", async () => {
   expect(app.texts()).toContain("2");
   expect(app.texts()).toContain("3");
   expect(app.count("id:input-otp-caret")).toBe(0);
+});
+
+/*
+ * Supplement: typing over a filled cell replaces it in place. A seventh digit
+ * that appended would show 7 characters (or drop the keystroke, leaving `6`).
+ */
+test("S-006 should replace the last cell instead of inserting", async () => {
+  const app = await openScenario("input-otp/filled");
+
+  await app.type("id:input-otp-input", "456");
+  await app.type("id:input-otp-input", "7");
+
+  expect(app.count("id:input-otp-slot")).toBe(6);
+  expect(app.count("id:input-otp-slot-value")).toBe(6);
+  expect(app.texts()).toContain("7");
+  expect(app.texts()).not.toContain("6");
+  expect(callsOf(app, "onChange").at(-1)?.[0]).toBe("123457");
+});
+
+/*
+ * Regression (review): HeroUI's Root forwards `readOnly` to the input
+ * (Omit<ComponentPropsWithRef<typeof OTPInput>, …>), where it blocks edits;
+ * the port declared it as accepted with no effect.
+ * src/components/input-otp/input-otp-root.tsx:67,352,771
+ */
+test("X-001 should block edits and keep focus under readOnly", async () => {
+  const app = await openScenario("input-otp/readonly");
+
+  expect(app.count("id:input-otp-slot-value")).toBe(3);
+  expect(app.enabled("id:input-otp-input")).toBe(false);
+
+  await app.type("id:input-otp-input", "9").catch(() => undefined);
+
+  expect(app.count("id:input-otp-slot-value")).toBe(3);
+  expect(app.value("id:input-otp-input")).toBe("123");
+  expect(callsOf(app, "onChange")).toHaveLength(0);
+
+  await app.press("id:input-otp-input");
+
+  expect(app.count("id:input-otp-caret")).toBe(1);
+});
+
+/*
+ * Regression (review): input-otp@1.4.2 normalizes the caret on every sync. A
+ * caret at `maxLength` selects the last cell, so the next digit replaces it
+ * instead of being dropped; a paste selects min(length, maxLength - 1) …
+ * length. The port kept the raw host caret in all three places.
+ * src/components/input-otp/input-otp-root.tsx:583-585,612-619,622-627
+ */
+test("X-002 should replace the last cell after a full code is typed or pasted", async () => {
+  const typed = await openScenario("input-otp/typing");
+
+  await typed.type("id:input-otp-input", "123456");
+  expect(callsOf(typed, "onChange").at(-1)?.[0]).toBe("123456");
+
+  await typed.type("id:input-otp-input", "7");
+
+  expect(typed.count("id:input-otp-slot-value")).toBe(6);
+  expect(callsOf(typed, "onChange").at(-1)?.[0]).toBe("123457");
+
+  const pasted = await openScenario("input-otp/paste");
+
+  await pasted.paste("id:input-otp-input", { text: "654321" });
+  expect(callsOf(pasted, "onChange").at(-1)?.[0]).toBe("654321");
+
+  await pasted.type("id:input-otp-input", "7");
+
+  expect(pasted.count("id:input-otp-slot-value")).toBe(6);
+  expect(callsOf(pasted, "onChange").at(-1)?.[0]).toBe("654327");
+});
+
+/*
+ * Regression (review): HeroUI's OTPInput has no Enter handler, so Return
+ * neither blurs nor changes the selection. The port's Input kept the
+ * single-line default `submitBehavior` ("blurAndSubmit"), which drops focus
+ * and with it the fake caret.
+ * src/components/input-otp/input-otp-root.tsx:750-785
+ */
+test("X-003 should keep focus and the fake caret on Return", async () => {
+  const app = await openScenario("input-otp/basic");
+
+  await app.press("id:input-otp-input");
+  expect(app.count("id:input-otp-caret")).toBe(1);
+
+  await app.keyboard.press("enter");
+
+  expect(app.count("id:input-otp-caret")).toBe(1);
 });
