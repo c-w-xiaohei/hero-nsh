@@ -203,6 +203,27 @@ test("T-022 supports typing and calls onChange", async () => {
   expect(calls.length).toBeGreaterThan(0);
 });
 
+// src/components/textfield/textfield.tsx:219, 343, 540-552
+// X-001: `TextFieldRootProps` declared `onCompositionChange` and `split()` took
+// it out of `rest`, but the field context's single member only fanned the
+// host's event out to `onCompositionStart` / `onCompositionUpdate` /
+// `onCompositionEnd`, so the root's own prop never ran. `TextControl` calls
+// `field.onCompositionChange(event)` for every phase (NSH reports all three on
+// one event); `nsh/test` cannot drive a native composition, so the fixture's
+// button calls that same context handler for start, update and end, and the
+// root has to hear all three.
+test("X-001 calls the root's onCompositionChange for every composition phase", async () => {
+  const app = await openCase("composition");
+
+  await app.press("id:compose");
+
+  const calls = callsOf(app, "onCompositionChange");
+  expect(calls).toHaveLength(3);
+  expect(calls[0]).toEqual([{ composing: true, text: "n" }]);
+  expect(calls[1]).toEqual([{ composing: true, text: "ni" }]);
+  expect(calls[2]).toEqual([{ composing: false, text: "" }]);
+});
+
 // heroui/packages/react/tests/components/textarea/textarea.test.tsx:52
 // T-023: `disabled` at the host; a rejected edit leaves the value unchanged.
 test("T-023 supports disabled state", async () => {

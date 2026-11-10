@@ -1,5 +1,5 @@
 import { host, mount, signal, Text, View } from "nsh";
-import { Description, FieldError, Input, Label, TextArea, TextField } from "@heroui/react";
+import { Description, FieldError, Input, Label, TextArea, TextField, TextFieldContext } from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 
@@ -37,6 +37,9 @@ import { probe } from "@scenario/probe";
  *                              probe (T-019, T-022)
  *   standalone-textarea-disabled  `<TextArea aria-label="Bio" disabled>` (T-023)
  *   required           `isRequired` + Label + Input (T-042, T-047)
+ *   composition        root `onCompositionChange` probe and a `compose` button
+ *                      that calls the field context's composition handler
+ *                      (X-001)
  *   focus              Input className / onFocus / onBlur probes (T-012)
  *   render-children.split  the children function reading `isRequired()`
  *                      (T-013)
@@ -261,6 +264,37 @@ function StandaloneTextAreaDisabledCase() {
   );
 }
 
+function CompositionTrigger() {
+  const field = TextFieldContext();
+
+  return (
+    <View
+      testID="compose"
+      role="button"
+      class="bg-default px-3 py-1"
+      onPress={() => {
+        field?.onCompositionChange?.({ composing: true, text: "n" });
+        field?.onCompositionChange?.({ composing: true, text: "ni" });
+        field?.onCompositionChange?.({ composing: false, text: "" });
+      }}
+    >
+      <Text>Compose</Text>
+    </View>
+  );
+}
+
+function CompositionCase() {
+  return (
+    <Stage>
+      <TextField name="name" onCompositionChange={probe("onCompositionChange")}>
+        <Label>Your name</Label>
+        <Input testID="name" />
+        <CompositionTrigger />
+      </TextField>
+    </Stage>
+  );
+}
+
 function RequiredCase() {
   return (
     <Stage>
@@ -331,6 +365,7 @@ function Fixture() {
   if (name === "standalone-textarea") return <StandaloneTextAreaCase />;
   if (name === "standalone-textarea-disabled") return <StandaloneTextAreaDisabledCase />;
   if (name === "required") return <RequiredCase />;
+  if (name === "composition") return <CompositionCase />;
   if (name === "focus") return <FocusCase />;
   if (name === "render-children") return <RenderChildrenCase />;
   if (name === "multiline") return <TextAreaCase />;
