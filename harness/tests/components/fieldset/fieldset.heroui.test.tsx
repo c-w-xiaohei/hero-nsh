@@ -63,3 +63,21 @@ test("T-004 disables the whole subtree from the root disabled state", async () =
   });
   expect(callsOf(app, "fieldset.save")).toHaveLength(0);
 });
+
+// Regression X-001: the root passed `props.children` raw into the provider's
+// View, and NSH drops a string inside a View, so `<Fieldset>Content</Fieldset>`
+// showed an empty screen. HeroUI takes `children: ReactNode`
+// (heroui/packages/react/src/components/fieldset/fieldset.tsx:37) and its own
+// cases pass a bare string child
+// (heroui/packages/react/tests/components/fieldset/fieldset.test.tsx:25 and
+// :34-36); port sheet tmp/port-sheets/fieldset.md:27 requires this unit's
+// children wrapper to wrap bare strings/numbers. Bug site:
+// src/components/fieldset/fieldset.tsx:128.
+test("X-001 renders bare string, number and string-array root children", async () => {
+  const app = await openFixture("children");
+
+  expect(app.shows("text:Bare string")).toBe(true);
+  expect(app.shows("text:42")).toBe(true);
+  expect(app.shows("text:First")).toBe(true);
+  expect(app.shows("text:Second")).toBe(true);
+});

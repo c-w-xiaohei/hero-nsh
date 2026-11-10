@@ -1,9 +1,9 @@
-import { host, mount, Text } from "nsh";
+import { host, mount } from "nsh";
 import { Fieldset } from "@heroui/react";
 import { Stage } from "@scenario/stage";
 
 /*
- * NSH-only Fieldset fixture (port sheet 4b, T-003).
+ * NSH-only Fieldset fixture (port sheet 4b, T-003 and regression X-001).
  *
  * The upstream case passes an arbitrary `data-foo` and reads it back; NSH has
  * no data-* channel (D18), so the equivalent channel is `testID` and this
@@ -14,14 +14,27 @@ import { Stage } from "@scenario/stage";
  * directory as the app's root, so an entry under harness/tests/... finds no
  * nsh.json: the `@heroui/react` alias does not resolve and the theme is lost.
  *
- * host.params.case picks the shape; `attributed` is the only case.
+ * host.params.case picks the shape:
+ * - `attributed`: upstream's own case, a bare string child plus `testID`.
+ * - `children`: the child shapes HeroUI accepts (`ReactNode`), a bare string,
+ *   a number and an array of strings, kept separate so each is visible.
  */
 
 function AttributedCase() {
   return (
     <Stage>
-      <Fieldset testID="fieldset">
-        <Text>Content</Text>
+      <Fieldset testID="fieldset">Content</Fieldset>
+    </Stage>
+  );
+}
+
+function ChildrenCase() {
+  return (
+    <Stage>
+      <Fieldset testID="fieldset-children">
+        {"Bare string"}
+        {42}
+        {["First", "Second"]}
       </Fieldset>
     </Stage>
   );
@@ -30,7 +43,7 @@ function AttributedCase() {
 function Fixture() {
   const name = String(host.params.case ?? "attributed");
 
-  if (name === "attributed") return <AttributedCase />;
+  if (name === "children") return <ChildrenCase />;
 
   return <AttributedCase />;
 }
