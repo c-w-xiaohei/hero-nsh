@@ -143,6 +143,16 @@ export function SliderMark(props: SliderMarkProps): JSX.Element {
     "text-foreground": indicator().filled,
   }));
 
+  // Read `props.children` once (research 4.1 / 4.6): the same value decides
+  // between the formatted fallback and the caller's label, then is placed.
+  const content = computed(() => {
+    const children = local.children;
+
+    return children === undefined || children === null
+      ? <Text>{slider?.state.getFormattedValue(local.value) ?? ""}</Text>
+      : renderChildren(children);
+  });
+
   return (
     <If when={isVisible()}>
       <View
@@ -157,11 +167,7 @@ export function SliderMark(props: SliderMarkProps): JSX.Element {
           getIndicatorStyle(indicator().percent, isVertical(), slider?.isRtl() ?? false),
         ]}
       >
-        {local.children === undefined || local.children === null ? (
-          <Text>{slider?.state.getFormattedValue(local.value) ?? ""}</Text>
-        ) : (
-          renderChildren(local.children)
-        )}
+        {content()}
       </View>
     </If>
   );

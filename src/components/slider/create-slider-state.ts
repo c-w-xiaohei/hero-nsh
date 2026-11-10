@@ -38,6 +38,9 @@ export interface SliderState {
   /** The current thumb values, sorted. */
   readonly values: Accessor<number[]>;
 
+  /** The value the slider resets to: the initial (restricted) default. */
+  readonly defaultValues: number[];
+
   getThumbValue(index: number): number;
   setThumbValue(index: number, value: number): void;
   getThumbPercent(index: number): number;
@@ -139,6 +142,14 @@ export function createSliderState(props: SliderStateProps): SliderState {
 
   const values = computed(() => restrictValues(controllableValues() ?? [minValue()]));
 
+  // React Stately's `defaultValues`: the snapshot `resetValues` returns to.
+  // The caller's `defaultValue` when one was given (restricted like the live
+  // values), otherwise the values the state started with.
+  const providedDefault = toArray(props.defaultValue?.());
+  const defaultValues = providedDefault
+    ? restrictValues(providedDefault)
+    : [...values()];
+
   const isEditables = signal<boolean[]>(new Array(values().length).fill(true));
   const dragging = signal<boolean[]>(new Array(values().length).fill(false));
   const focusedThumb = signal<number | undefined>(undefined);
@@ -150,7 +161,7 @@ export function createSliderState(props: SliderStateProps): SliderState {
   };
 
   const resetValues = () => {
-    setControllableValues(restrictValues(toArray(props.defaultValue?.()) ?? [minValue()]));
+    setControllableValues(restrictValues(defaultValues));
   };
 
   const getThumbMinValue = (index: number): number =>
@@ -284,6 +295,7 @@ export function createSliderState(props: SliderStateProps): SliderState {
 
   return {
     values,
+    defaultValues,
     getThumbValue: (index) => values()[index]!,
     setThumbValue: updateValue,
     getThumbPercent,

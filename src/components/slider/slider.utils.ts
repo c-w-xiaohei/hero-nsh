@@ -107,20 +107,27 @@ export function getClosestValueIndex(values: number[], nextValue: number): numbe
 }
 
 /**
- * The RTL languages and scripts of BCP 47, as `@react-aria/i18n` reads them
- * for `useLocale().direction`. NSH has no layout-direction read on the JS
- * side, so the locale string is the only source (port sheet section 8).
+ * The RTL languages and scripts of BCP 47, as React Aria / Kobalte read them
+ * for the locale direction (`@react-aria/i18n`'s `utils.ts`, mirrored in
+ * Kobalte's `packages/core/src/i18n/utils.ts:12-47`). NSH has no
+ * layout-direction read on the JS side, so the locale string is the only
+ * source (port sheet section 8).
  */
 const RTL_LANGUAGES = new Set([
+  "ae",
   "ar",
   "arc",
+  "bcc",
+  "bqi",
   "ckb",
   "dv",
   "fa",
-  "ha",
+  "glk",
   "he",
-  "khw",
-  "ks",
+  "ku",
+  "mzn",
+  "nqo",
+  "pnb",
   "ps",
   "sd",
   "ug",
@@ -128,11 +135,15 @@ const RTL_LANGUAGES = new Set([
   "yi",
 ]);
 
+/** Lowercased script codes: `Arab`, `Hebr`, `Nkoo` ... */
 const RTL_SCRIPTS = new Set([
   "adlm",
   "arab",
+  "armi",
+  "avst",
   "hebr",
   "mand",
+  "mend",
   "nkoo",
   "rohg",
   "samr",
@@ -142,6 +153,25 @@ const RTL_SCRIPTS = new Set([
 
 /** Whether a BCP 47 locale writes right to left (`ar-AE`, `he`, `ku-Arab`). */
 export function isRtlLocale(locale: string): boolean {
+  // The maximised script is the accurate read: one language can be written in
+  // several scripts (`ku` is Latn in Turkey and Arab in Iraq), so the locale
+  // subtags alone are only the fallback.
+  const IntlLocale = (
+    Intl as unknown as {
+      Locale?: new (tag: string) => { maximize(): { script?: string } };
+    }
+  ).Locale;
+
+  if (IntlLocale) {
+    try {
+      const script = new IntlLocale(locale).maximize().script ?? "";
+
+      return RTL_SCRIPTS.has(script.toLowerCase());
+    } catch {
+      // An unparsable tag falls through to the subtag table.
+    }
+  }
+
   const parts = locale.toLowerCase().split(/[-_]/);
   const language = parts[0] ?? "";
 

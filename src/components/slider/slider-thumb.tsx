@@ -201,6 +201,11 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
     () => (local.orientation ?? slider?.orientation() ?? "horizontal") === "vertical",
   );
 
+  // HeroUI sizes and centres the thumb from the root's `[data-orientation]`
+  // (styles/components/slider.css:167-182, :247-263), so the deprecated
+  // per-thumb `orientation` only moves this thumb; it does not resize it.
+  const isRootVertical = computed(() => slider?.orientation() === "vertical");
+
   const isDisabled = computed(
     () => (local.isDisabled ?? false) || (slider?.isDisabled() ?? false),
   );
@@ -503,15 +508,16 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
   const classes = computed(() =>
     joinClassNames(
       state ? slider?.slots().thumb() : undefined,
-      isVertical() ? "w-full left-1/2 h-7" : "h-full top-1/2 w-7",
+      isRootVertical() ? "w-full left-1/2 h-7" : "h-full top-1/2 w-7",
       resolvedClassName(),
     ),
   );
 
   // R-050: the horizontal `::after` → `w-6 h-4`.
-  // R-072: the vertical `::after` → `w-4 h-6`.
+  // R-072: the vertical `::after` → `w-4 h-6`. The block follows the root
+  // orientation like every other thumb size class.
   const visualClasses = computed(() =>
-    joinClassNames(THUMB_VISUAL_CLASSES, isVertical() ? "w-4 h-6" : "w-6 h-4"),
+    joinClassNames(THUMB_VISUAL_CLASSES, isRootVertical() ? "w-4 h-6" : "w-6 h-4"),
   );
 
   // R-076: the thumb's offset is `(isVertical or RTL ? 1 - percent : percent)`
@@ -602,7 +608,10 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
           // R-034: `[data-disabled="true"]` → `cursor-default`.
           "cursor-default": isDisabled(),
         }}
-        style={[resolvedStyle(), positionStyle()]}
+        // RAC applies the position first and the caller's `style` after it
+        // (`style={{...thumbProps.style, ...renderProps.style}}`), so a caller
+        // keeps the final say on left / top / transform.
+        style={[positionStyle(), resolvedStyle()]}
         onStartShouldSetResponder={() => !isDisabled()}
         onResponderGrant={handleGrant}
         onResponderMove={handleMove}
