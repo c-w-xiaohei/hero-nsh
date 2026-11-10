@@ -54,3 +54,4 @@ export * from "./components/radio-group";
 export * from "./components/card";
 export * from "./components/fieldset";
 export * from "./components/color-area";
+export * from "./components/tag";
