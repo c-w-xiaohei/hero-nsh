@@ -456,30 +456,23 @@ for (const { dir, locale } of DIRECTIONS) {
 // the whole SliderState to the render prop, and react-stately 3.51.0 useSliderState.d.ts:32-40
 // declares `readonly defaultValues: number[]`. Port sheet tmp/port-sheets/slider.md:74 lists it as
 // the first-frame snapshot: the restricted defaultValue when one was given, otherwise the first
-// values.
+// values. The keyboard half (the snapshot must not follow the live value) lives in
+// slider.heroui.web.test.tsx, because Tab reaches the thumb only on the web target.
 test("X-001 exposes the first-frame defaultValues through the Root render prop", async () => {
   // Uncontrolled: the snapshot is the restricted defaultValue.
-  let app = await openCase("state-defaults", { defaultValue: 30 }, { platform: "web" });
+  const app = await openCase("state-defaults", { defaultValue: 30 });
 
-  expect(app.shows("id:default-values >> text:30")).toBe(true);
-
-  // It is a snapshot, not the live values: an arrow key leaves it at 30.
-  await app.keyboard.press("tab");
-  await app.keyboard.press("arrowright");
-  expect(app.shows("id:output >> text:31")).toBe(true);
   expect(app.shows("id:default-values >> text:30")).toBe(true);
 
   // The snapshot is restricted to the slider's bounds.
-  app = await openCase(
-    "state-defaults",
-    { defaultValue: 150, maxValue: 100 },
-    { platform: "web" },
-  );
-  expect(app.shows("id:default-values >> text:100")).toBe(true);
+  const restricted = await openCase("state-defaults", { defaultValue: 150, maxValue: 100 });
+
+  expect(restricted.shows("id:default-values >> text:100")).toBe(true);
 
   // Controlled without a defaultValue: the first values are the snapshot.
-  app = await openCase("state-defaults", { controlled: true, value: 40 }, { platform: "web" });
-  expect(app.shows("id:default-values >> text:40")).toBe(true);
+  const controlled = await openCase("state-defaults", { controlled: true, value: 40 });
+
+  expect(controlled.shows("id:default-values >> text:40")).toBe(true);
 });
 
 // Regression X-002, evidence:

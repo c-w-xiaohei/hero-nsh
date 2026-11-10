@@ -319,3 +319,25 @@ test("T-026 supports pointer interaction through dots and updates their filled s
   expect(app.spanStyle("id:marks >> text:75 >> nth=0").color).toBe(app.spanStyle("id:marks >> text:0 >> nth=0").color);
   expect(callsOf(app, "onFocus")).toHaveLength(1);
 });
+
+/* -------------------------------------------------------------------------------------------------
+ * Regressions
+ * -----------------------------------------------------------------------------------------------*/
+
+// Regression X-001 (keyboard half), evidence:
+//   src/components/slider/create-slider-state.ts:37-65, 285-311
+// `defaultValues` is a snapshot taken on the first frame, not a reader of the
+// live values: ArrowRight moves the value to 31 while the snapshot stays at 30.
+// It sits here because reaching the thumb with Tab only works on the web target
+// (NSH 0.4.0's Win32 host focuses Inputs only; port sheet section 8).
+test("X-001 keeps defaultValues at its first-frame snapshot while the value moves", async () => {
+  const app = await openCase("state-defaults", { defaultValue: 30 });
+
+  expect(app.shows("id:default-values >> text:30")).toBe(true);
+
+  await app.keyboard.press("tab");
+  await app.keyboard.press("arrowright");
+
+  expect(app.shows("id:output >> text:31")).toBe(true);
+  expect(app.shows("id:default-values >> text:30")).toBe(true);
+});
