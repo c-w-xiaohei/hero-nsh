@@ -106,6 +106,31 @@ export function createModalContextValue(
 }
 
 /**
+ * A child value that keeps every dimension of `base` but takes its open state
+ * from the given accessor. A Backdrop with its own open channel uses it: React
+ * Aria gives the overlay its local state in that case, so the Dialog it renders
+ * must read (and close) that state rather than the Root's
+ * (`react-aria-components/src/Modal.tsx:213-215`).
+ */
+export function deriveModalState(
+  base: ModalContextValue,
+  isOpen: Accessor<boolean>,
+  setOpen: (next: boolean | ((prev: boolean) => boolean)) => void,
+): ModalContextValue {
+  const value: ModalContextValue = {
+    ...base,
+    isOpen,
+    setOpen,
+    open: () => setOpen(true),
+    close: () => setOpen(false),
+    toggle: () => setOpen((prev) => !prev),
+    withOverrides: (next) => deriveModalContext(value, next),
+  };
+
+  return value;
+}
+
+/**
  * A child value: every dimension is `override ?? parent`, and the slot table
  * is recomputed from the three axes. A single `modalVariants()` call with all
  * axes is the same string HeroUI gets by spreading one call over another,

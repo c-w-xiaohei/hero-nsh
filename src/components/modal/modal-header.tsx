@@ -1,8 +1,9 @@
 import type { JSX } from "nsh";
-import { computed, View } from "nsh";
+import { computed, split, View } from "nsh";
 
 import { ModalDialogContext } from "./create-modal-part-order";
 import type { ModalPartDomProps } from "./modal-dom-props";
+import { viewProps } from "./modal-dom-props";
 import { ModalContext } from "./modal-context";
 import { renderModalPartChildren } from "./modal-part-children";
 import { modalVariants } from "./modal.styles";
@@ -23,6 +24,17 @@ export interface ModalHeaderProps extends ModalPartDomProps {}
  * before it and gets `mt-2` / `mt-5` (R-058, R-059).
  */
 export function ModalHeader(props: ModalHeaderProps): JSX.Element {
+  const [local, rest] = split(props, [
+    "children",
+    "className",
+    "style",
+    "ref",
+    "id",
+    "nativeID",
+    "render",
+    "slot",
+  ]);
+
   const context = ModalContext();
 
   // Outside a Root the part still renders with the table's defaults, as the
@@ -36,20 +48,23 @@ export function ModalHeader(props: ModalHeaderProps): JSX.Element {
   ModalDialogContext()?.register("header");
 
   const classes = computed(() =>
-    [slots().header(), props.className]
+    [slots().header(), local.className]
       .filter((part) => part !== undefined && part !== "")
       .join(" "),
   );
 
   return (
     <View
-      ref={(node) => props.ref?.(node)}
-      testID={props.testID}
-      nativeID={props.id ?? props.nativeID}
+      // Upstream spreads every caller prop onto the div; the ones NSH models
+      // (`testID`, `accessibilityLabel`, `onLayout`, `focusable`, `onPress` …)
+      // reach the view, the DOM-only ones are dropped by `viewProps`.
+      {...viewProps(rest)}
+      ref={(node) => local.ref?.(node)}
+      nativeID={local.id ?? local.nativeID}
       class={classes()}
-      style={props.style}
+      style={local.style}
     >
-      {renderModalPartChildren(props.children)}
+      {renderModalPartChildren(local.children)}
     </View>
   );
 }

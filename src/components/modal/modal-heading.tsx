@@ -1,8 +1,10 @@
 import type { JSX } from "nsh";
-import { Text, View } from "nsh";
+import { split, View } from "nsh";
 
 import type { ModalPartDomProps } from "./modal-dom-props";
+import { viewProps } from "./modal-dom-props";
 import { ModalContext } from "./modal-context";
+import { renderModalPartChildren } from "./modal-part-children";
 import { modalVariants } from "./modal.styles";
 
 /**
@@ -14,45 +16,27 @@ export interface ModalHeadingProps extends ModalPartDomProps {
   level?: number;
 }
 
-/**
- * Upstream's heading is an `h{level}` DOM element, so its text is drawn by the
- * element itself. A `View` draws no bare string (research 4.1 / 4.6), so the
- * one value read from `props.children` is wrapped in a `Text` when it is a
- * string or a number. Local copy of `card/card-children.tsx`, which port sheet
- * §5 proposes lifting into a primitive; the unit keeps its own until then.
- */
-function renderHeadingChildren(node: JSX.Element): JSX.Element {
-  if (node === null || node === undefined || typeof node === "boolean") {
-    return null;
-  }
-
-  if (typeof node === "string" || typeof node === "number") {
-    return <Text>{node}</Text>;
-  }
-
-  // A zero-argument function is NSH's reactive child: calling it here keeps the
-  // read inside the tracked children expression at the placement, so a signal
-  // in `<Modal.Heading>{title()}</Modal.Heading>` still updates.
-  if (typeof node === "function") {
-    return renderHeadingChildren(node());
-  }
-
-  if (Array.isArray(node)) {
-    return node.map((child) => renderHeadingChildren(child)) as unknown as JSX.Element;
-  }
-
-  return node;
-}
-
 /** Modal.Heading / ModalHeading: the dialog's title. */
 export function ModalHeading(props: ModalHeadingProps): JSX.Element {
+  const [local, rest] = split(props, [
+    "children",
+    "className",
+    "style",
+    "ref",
+    "id",
+    "nativeID",
+    "level",
+    "render",
+    "slot",
+  ]);
+
   const context = ModalContext();
   const slots = () => context?.slots() ?? modalVariants();
 
   // R-050 `align-middle` is deleted (no inline box to align);
   // R-051 `.modal__heading` → `text-base font-medium text-foreground`.
   const classes = () =>
-    [slots().heading(), props.className]
+    [slots().heading(), local.className]
       .filter((part) => part !== undefined && part !== "")
       .join(" ");
 
@@ -61,15 +45,15 @@ export function ModalHeading(props: ModalHeadingProps): JSX.Element {
   // level becomes the accessibility level of a `header` role.
   return (
     <View
-      ref={(node) => props.ref?.(node)}
-      testID={props.testID}
-      nativeID={props.id ?? props.nativeID}
+      {...viewProps(rest)}
+      ref={(node) => local.ref?.(node)}
+      nativeID={local.id ?? local.nativeID}
       role="header"
-      accessibilityLevel={props.level ?? 3}
+      accessibilityLevel={local.level ?? 3}
       class={classes()}
-      style={props.style}
+      style={local.style}
     >
-      {renderHeadingChildren(props.children)}
+      {renderModalPartChildren(local.children)}
     </View>
   );
 }

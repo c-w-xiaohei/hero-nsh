@@ -1,8 +1,9 @@
 import type { JSX } from "nsh";
-import { computed, Scroll, View } from "nsh";
+import { computed, split, Scroll, View } from "nsh";
 
 import { ModalDialogContext } from "./create-modal-part-order";
 import type { ModalPartDomProps } from "./modal-dom-props";
+import { viewProps } from "./modal-dom-props";
 import { ModalContext } from "./modal-context";
 import { renderModalPartChildren } from "./modal-part-children";
 import { modalBodyAfterHeaderClasses, modalVariants } from "./modal.styles";
@@ -12,7 +13,7 @@ import { modalBodyAfterHeaderClasses, modalVariants } from "./modal.styles";
  * `children` and `className`.
  */
 export interface ModalBodyProps extends ModalPartDomProps {
-  /** A DOM tab stop upstream; accepted without effect, a view is one or not. */
+  /** A DOM tab stop upstream; a view is one through `focusable` (below). */
   tabIndex?: number;
 }
 
@@ -32,6 +33,19 @@ export interface ModalBodyProps extends ModalPartDomProps {
  * registration table which part was written before it.
  */
 export function ModalBody(props: ModalBodyProps): JSX.Element {
+  const [local, rest] = split(props, [
+    "children",
+    "className",
+    "style",
+    "ref",
+    "id",
+    "nativeID",
+    "tabIndex",
+    "focusable",
+    "render",
+    "slot",
+  ]);
+
   const context = ModalContext();
 
   const slots = () => context?.slots() ?? modalVariants();
@@ -41,10 +55,17 @@ export function ModalBody(props: ModalBodyProps): JSX.Element {
   // R-058, through the order the Dialog hands down (port sheet §2).
   const previous = ModalDialogContext()?.register("body");
 
+  // HeroUI's fixture gives the body `tabIndex={0}` to make the scrolling area
+  // focusable. A view is a tab stop through `focusable`, so a non-negative
+  // `tabIndex` maps to it; a caller's own `focusable` still decides when no
+  // `tabIndex` is given.
+  const focusable = () =>
+    local.tabIndex === undefined ? local.focusable : local.tabIndex >= 0;
+
   const classes = computed(() =>
     [
       slots().body(),
-      props.className,
+      local.className,
       previous === "header" ? modalBodyAfterHeaderClasses : undefined,
     ]
       .filter((part) => part !== undefined && part !== "")
@@ -69,23 +90,25 @@ export function ModalBody(props: ModalBodyProps): JSX.Element {
   return () =>
     inside() ? (
       <Scroll
-        ref={(node) => props.ref?.(node)}
-        testID={props.testID}
-        nativeID={props.id ?? props.nativeID}
+        {...viewProps(rest)}
+        ref={(node) => local.ref?.(node)}
+        nativeID={local.id ?? local.nativeID}
+        focusable={focusable()}
         class={classes()}
-        style={props.style}
+        style={local.style}
       >
-        {renderModalPartChildren(props.children)}
+        {renderModalPartChildren(local.children)}
       </Scroll>
     ) : (
       <View
-        ref={(node) => props.ref?.(node)}
-        testID={props.testID}
-        nativeID={props.id ?? props.nativeID}
+        {...viewProps(rest)}
+        ref={(node) => local.ref?.(node)}
+        nativeID={local.id ?? local.nativeID}
+        focusable={focusable()}
         class={classes()}
-        style={props.style}
+        style={local.style}
       >
-        {renderModalPartChildren(props.children)}
+        {renderModalPartChildren(local.children)}
       </View>
     );
 }

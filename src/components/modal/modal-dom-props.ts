@@ -34,3 +34,54 @@ export interface ModalPartDomProps
   /** Accepted, no effect: NSH has no DOM attribute channel. */
   [key: `data-${string}`]: unknown;
 }
+
+/**
+ * The members that exist only because HeroUI spreads its props onto a real DOM
+ * element. NSH's host logs every prop it does not know, so they are accepted by
+ * the props type and dropped before the spread onto `View`.
+ */
+const DOM_ONLY_PROPS = new Set([
+  "render",
+  "slot",
+  "dir",
+  "lang",
+  "hidden",
+  "inert",
+  "translate",
+]);
+
+/**
+ * The props a part hands to its `View`: everything `split` left in `rest`
+ * except the DOM-only members above and the caller's `aria-*` / `data-*`
+ * attributes. Upstream spreads `{...props}` on the element, so every other
+ * member of the public type has to reach the view: `onLayout`,
+ * `accessibilityLabel`, `focusable`, `onPress`, `onMouseEnter`, `disabled` …
+ *
+ * Each kept prop becomes an enumerable getter that reads `rest`, so the value
+ * keeps following its source exactly as `split`'s `rest` does; the keys are
+ * fixed at render time, as with every spread. Local copy of
+ * `card/card-dom-props.ts` (port sheet §5 proposes lifting it into a primitive;
+ * the unit keeps its own until then).
+ */
+export function viewProps(rest: object): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const source = rest as Record<string, unknown>;
+
+  for (const key of Object.keys(source)) {
+    if (isDomOnlyProp(key)) {
+      continue;
+    }
+
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => source[key],
+    });
+  }
+
+  return result;
+}
+
+function isDomOnlyProp(key: string): boolean {
+  return key.startsWith("aria-") || key.startsWith("data-") || DOM_ONLY_PROPS.has(key);
+}

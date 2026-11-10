@@ -1,10 +1,12 @@
 import type { JSX, StyleProp, ViewStyle } from "nsh";
-import { computed, View } from "nsh";
+import { cleanup, computed, split, View } from "nsh";
 
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
 import type { ModalBackdropProps } from "./modal-backdrop";
+import { ModalBackdropContext } from "./modal-backdrop";
 import type { ModalContextValue } from "./modal-context";
 import { createModalContextValue, ModalContext } from "./modal-context";
+import { viewProps } from "./modal-dom-props";
 import type { ModalRenderValues } from "./modal-render-values";
 import type { ModalPlacement, ModalVariants } from "./modal.styles";
 import { modalEnteringClasses } from "./modal.styles";
@@ -35,6 +37,42 @@ export interface ModalContainerProps
 
 /** Modal.Container / ModalContainer: the positioning wrapper for the dialog. */
 export function ModalContainer(props: ModalContainerProps): JSX.Element {
+  const [local, rest] = split(props, [
+    "children",
+    "className",
+    "style",
+    "ref",
+    "id",
+    "nativeID",
+    "placement",
+    "scroll",
+    "size",
+    // The overlay props the Container inherits from the Backdrop's type: they
+    // belong to the overlay layer, so they must not reach this view.
+    "variant",
+    "isDismissable",
+    "isKeyboardDismissDisabled",
+    "isOpen",
+    "defaultOpen",
+    "onOpenChange",
+    "isEntering",
+    "isExiting",
+    "onEnter",
+    "onExit",
+    "shouldCloseOnInteractOutside",
+    "UNSTABLE_portalContainer",
+    "render",
+    "slot",
+  ]);
+
+  // R-029: the scrolling carrier is the Backdrop's, but `scroll` is this
+  // part's prop, so the value travels upwards. The Backdrop reads the
+  // registered accessor and turns its carrier into a `Scroll` with
+  // `items-start` when it is `"outside"` (port sheet §5.4).
+  const backdrop = ModalBackdropContext();
+  const unregister = backdrop?.registerScroll(() => local.scroll);
+  cleanup(() => unregister?.());
+
   // Upstream merges its own `modalVariants({scroll, size})` over the root's
   // slots and hands the result down with `placement`; here the same merge is
   // `withOverrides`, so the Dialog (and the Body) read one table and no
@@ -49,9 +87,9 @@ export function ModalContainer(props: ModalContainerProps): JSX.Element {
     parent ?? createModalContextValue({ isOpen: () => true, setOpen: () => {} });
 
   const contextValue = base.withOverrides({
-    placement: () => props.placement,
-    scroll: () => props.scroll,
-    size: () => props.size,
+    placement: () => local.placement,
+    scroll: () => local.scroll,
+    size: () => local.size,
   });
 
   // RAC reports the overlay's entering phase through the render props of the
@@ -60,8 +98,8 @@ export function ModalContainer(props: ModalContainerProps): JSX.Element {
   // contract (research §10, port sheet §5.4).
   const presence = createOverlayPresence({
     isOpen: contextValue.isOpen,
-    isEntering: () => props.isEntering,
-    isExiting: () => props.isExiting,
+    isEntering: () => local.isEntering,
+    isExiting: () => local.isExiting,
   });
 
   const values: ModalRenderValues = {
@@ -80,7 +118,7 @@ export function ModalContainer(props: ModalContainerProps): JSX.Element {
   // `pointer-events-none`; R-030 / R-028 are the `full` / `outside` variants of
   // the same slot. All of them live in the table.
   const classes = computed(() =>
-    [contextValue.slots().container(), props.className]
+    [contextValue.slots().container(), local.className]
       .filter((part) => part !== undefined && part !== "")
       .join(" "),
   );
@@ -103,7 +141,7 @@ export function ModalContainer(props: ModalContainerProps): JSX.Element {
   });
 
   const content = () => {
-    const node = props.children;
+    const node = local.children;
 
     return typeof node === "function" && node.length >= 1
       ? (node as (values: ModalRenderValues) => JSX.Element)(values)
@@ -112,12 +150,12 @@ export function ModalContainer(props: ModalContainerProps): JSX.Element {
 
   return (
     <View
-      ref={(node) => props.ref?.(node)}
-      testID={props.testID}
-      nativeID={props.id ?? props.nativeID}
+      {...viewProps(rest)}
+      ref={(node) => local.ref?.(node)}
+      nativeID={local.id ?? local.nativeID}
       class={classes()}
       classList={classList()}
-      style={props.style}
+      style={local.style}
     >
       {/*
         The provider exception in the common rules: the subtree needs the merged

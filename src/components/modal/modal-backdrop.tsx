@@ -1,5 +1,5 @@
-import type { Accessor, JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
-import { context, reduceMotion, Scroll, signal, View } from "nsh";
+import type { Accessor, JSX, PressEvent, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
+import { computed, context, reduceMotion, Scroll, signal, View } from "nsh";
 import { Dialog } from "nsh/base";
 
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
@@ -7,7 +7,7 @@ import type { OverlayTriggerContextValue } from "../../primitives/create-overlay
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { createModalState } from "./create-modal-state";
 import type { ModalContextValue } from "./modal-context";
-import { createModalContextValue, ModalContext } from "./modal-context";
+import { createModalContextValue, deriveModalState, ModalContext } from "./modal-context";
 import type { ModalRenderValues } from "./modal-render-values";
 import type { ModalVariants } from "./modal.styles";
 import { modalBackdropLayoutClasses } from "./modal.styles";
@@ -118,7 +118,15 @@ function createBackdropScrollRegistry(): ModalBackdropContextValue {
   return {
     scroll: () => registration()?.read(),
     registerScroll: (read) => {
-      registration.set({ read });
+      const current = registration();
+
+      // The carrier re-reads its children when it switches element, so the
+      // Container mounts a second time and registers the same value again.
+      // Keeping the entry when the value did not change ends the switch there
+      // instead of re-rendering the carrier forever.
+      if (current === undefined || current.read() !== read()) {
+        registration.set({ read });
+      }
 
       return () => {
         if (registration()?.read === read) {
@@ -160,13 +168,24 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
   // HeroUI merges a second `modalVariants({variant})` over the root's slots;
   // here that is the same table with one axis replaced, so every part below
   // sees the merged slots without copying the state.
-  const contextValue: ModalContextValue = parent
+  //
+  // React Aria gives the overlay its local state whenever the overlay itself
+  // has an open channel (`isOpen` / `defaultOpen`) or has no trigger above it
+  // (`react-aria-components/src/Modal.tsx:213-215`), so in those cases the
+  // Dialog below has to read — and close — the Backdrop's state, not the
+  // Root's. Without a Root the base value is already the local state.
+  const base: ModalContextValue = parent
     ? parent.withOverrides({ variant: () => props.variant })
     : createModalContextValue({
         isOpen: state.isOpen,
         setOpen: state.setIsOpen,
         variant: () => props.variant,
       });
+
+  const contextValue: ModalContextValue =
+    parent !== null && ownsState()
+      ? deriveModalState(base, state.isOpen, state.setIsOpen)
+      : base;
 
   const isOpen = contextValue.isOpen;
   const close = () => contextValue.close();
@@ -215,7 +234,14 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
   const registry = createBackdropScrollRegistry();
   const scroll = () => registry.scroll() ?? contextValue.scroll();
 
-  const carrierClasses = () => {
+  // The carrier's element and classes follow a computed rather than the
+  // registry signal itself: registering the same value again (the Container
+  // remounts when the carrier switches element) recomputes it to the same
+  // boolean, and a computed only notifies on a change, so the switch happens
+  // once instead of rebuilding the children forever.
+  const outside = computed(() => scroll() === "outside");
+
+  const carrierClasses = computed(() => {
     const layout = modalBackdropLayoutClasses(scroll());
 
     // R-029 puts the scrolling on this layer when the Container scrolls
@@ -223,11 +249,14 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
     // is only a flex box: `pointer-events-none` lets a press in the empty area
     // fall through to the paint layer, while the Dialog's `pointer-events-auto`
     // (R-035) keeps the card itself a target.
-    return scroll() === "outside" ? layout : `${layout} pointer-events-none`;
-  };
+    return outside() ? layout : `${layout} pointer-events-none`;
+  });
 
   // R-029: `scroll="outside"` scrolls this carrier instead of `Modal.Body`, so
   // the element itself is the `Scroll`; the layout classes carry `items-start`.
+  // Only the branch that mounts is built, so `props.children` is read once, at
+  // its placement — the deferred form is what keeps that read tracked when the
+  // Container registers its `scroll`.
   const carrier = () => {
     const classes = carrierClasses();
     const node = props.children;
@@ -239,7 +268,7 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
       return node as JSX.Element;
     };
 
-    return scroll() === "outside" ? (
+    return outside() ? (
       <Scroll class={classes}>{content()}</Scroll>
     ) : (
       <View class={classes}>{content()}</View>
@@ -263,6 +292,13 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
     if (isOpen() && isDismissable()) {
       close();
     }
+  };
+
+  // Upstream spreads the caller's props onto the overlay, whose press handler
+  // dismisses; a caller's own `onPress` runs too (React Aria merges them).
+  const handlePress = (event: PressEvent) => {
+    props.onPress?.(event);
+    dismiss();
   };
 
   return (
@@ -295,11 +331,13 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
           focusable={false}
           class={paintClasses()}
           style={style()}
-          onPress={dismiss}
+          onPress={handlePress}
         />
         <ModalContext.Provider value={contextValue}>
           <OverlayTriggerContext.Provider value={scopedTrigger}>
-            <ModalBackdropContext.Provider value={registry}>{carrier()}</ModalBackdropContext.Provider>
+            <ModalBackdropContext.Provider value={registry}>
+              {() => carrier()}
+            </ModalBackdropContext.Provider>
           </OverlayTriggerContext.Provider>
         </ModalContext.Provider>
       </View>

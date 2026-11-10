@@ -1,10 +1,11 @@
 import type { JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
-import { computed, View } from "nsh";
+import { computed, split, View } from "nsh";
 
 import type { SurfaceContextValue } from "../surface";
 import { SurfaceContext } from "../surface";
 import { createModalPartOrder, ModalDialogContext } from "./create-modal-part-order";
 import { ModalContext } from "./modal-context";
+import { viewProps } from "./modal-dom-props";
 import type { ModalPlacement, ModalSlots } from "./modal.styles";
 import { modalPlacementClasses, modalVariants } from "./modal.styles";
 
@@ -59,6 +60,19 @@ const DEFAULT_SURFACE_CONTEXT: SurfaceContextValue = { variant: () => "default" 
 
 /** Modal.Dialog / ModalDialog: the card the modal shows. */
 export function ModalDialog(props: ModalDialogProps): JSX.Element {
+  const [local, rest] = split(props, [
+    "children",
+    "className",
+    "style",
+    "ref",
+    "id",
+    "nativeID",
+    "role",
+    "aria-label",
+    "render",
+    "slot",
+  ]);
+
   const context = ModalContext();
 
   // Outside a Root the Dialog still renders, with the table's defaults and
@@ -73,7 +87,7 @@ export function ModalDialog(props: ModalDialogProps): JSX.Element {
   // R-035 → `p-6 pointer-events-auto`. The size and scroll halves are the
   // table's `dialog` variants, merged in by the Container's context.
   const classes = computed(() =>
-    [slots().dialog(), props.className]
+    [slots().dialog(), local.className]
       .filter((part) => part !== undefined && part !== "")
       .join(" "),
   );
@@ -93,7 +107,7 @@ export function ModalDialog(props: ModalDialogProps): JSX.Element {
   const partOrder = createModalPartOrder();
 
   const content = () => {
-    const node = props.children;
+    const node = local.children;
 
     return typeof node === "function" && node.length >= 1
       ? (node as (values: { close: () => void }) => JSX.Element)({ close })
@@ -104,16 +118,20 @@ export function ModalDialog(props: ModalDialogProps): JSX.Element {
     <SurfaceContext.Provider value={DEFAULT_SURFACE_CONTEXT}>
       <ModalDialogContext.Provider value={partOrder}>
         <View
-          ref={(node) => props.ref?.(node)}
-          testID={props.testID}
-          nativeID={props.id ?? props.nativeID}
+          // Upstream's `DialogPrimitive` is `DOMRenderProps<'section'>`, so
+          // every caller prop reaches the section; `viewProps` drops only the
+          // DOM-only names. `role` and `aria-label` are mapped above and are
+          // therefore not in `rest`.
+          {...viewProps(rest)}
+          ref={(node) => local.ref?.(node)}
+          nativeID={local.id ?? local.nativeID}
           // NSH's `AccessibilityRole` has no `dialog`; an `alertdialog` still
           // becomes `alert`, the plain dialog has no role to land on (§5.6).
-          role={props.role === "alertdialog" ? "alert" : "none"}
-          accessibilityLabel={props["aria-label"]}
+          role={local.role === "alertdialog" ? "alert" : "none"}
+          accessibilityLabel={local["aria-label"]}
           class={classes()}
           classList={classList()}
-          style={props.style}
+          style={local.style}
         >
           {/*
             The provider exception in the common rules: the three spacing parts

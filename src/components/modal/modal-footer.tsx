@@ -1,8 +1,9 @@
 import type { JSX } from "nsh";
-import { computed, View } from "nsh";
+import { computed, split, View } from "nsh";
 
 import { ModalDialogContext } from "./create-modal-part-order";
 import type { ModalPartDomProps } from "./modal-dom-props";
+import { viewProps } from "./modal-dom-props";
 import { ModalContext } from "./modal-context";
 import { renderModalPartChildren } from "./modal-part-children";
 import {
@@ -28,6 +29,17 @@ export interface ModalFooterProps extends ModalPartDomProps {}
  * separate constants because they are separate rules upstream.
  */
 export function ModalFooter(props: ModalFooterProps): JSX.Element {
+  const [local, rest] = split(props, [
+    "children",
+    "className",
+    "style",
+    "ref",
+    "id",
+    "nativeID",
+    "render",
+    "slot",
+  ]);
+
   const context = ModalContext();
 
   const slots = () => context?.slots() ?? modalVariants();
@@ -45,20 +57,20 @@ export function ModalFooter(props: ModalFooterProps): JSX.Element {
         : undefined;
 
   const classes = computed(() =>
-    [slots().footer(), props.className, gap]
+    [slots().footer(), local.className, gap]
       .filter((part) => part !== undefined && part !== "")
       .join(" "),
   );
 
   return (
     <View
-      ref={(node) => props.ref?.(node)}
-      testID={props.testID}
-      nativeID={props.id ?? props.nativeID}
+      {...viewProps(rest)}
+      ref={(node) => local.ref?.(node)}
+      nativeID={local.id ?? local.nativeID}
       class={classes()}
-      style={props.style}
+      style={local.style}
     >
-      {renderModalPartChildren(props.children)}
+      {renderModalPartChildren(local.children)}
     </View>
   );
 }
