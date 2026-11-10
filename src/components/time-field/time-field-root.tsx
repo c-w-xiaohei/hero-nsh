@@ -160,6 +160,9 @@ export interface TimeFieldRootProps
   /** Accepted, no effect: NSH has no slot collection. */
   slot?: string;
 
+  /** Accepted, no effect: NSH has no DOM render function to replace the element. */
+  render?: unknown;
+
   /** A DOM id upstream; becomes the view's `nativeID`. */
   id?: string;
 
@@ -226,6 +229,7 @@ export function TimeFieldRoot(props: TimeFieldRootProps): JSX.Element {
     "autoFocus",
     "name",
     "slot",
+    "render",
     "id",
     "nativeID",
     "aria-label",
@@ -263,7 +267,13 @@ export function TimeFieldRoot(props: TimeFieldRootProps): JSX.Element {
     isDisabled: () => local.isDisabled,
     isReadOnly: () => local.isReadOnly,
     isRequired: () => local.isRequired,
-    isInvalid: () => local.isInvalid,
+    // The root's computed flag, not the raw prop: it also counts the caller's
+    // `validationErrors` (upstream's state receives them too:
+    // `DateField.tsx:239-243`), so the Group and its segments turn invalid with
+    // the Label and the FieldError instead of disagreeing with them. The
+    // accessor is read lazily, after `isInvalid` below is defined, and it never
+    // reads `state.isInvalid`, so there is no cycle.
+    isInvalid: () => isInvalid(),
   });
 
   // The caller's errors come first, the field's own validation after them, as
