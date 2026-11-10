@@ -4,7 +4,7 @@ import { callsOf } from "../../helpers/calls";
 
 /*
  * TextField regression cases from HeroUI 3.2.7 (port sheet 4b, rows T-001 …
- * T-013). The stories are covered by the shared scenarios; every case here that
+ * T-023). The stories are covered by the shared scenarios; every case here that
  * reads a callback back or targets one part by `testID` opens the NSH-only
  * fixture at harness/textfield.fixtures.tsx (port sheet 4b.3).
  *
@@ -141,4 +141,74 @@ test("T-013 supports children as a render function receiving field state", async
 
   expect(app.shows("label:Your name")).toBe(true);
   expect(app.shows("text:Required")).toBe(true);
+});
+
+// heroui/packages/react/tests/components/input/input.test.tsx:17
+// T-014: a standalone Input (no TextField) takes `aria-label` as its name, the
+// same fact upstream's `getByRole("textbox", {name: "Name"})` asserts.
+test("T-014 renders with textbox role and accessible name", async () => {
+  const app = await openCase("standalone-input");
+
+  expect(app.shows("label:Name")).toBe(true);
+});
+
+// heroui/packages/react/tests/components/input/input.test.tsx:39
+// T-017: typing edits the standalone Input; onChange receives the string, not
+// a DOM event.
+test("T-017 supports typing and calls onChange", async () => {
+  const app = await openCase("standalone-input");
+
+  await app.type("id:name", "Ada");
+
+  expect(app.value("id:name")).toBe("Ada");
+
+  const calls = callsOf(app, "onChange");
+  expect(calls.length).toBeGreaterThan(0);
+});
+
+// heroui/packages/react/tests/components/input/input.test.tsx:50
+// T-018: `disabled` at the host. Upstream asserts only `toBeDisabled`; the
+// rejected edit is the same fact on this side, where typing a disabled field
+// has to leave it empty.
+test("T-018 supports disabled state", async () => {
+  const app = await openCase("standalone-input-disabled");
+
+  expect(app.enabled("id:name")).toBe(false);
+  await app.type("id:name", "x").catch(() => undefined);
+  expect(app.value("id:name")).toBe("");
+});
+
+// heroui/packages/react/tests/components/textarea/textarea.test.tsx:17
+// T-019: the accessible name, plus the observable part of `tagName ===
+// "TEXTAREA"` (port sheet): a typed line break stays in the value.
+test("T-019 renders a textarea element with textbox role and accessible name", async () => {
+  const app = await openCase("standalone-textarea");
+
+  expect(app.shows("label:Bio")).toBe(true);
+
+  await app.type("id:bio", "a\nb");
+  expect(app.value("id:bio")).toContain("\n");
+});
+
+// heroui/packages/react/tests/components/textarea/textarea.test.tsx:41
+// T-022: typing edits the standalone TextArea; onChange receives the string.
+test("T-022 supports typing and calls onChange", async () => {
+  const app = await openCase("standalone-textarea");
+
+  await app.type("id:bio", "Hello");
+
+  expect(app.value("id:bio")).toBe("Hello");
+
+  const calls = callsOf(app, "onChange");
+  expect(calls.length).toBeGreaterThan(0);
+});
+
+// heroui/packages/react/tests/components/textarea/textarea.test.tsx:52
+// T-023: `disabled` at the host; a rejected edit leaves the value unchanged.
+test("T-023 supports disabled state", async () => {
+  const app = await openCase("standalone-textarea-disabled");
+
+  expect(app.enabled("id:bio")).toBe(false);
+  await app.type("id:bio", "x").catch(() => undefined);
+  expect(app.value("id:bio")).toBe("");
 });
