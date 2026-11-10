@@ -7,11 +7,27 @@ import type { ToolbarAxisAlignment, ToolbarItem } from "./context";
 export interface CreateToolbarStateOptions {
   /** The toolbar's axis; picks which arrow pair is bound. */
   orientation: Accessor<ToolbarAxisAlignment>;
+
+  /**
+   * The enclosing toolbar's registry, for a toolbar nested in another one.
+   *
+   * React Aria keeps one keyboard chain per outermost toolbar: a nested
+   * toolbar does not bind `onKeyDownCapture`, the outer one handles the keys
+   * and `focusNext` / `focusPrevious` walk through its descendants whatever
+   * toolbar they sit in (port sheet §5). A nested toolbar therefore still
+   * keeps its own member list — that is what decides whether focus is inside
+   * *this* toolbar — but hands every member to the outer registry, which owns
+   * the chain. When this is set, no key scope is created.
+   */
+  delegate?: (item: ToolbarItem) => () => void;
 }
 
 export interface ToolbarState {
   /** Joins the registry; the returned function leaves it. */
   registerItem: (item: ToolbarItem) => () => void;
+
+  /** Whether a member of this toolbar holds the keyboard focus now. */
+  isFocusWithin: Accessor<boolean>;
 }
 
 /**
@@ -43,9 +59,11 @@ export function createToolbarState(props: CreateToolbarStateOptions): ToolbarSta
 
   const registerItem = (item: ToolbarItem) => {
     items.set([...items(), item]);
+    const leaveOuter = props.delegate?.(item);
 
     return () => {
       items.set(items().filter((current) => current !== item));
+      leaveOuter?.();
     };
   };
 
@@ -82,23 +100,26 @@ export function createToolbarState(props: CreateToolbarStateOptions): ToolbarSta
 
   // One scope per axis: `isActive` also carries the orientation, so changing it
   // unloads one pair and binds the other instead of keeping the first read.
-  createKeymapScope({
-    isActive: () => isFocusWithin() && props.orientation() === "horizontal",
-    bindings: {
-      left: () => moveFocus(-1),
-      right: () => moveFocus(1),
-    },
-    options: { repeat: true },
-  });
+  // A nested toolbar delegates the chain to the outer one and binds nothing.
+  if (props.delegate == null) {
+    createKeymapScope({
+      isActive: () => isFocusWithin() && props.orientation() === "horizontal",
+      bindings: {
+        left: () => moveFocus(-1),
+        right: () => moveFocus(1),
+      },
+      options: { repeat: true },
+    });
 
-  createKeymapScope({
-    isActive: () => isFocusWithin() && props.orientation() === "vertical",
-    bindings: {
-      up: () => moveFocus(-1),
-      down: () => moveFocus(1),
-    },
-    options: { repeat: true },
-  });
+    createKeymapScope({
+      isActive: () => isFocusWithin() && props.orientation() === "vertical",
+      bindings: {
+        up: () => moveFocus(-1),
+        down: () => moveFocus(1),
+      },
+      options: { repeat: true },
+    });
+  }
 
-  return { registerItem };
+  return { registerItem, isFocusWithin };
 }

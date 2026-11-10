@@ -10,7 +10,7 @@ import type {
   ViewStyle,
 } from "nsh";
 import type { Accessor } from "nsh";
-import { computed, split, View } from "nsh";
+import { computed, effect, split, untracked, View } from "nsh";
 
 import { SeparatorContext } from "../separator/context";
 import { ToolbarContext, type ToolbarContextValue } from "./context";
@@ -110,6 +110,11 @@ export interface ToolbarRootProps {
   onPressDown?: (e: PressEvent) => void;
   onPressUp?: (e: PressEvent) => void;
   onLongPress?: (e: PressEvent) => void;
+  /**
+   * The caller's `onFocus` / `onBlur`: upstream they bubble from the controls
+   * inside the toolbar, and here they fire when the focus enters or leaves
+   * those controls (the root itself is not focusable).
+   */
   onFocus?: () => void;
   onBlur?: () => void;
   onMouseEnter?: (e: NshMouseEvent) => void;
@@ -181,15 +186,48 @@ export function ToolbarRoot(props: ToolbarRootProps): JSX.Element {
 
   const orientation = computed<ToolbarOrientation>(() => local.orientation ?? "horizontal");
 
-  // A nested toolbar joins the outer registry instead of starting a second
-  // one, so the outer arrows still walk through every control on their way.
-  let contextValue: ToolbarContextValue;
-  if (outer) {
-    contextValue = outer;
-  } else {
-    const state = createToolbarState({ orientation });
-    contextValue = { orientation, registerItem: state.registerItem };
-  }
+  // A nested toolbar hands its members to the outer registry instead of
+  // starting a second chain, so the outer arrows still walk through every
+  // control on their way; it keeps its own member list to know whether the
+  // focus is inside *this* toolbar, and it still publishes its own axis so
+  // the `ToggleButtonGroup` and `ButtonGroup` inside take the inner one.
+  // Upstream does the same on both counts: `ToolbarRoot` wraps its children in
+  // `ToggleButtonGroupContext` with its own `orientation`
+  // (tmp/vendor/heroui/packages/react/src/components/toolbar/toolbar.tsx:33),
+  // while `useToolbar` only binds the key handler on the outermost toolbar and
+  // `focusManager.focusNext` walks every tabbable descendant (port sheet §5).
+  const state = createToolbarState({
+    orientation,
+    delegate: outer ? outer.registerItem : undefined,
+  });
+  const contextValue: ToolbarContextValue = {
+    orientation,
+    registerItem: state.registerItem,
+  };
+
+  // React spreads DOM props on the toolbar `div`, so a caller's `onFocus` /
+  // `onBlur` fire from the controls inside it (React's synthetic focus events
+  // bubble). The NSH root is not focusable, so its own events never fire;
+  // mirroring `isFocusWithin` is the equivalent. It reports the boundary of
+  // the whole subtree rather than one pair per step between two controls,
+  // which is the behaviour a toolbar callback actually wants.
+  let wasFocusWithin = state.isFocusWithin();
+  effect(() => {
+    const within = state.isFocusWithin();
+
+    if (within === wasFocusWithin) {
+      return;
+    }
+
+    wasFocusWithin = within;
+    untracked(() => {
+      if (within) {
+        local.onFocus?.();
+      } else {
+        local.onBlur?.();
+      }
+    });
+  });
 
   // Upstream writes the Separator's axis into `SeparatorContext`: the divider
   // runs across the toolbar, so its orientation is the other axis, and in a
@@ -294,8 +332,8 @@ export function ToolbarRoot(props: ToolbarRootProps): JSX.Element {
           onPressDown={local.onPressDown}
           onPressUp={local.onPressUp}
           onLongPress={local.onLongPress}
-          onFocus={local.onFocus}
-          onBlur={local.onBlur}
+          // `onFocus` / `onBlur` are mirrored from `isFocusWithin` above: a
+          // focusable-`false` root never fires its own.
           onMouseEnter={local.onMouseEnter}
           onMouseLeave={local.onMouseLeave}
           onLayout={local.onLayout}
