@@ -47,6 +47,7 @@ import { inputScenarios } from "./input.scenarios";
 import { textAreaScenarios } from "./textarea.scenarios";
 import { tabsScenarios } from "./tabs.scenarios";
 import { timeFieldScenarios } from "./time-field.scenarios";
+import { inputOtpScenarios } from "./input-otp.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -97,4 +98,5 @@ export const scenarios: Record<string, Component> = {
   ...textAreaScenarios,
   ...tabsScenarios,
   ...timeFieldScenarios,
+  ...inputOtpScenarios,
 };

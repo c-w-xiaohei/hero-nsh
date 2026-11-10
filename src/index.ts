@@ -49,3 +49,4 @@ export * from "./components/radio";
 export * from "./components/textfield";
 export * from "./components/tabs";
 export * from "./components/time-field";
+export * from "./components/input-otp";
