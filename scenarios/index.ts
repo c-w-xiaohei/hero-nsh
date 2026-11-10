@@ -32,6 +32,7 @@ import { iconsScenarios } from "./icons.scenarios";
 import { formScenarios } from "./form.scenarios";
 import { switchGroupScenarios } from "./switch-group.scenarios";
 import { colorSwatchScenarios } from "./color-swatch.scenarios";
+import { colorFieldScenarios } from "./color-field.scenarios";
 import { alertScenarios } from "./alert.scenarios";
 import { paginationScenarios } from "./pagination.scenarios";
 import { accordionScenarios } from "./accordion.scenarios";
@@ -85,4 +86,5 @@ export const scenarios: Record<string, Component> = {
   ...menuScenarios,
   ...checkboxScenarios,
   ...dropdownScenarios,
+  ...colorFieldScenarios,
 };
