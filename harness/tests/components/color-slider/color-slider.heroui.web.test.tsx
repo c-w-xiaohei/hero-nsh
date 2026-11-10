@@ -24,6 +24,9 @@ function openCase(
     platform: "web",
     width: 1024,
     height: 768,
+    // Both cases settle the arrow's effect with `app.clock!.runFor`, which
+    // needs the manual clock; on the system's clock `app.clock` is null.
+    clock: {},
     host: { params: { case: name, ...params } },
   });
 }
