@@ -56,14 +56,31 @@ test("T-002 should expose three segments inside the group", async () => {
 });
 
 // heroui/packages/react/tests/components/time-field/time-field.test.tsx:99
-// T-006: the replacement for `rerender` is a second `open` with the other
-// controlled value, since `nsh/test` has no rerender step. The fixture's
-// `controlled` case reads `value` from `host.params` and never writes it back,
-// which is what makes both renders controlled rather than a default value.
+// T-006: upstream rerenders the same field with a new `value`. Two mounts
+// cover the initial controlled value; the presses on one of them stand in for
+// that rerender: `tf-set-afternoon` / `tf-set-morning` write the fixture's
+// parent signal, so the segments must follow. A root that read `props.value`
+// once into a plain binding keeps showing 9:30 here and fails.
 test("T-006 should support controlled value", async () => {
   const nine = await openCase("controlled", { hour: 9, minute: 30 });
 
   expect(nine.shows("id:tf-hour >> text:9")).toBe(true);
+  expect(nine.shows("id:tf-minute >> text:30")).toBe(true);
+  expect(nine.shows("id:tf-day-period >> text:AM")).toBe(true);
+
+  await nine.press("id:tf-set-afternoon");
+
+  expect(nine.shows("id:tf-hour >> text:2")).toBe(true);
+  expect(nine.shows("id:tf-minute >> text:15")).toBe(true);
+  expect(nine.shows("id:tf-day-period >> text:PM")).toBe(true);
+
+  // A second write to a third value separates "follows the parent" from "took
+  // the first update and stopped": both values are away from the mount value.
+  await nine.press("id:tf-set-morning");
+
+  expect(nine.shows("id:tf-hour >> text:7")).toBe(true);
+  expect(nine.shows("id:tf-minute >> text:05")).toBe(true);
+  expect(nine.shows("id:tf-day-period >> text:AM")).toBe(true);
 
   const afternoon = await openCase("controlled", { hour: 14, minute: 15 });
 

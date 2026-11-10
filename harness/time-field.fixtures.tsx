@@ -1,4 +1,4 @@
-import { host, mount, Text, View } from "nsh";
+import { host, mount, signal, Text, View } from "nsh";
 import { Description, FieldError, Label, TimeField } from "@heroui/react";
 import { Time, parseTime } from "@internationalized/date";
 import { Stage } from "@scenario/stage";
@@ -19,8 +19,10 @@ import { probe } from "@scenario/probe";
  *                     9:30, onChange probe. testIDs: tf-root, tf-group,
  *                     tf-input, tf-hour, tf-minute, tf-day-period (T-001,
  *                     T-002, T-004, T-005)
- *   controlled        `value` from params (never written back), onChange probe
- *                     (T-006)
+ *   controlled        `value` from a signal that starts at params hour/minute,
+ *                     onChange probe; the `tf-set-afternoon` /
+ *                     `tf-set-morning` buttons write the signal, so one mount
+ *                     can be rerendered with another value (T-006)
  *   required-invalid  isRequired + isInvalid + FieldError "Please enter a valid
  *                     time" (T-007)
  *   description       Label + Description "Enter a time" (T-008)
@@ -120,6 +122,10 @@ function DefaultCase() {
 }
 
 function ControlledCase() {
+  // The parent owns the value; the buttons below stand in for HeroUI's
+  // `rerender` with a new `value` on the same mounted field.
+  const value = signal<Time | null>(startTime());
+
   return (
     <Stage>
       <TimeField
@@ -127,13 +133,31 @@ function ControlledCase() {
         name="time"
         onChange={probe("onChange")}
         testID="tf-root"
-        value={startTime()}
+        value={value()}
       >
         <Label>Time</Label>
         <TimeField.Group testID="tf-group">
           <Segments />
         </TimeField.Group>
       </TimeField>
+      <View class="flex-row gap-2">
+        <View
+          class="px-3 py-1 bg-default"
+          role="button"
+          testID="tf-set-afternoon"
+          onPress={() => value.set(new Time(14, 15))}
+        >
+          <Text>set afternoon</Text>
+        </View>
+        <View
+          class="px-3 py-1 bg-default"
+          role="button"
+          testID="tf-set-morning"
+          onPress={() => value.set(new Time(7, 5))}
+        >
+          <Text>set morning</Text>
+        </View>
+      </View>
     </Stage>
   );
 }
