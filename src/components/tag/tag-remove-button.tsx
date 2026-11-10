@@ -87,11 +87,25 @@ function renderRemoveButton(props: TagRemoveButtonProps): JSX.Element {
  */
 export function TagRemoveButton(props: TagRemoveButtonProps): JSX.Element {
   const tag = TagContext();
+  const group = TagGroupContext();
 
   if (tag) {
     cleanup(tag.registerRemoveButton());
   }
 
+  // HeroUI renders the extracted `removeButtonChildren` only inside
+  // `!!renderProps.allowsRemoving` (`tag.tsx`), so a static caller-written
+  // button disappears when the group has no `onRemove`. The check is a
+  // reactive `when`: the group can gain or lose `onRemove` after mount.
+  return (
+    <If when={group == null || group.allowsRemoving()}>
+      {() => <TagRemoveButtonBody {...props} />}
+    </If>
+  );
+}
+
+/** The button's own body: a component so its context reads run under the `If`. */
+function TagRemoveButtonBody(props: TagRemoveButtonProps): JSX.Element {
   return renderRemoveButton(props);
 }
 

@@ -6,7 +6,6 @@ import type {
   SelectionBehavior,
   SelectionManager,
   SelectionMode,
-  SelectionModifiers,
 } from "../../primitives";
 import { tagVariants } from "./tag.styles";
 import type { TagSize, TagVariant } from "./tag.styles";
@@ -42,15 +41,13 @@ export interface TagDescriptor {
   ref: () => ViewRef | undefined;
 
   /**
-   * The one activation entry: the row's own press, Return / Space on the grid,
-   * and the row's action half all arrive here. It selects when the group
-   * allows selection, otherwise reports the action (port sheet section 5).
+   * The row's press lifecycle replayed from a keyboard press the list receives
+   * (Return / Space): the row is never focusable, so the list is the only view
+   * that gets that press, while upstream's `rowProps` carry the handlers for
+   * pointer and keyboard alike. The last phase activates the tag (RAC's
+   * primary / secondary action rule).
    */
-  activate: (
-    source: "pointer" | "keyboard",
-    event?: PressEvent,
-    modifiers?: SelectionModifiers,
-  ) => void;
+  keyboardPress: (phase: "start" | "up" | "press", event: PressEvent) => void;
 }
 
 /** The current entry of a dynamic collection (`items` + a function child). */
@@ -122,6 +119,15 @@ export interface TagGroupContextValue {
 
   /** Reports a tag's action to the group's `onAction`. */
   fireAction: (key: string) => void;
+
+  /** Whether the group has an `onAction` (a tag's action falls back to it). */
+  hasGroupAction: Accessor<boolean>;
+
+  /** Runs the root's public `onFocus` (the grid holds the real focus). */
+  notifyRootFocus: () => void;
+
+  /** Runs the root's public `onBlur` (the grid holds the real focus). */
+  notifyRootBlur: () => void;
 
   /** A fresh, non-empty key for a tag that was given no `id`. */
   createKey: () => string;

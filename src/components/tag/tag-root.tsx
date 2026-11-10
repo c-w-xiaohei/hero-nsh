@@ -194,8 +194,13 @@ function TagContent(props: {
 
   // HeroUI appends its own remove button only to plain children; with a render
   // function the caller places `Tag.RemoveButton` itself (`tag.tsx`).
+  //
+  // The content is placed through a thunk so the one read of `props.children`
+  // happens where the content goes (common rules: `{children()}` at the
+  // placement). Evaluating it here in the body would freeze the tree: a plain
+  // child such as `<Tag>{label()}</Tag>` must keep updating.
   return [
-    renderTagChildren(resolved().content),
+    () => renderTagChildren(resolved().content),
     resolved().renderProp ? null : props.renderRemoveButton(),
   ] as unknown as JSX.Element;
 }
@@ -400,6 +405,33 @@ export function TagRoot(props: TagRootProps): JSX.Element {
     group.fireAction(key);
   };
 
+  const allowsActions = computed(
+    () => !selectable.isDisabled() && (local.onAction != null || group.hasGroupAction()),
+  );
+
+  // RAC `useSelectableItem`'s `hasPrimaryAction`: with `selectionBehavior`
+  // `replace` the action is secondary (a double click) whenever the tag can be
+  // selected; with `toggle` it is primary while the selection is empty (and
+  // whenever the tag cannot be selected at all).
+  const hasPrimaryAction = computed(() => {
+    if (!allowsActions()) {
+      return false;
+    }
+
+    if (group.selectionBehavior() === "replace") {
+      return !selectable.allowsSelection();
+    }
+
+    return !selectable.allowsSelection() || group.selectionManager().isEmpty();
+  });
+
+  const hasSecondaryAction = computed(
+    () =>
+      allowsActions() &&
+      selectable.allowsSelection() &&
+      group.selectionBehavior() === "replace",
+  );
+
   const activate = (
     source: "pointer" | "keyboard",
     event?: PressEvent,
@@ -408,22 +440,72 @@ export function TagRoot(props: TagRootProps): JSX.Element {
       return;
     }
 
-    if (selectable.allowsSelection()) {
-      if (source === "pointer") {
-        if (event) {
-          selectable.onPress(event);
-        }
-      } else {
-        selectable.onKeyDown(
-          "enter",
-          event ? modifiersFromPress(event) : undefined,
-        );
-      }
+    // A primary action replaces the selection; a secondary one needs the
+    // second click (`PressEvent.clickCount`), as upstream's `onDoubleClick`.
+    if (hasPrimaryAction()) {
+      fireAction();
 
       return;
     }
 
-    fireAction();
+    if (
+      hasSecondaryAction() &&
+      source === "pointer" &&
+      (event?.clickCount ?? 1) > 1
+    ) {
+      fireAction();
+
+      return;
+    }
+
+    if (!selectable.allowsSelection()) {
+      return;
+    }
+
+    if (source === "pointer") {
+      if (event) {
+        selectable.onPress(event);
+      }
+    } else {
+      selectable.onKeyDown(
+        "enter",
+        event ? modifiersFromPress(event) : undefined,
+      );
+    }
+  };
+
+  /**
+   * The row's press lifecycle, replayed from a keyboard press the list
+   * received: the row is never focusable, so Return / Space reach the list, and
+   * upstream's `rowProps` carry these handlers for pointer and keyboard alike
+   * (RAC `useTag`).
+   */
+  const keyboardPress = (
+    phase: "start" | "up" | "press",
+    event: PressEvent,
+  ) => {
+    if (selectable.isDisabled()) {
+      return;
+    }
+
+    if (phase === "start") {
+      local.onPressStart?.(event);
+      local.onPressDown?.(event);
+      local.onPressChange?.(true);
+
+      return;
+    }
+
+    if (phase === "up") {
+      local.onPressUp?.(event);
+      local.onPressEnd?.(event);
+      local.onPressChange?.(false);
+
+      return;
+    }
+
+    activate("keyboard", event);
+    local.onPress?.(event);
   };
 
   let node: ViewRef | undefined;
@@ -435,7 +517,7 @@ export function TagRoot(props: TagRootProps): JSX.Element {
       order: collectionItem?.index,
       disabled: () => isDisabled(),
       ref: () => node,
-      activate,
+      keyboardPress,
     }),
   );
 
@@ -456,7 +538,11 @@ export function TagRoot(props: TagRootProps): JSX.Element {
       group.focusList(true);
     }
 
-    selectable.onPressDown(event);
+    // A primary action happens on release, so the press must not select.
+    if (!hasPrimaryAction()) {
+      selectable.onPressDown(event);
+    }
+
     local.onPressStart?.(event);
     local.onPressDown?.(event);
     local.onPressChange?.(true);
@@ -472,7 +558,10 @@ export function TagRoot(props: TagRootProps): JSX.Element {
       local.onPressChange?.(false);
     }
 
-    selectable.onPressUp(event);
+    if (!hasPrimaryAction()) {
+      selectable.onPressUp(event);
+    }
+
     local.onPressUp?.(event);
     local.onPressEnd?.(event);
   };

@@ -18,11 +18,11 @@ export function renderTagChildren(node: JSX.Element): JSX.Element {
   }
 
   // A zero-argument function is NSH's reactive child: the compiler wraps a
-  // dynamic sibling in one. Calling it here keeps the read inside the tracked
-  // children expression at the placement, so a signal in
-  // `<Tag>{value()}</Tag>` still updates.
+  // dynamic sibling in one. It is returned as a function (never called here)
+  // so the placement evaluates it inside its own tracked children expression:
+  // calling it now would freeze `<Tag>{value()}</Tag>` at its first value.
   if (typeof node === "function") {
-    return renderTagChildren(node());
+    return (() => renderTagChildren(node())) as unknown as JSX.Element;
   }
 
   if (Array.isArray(node)) {

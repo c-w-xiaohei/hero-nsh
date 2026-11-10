@@ -411,6 +411,14 @@ export function TagGroupRoot(props: TagGroupRootProps): JSX.Element {
     local.onAction?.(key);
   };
 
+  const hasGroupAction = () => local.onAction != null;
+
+  // Upstream's root `div` wraps the grid, so the caller's `onFocus` / `onBlur`
+  // see the grid's focus events through React's bubbling. The list forwards
+  // them here instead (it owns the only focusable view).
+  const notifyRootFocus = () => local.onFocus?.();
+  const notifyRootBlur = () => local.onBlur?.();
+
   /* --- Context ------------------------------------------------------------- */
   const contextValue: TagGroupContextValue = {
     list,
@@ -431,6 +439,9 @@ export function TagGroupRoot(props: TagGroupRootProps): JSX.Element {
     removeKeys,
     removeTag,
     fireAction,
+    hasGroupAction,
+    notifyRootFocus,
+    notifyRootBlur,
     createKey,
     findDescriptor: (key) => findTagDescriptor(descriptors(), key),
     focusList,

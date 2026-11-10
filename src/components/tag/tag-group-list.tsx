@@ -17,6 +17,7 @@ import {
   platform,
   screenReaderEnabled,
   setAccessibilityFocus,
+  signal,
   split,
   untracked,
   View,
@@ -218,7 +219,10 @@ export function TagGroupList<T extends object>(
   let pointerFocusPending = false;
 
   const focusListFromPointer = () => {
-    if (!canFocusViews) {
+    if (!canFocusViews || context.isFocused()) {
+      // Already focused: `focus()` is a no-op and fires no focus event, so the
+      // flag would stay set and the next keyboard focus-in would be mistaken
+      // for a pointer one (no focus ring).
       return;
     }
 
@@ -436,23 +440,35 @@ export function TagGroupList<T extends object>(
     context.noteFocus(fromPointer);
     selectableList.onFocusIn();
     local.onFocus?.();
+    context.notifyRootFocus();
   };
 
   const handleBlur = () => {
     context.noteBlur();
     selectableList.onFocusOut();
     local.onBlur?.();
+    context.notifyRootBlur();
   };
 
   // Return / Space on the focused list view arrive as a native press; the
-  // pressed tag's `isPressed` mirror is what the row renders.
+  // pressed tag's `isPressed` mirror is what the row renders. The row cannot
+  // receive that press itself, so its press lifecycle is replayed through the
+  // descriptor (upstream's `rowProps` carry the same handlers on the row).
   const handlePressDown = (event: PressEvent) => {
     if (!isKeyboardPress(event)) {
       return;
     }
 
     context.noteKeyboard();
-    context.keyboardPressedKey.set(context.focusedKey());
+
+    const key = context.focusedKey();
+
+    if (key == null) {
+      return;
+    }
+
+    context.keyboardPressedKey.set(key);
+    context.findDescriptor(key)?.keyboardPress("start", event);
   };
 
   const handlePressUp = (event: PressEvent) => {
@@ -460,7 +476,13 @@ export function TagGroupList<T extends object>(
       return;
     }
 
+    const key = context.keyboardPressedKey();
+
     context.keyboardPressedKey.set(undefined);
+
+    if (key != null) {
+      context.findDescriptor(key)?.keyboardPress("up", event);
+    }
   };
 
   const handlePress = (event: PressEvent) => {
@@ -476,7 +498,7 @@ export function TagGroupList<T extends object>(
       return;
     }
 
-    context.findDescriptor(key)?.activate("keyboard", event);
+    context.findDescriptor(key)?.keyboardPress("press", event);
   };
 
   const handleMouseEnter = (event: NshMouseEvent) => {
@@ -528,12 +550,18 @@ export function TagGroupList<T extends object>(
 
   const hasItems = computed(() => local.items != null);
 
-  // Port sheet section 5: a static JSX child cannot be counted before it
-  // mounts, and an empty registry on the first pass must not hide it. With
-  // `items`, the count is the answer; without, "a static child was given" is.
-  const isEmptyState = computed(() =>
-    hasItems() ? (local.items?.length ?? 0) === 0 : children() == null,
-  );
+  // A static JSX child cannot be counted before it mounts, and the first pass
+  // therefore sees an empty registry. As in `ListBox.Root`, wait for the mount
+  // effect: after it, the registry is the collection (upstream's
+  // `state.collection.size === 0`), so static children that render no tags show
+  // `renderEmptyState` too.
+  const mounted = signal(false);
+
+  effect(() => {
+    mounted.set(true);
+  });
+
+  const isEmptyState = computed(() => mounted() && isEmpty());
 
   const showEmpty = () => local.renderEmptyState != null && isEmptyState();
 
