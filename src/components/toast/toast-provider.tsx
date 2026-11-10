@@ -1,4 +1,5 @@
-import { computed, cleanup, effect, keymap, lifecycle, signal, split, untracked, View, windowSize } from "nsh";
+import * as nshRuntime from "nsh";
+import { computed, cleanup, effect, keymap, signal, split, untracked, View, windowSize } from "nsh";
 import { createKeymapScope as createKeymapScopePrimitive } from "../../primitives";
 import { Spinner } from "../spinner";
 import { renderChildren, type ToastRenderValues } from "./children";
@@ -169,6 +170,17 @@ const MODIFIER_NAMES: Record<string, string> = {
   metaKey: "cmd",
   shiftKey: "shift",
 };
+
+/**
+ * `lifecycle()` reports whether the app is in use. NSH 0.4.0's web runtime
+ * leaves the name out of its `nsh` facade, and importing a missing export fails
+ * the whole page on that target ("does not provide an export named
+ * `lifecycle`"), so it is read off the module namespace: the headless and
+ * desktop hosts have it, and the web target simply skips the visibility pause.
+ */
+const lifecycleAccessor = (
+  nshRuntime as { lifecycle?: Accessor<"active" | "inactive" | "background"> }
+).lifecycle;
 
 /**
  * The keystroke `keymap` takes for a HeroUI hotkey array, or `undefined` when
@@ -477,8 +489,12 @@ export function ToastProvider<T extends object = ToastContentValue>(
   });
 
   effect(() => {
+    if (!lifecycleAccessor) {
+      return;
+    }
+
     const source = queue();
-    const state = lifecycle();
+    const state = lifecycleAccessor();
 
     if (state === "background") {
       source.suspendTimers("visibility");
@@ -605,10 +621,47 @@ export function ToastProvider<T extends object = ToastContentValue>(
     return toMinWidth(local.width ?? DEFAULT_TOAST_WIDTH);
   });
 
+  /**
+   * The region has no height of its own: its children are absolutely positioned
+   * (`R-013`), so upstream's DOM box collapses to zero. NSH selectors (and
+   * assistive technology) skip a view without an area, which made the region
+   * itself, and every element matched through it, invisible to `nsh/test`
+   * (T-002, T-030, T-055, T-061). The box therefore takes the stack's height:
+   * it grows away from the anchored edge (up from `bottom-4`, down from
+   * `top-4`), which leaves every toast exactly where it was.
+   */
+  const regionHeight = computed(() => {
+    const heights = toastHeights();
+    const list = visibleToasts().filter((entry) => !exitingKeys().has(entry.key));
+
+    if (list.length === 0) {
+      return undefined;
+    }
+
+    const frontHeight = heights[list[0]!.key] ?? 0;
+
+    if (!isExpanded()) {
+      const height = frontHeight + (list.length - 1) * gap();
+
+      return height > 0 ? height : undefined;
+    }
+
+    let total = 0;
+
+    for (const entry of list) {
+      total += heights[entry.key] ?? frontHeight;
+    }
+
+    total += (list.length - 1) * gap();
+
+    return total > 0 ? total : undefined;
+  });
+
   const regionStyle = (): ViewStyle => {
     const style: ViewStyle = {};
     const width = regionWidth();
     const minWidth = regionMinWidth();
+    const height = regionHeight();
 
     if (width !== undefined) {
       style.width = width;
@@ -616,6 +669,10 @@ export function ToastProvider<T extends object = ToastContentValue>(
 
     if (minWidth !== undefined) {
       style.minWidth = minWidth;
+    }
+
+    if (height !== undefined) {
+      style.height = height;
     }
 
     return style;

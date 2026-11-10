@@ -568,7 +568,10 @@ export function ToastRoot<T extends object = ToastContentValue>(
         // Focus is reported, not cleared on blur: Tab from a toast root into
         // its own close button blurs the root, and the handoff still has to
         // know the toast held the focus (port sheet §2).
-        onFocus={() => region.setFocusedKey?.(key)}
+        onFocus={() => {
+          region.setFocusedKey?.(key);
+          local.onFocus?.();
+        }}
         onBlur={() => local.onBlur?.()}
         onLayout={handleLayout}
       >

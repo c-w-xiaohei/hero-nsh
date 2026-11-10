@@ -55,7 +55,7 @@ export const toastVariants = tv({
     // duration, so the 150ms opacity half is registered in §8.
     // R-033: `.toast:focus-visible` → `outline-2 outline-offset-2 outline-focus`.
     toast:
-      "absolute start-0 end-0 rounded-3xl pointer-events-auto grid grid-cols-[auto_minmax(0,1fr)] items-start justify-start gap-x-1.5 gap-y-2 bg-surface px-4 py-3 shadow-overlay dark:shadow-overlay-dark sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-y-0 ease-out-fluid focus:outline-2 focus:outline-offset-2 focus:outline-focus",
+      "group absolute start-0 end-0 rounded-3xl pointer-events-auto grid grid-cols-[auto_minmax(0,1fr)] items-start justify-start gap-x-1.5 gap-y-2 bg-surface px-4 py-3 shadow-overlay dark:shadow-overlay-dark sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-y-0 ease-out-fluid focus:outline-2 focus:outline-offset-2 focus:outline-focus",
 
     // R-023: `.toast > :not([data-slot="toast-close"])` → `transition: opacity
     // 200ms`; the descendant selector becomes the same three classes on the

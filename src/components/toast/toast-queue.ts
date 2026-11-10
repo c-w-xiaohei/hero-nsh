@@ -216,6 +216,10 @@ class ToastTimer {
 
   /** Ends the timer for good; a paused queue must not bring it back. */
   stop(): void {
+    if (this.handle !== undefined) {
+      clearTimeout(this.handle);
+    }
+
     this.stopped = true;
     this.handle = undefined;
     this.remaining = 0;
@@ -303,24 +307,30 @@ export class ToastQueue<T extends object = ToastContentValue> {
       return false;
     }
 
-    const entry = this.entries.find((candidate) => candidate.key === key);
+    const index = this.entries.findIndex((candidate) => candidate.key === key);
 
-    if (!entry) {
+    if (index < 0) {
       return false;
     }
 
-    entry.content = content;
+    const previous = this.entries[index]!;
+    // A fresh entry object, not a mutation: `Each` compares a row's item by
+    // identity, so an entry mutated in place would keep rendering the old
+    // content (`Saving` after an update to `Saved`, T-014 / T-052 / T-016).
+    const entry: ToastEntry<T> = {
+      content,
+      key,
+      onClose: options && "onClose" in options ? options.onClose : previous.onClose,
+      timeout: options?.timeout !== undefined ? options.timeout : previous.timeout,
+    };
 
-    if (options && "onClose" in options) {
-      entry.onClose = options.onClose;
-    }
+    this.entries[index] = entry;
 
     if (options?.timeout !== undefined) {
       // The old timer must not survive the restart: the countdown begins again
       // on the new delay, as upstream's fresh timer identity does.
       this.timers.get(key)?.stop();
       this.timers.delete(key);
-      entry.timeout = options.timeout;
       this.startTimer(key, options.timeout);
     }
 

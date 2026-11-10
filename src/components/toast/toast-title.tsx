@@ -67,6 +67,8 @@ export function ToastTitle(props: ToastTitleProps): JSX.Element {
     "slot",
     "id",
     "nativeID",
+    "aria-label",
+    "accessibilityLabel",
     "testID",
     "tooltip",
   ] as const);
@@ -96,6 +98,18 @@ export function ToastTitle(props: ToastTitleProps): JSX.Element {
       testID={local.testID}
       nativeID={local.id ?? local.nativeID}
       tooltip={local.tooltip}
+      // R-040: the title is the toast's accessible name upstream
+      // (`aria-labelledby` points at it). NSH has no id references, so the root
+      // merges the texts into its own label (T-046) and the title also carries
+      // its text as its own label, which is the same string a screen reader
+      // reads and what T-045 matches.
+      accessibilityLabel={
+        typeof local["aria-label"] === "string"
+          ? local["aria-label"]
+          : typeof local.accessibilityLabel === "string"
+            ? local.accessibilityLabel
+            : extractText(children())
+      }
       class={classes()}
       style={local.style}
     >
