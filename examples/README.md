@@ -30,6 +30,5 @@ app directory therefore holds the shared setup for every page:
 ## Coverage
 
 Between them the five pages use every component exported from `src/index.ts` except the
-seven that are not merged yet: `table`, `modal`, `toast`, `tooltip`, `combo-box`,
-`date-field` and `color-swatch-picker`. They live in `tmp/worktrees/` and join these pages
-once they land.
+four that are not merged yet: `table`, `toast`, `tooltip` and `combo-box`. They live in
+`tmp/worktrees/` and join these pages once they land.

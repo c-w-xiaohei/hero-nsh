@@ -40,11 +40,11 @@ function Identity() {
   return (
     <Card>
       <Card.Header>
-        <View class="flex-row items-center gap-4">
+        <View class="flex-row flex-wrap items-center gap-4 gap-y-2">
           <Avatar>
             <Avatar.Fallback>AL</Avatar.Fallback>
           </Avatar>
-          <View class="flex-1 gap-0.5">
+          <View class="flex-auto gap-0.5">
             <View class="flex-row items-center gap-2">
               <Card.Title>Ada Lovelace</Card.Title>
               <Chip color="accent">Admin</Chip>
@@ -54,7 +54,7 @@ function Identity() {
           <Button variant="secondary">Edit profile</Button>
         </View>
       </Card.Header>
-      <View class="gap-3">
+      <Card.Content className="gap-3">
         <TagGroup aria-label="Skills" selectionMode="multiple">
           <TagGroup.List>
             <Tag id="analytics">Analytics</Tag>
@@ -63,7 +63,7 @@ function Identity() {
           </TagGroup.List>
         </TagGroup>
         <Link href="https://example.com/ada">example.com/ada</Link>
-      </View>
+      </Card.Content>
     </Card>
   );
 }
@@ -75,24 +75,24 @@ function About() {
         <Card.Title>About</Card.Title>
         <Card.Description>Shown on your public profile.</Card.Description>
       </Card.Header>
-      <View>
+      <Card.Content>
         <Typography.Paragraph>
           Mathematician, occasional programmer, and the person who keeps the billing runbooks in
           order. Ask me about invoices, exports, or why the March report is late.
         </Typography.Paragraph>
         <Typography.Code>timezone: Europe/Berlin</Typography.Code>
-      </View>
+      </Card.Content>
     </Card>
   );
 }
 
 function Details() {
   return (
-    <Card className="w-[300px]">
+    <Card className="w-full sm:w-[300px]">
       <Card.Header>
         <Card.Title>Details</Card.Title>
       </Card.Header>
-      <View>
+      <Card.Content>
         <DisclosureGroup>
           <Disclosure id="contact">
             <Disclosure.Heading>
@@ -117,19 +117,19 @@ function Details() {
             </Disclosure.Content>
           </Disclosure>
         </DisclosureGroup>
-      </View>
+      </Card.Content>
     </Card>
   );
 }
 
 function Shortcuts() {
   return (
-    <Card className="w-[300px]">
+    <Card className="w-full sm:w-[300px]">
       <Card.Header>
         <Card.Title>Shortcuts</Card.Title>
         <Card.Description>Everywhere in Acme.</Card.Description>
       </Card.Header>
-      <View class="gap-2">
+      <Card.Content className="gap-2">
         <View class="flex-row items-center justify-between gap-3">
           <Text class="text-sm text-foreground">Search</Text>
           <Kbd>
@@ -150,18 +150,18 @@ function Shortcuts() {
             <Kbd.Content>Esc</Kbd.Content>
           </Kbd>
         </View>
-      </View>
+      </Card.Content>
     </Card>
   );
 }
 
 function QuickActions() {
   return (
-    <Card className="w-[300px]">
+    <Card className="w-full sm:w-[300px]">
       <Card.Header>
         <Card.Title>Quick actions</Card.Title>
       </Card.Header>
-      <View>
+      <Card.Content>
         <Menu aria-label="Quick actions" className="w-full">
           <Menu.Item id="invite" textValue="Invite a teammate">
             <Label>Invite a teammate</Label>
@@ -173,7 +173,7 @@ function QuickActions() {
             <Label>Sign out everywhere</Label>
           </Menu.Item>
         </Menu>
-      </View>
+      </Card.Content>
     </Card>
   );
 }
@@ -186,7 +186,7 @@ function App() {
       actions={<Button>Save changes</Button>}
     >
       <Surface className="flex-row items-center gap-3 rounded-3xl p-4">
-        <View class="flex-1 gap-0.5">
+        <View class="flex-auto gap-0.5">
           <Text class="text-sm font-medium text-foreground">Your profile is 80% complete</Text>
           <ProgressBar value={80}>
             <ProgressBar.Track>
@@ -211,7 +211,7 @@ function App() {
 
       <Section title="FAQ">
         <Card>
-          <View>
+          <Card.Content>
             <Accordion allowsMultipleExpanded>
               {FAQ.map((item) => (
                 <Accordion.Item>
@@ -227,7 +227,7 @@ function App() {
                 </Accordion.Item>
               ))}
             </Accordion>
-          </View>
+          </Card.Content>
         </Card>
       </Section>
     </Page>

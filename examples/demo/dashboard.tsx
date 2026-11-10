@@ -30,17 +30,17 @@ const ACTIVITY = [
 
 function Stat(props: { label: string; value: string; delta: string; note: string; up?: boolean }) {
   return (
-    <Card className="w-[240px]">
+    <Card className="w-full sm:w-[240px]">
       <Card.Header>
         <Card.Title>{props.label}</Card.Title>
         <Card.Description>{props.note}</Card.Description>
       </Card.Header>
-      <View class="gap-2">
+      <Card.Content className="gap-2">
         <View class="flex-row items-center gap-2">
           <Text class="text-2xl font-semibold text-foreground">{props.value}</Text>
           <Chip color={props.up === false ? "default" : "success"}>{props.delta}</Chip>
         </View>
-      </View>
+      </Card.Content>
     </Card>
   );
 }
@@ -48,42 +48,42 @@ function Stat(props: { label: string; value: string; delta: string; note: string
 function Goals() {
   return (
     <Row>
-      <Card className="w-[300px]">
+      <Card className="w-full sm:w-[300px]">
         <Card.Header>
           <Card.Title>Monthly goal</Card.Title>
           <Card.Description>$18,400 of $25,000</Card.Description>
         </Card.Header>
-        <View>
+        <Card.Content>
           <ProgressBar value={74}>
             <ProgressBar.Output />
             <ProgressBar.Track>
               <ProgressBar.Fill />
             </ProgressBar.Track>
           </ProgressBar>
-        </View>
+        </Card.Content>
       </Card>
 
-      <Card className="w-[300px]">
+      <Card className="w-full sm:w-[300px]">
         <Card.Header>
           <Card.Title>Storage</Card.Title>
           <Card.Description>68 GB of 100 GB</Card.Description>
         </Card.Header>
-        <View>
+        <Card.Content>
           <Meter value={68}>
             <Meter.Output />
             <Meter.Track>
               <Meter.Fill />
             </Meter.Track>
           </Meter>
-        </View>
+        </Card.Content>
       </Card>
 
-      <Card className="w-[300px]">
+      <Card className="w-full sm:w-[300px]">
         <Card.Header>
           <Card.Title>Uptime</Card.Title>
           <Card.Description>Last 30 days</Card.Description>
         </Card.Header>
-        <View>
+        <Card.Content>
           <View class="flex-row items-center gap-3">
             <ProgressCircle aria-label="Uptime" value={99}>
               <ProgressCircle.Track>
@@ -93,7 +93,7 @@ function Goals() {
             </ProgressCircle>
             <Text class="text-sm text-foreground">99.98%</Text>
           </View>
-        </View>
+        </Card.Content>
       </Card>
     </Row>
   );
@@ -118,7 +118,7 @@ function Activity() {
           </Popover>
         </View>
       </Card.Header>
-      <View>
+      <Card.Content>
         <ScrollShadow className="h-56 w-full">
           <ListBox aria-label="Recent activity" className="w-full">
             {ACTIVITY.map((entry) => (
@@ -126,7 +126,7 @@ function Activity() {
                 <Avatar>
                   <Avatar.Fallback>{entry.who.charAt(0)}</Avatar.Fallback>
                 </Avatar>
-                <View class="flex-1 flex-col">
+                <View class="flex-auto flex-col">
                   <Label>{entry.who}</Label>
                   <Description>{entry.what}</Description>
                 </View>
@@ -135,7 +135,7 @@ function Activity() {
             ))}
           </ListBox>
         </ScrollShadow>
-      </View>
+      </Card.Content>
     </Card>
   );
 }
@@ -163,7 +163,7 @@ function App() {
       </Alert>
 
       <Surface className="flex-row items-center gap-3 rounded-2xl p-4">
-        <View class="flex-1 gap-0.5">
+        <View class="flex-auto gap-0.5">
           <Text class="text-sm font-medium text-foreground">New: bulk refunds</Text>
           <Text class="text-xs text-muted">Select several orders and refund them at once.</Text>
         </View>

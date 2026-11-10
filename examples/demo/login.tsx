@@ -19,13 +19,13 @@ import {
 
 function SignIn() {
   return (
-    <Card className="w-[360px]">
+    <Card className="w-full max-w-[360px]">
       <Card.Header>
         <Card.Title>Sign in</Card.Title>
         <Card.Description>Welcome back to Acme.</Card.Description>
       </Card.Header>
-      <View class="gap-4">
-        <Form aria-label="Sign in" onSubmit={(event) => event.preventDefault()}>
+      <Card.Content className="gap-4">
+        <Form aria-label="Sign in" className="gap-4" onSubmit={(event) => event.preventDefault()}>
           <ErrorMessage>That email and password do not match.</ErrorMessage>
           <TextField isRequired name="email" type="email">
             <Label>Email</Label>
@@ -50,7 +50,7 @@ function SignIn() {
           </View>
           <Button type="submit">Sign in</Button>
         </Form>
-      </View>
+      </Card.Content>
       <Card.Footer className="gap-1.5">
         <Text class="text-sm text-muted">No account?</Text>
         <Link href="https://example.com/signup">Create one</Link>
@@ -61,12 +61,12 @@ function SignIn() {
 
 function TwoFactor() {
   return (
-    <Card className="w-[360px]">
+    <Card className="w-full max-w-[360px]">
       <Card.Header>
         <Card.Title>Two-factor authentication</Card.Title>
         <Card.Description>Enter the six-digit code from your authenticator app.</Card.Description>
       </Card.Header>
-      <View>
+      <Card.Content className="gap-4">
         <Alert status="warning">
           <Alert.Indicator />
           <Alert.Content>
@@ -95,7 +95,7 @@ function TwoFactor() {
           <Spinner />
           <Description>Sending a new code to j•••@acme.com</Description>
         </View>
-      </View>
+      </Card.Content>
     </Card>
   );
 }

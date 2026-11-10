@@ -13,8 +13,8 @@ export function Page(props: {
     <View class="flex-1 bg-background">
       <Scroll class="flex-1">
         <View class="gap-8 p-8">
-          <View class="flex-row items-start justify-between gap-4">
-            <View class="flex-1 gap-1">
+          <View class="flex-col items-start gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
+            <View class="flex-auto gap-1">
               <Text class="text-lg font-semibold text-foreground">{props.title}</Text>
               {props.note ? <Text class="text-sm text-muted">{props.note}</Text> : null}
             </View>

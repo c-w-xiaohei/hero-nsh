@@ -8,6 +8,8 @@ import {
   ColorInputGroup,
   ColorSlider,
   ColorSwatch,
+  ColorSwatchPicker,
+  DateField,
   Description,
   Disclosure,
   DisclosureGroup,
@@ -17,6 +19,7 @@ import {
   Label,
   ListBox,
   Meter,
+  Modal,
   ProgressCircle,
   Radio,
   RadioGroup,
@@ -44,7 +47,7 @@ function Profile() {
         <Card.Title>Profile</Card.Title>
         <Card.Description>How your teammates see you.</Card.Description>
       </Card.Header>
-      <View class="gap-4">
+      <Card.Content className="gap-4">
         <Form aria-label="Profile" onSubmit={(event) => event.preventDefault()}>
           <Fieldset>
             <Fieldset.Group>
@@ -57,6 +60,15 @@ function Profile() {
                 <Input />
                 <Description>Only visible to workspace admins.</Description>
               </TextField>
+              <DateField name="birthday">
+                <Label>Birthday</Label>
+                <DateField.Group>
+                  <DateField.Input>
+                    {(segment) => <DateField.Segment segment={segment} />}
+                  </DateField.Input>
+                </DateField.Group>
+                <Description>Used for the birthday note on your profile.</Description>
+              </DateField>
               <Select className="w-[260px]" defaultSelectedKey="shanghai">
                 <Label>Time zone</Label>
                 <Select.Trigger>
@@ -74,8 +86,8 @@ function Profile() {
                   </ListBox>
                 </Select.Popover>
               </Select>
-              <View class="flex-row items-end gap-3">
-                <TimeField className="w-[180px]" name="quiet-from">
+              <View class="flex-row flex-wrap items-end gap-3">
+                <TimeField className="w-[180px] max-w-full" name="quiet-from">
                   <Label>Quiet hours from</Label>
                   <TimeField.Group>
                     <TimeField.Input>
@@ -83,7 +95,7 @@ function Profile() {
                     </TimeField.Input>
                   </TimeField.Group>
                 </TimeField>
-                <TimeField className="w-[180px]" name="quiet-to">
+                <TimeField className="w-[180px] max-w-full" name="quiet-to">
                   <Label>to</Label>
                   <TimeField.Group>
                     <TimeField.Input>
@@ -95,7 +107,7 @@ function Profile() {
             </Fieldset.Group>
           </Fieldset>
         </Form>
-      </View>
+      </Card.Content>
     </Card>
   );
 }
@@ -107,7 +119,7 @@ function Notifications() {
         <Card.Title>Notifications</Card.Title>
         <Card.Description>Pick what reaches you, and how often.</Card.Description>
       </Card.Header>
-      <View class="gap-5">
+      <Card.Content className="gap-5">
         <SwitchGroup>
           <Switch defaultSelected name="mentions">
             <Switch.Content>
@@ -162,7 +174,7 @@ function Notifications() {
             </Radio.Content>
           </Radio>
         </RadioGroup>
-        <View class="w-80">
+        <View class="w-full sm:w-80">
           <Slider defaultValue={20}>
             <Label>Digest days</Label>
             <Slider.Output />
@@ -172,7 +184,7 @@ function Notifications() {
             </Slider.Track>
           </Slider>
         </View>
-      </View>
+      </Card.Content>
     </Card>
   );
 }
@@ -184,12 +196,12 @@ function Appearance() {
         <Card.Title>Appearance</Card.Title>
         <Card.Description>The accent used across this workspace.</Card.Description>
       </Card.Header>
-      <View class="gap-5">
+      <Card.Content className="gap-5">
         <View class="flex-row flex-wrap items-start gap-6">
           <ColorArea aria-label="Accent color" defaultValue="hsl(213, 90%, 55%)">
             <ColorArea.Thumb />
           </ColorArea>
-          <View class="w-[320px]">
+          <View class="w-full sm:w-[320px]">
             <ColorSlider channel="hue" colorSpace="hsl" defaultValue="hsl(213, 90%, 55%)">
               <Label>Hue</Label>
               <ColorSlider.Output />
@@ -200,7 +212,7 @@ function Appearance() {
           </View>
         </View>
         <View class="flex-row flex-wrap items-end gap-4">
-          <ColorField className="w-[240px]" defaultValue="#0485F7" name="accent">
+          <ColorField className="w-[240px] max-w-full" defaultValue="#0485F7" name="accent">
             <Label>Accent</Label>
             <ColorField.Group>
               <ColorField.Prefix>
@@ -209,7 +221,7 @@ function Appearance() {
               <ColorField.Input />
             </ColorField.Group>
           </ColorField>
-          <View class="w-[240px]">
+          <View class="w-[240px] max-w-full">
             <Label>Hex value</Label>
             <ColorInputGroup>
               <ColorInputGroup.Input placeholder="#000000" />
@@ -223,7 +235,18 @@ function Appearance() {
           <ColorSwatch color="#F5A524" colorName="Warning" />
           <ColorSwatch color="#F31260" colorName="Danger" />
         </View>
-      </View>
+        <View class="gap-2">
+          <Label>Presets</Label>
+          <ColorSwatchPicker aria-label="Accent presets" defaultValue="#0485F7">
+            {["#0485F7", "#17C964", "#F5A524", "#F31260"].map((color) => (
+              <ColorSwatchPicker.Item color={color}>
+                <ColorSwatchPicker.Swatch />
+                <ColorSwatchPicker.Indicator />
+              </ColorSwatchPicker.Item>
+            ))}
+          </ColorSwatchPicker>
+        </View>
+      </Card.Content>
     </Card>
   );
 }
@@ -235,8 +258,8 @@ function Usage() {
         <Card.Title>Usage</Card.Title>
         <Card.Description>This workspace is on the Team plan.</Card.Description>
       </Card.Header>
-      <View class="gap-4">
-        <View class="w-[320px]">
+      <Card.Content className="gap-4">
+        <View class="w-full sm:w-[320px]">
           <Meter value={68}>
             <Label>Storage</Label>
             <Meter.Output />
@@ -254,7 +277,7 @@ function Usage() {
           </ProgressCircle>
           <Text class="text-sm text-foreground">12 of 20 seats</Text>
         </View>
-      </View>
+      </Card.Content>
     </Card>
   );
 }
@@ -266,7 +289,7 @@ function Advanced() {
         <Card.Title>Advanced</Card.Title>
         <Card.Description>Settings most people never open.</Card.Description>
       </Card.Header>
-      <View>
+      <Card.Content className="gap-4">
         <DisclosureGroup>
           <Disclosure id="sessions">
             <Disclosure.Heading>
@@ -291,7 +314,30 @@ function Advanced() {
             </Disclosure.Content>
           </Disclosure>
         </DisclosureGroup>
-      </View>
+        <Modal>
+          <Button variant="danger-soft">Leave workspace</Button>
+          <Modal.Backdrop>
+            <Modal.Container>
+              <Modal.Dialog>
+                <Modal.CloseTrigger />
+                <Modal.Header>
+                  <Modal.Heading>Leave workspace?</Modal.Heading>
+                </Modal.Header>
+                <Modal.Body>
+                  <Text class="text-sm text-foreground">
+                    You will lose access to every order, member and setting in Acme. An admin can
+                    invite you back later.
+                  </Text>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button slot="close" variant="secondary">Cancel</Button>
+                  <Button slot="close" variant="danger">Leave workspace</Button>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
+      </Card.Content>
     </Card>
   );
 }

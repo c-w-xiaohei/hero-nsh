@@ -12,6 +12,7 @@ import {
   Label,
   Link,
   ListBox,
+  Modal,
   Pagination,
   SearchField,
   Select,
@@ -89,14 +90,14 @@ function OrderList() {
   return (
     <ListBox aria-label="Orders" className="w-full" selectionMode="single">
       {ORDERS.map((order) => (
-        <ListBox.Item id={order.id} textValue={`#${order.id} ${order.name}`}>
+        <ListBox.Item className="flex-wrap gap-y-1" id={order.id} textValue={`#${order.id} ${order.name}`}>
           <Badge.Anchor>
             <Avatar>
               <Avatar.Fallback>{order.name.charAt(0)}</Avatar.Fallback>
             </Avatar>
             {order.urgent ? <Badge>!</Badge> : null}
           </Badge.Anchor>
-          <View class="flex-1 flex-col">
+          <View class="flex-auto min-w-[140px] flex-col">
             <Label>{order.name}</Label>
             <Description>{order.detail}</Description>
           </View>
@@ -116,8 +117,30 @@ function App() {
       title="Orders"
       note="Everything sold this month, newest first."
       actions={
-        <View class="flex-row gap-2">
+        <View class="flex-row flex-wrap items-center gap-2">
           <Link href="https://example.com/exports">Export</Link>
+          <Modal>
+            <Button variant="secondary">Refund policy</Button>
+            <Modal.Backdrop>
+              <Modal.Container>
+                <Modal.Dialog>
+                  <Modal.CloseTrigger />
+                  <Modal.Header>
+                    <Modal.Heading>Refund policy</Modal.Heading>
+                  </Modal.Header>
+                  <Modal.Body>
+                    <Text class="text-sm text-foreground">
+                      Orders can be refunded within 30 days of delivery. Refunds return to the
+                      original payment method in three to five business days.
+                    </Text>
+                  </Modal.Body>
+                  <Modal.Footer>
+                    <Button slot="close">Got it</Button>
+                  </Modal.Footer>
+                </Modal.Dialog>
+              </Modal.Container>
+            </Modal.Backdrop>
+          </Modal>
           <Button>New order</Button>
         </View>
       }
