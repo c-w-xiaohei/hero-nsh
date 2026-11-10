@@ -80,11 +80,10 @@ export interface ComboBoxRenderProps {
  * The selection payload `onChange` receives: a key or `null` in single mode,
  * the keys in selection order in multiple mode.
  */
-export type ComboBoxSelection =
-  | string
-  | number
-  | null
-  | (string | number)[];
+export type ComboBoxSelection<M extends "single" | "multiple" = "single"> =
+  M extends "multiple"
+    ? Iterable<string | number>
+    : string | number | null;
 
 /**
  * The props of `ComboBox.Root`: HeroUI 3.2.7's `ComboBoxRootProps`, which is
@@ -97,7 +96,10 @@ export type ComboBoxSelection =
  * are present, as React Aria's `useControlledState` does
  * (`useComboBoxState.ts:216-221`).
  */
-export interface ComboBoxRootProps<T = unknown> extends ComboBoxVariants {
+export interface ComboBoxRootProps<
+  T extends object = object,
+  M extends "single" | "multiple" = "single",
+> extends ComboBoxVariants {
   /**
    * The variant dimension (`"primary"` by default). HeroUI 3.2.7's variant
    * table and CSS carry no `secondary` branch, so it makes no class; it is
@@ -129,16 +131,16 @@ export interface ComboBoxRootProps<T = unknown> extends ComboBoxVariants {
   defaultItems?: Iterable<T>;
 
   /** `"single"` by default; it decides the value's text and the close rule. */
-  selectionMode?: "single" | "multiple";
+  selectionMode?: M;
 
   /** The selection in controlled mode: a key or `null`, or the keys. */
-  value?: string | number | null | Iterable<string | number>;
+  value?: ComboBoxSelection<M>;
 
   /** The initial selection in uncontrolled mode. */
-  defaultValue?: string | number | null | Iterable<string | number>;
+  defaultValue?: ComboBoxSelection<M>;
 
   /** The selection changed (the payload is `ComboBoxSelection`). */
-  onChange?: (selection: ComboBoxSelection) => void;
+  onChange?: (selection: ComboBoxSelection<M>) => void;
 
   /** HeroUI's deprecated single-select controlled key. */
   selectedKey?: string | number | null;
@@ -280,7 +282,10 @@ function joinedText(
  * `ComboBox`, a plain `<div>` with no role; Kobalte's `role="group"` is not
  * HeroUI's contract and is not carried (port sheet §3).
  */
-export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
+export function ComboBoxRoot<
+  T extends object = object,
+  M extends "single" | "multiple" = "single",
+>(props: ComboBoxRootProps<T, M>): JSX.Element {
   const [local, rest] = split(props, [
     "children",
     "className",
@@ -393,36 +398,13 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
   // list never takes the view focus (port sheet §5: `focusTarget`).
   let inputFocus: (() => void) | undefined;
 
-  // NSH's web host reports a blur and a focus for `focus()` on an input that
-  // already holds the focus. The field focuses its input on every open (React
-  // Aria's `focusFirst`, `useComboBox.ts:598-604`), so that blur is the field's
-  // own doing and must not run the field's blur commit: the flag it sets is
-  // consumed by the one blur the call reports, and any focus clears it.
-  let blurFromOwnFocus = false;
-  let ownFocusFrame: number | undefined;
-
-  cleanup(() => {
-    if (ownFocusFrame !== undefined) {
-      cancelAnimationFrame(ownFocusFrame);
-    }
-  });
-
   const focusInput = () => {
-    if (!inputFocus) {
+    // React Aria's input focus handler also avoids focusing an input that
+    // already owns focus (Kobalte combobox-input.tsx:237-245). NSH's web host
+    // emits synthetic blur/focus callbacks for that redundant call.
+    if (!inputFocus || inputFocused()) {
       return;
     }
-
-    // Only a focus call on an input that already holds the focus reports the
-    // pair; a fallback clears the flag on the next frame, in case a host
-    // reports nothing at all for the call.
-    if (inputFocused()) {
-      blurFromOwnFocus = true;
-      ownFocusFrame = requestAnimationFrame(() => {
-        ownFocusFrame = undefined;
-        blurFromOwnFocus = false;
-      });
-    }
-
     inputFocus();
   };
 
@@ -548,14 +530,16 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
     }
 
     if (isMultiple()) {
-      local.onChange?.(keys === "all" ? [] : Array.from(keys));
+      local.onChange?.(
+        (keys === "all" ? [] : Array.from(keys)) as unknown as ComboBoxSelection<M>,
+      );
 
       return;
     }
 
     const key = keys === "all" ? null : (keys.values().next().value ?? null);
 
-    local.onChange?.(key);
+    local.onChange?.(key as ComboBoxSelection<M>);
     // React Aria keeps calling the deprecated single-select callback as well.
     local.onSelectionChange?.(key);
   };
@@ -879,7 +863,6 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
   };
 
   const handleInputFocus = () => {
-    blurFromOwnFocus = false;
     inputFocused.set(true);
     modality.onFocus();
     local.onFocusChange?.(true);
@@ -920,12 +903,6 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
     inputFocused.set(false);
     local.onFocusChange?.(false);
     local.onBlur?.();
-
-    if (blurFromOwnFocus) {
-      blurFromOwnFocus = false;
-
-      return;
-    }
 
     if (!overlay.isOpen()) {
       return;

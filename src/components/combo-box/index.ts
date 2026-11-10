@@ -34,11 +34,11 @@ export const ComboBox = Object.assign(ComboBoxRoot, {
 });
 
 export type ComboBox<
-  T = unknown,
+  T extends object = object,
   M extends "single" | "multiple" = "single",
 > = {
-  Props: ComboBoxRootProps<T>;
-  RootProps: ComboBoxRootProps<T>;
+  Props: ComboBoxRootProps<T, M>;
+  RootProps: ComboBoxRootProps<T, M>;
   InputGroupProps: ComboBoxInputGroupProps;
   ValueProps: ComboBoxValueProps<T>;
   TriggerProps: ComboBoxTriggerProps;
