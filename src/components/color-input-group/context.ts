@@ -96,6 +96,30 @@ export interface ColorInputGroupFieldValue {
    * `"none"`. Explicit `role` on the root still wins.
    */
   role?: "presentation";
+
+  /**
+   * The field's placeholder text, forwarded to `Input` when it was not given
+   * one itself. React Aria's `InputContext` carries it in `inputProps`.
+   */
+  placeholder?: () => string | undefined;
+
+  /** The field's `autoFocus`, forwarded to `Input`; an explicit prop wins. */
+  autoFocus?: () => boolean;
+
+  /** The input took the focus: the field records its focus-within state. */
+  onFocus?: () => void;
+
+  /** The input lost the focus: the field commits its text, then clears it. */
+  onBlur?: () => void;
+
+  /** Return in the input: the field commits in place (React Aria's Enter). */
+  onSubmit?: (event: { text: string }) => void;
+
+  /**
+   * Registers the input's focus handle, standing in for the DOM's
+   * `<label for>` press. Returns the unregister function for `cleanup`.
+   */
+  registerInputFocus?: (focus: () => void) => () => void;
 }
 
 /**

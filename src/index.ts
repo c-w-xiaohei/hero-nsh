@@ -58,3 +58,4 @@ export * from "./components/tag";
 export * from "./components/toolbar";
 export * from "./components/color-slider";
 export * from "./components/slider";
+export * from "./components/color-field";
