@@ -1,31 +1,31 @@
 import { mount, Text, View } from "nsh";
 import {
-  Alert,
+  Avatar,
   Button,
   Card,
   Checkbox,
-  Description,
   ErrorMessage,
   FieldError,
   Form,
   Input,
-  InputOTP,
   Label,
   Link,
   Separator,
-  Spinner,
   TextField,
 } from "hero-nsh";
 
 function SignIn() {
   return (
-    <Card className="w-full max-w-[360px]">
-      <Card.Header>
-        <Card.Title>Sign in</Card.Title>
-        <Card.Description>Welcome back to Acme.</Card.Description>
+    <Card className="w-full p-5">
+      <Card.Header className="w-full flex-row items-center justify-center gap-2">
+        <Avatar>
+          <Avatar.Fallback>A</Avatar.Fallback>
+        </Avatar>
+        <Card.Title>Sign in to Acme</Card.Title>
       </Card.Header>
-      <Card.Content className="gap-4">
-        <Form aria-label="Sign in" className="gap-4" onSubmit={(event) => event.preventDefault()}>
+      <Card.Content className="w-full gap-3">
+        <Text class="text-center text-sm text-muted">Use your work email to continue.</Text>
+        <Form aria-label="Sign in" className="gap-3" onSubmit={(event) => event.preventDefault()}>
           <ErrorMessage>That email and password do not match.</ErrorMessage>
           <TextField isRequired name="email" type="email">
             <Label>Email</Label>
@@ -50,51 +50,13 @@ function SignIn() {
           </View>
           <Button fullWidth type="submit">Sign in</Button>
         </Form>
-      </Card.Content>
-      <Card.Footer className="gap-1.5">
-        <Text class="text-sm text-muted">No account?</Text>
-        <Link href="https://example.com/signup">Create one</Link>
-      </Card.Footer>
-    </Card>
-  );
-}
-
-function TwoFactor() {
-  return (
-    <Card className="w-full max-w-[360px]">
-      <Card.Header>
-        <Card.Title>Two-factor authentication</Card.Title>
-        <Card.Description>Enter the six-digit code from your authenticator app.</Card.Description>
-      </Card.Header>
-      <Card.Content className="gap-4">
-        <Alert status="warning">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>Code expires in 30 seconds</Alert.Title>
-          </Alert.Content>
-        </Alert>
-        <InputOTP maxLength={6}>
-          <InputOTP.Group>
-            <InputOTP.Slot index={0} />
-            <InputOTP.Slot index={1} />
-            <InputOTP.Slot index={2} />
-          </InputOTP.Group>
-          <InputOTP.Separator />
-          <InputOTP.Group>
-            <InputOTP.Slot index={3} />
-            <InputOTP.Slot index={4} />
-            <InputOTP.Slot index={5} />
-          </InputOTP.Group>
-        </InputOTP>
-        <View class="flex-row items-center gap-3">
-          <Button>Verify</Button>
-          <Link href="https://example.com/resend">Resend code</Link>
+        <View class="flex-row items-center gap-2 py-1">
+          <Separator className="w-auto flex-1" />
+          <Text class="text-xs font-medium text-muted">OR</Text>
+          <Separator className="w-auto flex-1" />
         </View>
-        <Separator />
-        <View class="flex-row items-center gap-2">
-          <Spinner />
-          <Description>Sending a new code to j•••@acme.com</Description>
-        </View>
+        <Button fullWidth variant="tertiary">Continue with Google</Button>
+        <Button fullWidth variant="tertiary">Continue with Apple</Button>
       </Card.Content>
     </Card>
   );
@@ -102,29 +64,16 @@ function TwoFactor() {
 
 function App() {
   return (
-    <View class="flex-1 flex-row bg-background-secondary">
-      <View class="hidden flex-1 flex-col justify-between bg-accent p-10 md:flex">
-        <Text class="text-xl font-semibold text-accent-foreground">Acme</Text>
-        <View class="max-w-[380px] gap-3">
-          <Text class="text-4xl font-semibold leading-tight text-accent-foreground">
-            Welcome back.
-          </Text>
-          <Text class="text-sm text-accent-foreground opacity-80">
-            Orders, customers and billing for the whole team, in one workspace.
-          </Text>
+    <View class="flex-1 items-center justify-center bg-background-secondary p-4 sm:p-8">
+      <View class="w-full max-w-[380px] gap-5">
+        <View class="items-center gap-1">
+          <Text class="text-xl font-semibold text-foreground">Acme</Text>
+          <Text class="text-sm text-muted">Sign in to your workspace</Text>
         </View>
-        <Text class="text-xs text-accent-foreground opacity-70">© 2026 Acme Inc.</Text>
-      </View>
-
-      <View class="flex-1 items-center justify-center p-4 sm:p-8">
-        <View class="w-full max-w-[400px] gap-4">
-          <View class="items-center gap-1 md:hidden">
-            <Text class="text-xl font-semibold text-foreground">Acme</Text>
-            <Text class="text-sm text-muted">Sign in to your workspace</Text>
-          </View>
-          <SignIn />
-          <TwoFactor />
-        </View>
+        <SignIn />
+        <Text class="text-center text-sm text-muted">
+          No account? <Link href="https://example.com/signup">Create one</Link>
+        </Text>
       </View>
     </View>
   );

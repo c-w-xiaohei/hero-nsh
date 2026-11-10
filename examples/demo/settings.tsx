@@ -16,7 +16,9 @@ import {
   Fieldset,
   Form,
   Input,
+  InputOTP,
   Label,
+  Link,
   ListBox,
   Meter,
   Modal,
@@ -26,6 +28,7 @@ import {
   Select,
   Separator,
   Slider,
+  Spinner,
   Switch,
   SwitchGroup,
   TextField,
@@ -183,6 +186,47 @@ function Notifications() {
               <Slider.Thumb />
             </Slider.Track>
           </Slider>
+        </View>
+      </Card.Content>
+    </Card>
+  );
+}
+
+function Security() {
+  return (
+    <Card>
+      <Card.Header>
+        <Card.Title>Two-factor authentication</Card.Title>
+        <Card.Description>Confirm sign-in with a six-digit code.</Card.Description>
+      </Card.Header>
+      <Card.Content className="gap-4">
+        <Alert status="warning">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Code expires in 30 seconds</Alert.Title>
+          </Alert.Content>
+        </Alert>
+        <InputOTP maxLength={6}>
+          <InputOTP.Group>
+            <InputOTP.Slot index={0} />
+            <InputOTP.Slot index={1} />
+            <InputOTP.Slot index={2} />
+          </InputOTP.Group>
+          <InputOTP.Separator />
+          <InputOTP.Group>
+            <InputOTP.Slot index={3} />
+            <InputOTP.Slot index={4} />
+            <InputOTP.Slot index={5} />
+          </InputOTP.Group>
+        </InputOTP>
+        <View class="flex-row items-center gap-3">
+          <Button>Verify</Button>
+          <Link href="https://example.com/resend">Resend code</Link>
+        </View>
+        <Separator />
+        <View class="flex-row items-center gap-2">
+          <Spinner />
+          <Description>Sending a new code to j•••@acme.com</Description>
         </View>
       </Card.Content>
     </Card>
@@ -358,6 +402,7 @@ function App() {
       <View class="w-full gap-6">
         <Profile />
         <Notifications />
+        <Security />
         <Appearance />
         <Usage />
         <Section title="Advanced">
