@@ -40,23 +40,27 @@ import type { Component } from "./types";
  * takes no effect here, and the render-function arguments are accessors here.
  */
 
-const HSL_CHANNELS = [
-  { channel: "hue", label: "Hue" },
-  { channel: "saturation", label: "Saturation" },
-  { channel: "brightness", label: "Brightness" },
-  { channel: "lightness", label: "Lightness" },
-  { channel: "alpha", label: "Alpha" },
+/* The `all` grid keeps every row a literal `channel` / `colorSpace` pair, so it
+ * satisfies HeroUI's discriminated `ColorSliderChannelProps` union the same way
+ * the upstream stories do (color-slider.stories.tsx:49,74,93,112). A single
+ * array mixing channels and color spaces would widen both props to unions that
+ * no member of that union accepts, so the rows are grouped by color space and
+ * each group renders with its own literal `colorSpace`. */
+const HSL_ROWS = [
+  { channel: "hue", label: "Hue", value: "hsl(210, 100%, 50%)" },
+  { channel: "saturation", label: "Saturation", value: "hsl(210, 100%, 50%)" },
+  { channel: "lightness", label: "Lightness", value: "hsl(210, 100%, 50%)" },
+  { channel: "alpha", label: "Alpha", value: "hsla(210, 100%, 50%, 0.5)" },
 ] as const;
 
-const ALL_CHANNELS = [
-  { channel: "hue", colorSpace: "hsl", label: "Hue", value: "hsl(210, 100%, 50%)" },
-  { channel: "saturation", colorSpace: "hsl", label: "Saturation", value: "hsl(210, 100%, 50%)" },
-  { channel: "brightness", colorSpace: "hsb", label: "Brightness", value: "hsb(210, 100%, 100%)" },
-  { channel: "lightness", colorSpace: "hsl", label: "Lightness", value: "hsl(210, 100%, 50%)" },
-  { channel: "alpha", colorSpace: "hsl", label: "Alpha", value: "hsla(210, 100%, 50%, 0.5)" },
-  { channel: "red", colorSpace: "rgb", label: "Red", value: "rgb(64, 128, 255)" },
-  { channel: "green", colorSpace: "rgb", label: "Green", value: "rgb(64, 128, 255)" },
-  { channel: "blue", colorSpace: "rgb", label: "Blue", value: "rgb(64, 128, 255)" },
+const HSB_ROWS = [
+  { channel: "brightness", label: "Brightness", value: "hsb(210, 100%, 100%)" },
+] as const;
+
+const RGB_ROWS = [
+  { channel: "red", label: "Red", value: "rgb(64, 128, 255)" },
+  { channel: "green", label: "Green", value: "rgb(64, 128, 255)" },
+  { channel: "blue", label: "Blue", value: "rgb(64, 128, 255)" },
 ] as const;
 
 function Default() {
@@ -235,19 +239,27 @@ function Channels() {
   return (
     <Stage>
       <View class="w-[320px] flex-col gap-4">
-        {HSL_CHANNELS.slice(0, 3).map((entry) => (
-          <ColorSlider
-            channel={entry.channel}
-            defaultValue="hsl(200, 100%, 50%)"
-            colorSpace="hsl"
-          >
-            <Label>{entry.label}</Label>
-            <ColorSlider.Output />
-            <ColorSlider.Track>
-              <ColorSlider.Thumb />
-            </ColorSlider.Track>
-          </ColorSlider>
-        ))}
+        <ColorSlider channel="hue" colorSpace="hsl" defaultValue="hsl(200, 100%, 50%)">
+          <Label>Hue</Label>
+          <ColorSlider.Output />
+          <ColorSlider.Track>
+            <ColorSlider.Thumb />
+          </ColorSlider.Track>
+        </ColorSlider>
+        <ColorSlider channel="saturation" colorSpace="hsl" defaultValue="hsl(200, 100%, 50%)">
+          <Label>Saturation</Label>
+          <ColorSlider.Output />
+          <ColorSlider.Track>
+            <ColorSlider.Thumb />
+          </ColorSlider.Track>
+        </ColorSlider>
+        <ColorSlider channel="lightness" colorSpace="hsl" defaultValue="hsl(200, 100%, 50%)">
+          <Label>Lightness</Label>
+          <ColorSlider.Output />
+          <ColorSlider.Track>
+            <ColorSlider.Thumb />
+          </ColorSlider.Track>
+        </ColorSlider>
       </View>
       <View class="flex-row items-center gap-3">
         <ColorSwatch color="hsl(200, 100%, 50%)" size="lg" />
@@ -319,13 +331,31 @@ function All() {
   return (
     <Stage>
       <View class="flex-col gap-6">
-        {ALL_CHANNELS.map((entry) => (
+        {HSL_ROWS.map((entry) => (
           <View class="w-[320px]">
-            <ColorSlider
-              channel={entry.channel}
-              colorSpace={entry.colorSpace}
-              defaultValue={entry.value}
-            >
+            <ColorSlider channel={entry.channel} colorSpace="hsl" defaultValue={entry.value}>
+              <Label>{entry.label}</Label>
+              <ColorSlider.Output />
+              <ColorSlider.Track>
+                <ColorSlider.Thumb />
+              </ColorSlider.Track>
+            </ColorSlider>
+          </View>
+        ))}
+        {HSB_ROWS.map((entry) => (
+          <View class="w-[320px]">
+            <ColorSlider channel={entry.channel} colorSpace="hsb" defaultValue={entry.value}>
+              <Label>{entry.label}</Label>
+              <ColorSlider.Output />
+              <ColorSlider.Track>
+                <ColorSlider.Thumb />
+              </ColorSlider.Track>
+            </ColorSlider>
+          </View>
+        ))}
+        {RGB_ROWS.map((entry) => (
+          <View class="w-[320px]">
+            <ColorSlider channel={entry.channel} colorSpace="rgb" defaultValue={entry.value}>
               <Label>{entry.label}</Label>
               <ColorSlider.Output />
               <ColorSlider.Track>
@@ -335,12 +365,42 @@ function All() {
           </View>
         ))}
         <View class="flex-row items-start gap-6">
-          {ALL_CHANNELS.map((entry) => (
+          {HSL_ROWS.map((entry) => (
             <View class="h-48 w-16">
               <ColorSlider
                 aria-label={entry.label}
                 channel={entry.channel}
-                colorSpace={entry.colorSpace}
+                colorSpace="hsl"
+                defaultValue={entry.value}
+                orientation="vertical"
+              >
+                <ColorSlider.Track>
+                  <ColorSlider.Thumb />
+                </ColorSlider.Track>
+              </ColorSlider>
+            </View>
+          ))}
+          {HSB_ROWS.map((entry) => (
+            <View class="h-48 w-16">
+              <ColorSlider
+                aria-label={entry.label}
+                channel={entry.channel}
+                colorSpace="hsb"
+                defaultValue={entry.value}
+                orientation="vertical"
+              >
+                <ColorSlider.Track>
+                  <ColorSlider.Thumb />
+                </ColorSlider.Track>
+              </ColorSlider>
+            </View>
+          ))}
+          {RGB_ROWS.map((entry) => (
+            <View class="h-48 w-16">
+              <ColorSlider
+                aria-label={entry.label}
+                channel={entry.channel}
+                colorSpace="rgb"
                 defaultValue={entry.value}
                 orientation="vertical"
               >
