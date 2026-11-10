@@ -15,7 +15,9 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createKeymapScope } from "../../primitives/create-keymap-scope";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { FormContext } from "../form/context";
 import { ButtonGroupContext } from "./button-group-context";
 import { buttonGroupItemClasses } from "./button-group-classes";
 import { buttonVariants, type ButtonVariants } from "./button.styles";
@@ -83,8 +85,9 @@ export interface ButtonRootProps extends ButtonVariants, AriaProps, GlobalDomPro
   onMouseLeave?: (e: NshMouseEvent) => void;
   onFocus?: () => void;
   onBlur?: () => void;
-  /** React Aria DOM / form props: accepted for API parity, no effect in NSH. */
+  /** `submit` submits the enclosing Form; `button` (default) and `reset` do nothing (NSH has no native form). */
   type?: "button" | "submit" | "reset";
+  /** React Aria DOM / form props: accepted for API parity, no effect in NSH. */
   form?: string;
   formAction?: string;
   formEncType?: string;
@@ -114,6 +117,11 @@ export function ButtonRoot(props: ButtonRootProps) {
   // trigger. NSH has no handler injection channel, so the Button consumes the
   // trigger context itself; outside one it is `null` and nothing changes.
   const overlayTrigger = OverlayTriggerContext();
+  // Form sheet §5.2: `<Button type="submit">` is how HeroUI submits the form
+  // around it. NSH has no native submit event, so the Button asks the enclosing
+  // Form through its context; outside a Form this is `undefined` and nothing
+  // changes.
+  const form = FormContext();
 
   const isHovered = signal(false);
   const isPressed = signal(false);
@@ -121,6 +129,26 @@ export function ButtonRoot(props: ButtonRootProps) {
   const modality = createInteractionModality();
 
   const isFocusVisible = computed(() => isFocused() && modality.isKeyboard());
+
+  // A Button placed in a Dropdown root is that overlay's trigger, so it takes
+  // the trigger's keys (`useMenuTrigger.ts:88-100`, dropdown port sheet §5):
+  // ArrowDown opens on the first row, ArrowUp on the last, the Alt arrows in
+  // every mode, the plain arrows only outside `longPress`, and the Alt forms of
+  // Return and Space only in `longPress` mode, on the first row. Outside such a
+  // root the context has no channel and the Button binds nothing.
+  createKeymapScope({
+    isActive: isFocused,
+    bindings: overlayTrigger?.triggerKeyOpen
+      ? {
+          arrowdown: () => overlayTrigger?.triggerKeyOpen?.("first", "arrow"),
+          "alt+arrowdown": () => overlayTrigger?.triggerKeyOpen?.("first", "altArrow"),
+          arrowup: () => overlayTrigger?.triggerKeyOpen?.("last", "arrow"),
+          "alt+arrowup": () => overlayTrigger?.triggerKeyOpen?.("last", "altArrow"),
+          "alt+enter": () => overlayTrigger?.triggerKeyOpen?.("first", "activation"),
+          "alt+space": () => overlayTrigger?.triggerKeyOpen?.("first", "activation"),
+        }
+      : {},
+  });
 
   const isPending = () => props.isPending ?? false;
   const ownIsDisabled = () =>
@@ -203,8 +231,19 @@ export function ButtonRoot(props: ButtonRootProps) {
 
     notePress(event);
     // Before the caller's `onPress`, as PressResponder's handler runs before
-    // the element's own: a disabled Button never reaches this line.
-    overlayTrigger?.toggle();
+    // the element's own: a disabled Button never reaches this line. A root that
+    // owns a press channel (Dropdown) decides what a press does; elsewhere the
+    // press toggles the overlay (dropdown port sheet §5, third change).
+    if (overlayTrigger?.triggerPress) {
+      overlayTrigger.triggerPress(isKeyboardPress(event) ? "keyboard" : "pointer");
+    } else {
+      overlayTrigger?.toggle();
+    }
+    // Form sheet §5.2: a submit Button asks the enclosing Form; `button` (the
+    // default) and `reset` do nothing, NSH having no native form.
+    if (props.type === "submit") {
+      form?.submit();
+    }
     props.onPress?.(event);
   };
 
@@ -239,6 +278,10 @@ export function ButtonRoot(props: ButtonRootProps) {
       return;
     }
 
+    // A held press is the long-press trigger of an overlay root that opens
+    // that way (Dropdown's `longPress`); before the caller's handlers, as
+    // PressResponder's injected `onLongPress` runs before the element's.
+    overlayTrigger?.triggerLongPress?.();
     props.onLongPressStart?.(event);
     props.onLongPress?.(event);
   };

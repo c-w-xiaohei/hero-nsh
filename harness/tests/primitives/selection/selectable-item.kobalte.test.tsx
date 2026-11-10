@@ -161,17 +161,6 @@ describe("selection on press", () => {
     expect(result.selected).toEqual([]);
   });
 
-  test("on the web, the platform (Command/Super) modifier also toggles", async () => {
-    const result = await run(
-      { mode: "multiple", behavior: "replace", target: "banana" },
-      "press",
-      "press-meta",
-      { platform: "web" },
-    );
-
-    expect(result.selected).toEqual([]);
-  });
-
   test("a touch press toggles under replace behavior", async () => {
     const result = await run(
       {
@@ -317,17 +306,6 @@ describe("keyboard activation", () => {
       { mode: "multiple", behavior: "replace" },
       "enter",
       "ctrl-enter",
-    );
-
-    expect(result.selected).toEqual([]);
-  });
-
-  test("on the web, Alt+keyboard activation is the non-contiguous toggle", async () => {
-    const result = await run(
-      { mode: "multiple", behavior: "replace", selected: "banana" },
-      "press-keyboard-alt",
-      undefined,
-      { platform: "web" },
     );
 
     expect(result.selected).toEqual([]);

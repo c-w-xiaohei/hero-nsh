@@ -6,6 +6,8 @@ export * from "./create-keymap-scope";
 export * from "./create-overlay-presence";
 export * from "./create-overlay-trigger";
 export * from "./create-progress-state";
+export * from "./create-select-state";
 export * from "./create-toggle-state";
+export * from "./create-scroll-shadow";
 export * from "./list";
 export * from "./selection";

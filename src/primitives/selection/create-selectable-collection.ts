@@ -163,6 +163,14 @@ export interface SelectableCollectionState {
 
   /** Wire to the collection view's `onBlur`. */
   onFocusOut: () => void;
+
+  /**
+   * Forgets the typeahead prefix. A collection that stays mounted while its
+   * field closes calls it there: upstream the popover unmounts, which drops
+   * `useTypeSelect`'s buffer (Select's list, port sheet T-068). Optional: a
+   * collection built elsewhere may not carry a typeahead at all.
+   */
+  resetTypeAhead?: () => void;
 }
 
 /**
@@ -182,7 +190,7 @@ export function createSelectableCollection(
   const direction = () => props.direction?.() ?? "ltr";
   const shouldUseVirtualFocus = () => !!props.shouldUseVirtualFocus?.();
 
-  const { typeSelectHandlers } = createTypeSelect({
+  const { typeSelectHandlers, reset: resetTypeAhead } = createTypeSelect({
     isDisabled: () => props.disallowTypeAhead?.(),
     keyboardDelegate,
     selectionManager,
@@ -470,5 +478,6 @@ export function createSelectableCollection(
     onKeyDown,
     onFocusIn,
     onFocusOut,
+    resetTypeAhead,
   };
 }

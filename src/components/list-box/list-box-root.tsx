@@ -28,6 +28,7 @@ import {
   createListState,
   createSelectableList,
   isKeyboardPress,
+  ListOwnerContext,
   type ListState,
   type SelectionBehavior,
   type SelectionMode,
@@ -37,6 +38,7 @@ import {
 import { renderChildren } from "./children";
 import {
   CollectionItemContext,
+  ListBoxContainerContext,
   ListBoxContext,
   type ListBoxContextValue,
   type ListBoxDescriptor,
@@ -298,11 +300,31 @@ export function ListBoxRoot<T>(
   ] as const);
 
   const variant = computed(() => local.variant ?? "default");
-  const selectionMode = (): SelectionMode => local.selectionMode ?? "none";
+
+  // Port sheet §5, first change: a Select (or later a ComboBox) can drive this
+  // list. Without an owner every accessor below keeps today's value, so a
+  // standalone ListBox behaves exactly as before.
+  const owner = ListOwnerContext();
+  const container = ListBoxContainerContext();
+
+  const selectionMode = (): SelectionMode =>
+    owner?.selectionMode() ?? local.selectionMode ?? "none";
   const selectionBehavior = (): SelectionBehavior =>
     local.selectionBehavior ?? "toggle";
   const disabledBehavior = (): "all" | "selection" =>
     local.disabledBehavior ?? "all";
+
+  /** Whether the list may take focus, bind keys and be read out (port sheet §5, third change). */
+  const isActive = () => owner?.isActive() ?? true;
+
+  const shouldFocusOnHover = () =>
+    owner?.shouldFocusOnHover() ?? local.shouldFocusOnHover ?? false;
+
+  const shouldSelectOnPressUp = () =>
+    owner?.shouldSelectOnPressUp() ?? local.shouldSelectOnPressUp ?? false;
+
+  const disallowEmptySelection = () =>
+    owner?.disallowEmptySelection() ?? local.disallowEmptySelection ?? false;
 
   // Research 4.2: parts register themselves with the nearest owner, and the
   // registry becomes the primitive's data source. A section descriptor carries
@@ -333,7 +355,10 @@ export function ListBoxRoot<T>(
     `\u0000nsh-listbox-section:${generatedSectionCount++}`;
 
   const isDisabledKey = (key: string) => {
-    const keys = local.disabledKeys;
+    // The owner's `disabledKeys` replace this list's own prop, never add to it:
+    // a Select's stories write them on the root and the caller's ListBox has no
+    // props (port sheet §2).
+    const keys = owner ? owner.disabledKeys() : local.disabledKeys;
 
     if (keys == null) {
       return false;
@@ -356,12 +381,33 @@ export function ListBoxRoot<T>(
     getSectionChildren: () => "children",
     selectionMode,
     selectionBehavior,
-    selectedKeys: computed(() => normalizeSelection(local.selectedKeys)),
-    defaultSelectedKeys: computed(() =>
-      normalizeSelection(local.defaultSelectedKeys),
+    selectedKeys: computed(() =>
+      owner
+        ? owner.selectedKeys()
+        : normalizeSelection(local.selectedKeys),
     ),
-    onSelectionChange: (keys) => local.onSelectionChange?.(keys),
-    disallowEmptySelection: () => local.disallowEmptySelection ?? false,
+    defaultSelectedKeys: computed(() =>
+      owner
+        ? owner.defaultSelectedKeys()
+        : normalizeSelection(local.defaultSelectedKeys),
+    ),
+    onSelectionChange: (keys) => {
+      if (owner) {
+        owner.onSelectionChange(keys);
+
+        // Kobalte closes a single-select field at the end of its selection
+        // callback; the owner decides whether this list closes on selection.
+        if (owner.closeOnSelection()) {
+          owner.close();
+        }
+
+        return;
+      }
+
+      local.onSelectionChange?.(keys);
+    },
+    allowDuplicateSelectionEvents: () => owner?.allowDuplicateSelectionEvents(),
+    disallowEmptySelection,
     disabledBehavior,
   });
 
@@ -397,11 +443,30 @@ export function ListBoxRoot<T>(
     autoFocus: () => local.autoFocus,
     shouldFocusWrap: () => local.shouldFocusWrap,
     orientation: () => local.orientation ?? "vertical",
-    disallowEmptySelection: () => local.disallowEmptySelection,
+    disallowEmptySelection,
     focusCollection: focusRoot,
   });
 
   const manager = () => list.selectionManager();
+
+  // Port sheet §5: the list reports its state and its focus entry points back
+  // to the owning field, and drops the registration when it unmounts.
+  if (owner) {
+    cleanup(
+      owner.registerList(list, {
+        focusList: focusRoot,
+        focusKey: (key) => {
+          manager().setFocused(true);
+          manager().setFocusedKey(key);
+        },
+        focusedKey: () => manager().focusedKey(),
+        findItem: (key) => findItemDescriptor(descriptors(), key),
+        // The field's list stays mounted while it closes; its typeahead prefix
+        // must not survive the close (the closed list would search "thf").
+        resetTypeAhead: selectableList.resetTypeAhead,
+      }),
+    );
+  }
 
   const rootFocused = signal(false);
   const keyboardPressedKey = signal<string | undefined>(undefined);
@@ -442,11 +507,30 @@ export function ListBoxRoot<T>(
       : className;
   };
 
+  // R-042: the container's list classes sit after this list's own base classes
+  // and before the caller's, so `p-1.5` beats `p-1` and the caller still wins
+  // (the same three-segment order Description and FieldError use).
   const classes = computed(() =>
-    [listboxVariants({ variant: variant() }), resolvedClassName()]
+    [
+      listboxVariants({ variant: variant() }),
+      container?.listClass?.(),
+      resolvedClassName(),
+    ]
       .filter((part): part is string => typeof part === "string" && part.length > 0)
       .join(" "),
   );
+
+  // The popover names the listbox with the field's label, standing in for
+  // `aria-labelledby` (port sheet §5, second change).
+  const accessibilityLabel = () =>
+    local["aria-label"] ??
+    local.accessibilityLabel ??
+    container?.accessibilityLabel?.();
+
+  // A closed field keeps its list mounted but out of the accessibility tree and
+  // the Tab order (port sheet §5, third change).
+  const elementsHidden = () =>
+    local["aria-hidden"] ?? local.accessibilityElementsHidden ?? !isActive();
 
   const resolvedStyle = () => {
     const style = local.style;
@@ -616,27 +700,39 @@ export function ListBoxRoot<T>(
   }
 
   createKeymapScope({
-    isActive: rootFocused,
+    isActive: () => isActive() && rootFocused(),
     bindings: navigationBindings,
     options: { repeat: true },
   });
 
   createKeymapScope({
-    isActive: rootFocused,
+    isActive: () => isActive() && rootFocused(),
     bindings: commandBindings,
   });
 
   createKeymapScope({
-    isActive: rootFocused,
+    isActive: () => isActive() && rootFocused(),
     bindings: printableBindings,
   });
 
   // `escapeKeyBehavior` is a prop, so the binding is its own scope: flipping it
   // while the list is focused re-binds or drops Escape instead of keeping the
-  // value read at mount.
+  // value read at mount. An owned list closes its field instead of clearing the
+  // selection (port sheet §5): Escape must never deselect in a Select.
   createKeymapScope({
-    isActive: () => rootFocused() && local.escapeKeyBehavior !== "none",
-    bindings: { escape: () => runKey("escape") },
+    isActive: () =>
+      isActive() &&
+      rootFocused() &&
+      (owner ? true : local.escapeKeyBehavior !== "none"),
+    bindings: {
+      escape: () => {
+        if (owner) {
+          owner.escape();
+        } else {
+          runKey("escape");
+        }
+      },
+    },
   });
 
   // The screen reader follows the focused key, the stand-in for
@@ -697,8 +793,8 @@ export function ListBoxRoot<T>(
     isFocused: rootFocused,
     focusedKey: () => manager().focusedKey(),
     isKeyboard: modality.isKeyboard,
-    shouldFocusOnHover: () => local.shouldFocusOnHover ?? false,
-    shouldSelectOnPressUp: () => local.shouldSelectOnPressUp ?? false,
+    shouldFocusOnHover,
+    shouldSelectOnPressUp,
     orientation: () => local.orientation ?? "vertical",
     layout: () => local.layout ?? "stack",
     isDisabledKey,
@@ -756,13 +852,12 @@ export function ListBoxRoot<T>(
         tooltip={local.tooltip}
         role="listbox"
         // The root is the one Tab stop; items are virtual-focus rows and never
-        // focusable themselves (port sheet section 5).
-        focusable={true}
-        accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel}
+        // focusable themselves (port sheet section 5). An owned list is a Tab
+        // stop only while its field is open.
+        focusable={isActive()}
+        accessibilityLabel={accessibilityLabel()}
         accessibilityState={local.accessibilityState}
-        accessibilityElementsHidden={
-          local["aria-hidden"] ?? local.accessibilityElementsHidden
-        }
+        accessibilityElementsHidden={elementsHidden()}
         class={classes()}
         style={resolvedStyle()}
         onFocus={handleFocus}
