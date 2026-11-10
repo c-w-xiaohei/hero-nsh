@@ -173,6 +173,27 @@ export function modalBackdropLayoutClasses(scroll: ModalVariants["scroll"]): str
 }
 
 /**
+ * The carrier's classes when it is the `Scroll` itself (`scroll="outside"`,
+ * R-029): the scroll view's own sizing, and the classes of the view it lays its
+ * content in.
+ *
+ * A `Scroll` stacks its content along the scroll axis, so the row semantics of
+ * `modalBackdropLayoutClasses` do not carry over: `justify-center` on the
+ * scroll view centers the content along the axis it scrolls, not across it.
+ * Measured on the web target before this split: the 1422pt container sat at
+ * y -327 in the 768pt viewport and `Row 01`…`Row 05` could not be reached.
+ * `items-center justify-start` on the content view gives upstream's
+ * `items-start`/`justify-center` result: the card starts at the top and is
+ * centered across the viewport.
+ */
+export function modalBackdropScrollClasses(): { scroll: string; content: string } {
+  return {
+    scroll: "flex-1 w-full",
+    content: "flex flex-col items-center justify-start w-full",
+  };
+}
+
+/**
  * The Dialog's placement classes, HeroUI's `[data-placement=…]` rules:
  *
  * R-036 `auto` → `mt-auto sm:my-auto`; R-037 `center` → `my-auto`;

@@ -10,7 +10,7 @@ import type { ModalContextValue } from "./modal-context";
 import { createModalContextValue, deriveModalState, ModalContext } from "./modal-context";
 import type { ModalRenderValues } from "./modal-render-values";
 import type { ModalVariants } from "./modal.styles";
-import { modalBackdropLayoutClasses } from "./modal.styles";
+import { modalBackdropLayoutClasses, modalBackdropScrollClasses } from "./modal.styles";
 
 /**
  * The props of `Modal.Backdrop`: HeroUI's `ModalBackdropProps`, which is
@@ -120,21 +120,44 @@ function createBackdropScrollRegistry(): ModalBackdropContextValue {
     registerScroll: (read) => {
       const current = registration();
 
-      // The carrier re-reads its children when it switches element, so the
-      // Container mounts a second time and registers the same value again.
-      // Keeping the entry when the value did not change ends the switch there
-      // instead of re-rendering the carrier forever.
+      // The carrier switches element on this value, and that switch remounts
+      // the Container below it, which registers the same value again. Keeping
+      // the entry when the value did not change ends the switch there instead
+      // of rebuilding the carrier forever; the accessor is swapped in place,
+      // without a notification, because the value it reads did not change but
+      // the Container that owns it did.
       if (current === undefined || current.read() !== read()) {
         registration.set({ read });
+      } else {
+        current.read = read;
       }
 
-      return () => {
-        if (registration()?.read === read) {
-          registration.set(undefined);
-        }
-      };
+      // The entry outlives this Container on purpose. A withdrawal here runs
+      // before the carrier's rebuild (measured: register build 1 → cleanup
+      // build 1 → register build 2), so it would clear the value the rebuild is
+      // about to register again and the mount would never settle (60+ builds).
+      // The next Container replaces or confirms the value; a Backdrop that
+      // keeps running with no Container at all keeps the last one (port sheet
+      // §8 notes the limit).
+      return () => {};
     },
   };
+}
+
+/** What `ModalLayer` takes: the Backdrop's prepared values, as live accessors. */
+interface ModalLayerProps {
+  open: Accessor<boolean>;
+  closeOnEscape: Accessor<boolean>;
+  onDismiss: () => void;
+  paintClasses: Accessor<string>;
+  style: Accessor<StyleProp<ViewStyle> | undefined>;
+  handlePress: (event: PressEvent) => void;
+  forwardRef: (node: ViewRef) => void;
+  testID: Accessor<ViewProps["testID"]>;
+  nativeID: Accessor<string | undefined>;
+  accessibilityLabel: Accessor<string | undefined>;
+  onLayout: Accessor<ViewProps["onLayout"] | undefined>;
+  carrier: () => JSX.Element;
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -249,16 +272,19 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
     // is only a flex box: `pointer-events-none` lets a press in the empty area
     // fall through to the paint layer, while the Dialog's `pointer-events-auto`
     // (R-035) keeps the card itself a target.
-    return outside() ? layout : `${layout} pointer-events-none`;
+    return `${layout} pointer-events-none`;
   });
 
   // R-029: `scroll="outside"` scrolls this carrier instead of `Modal.Body`, so
-  // the element itself is the `Scroll`; the layout classes carry `items-start`.
+  // the element itself is the `Scroll`. Its content view, not the scroll view,
+  // carries the alignment (a `Scroll` stacks along the axis it scrolls — see
+  // `modalBackdropScrollClasses`).
   // Only the branch that mounts is built, so `props.children` is read once, at
   // its placement — the deferred form is what keeps that read tracked when the
   // Container registers its `scroll`.
   const carrier = () => {
     const classes = carrierClasses();
+    const scrollClasses = modalBackdropScrollClasses();
     const node = props.children;
     const content = () => {
       if (typeof node === "function" && node.length >= 1) {
@@ -269,7 +295,9 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
     };
 
     return outside() ? (
-      <Scroll class={classes}>{content()}</Scroll>
+      <Scroll class={scrollClasses.scroll} contentClass={scrollClasses.content}>
+        {content()}
+      </Scroll>
     ) : (
       <View class={classes}>{content()}</View>
     );
@@ -302,8 +330,44 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
   };
 
   return (
+    <ModalContext.Provider value={contextValue}>
+      <OverlayTriggerContext.Provider value={scopedTrigger}>
+        <ModalBackdropContext.Provider value={registry}>
+          <ModalLayer
+            open={isOpen}
+            closeOnEscape={() => !isKeyboardDismissDisabled()}
+            onDismiss={close}
+            paintClasses={paintClasses}
+            style={style}
+            handlePress={handlePress}
+            forwardRef={(node) => props.ref?.(node)}
+            testID={() => props.testID}
+            nativeID={() => props.id ?? props.nativeID}
+            accessibilityLabel={() => props.accessibilityLabel}
+            onLayout={() => props.onLayout}
+            carrier={carrier}
+          />
+        </ModalBackdropContext.Provider>
+      </OverlayTriggerContext.Provider>
+    </ModalContext.Provider>
+  );
+}
+
+/**
+ * The native layer and its two children: the paint layer and the carrier.
+ *
+ * A component of its own, so what it creates is an element *below* the three
+ * providers rather than a thunk in the Backdrop's body. The web host builds a
+ * presented dialog's content in a pass of its own; a part created from the
+ * Backdrop's body looked its context up from the Backdrop's own scope and read
+ * the root's closed state (measured: X-002's `Modal.CloseTrigger` closed
+ * nothing). Created from inside the providers, the parts see the Backdrop's
+ * state on every host.
+ */
+function ModalLayer(props: ModalLayerProps): JSX.Element {
+  return (
     <Dialog
-      open={isOpen()}
+      open={props.open()}
       // R-010 / R-011: the backdrop's 150ms fade in and 100ms fade out are the
       // Dialog's native fade; the durations are the host's.
       // R-012: `motion-reduce:animate-none` → no animation at all.
@@ -313,33 +377,27 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
       // to reproduce (port sheet §8).
       // The paint layer below owns the backdrop press, so the native one is off.
       closeOnBackdropPress={false}
-      closeOnEscape={!isKeyboardDismissDisabled()}
+      closeOnEscape={props.closeOnEscape()}
       onOpenChange={(event) => {
         if (!event.open) {
-          close();
+          props.onDismiss();
         }
       }}
       class="flex-1"
     >
       <View class="relative flex-1">
         <View
-          ref={(node) => props.ref?.(node)}
-          testID={props.testID}
-          nativeID={props.id ?? props.nativeID}
-          accessibilityLabel={props.accessibilityLabel}
-          onLayout={props.onLayout}
+          ref={(node) => props.forwardRef(node)}
+          testID={props.testID()}
+          nativeID={props.nativeID()}
+          accessibilityLabel={props.accessibilityLabel()}
+          onLayout={props.onLayout()}
           focusable={false}
-          class={paintClasses()}
-          style={style()}
-          onPress={handlePress}
+          class={props.paintClasses()}
+          style={props.style()}
+          onPress={props.handlePress}
         />
-        <ModalContext.Provider value={contextValue}>
-          <OverlayTriggerContext.Provider value={scopedTrigger}>
-            <ModalBackdropContext.Provider value={registry}>
-              {() => carrier()}
-            </ModalBackdropContext.Provider>
-          </OverlayTriggerContext.Provider>
-        </ModalContext.Provider>
+        {() => props.carrier()}
       </View>
     </Dialog>
   );
