@@ -20,7 +20,6 @@ import {
 } from "../../primitives/create-overlay-trigger";
 import type { TooltipContextValue, TooltipState } from "./tooltip-context";
 import { TooltipContext } from "./tooltip-context";
-import type { TooltipPlacement } from "./tooltip-placement";
 import { tooltipVariants } from "./tooltip.styles";
 import {
   closeOtherTooltips,
@@ -86,9 +85,6 @@ export interface TooltipRootProps {
 
   /** HeroUI's type carries `ref`; React Aria's `TooltipTrigger` does not forward it. */
   ref?: unknown;
-
-  /** Accepted, no effect: `Tooltip.Content` sets the placement (React Aria's prop is on the content). */
-  placement?: TooltipPlacement;
 }
 
 /**
@@ -204,13 +200,19 @@ export function TooltipRoot(props: TooltipRootProps) {
     show(true);
   };
 
-  /** RAC's `onHoverStart`: ignored when the root opens on focus only. */
-  const hoverStart = () => {
-    if (isDisabled() || !isHoverTrigger()) {
+  /**
+   * Kobalte's `openTooltip(immediate)` (`tooltip-root.tsx:252-266`): `true` shows
+   * at once, while a plain open goes through the `delay` + warmup path, exactly
+   * as a hover does. React Aria's `state.open()` is the same request.
+   */
+  const openTooltip = (immediate?: boolean) => {
+    if (immediate === true) {
+      if (!trigger.isOpen()) {
+        show(isTooltipWarmedUp());
+      }
+
       return;
     }
-
-    hovered = true;
 
     // Coming back to an open (or closing) tip cancels the close.
     if (trigger.isOpen()) {
@@ -225,6 +227,16 @@ export function TooltipRoot(props: TooltipRootProps) {
     } else {
       show(false);
     }
+  };
+
+  /** RAC's `onHoverStart`: ignored when the root opens on focus only. */
+  const hoverStart = () => {
+    if (isDisabled() || !isHoverTrigger()) {
+      return;
+    }
+
+    hovered = true;
+    openTooltip(false);
   };
 
   /** RAC's `onHoverEnd`: the pointer left the trigger, so close after `closeDelay`. */
@@ -301,11 +313,9 @@ export function TooltipRoot(props: TooltipRootProps) {
 
   const state: TooltipState = {
     isOpen: trigger.isOpen,
-    open: (immediate) => {
-      if (!trigger.isOpen()) {
-        show(immediate === true ? isTooltipWarmedUp() : false);
-      }
-    },
+    // `open(true)` is the immediate open; a plain `open()` waits `delay` like a
+    // hover (Kobalte's `openTooltip(false)`).
+    open: (immediate) => openTooltip(immediate),
     close: (immediate) => hide(immediate === true),
   };
 

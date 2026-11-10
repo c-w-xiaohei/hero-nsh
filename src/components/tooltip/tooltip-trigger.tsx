@@ -57,7 +57,13 @@ export interface TooltipTriggerProps {
   /** A DOM id upstream; maps to `nativeID`. */
   id?: string;
 
-  /** `aria-disabled` upstream; HeroUI's trigger has no disabled rule, so it changes nothing visible. */
+  /**
+   * `disabled` / `aria-disabled` upstream: HeroUI's trigger is a `div` fed
+   * through `mergeProps` (`tooltip.tsx:202-229`) with no disable logic, so
+   * HeroUI only writes the ARIA state. NSH's `View disabled` would also block
+   * presses and paint disabled styles, so these map to `accessibilityState`
+   * alone.
+   */
   disabled?: boolean;
   "aria-disabled"?: boolean;
 
@@ -97,6 +103,7 @@ export function TooltipTrigger(props: TooltipTriggerProps) {
   const focused = signal(false);
 
   const isDisabled = () => props.disabled ?? props["aria-disabled"] === true;
+
   const isFocusVisible = computed(() => focused() && modality.isKeyboard());
 
   const classes = () =>
@@ -119,10 +126,6 @@ export function TooltipTrigger(props: TooltipTriggerProps) {
   };
 
   const handlePress = (event: PressEvent) => {
-    if (isDisabled()) {
-      return;
-    }
-
     notePress(event);
     // The root's press response runs before the caller's `onPress`, as React
     // Aria's injected handler runs before the element's own.
@@ -131,28 +134,16 @@ export function TooltipTrigger(props: TooltipTriggerProps) {
   };
 
   const handlePressDown = (event: PressEvent) => {
-    if (isDisabled()) {
-      return;
-    }
-
     notePress(event);
     hoverTrigger?.pressStart();
     props.onPressDown?.(event);
   };
 
   const handlePressUp = (event: PressEvent) => {
-    if (isDisabled()) {
-      return;
-    }
-
     props.onPressUp?.(event);
   };
 
   const handleLongPress = (event: PressEvent) => {
-    if (isDisabled()) {
-      return;
-    }
-
     props.onLongPress?.(event);
   };
 
@@ -207,7 +198,6 @@ export function TooltipTrigger(props: TooltipTriggerProps) {
       nativeID={props.id ?? props.nativeID}
       role={props.role ?? "button"}
       focusable={props.tabIndex === -1 ? false : undefined}
-      disabled={isDisabled()}
       accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel}
       accessibilityState={accessibilityState()}
       class={classes()}

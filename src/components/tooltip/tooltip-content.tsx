@@ -170,9 +170,17 @@ export function TooltipContent(props: TooltipContentProps) {
     }
   };
 
-  const rootSkip = () => (ownsState() ? false : (tooltip?.skipAnimation() ?? false));
-  const rootShouldSkip = () =>
-    ownsState() ? false : (tooltip?.shouldSkipAnimation() ?? false);
+  /**
+   * HeroUI's `TooltipAnimationScope` (`tooltip.tsx:44-54`) clears React Aria's
+   * warmup skip for the descendants unless Root's `shouldSkipAnimation` prop is
+   * true, so both phases animate by default, a swap included. The one state that
+   * may drop them is the caller opting in *and* the state machine reporting the
+   * swap.
+   */
+  const skipsAnimation = () =>
+    !ownsState() &&
+    (tooltip?.shouldSkipAnimation() ?? false) &&
+    (tooltip?.skipAnimation() ?? false);
 
   /* -------------------------------------------------------------------------------------------
    * Presence, placement and geometry (port sheet §5.5, §5.6).
@@ -185,10 +193,10 @@ export function TooltipContent(props: TooltipContentProps) {
   });
 
   // React Aria's mount rule: open, or held through the exit unless the swap
-  // path skipped the animation. The condition lives in `when`, never in `<If>`'s
+  // path dropped the animation. The condition lives in `when`, never in `<If>`'s
   // child, which runs untracked.
   const mounted = computed(
-    () => isOpen() || (!rootSkip() && presence.isPresent()),
+    () => isOpen() || (!skipsAnimation() && presence.isPresent()),
   );
 
   const resolved = computed(() => resolveTooltipPlacement(props.placement));
@@ -277,14 +285,14 @@ export function TooltipContent(props: TooltipContentProps) {
     [slots.base(), className()].filter((part) => part !== "").join(" ");
 
   // R-006 … R-011: the enter starting classes come off one frame after mount;
-  // the exit classes stay for the 100ms hold. HeroUI forces the enter animation
-  // on unless Root's `shouldSkipAnimation` says otherwise, so the forced-off
-  // state is the only one that may drop the classes.
+  // the exit classes stay for the 100ms hold. HeroUI forces both animations on
+  // unless Root's `shouldSkipAnimation` opts out, so only that opted-out state
+  // may drop the classes.
   const classList = computed(() => {
     const list: Record<string, boolean> = {};
     const current = side();
 
-    if (presence.isEntering() && !(rootShouldSkip() && rootSkip())) {
+    if (presence.isEntering() && !skipsAnimation()) {
       // R-006: `heroui-overlay-enter-90` becomes the starting classes plus the
       // base duration and curve (no keyframes in NSH). The translations below
       // are the four placement variants.
@@ -305,7 +313,7 @@ export function TooltipContent(props: TooltipContentProps) {
       }
     }
 
-    if (presence.isExiting() && !rootSkip()) {
+    if (presence.isExiting() && !skipsAnimation()) {
       // R-011: the 100ms exit, out of the pointer's way while it plays.
       list["opacity-0 scale-95 pointer-events-none"] = true;
     }
@@ -315,7 +323,7 @@ export function TooltipContent(props: TooltipContentProps) {
 
   const style = () => [
     TRANSITION_STYLE,
-    presence.isExiting() && !rootSkip() ? EXIT_DURATION_STYLE : undefined,
+    presence.isExiting() && !skipsAnimation() ? EXIT_DURATION_STYLE : undefined,
     { transformOrigin: transformOrigin() },
     resolvedStyle(),
   ];
