@@ -61,3 +61,5 @@ export * from "./components/slider";
 export * from "./components/color-field";
 export * from "./components/date-field";
 export * from "./components/input-group";
+export * from "./components/color-swatch-picker";
+export * from "./components/color-picker";
