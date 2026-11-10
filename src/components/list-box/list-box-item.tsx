@@ -319,8 +319,12 @@ export function ListBoxItemRoot<T>(
   const hasIndicator = signal(false);
 
   const isSelected = computed(() => selectable.isSelected());
+  // The collection's own focus flag, not the root view's: a virtual-focus list
+  // (ComboBox) never gives its root the view focus, but React Aria's
+  // `ListState.isFocused` is still true and drives the item's `data-focus`
+  // (port sheet §5, first change).
   const isFocused = computed(
-    () => list.isFocused() && list.focusedKey() === key,
+    () => selectionManager().isFocused() && list.focusedKey() === key,
   );
   const isFocusVisible = computed(() => isFocused() && list.isKeyboard());
   const isDisabled = computed(() => selectable.isDisabled());
@@ -680,6 +684,10 @@ export function ListBoxItemRoot<T>(
               "scale-[0.98]": isPressed(),
               // R-016: `status-disabled` as literals (theme notes).
               "opacity-50 cursor-not-allowed pointer-events-none": isDisabled(),
+              // Port sheet §5, third change: a row the owner's filter left out
+              // stays mounted (so a changed filter restores it) but takes no
+              // room and no presses.
+              hidden: list.visibleKeys()?.has(key) === false,
             }}
             style={resolvedStyle()}
             onPress={handlePress}

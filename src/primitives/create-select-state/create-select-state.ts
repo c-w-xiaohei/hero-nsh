@@ -39,6 +39,13 @@ export interface CreateSelectStateProps {
 
   /** The list's selection manager, when it has registered itself. */
   selectionManager: Accessor<MultipleSelectionManager | undefined>;
+
+  /**
+   * Where the view focus goes on open. Select puts it in the list; a field with
+   * virtual focus (ComboBox) keeps it in its input and passes `focusInput`
+   * (port sheet §5, third change). Defaults to the list's `focusList`.
+   */
+  focusTarget?: () => void;
 }
 
 export interface CreateSelectStateResult {
@@ -177,7 +184,14 @@ export function createSelectState(
     }
 
     placed = true;
-    listControls.focusList();
+
+    if (props.focusTarget) {
+      // A virtual-focus field (ComboBox) keeps the focus in its input; the
+      // list only holds the highlighted option (port sheet §5).
+      props.focusTarget();
+    } else {
+      listControls.focusList();
+    }
   });
 
   /**

@@ -50,6 +50,14 @@ export interface ListOwnerListControls {
    * drops the search buffer (Select's list, port sheet T-068).
    */
   resetTypeAhead?: () => void;
+
+  /**
+   * The list's own keyboard delegate, for a field whose input keeps the DOM
+   * focus (ComboBox's virtual focus). The owner calls it with the key name the
+   * keymap reports and gets back whether it consumed the key. A standalone list
+   * binds the same delegate itself while its root is focused.
+   */
+  handleKeyDown?: (event: { key: string }) => boolean;
 }
 
 /**
@@ -129,6 +137,31 @@ export interface ListOwner {
     state: ListState,
     controls: ListOwnerListControls,
   ) => () => void;
+
+  /**
+   * The current filter text, or `undefined` when it does not filter (ComboBox's
+   * `displayedCollection`, port sheet §5, first change). The list drops the
+   * options it does not match from its collection and keeps the rows mounted.
+   */
+  filterText?: () => string | undefined;
+
+  /** The caller's filter function; the language-aware `contains` when absent. */
+  defaultFilter?: Accessor<
+    ((textValue: string, inputValue: string) => boolean) | undefined
+  >;
+
+  /**
+   * Whether the hidden list is a Tab stop. ComboBox passes `false`: its list is
+   * a virtual-focus collection and the input is the only stop.
+   */
+  isTabStop?: () => boolean;
+
+  /**
+   * The field's dynamic collection (`items ?? defaultItems`), used when the
+   * caller writes the rows through a function child on the field root instead
+   * of on the list (the HeroUI stories do exactly that).
+   */
+  items?: Accessor<Iterable<unknown> | undefined>;
 }
 
 /** The nearest composite field driving the list below it, if any. */

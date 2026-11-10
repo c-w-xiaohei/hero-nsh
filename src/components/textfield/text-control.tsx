@@ -2,6 +2,8 @@ import type { InputProps as NshInputProps } from "nsh/base";
 import { Input } from "nsh/base";
 import type {
   Accessor,
+  AccessibilityRole,
+  AccessibilityState,
   InputRef,
   InputStyle,
   JSX,
@@ -301,6 +303,15 @@ export interface TextControlCommonProps
   /** The accessible description through NSH's own prop, above the field's registered one. */
   accessibilityHint?: string;
 
+  /**
+   * The input's role. A field that owns the input (ComboBox) supplies it
+   * through the context; a caller's own `role` wins when both are present.
+   */
+  role?: AccessibilityRole;
+
+  /** The accessibility state; the field's derived entries win over the caller's. */
+  accessibilityState?: AccessibilityState;
+
   /** A test identity; not part of HeroUI's API, useful to the harness. */
   testID?: string;
 
@@ -416,6 +427,8 @@ export function renderTextControl(
     "aria-readonly",
     "accessibilityLabel",
     "accessibilityHint",
+    "role",
+    "accessibilityState",
     "name",
     "form",
     "list",
@@ -727,6 +740,14 @@ export function renderTextControl(
     local.onBlur?.();
   };
 
+  // The caller's handler first, then the field's: a ComboBox commits the
+  // highlighted option on Enter while the input still reports the keystroke
+  // (port sheet §5, second change).
+  const handleKeyPress = (event: { key: string }) => {
+    local.onKeyPress?.(event);
+    field?.onKeyPress?.(event);
+  };
+
   // --- Render props and classes --------------------------------------------
   const renderProps: TextControlRenderProps = {
     isHovered: hovered,
@@ -801,6 +822,10 @@ export function renderTextControl(
       // R-015 / R-034: `status-disabled` → `opacity: .5`, `cursor: not-allowed`,
       // `pointer-events: none`, as literals (the theme has no such tokens).
       disabled ? "opacity-50 cursor-not-allowed pointer-events-none" : undefined,
+      // Port sheet §5, second change: the owning composite field's own classes
+      // (`min-w-0 flex-1`, plus `pe-7` while a ComboBox trigger is mounted) sit
+      // after the control's state classes and before the caller's.
+      field?.inputPartClass?.(),
       resolvedClassName(),
     );
   });
@@ -856,10 +881,17 @@ export function renderTextControl(
         field?.accessibilityLabel()
       }
       accessibilityHint={local.accessibilityHint ?? field?.accessibilityHint()}
+      // The field may make its input a `combobox` and report the open state
+      // (port sheet §5, second change); a plain field leaves both absent.
+      role={local.role ?? field?.role?.()}
+      accessibilityState={{
+        ...local.accessibilityState,
+        ...field?.accessibilityState?.(),
+      }}
       onPaste={handlePaste}
       onCompositionChange={handleCompositionChange}
       onSelectionChange={handleSelectionChange}
-      onKeyPress={local.onKeyPress}
+      onKeyPress={handleKeyPress}
       class={classes()}
       style={style()}
       onMouseEnter={handleMouseEnter}

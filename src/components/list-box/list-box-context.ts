@@ -160,6 +160,14 @@ export interface ListBoxContextValue {
   /** The item held down from the keyboard (Return / Space), for R-013. */
   keyboardPressedKey: Accessor<string | undefined>;
 
+  /**
+   * The keys the current filter lets through, or `undefined` when nothing is
+   * filtered. A row whose key is outside the set is `hidden` but stays mounted
+   * and registered, so a changed filter brings it back (port sheet §5, third
+   * change; ComboBox's `displayedCollection`).
+   */
+  visibleKeys: Accessor<ReadonlySet<string> | undefined>;
+
   registerItemLayout: (key: string, bounds: Bounds, sectionKey?: string) => void;
 
   unregisterItemLayout: (key: string) => void;
