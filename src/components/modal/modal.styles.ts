@@ -38,8 +38,16 @@ export const modalVariants = tv({
     // element replacing `overflow-y-auto`) is in `modal-body.tsx`: the
     // `inside` variant renders a `Scroll`, and this slot keeps `flex-1`.
     body: "min-h-0 flex-1 text-sm leading-[1.43] text-muted -m-[3px] my-0 overflow-visible p-[3px]",
-    // R-057 `.modal__close-trigger` → `absolute end-4 top-4`.
-    closeTrigger: "absolute end-4 top-4",
+    // R-057 `.modal__close-trigger` → `absolute end-4 top-4`. `z-10` is not
+    // in R-057: it carries the stacking the browser gives an absolutely
+    // positioned button over the in-flow siblings written after it. NSH's web
+    // host hit-tests overlapping views in the order they are written, so
+    // without it the Header (R-048, written after the CloseTrigger in every
+    // HeroUI fixture) swallows the press and the modal never closes
+    // (measured: T-003 / T-006 fail on `--target web` without it, pass with
+    // it). Nothing else inside the dialog sets a z-index, so the paint is
+    // unchanged.
+    closeTrigger: "absolute end-4 top-4 z-10",
     // R-017 `.modal__container` → `flex flex-col items-center`; R-018 →
     // `h-(--visual-viewport-height) w-full min-w-0 flex-1` (the height comes
     // from the hosting layer, there is no visual-viewport variable here);

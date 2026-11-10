@@ -51,44 +51,41 @@ export function ModalBody(props: ModalBodyProps): JSX.Element {
       .join(" "),
   );
 
-  // One read of `props.children`, at its placement inside both candidate
-  // elements: only the one `<If>` mounts builds native views.
-  const children = renderModalPartChildren(props.children);
-
   // R-054: `Scroll` carries the scrollbar and the momentum the CSS asked for.
   // Upstream's `overscroll-contain` only stops the scroll from chaining to the
   // carrier; there is no class channel for it here and the dialog clips its
   // own box (`max-h-full min-h-0 overflow-clip`, R-040), so nothing outside
   // can scroll with it.
-  const insideBody = (
-    <Scroll
-      ref={(node) => props.ref?.(node)}
-      testID={props.testID}
-      nativeID={props.id ?? props.nativeID}
-      class={classes()}
-      style={props.style}
-    >
-      {children}
-    </Scroll>
-  );
-
+  //
   // R-055: with `scroll="outside"` the body is an ordinary `View` and the
   // carrier around the dialog scrolls instead (R-029, the Backdrop's part).
-  const outsideBody = (
-    <View
-      ref={(node) => props.ref?.(node)}
-      testID={props.testID}
-      nativeID={props.id ?? props.nativeID}
-      class={classes()}
-      style={props.style}
-    >
-      {children}
-    </View>
-  );
-
-  return (
-    <If when={inside()} else={outsideBody}>
-      {insideBody}
-    </If>
-  );
+  //
+  // The two elements differ, and JSX builds an element tree as it is written:
+  // writing both bodies and handing one to `<If>` inserts the same children
+  // into two parents, and the second insert takes them away from the first.
+  // A child function is the deferred form instead, so only the body that
+  // mounts is built, and `props.children` is read once, at its placement
+  // inside it.
+  return () =>
+    inside() ? (
+      <Scroll
+        ref={(node) => props.ref?.(node)}
+        testID={props.testID}
+        nativeID={props.id ?? props.nativeID}
+        class={classes()}
+        style={props.style}
+      >
+        {renderModalPartChildren(props.children)}
+      </Scroll>
+    ) : (
+      <View
+        ref={(node) => props.ref?.(node)}
+        testID={props.testID}
+        nativeID={props.id ?? props.nativeID}
+        class={classes()}
+        style={props.style}
+      >
+        {renderModalPartChildren(props.children)}
+      </View>
+    );
 }
