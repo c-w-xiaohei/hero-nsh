@@ -72,7 +72,12 @@ export interface ComboBoxPopoverProps {
   defaultOpen?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
 
-  /** Modal by default (RAC): a backdrop absorbs the presses outside. */
+  /**
+   * Adds the underlay that absorbs the presses outside the list. The ComboBox
+   * itself is non-modal (`isNonModal: true` in RAC's own ComboBox popover
+   * context), so the default is off; `false` is the caller's explicit choice
+   * to make the layer modal.
+   */
   isNonModal?: boolean;
 
   /** When `true`, Escape does not close (the `onCancel` channel still fires). */
@@ -208,7 +213,14 @@ export function ComboBoxPopover(props: ComboBoxPopoverProps): JSX.Element {
     ownsState() ? ownIsOpen() : (overlayTrigger?.isOpen() ?? false),
   );
 
-  const isNonModal = () => props.isNonModal ?? false;
+  // Modal by default would be wrong here, even though it is RAC's `Popover`
+  // default: the ComboBox's own popover context pins `isNonModal: true`
+  // (`react-aria-components/src/ComboBox.tsx:332-340`), so the field's list is
+  // the non-modal layer RAC documents — no underlay over the window, the input
+  // stays the field's interactive surface while the list is open, and an
+  // outside press is dismissed by the layer's own `onPressOutside`. An explicit
+  // `isNonModal={false}` from the caller still gets the underlay below.
+  const isNonModal = () => props.isNonModal ?? true;
   const isKeyboardDismissDisabled = () =>
     props.isKeyboardDismissDisabled ?? false;
 
@@ -402,11 +414,44 @@ export function ComboBoxPopover(props: ComboBoxPopoverProps): JSX.Element {
     }
   };
 
+  /**
+   * A press on the field's own surface is not an outside press. The layer is
+   * non-modal, so the input stays interactive while the list is open (React
+   * Aria excludes the trigger's own subtree from the interact-outside report
+   * the same way), and NSH reports a press on the input as outside the layer
+   * even though the input sits inside the anchor. The anchor's measured box —
+   * the input group, which holds the input and the trigger — draws the line.
+   */
+  const pressOnField = (event: { pagePosition: { x: number; y: number } }) => {
+    const box = anchorBounds();
+
+    if (!box) {
+      return false;
+    }
+
+    const point = event.pagePosition;
+    const left = box.origin.x;
+    const top = box.origin.y;
+    const right = left + box.size.width;
+    const bottom = top + box.size.height;
+
+    return point.x >= left && point.x <= right && point.y >= top && point.y <= bottom;
+  };
+
+  const handlePressOutside = (event: { pagePosition: { x: number; y: number } }) => {
+    if (pressOnField(event)) {
+      return;
+    }
+
+    close();
+  };
+
   // One read of `props.children`, at the placement inside the container that
   // tells the list which classes and switches it gets.
   const listContent = (
     <Scroll
       scrollbar={true}
+      focusable={false}
       class="w-full"
       style={scrollStyle()}
       onLayout={local.onLayout}
@@ -430,10 +475,13 @@ export function ComboBoxPopover(props: ComboBoxPopoverProps): JSX.Element {
       testID={local.testID}
       nativeID={local.id ?? local.nativeID}
       accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel}
+      // R-022: the layer is not a focus stop — the field's input keeps the
+      // keyboard focus while the list is open, and the rows are virtual focus.
+      focusable={false}
       class={classes()}
       classList={classList()}
       style={style()}
-      onPressOutside={isOpen() ? close : undefined}
+      onPressOutside={isOpen() ? handlePressOutside : undefined}
       onCancel={isOpen() ? handleCancel : undefined}
       onPosition={handlePosition}
     >
@@ -441,9 +489,10 @@ export function ComboBoxPopover(props: ComboBoxPopoverProps): JSX.Element {
     </Overlay>
   );
 
-  // The modal underlay: the outer overlay absorbs presses outside the list, as
-  // RAC's `usePopover` underlay does. The closed field keeps the content
-  // mounted but hidden, so the list's collection survives.
+  // Only a caller's explicit `isNonModal={false}` renders the underlay: the
+  // outer overlay then absorbs presses outside the list, as RAC's `usePopover`
+  // underlay does. The closed field keeps the content mounted but hidden either
+  // way, so the list's collection survives.
   return (
     <If when={!isNonModal()} else={contentOverlay}>
       <Overlay

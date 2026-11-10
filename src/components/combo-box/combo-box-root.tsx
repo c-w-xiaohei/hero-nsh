@@ -380,7 +380,39 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
   // The field's focus handle, registered by the `Input` inside the field; the
   // list never takes the view focus (port sheet §5: `focusTarget`).
   let inputFocus: (() => void) | undefined;
-  const focusInput = () => inputFocus?.();
+
+  // NSH's web host reports a blur and a focus for `focus()` on an input that
+  // already holds the focus. The field focuses its input on every open (React
+  // Aria's `focusFirst`, `useComboBox.ts:598-604`), so that blur is the field's
+  // own doing and must not run the field's blur commit: the flag it sets is
+  // consumed by the one blur the call reports, and any focus clears it.
+  let blurFromOwnFocus = false;
+  let ownFocusFrame: number | undefined;
+
+  cleanup(() => {
+    if (ownFocusFrame !== undefined) {
+      cancelAnimationFrame(ownFocusFrame);
+    }
+  });
+
+  const focusInput = () => {
+    if (!inputFocus) {
+      return;
+    }
+
+    // Only a focus call on an input that already holds the focus reports the
+    // pair; a fallback clears the flag on the next frame, in case a host
+    // reports nothing at all for the call.
+    if (inputFocused()) {
+      blurFromOwnFocus = true;
+      ownFocusFrame = requestAnimationFrame(() => {
+        ownFocusFrame = undefined;
+        blurFromOwnFocus = false;
+      });
+    }
+
+    inputFocus();
+  };
 
   const selectState = createSelectState({
     isOpen: overlay.isOpen,
@@ -732,38 +764,83 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
   };
 
   const handleInputFocus = () => {
+    blurFromOwnFocus = false;
     inputFocused.set(true);
     modality.onFocus();
     local.onFocusChange?.(true);
     local.onFocus?.();
 
-    if (!isReadOnly() && menuTrigger() === "focus" && !overlay.isOpen()) {
+    // A disabled field takes no focus at all upstream (the host refuses it), so
+    // it never opens: NSH's web host can still deliver the focus of a Tab stop
+    // to a disabled input, and the field would open a list it cannot use.
+    if (
+      !isDisabled() &&
+      !isReadOnly() &&
+      menuTrigger() === "focus" &&
+      !overlay.isOpen()
+    ) {
       open();
     }
   };
+
+  // A blur that the field's own focus call causes is not the user leaving it:
+  // NSH's web host reports a blur and a focus for `focus()` on an input that
+  // already holds the focus, and the ComboBox focuses its input on every open
+  // (React Aria's `focusFirst` does the same: `useComboBox.ts:598-604`). The
+  // commit therefore waits one tick and stands down when the focus is back on
+  // the input by then; only a blur that leaves the field alone — Tab, the
+  // field's one keyboard exit — still finds it unfocused and open.
+  let blurTimer: number | undefined;
+
+  cleanup(() => {
+    if (blurTimer !== undefined) {
+      clearTimeout(blurTimer);
+    }
+  });
 
   const handleInputBlur = () => {
     inputFocused.set(false);
     local.onFocusChange?.(false);
     local.onBlur?.();
 
+    if (blurFromOwnFocus) {
+      blurFromOwnFocus = false;
+
+      return;
+    }
+
     if (!overlay.isOpen()) {
       return;
+    }
+
+    if (blurTimer !== undefined) {
+      clearTimeout(blurTimer);
     }
 
     // Tab commits the highlighted option and closes (`useComboBox.ts:218-235`).
     // NSH has no Tab hook a component can observe before the focus moves (a
     // keymap binding would consume the key and stop the move), so the commit
     // runs on the blur the Tab causes; with no highlight the text is committed
-    // and the list closes (port sheet §6 deviation).
-    if (focusedKey() != null) {
-      commitFocused();
+    // and the list closes (port sheet §6 deviation). A pointer press does not
+    // blur the field (`_common` "NSH input facts"), so this is the keyboard's
+    // own exit; a press outside goes through the layer's dismiss, which resets
+    // the text instead of committing the highlight.
+    blurTimer = setTimeout(() => {
+      blurTimer = undefined;
 
-      return;
-    }
+      if (inputFocused() || !overlay.isOpen()) {
+        return;
+      }
 
-    commitValue();
-    close();
+      if (focusedKey() != null) {
+        commitFocused();
+
+        return;
+      }
+
+      commitValue();
+      close();
+    }, 0);
   };
 
   const handleInputKeyPress = (event: { key: string }) => {
