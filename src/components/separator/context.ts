@@ -19,11 +19,23 @@ import { context } from "nsh";
  */
 export interface SeparatorContextValue {
   /**
+   * The orientation the container wants its Separators to take, when the
+   * Separator itself sets none. A Toolbar runs its separators across its own
+   * axis, so a horizontal toolbar provides `"vertical"` (upstream writes the
+   * opposite axis into React Aria's `SeparatorContext`). Undefined means the
+   * container has no opinion and the Separator keeps its own default.
+   */
+  orientation?: () => "horizontal" | "vertical";
+
+  /**
    * The classes a container root would otherwise apply to the Separator
    * through a descendant selector (`h-1/2 self-center` inside a vertical
-   * toolbar, `w-1/2 justify-self-center` inside a horizontal one).
+   * toolbar, `w-1/2 justify-self-center` inside a horizontal one). It receives
+   * the orientation the Separator resolved — its own prop, or the one this
+   * context provided — because the two descendant blocks upstream select on
+   * exactly that class.
    */
-  partClass?: () => string | undefined;
+  partClass?: (orientation: "horizontal" | "vertical") => string | undefined;
 }
 
 export const SeparatorContext = context<SeparatorContextValue | undefined>(undefined);

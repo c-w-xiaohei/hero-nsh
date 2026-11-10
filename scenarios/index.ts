@@ -52,6 +52,7 @@ import { cardScenarios } from "./card.scenarios";
 import { fieldsetScenarios } from "./fieldset.scenarios";
 import { colorAreaScenarios } from "./color-area.scenarios";
 import { tagScenarios } from "./tag.scenarios";
+import { toolbarScenarios } from "./toolbar.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -107,4 +108,5 @@ export const scenarios: Record<string, Component> = {
   ...fieldsetScenarios,
   ...colorAreaScenarios,
   ...tagScenarios,
+  ...toolbarScenarios,
 };
