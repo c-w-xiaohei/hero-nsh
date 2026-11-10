@@ -190,6 +190,7 @@ function Combo(props: ComboProps) {
           probe("selectionChange")(normalizeSelection(value, props.multiple === true))
         }
         onOpenChange={(...args: unknown[]) => probe("openChange")(...args)}
+        onFocusChange={(value: boolean) => probe("focusChange")(value)}
       >
         <Label>{props.label ?? "Favorite Animal"}</Label>
         <ComboBox.InputGroup>

@@ -179,6 +179,29 @@ test("X-003 reports an ArrowDown open as manual", async () => {
   expect(callsOf(app, "openChange")).toEqual([[true, "manual"]]);
 });
 
+// src/components/combo-box/combo-box-root.tsx:396-426, 881-926; src/primitives/create-select-state/create-select-state.ts:188-194 (review finding): focusTarget must not synthesize duplicate focus/blur events when the input already owns focus.
+test("X-012 keeps focus event counts unchanged when ArrowDown opens the list", async () => {
+  const app = await openCase("manual", { platform: "web" });
+
+  await app.keyboard.press("tab");
+  await app.clock!.runFor(20);
+
+  const before = {
+    focus: callsOf(app, "inputFocus").length,
+    blur: callsOf(app, "inputBlur").length,
+    change: callsOf(app, "focusChange").length,
+  };
+  expect(before.focus).toBe(1);
+
+  await app.keyboard.press("arrowdown");
+  await app.waitFor(combo.COMBO_BOX_LISTBOX);
+  await app.clock!.runFor(20);
+
+  expect(callsOf(app, "inputFocus")).toHaveLength(before.focus);
+  expect(callsOf(app, "inputBlur")).toHaveLength(before.blur);
+  expect(callsOf(app, "focusChange")).toHaveLength(before.change);
+});
+
 // src/components/combo-box/combo-box-root.tsx:676-712 (review finding);
 // upstream packages/react-stately/src/combobox/useComboBoxState.ts:466-478:
 // clearing the input of a single field whose selection is not fully controlled
