@@ -41,6 +41,11 @@ import { probe } from "@scenario/probe";
  *   drag              400 wide, value 0, step 25, marks and probes (T-026)
  *   refs              Steps / Marks / Mark ref callbacks, testID passthrough,
  *                     a custom Mark child and a style object (T-022)
+ *   state-defaults    the Root render prop prints `state.defaultValues`; the
+ *                     defaultValue / value / minValue / maxValue come from
+ *                     host.params (X-001)
+ *   mark-children     a Mark whose child probes its own build, so a second read
+ *                     of the children shows up as an extra probe (X-002)
  *
  * It sits next to harness/nsh.json on purpose. NSH takes the entry's own
  * directory as the app root, so an entry under harness/tests/... finds no
@@ -478,6 +483,69 @@ function RefsCase() {
   );
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * Render-prop state and children reads (X-001, X-002)
+ * -----------------------------------------------------------------------------------------------*/
+
+function StateDefaultsCase() {
+  const controlled = host.params.controlled === true || host.params.controlled === "true";
+
+  return (
+    <Stage>
+      <View class="w-[400px]">
+        <Slider
+          aria-label="Volume"
+          defaultValue={sliderValue("defaultValue")}
+          maxValue={num("maxValue")}
+          minValue={num("minValue")}
+          value={controlled ? sliderValue("value") : undefined}
+        >
+          {({ state }) => (
+            <>
+              <Slider.Output testID="output" />
+              <Slider.Track>
+                <Slider.Fill />
+                <Slider.Thumb />
+              </Slider.Track>
+              <View testID="default-values">
+                <Text>{state.defaultValues.join(",")}</Text>
+              </View>
+            </>
+          )}
+        </Slider>
+      </View>
+    </Stage>
+  );
+}
+
+/* A child component runs once per build of the children it sits in. */
+function MarkChildProbe() {
+  probe("markChild")({});
+
+  return <Text>Quiet</Text>;
+}
+
+function MarkChildrenCase() {
+  return (
+    <Stage>
+      <View class="w-[400px]">
+        <Slider aria-label="Volume" defaultValue={50} step={25}>
+          <Slider.Track>
+            <Slider.Fill />
+            <Slider.Thumb />
+          </Slider.Track>
+          <Slider.Marks testID="marks">
+            <Slider.Mark value={0} />
+            <Slider.Mark value={25}>
+              <MarkChildProbe />
+            </Slider.Mark>
+          </Slider.Marks>
+        </Slider>
+      </View>
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "geometry");
 
@@ -490,6 +558,8 @@ function Fixture() {
   if (name === "labels") return <LabelsCase />;
   if (name === "drag") return <DragCase />;
   if (name === "refs") return <RefsCase />;
+  if (name === "state-defaults") return <StateDefaultsCase />;
+  if (name === "mark-children") return <MarkChildrenCase />;
 
   return <GeometryCase />;
 }

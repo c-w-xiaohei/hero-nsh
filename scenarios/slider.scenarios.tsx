@@ -15,6 +15,15 @@ import type { Component } from "./types";
  *                                       thumbs explicitly so the JSX stays
  *                                       shared (heroes render the same)
  *   slider/with-steps                   story WithSteps
+ *   slider/steps-negative               T-015's it.each set -0.3 … 0.3 by 0.1
+ *   slider/steps-offset                 T-015's set 10 … 21 by 3
+ *   slider/steps-tiny                   T-015's set 0 … 3e-7 by 1e-7
+ *   slider/steps-overshoot              T-015's set 5 … 10 by 20
+ *   slider/steps-zero-range             T-015's set 5 … 5 by 1
+ *                                       (the five grids are screenshot-only:
+ *                                       the dots have no text, testID or role,
+ *                                       so these entries give the reference
+ *                                       comparison the same cases as HeroUI)
  *   slider/with-marks                   story WithMarks: bare string children,
  *                                       which the Mark wraps in Text
  *   slider/with-steps-and-marks         story WithStepsAndMarks
@@ -121,6 +130,61 @@ function WithSteps() {
       </View>
     </Stage>
   );
+}
+
+/*
+ * T-015's five parameter sets (upstream slider.test.tsx:272): the fixture starts
+ * at minValue, renders no marks, and lets Steps cover the whole track. HeroUI
+ * asserts the dots' data-value list; the dots are unreadable here, so the five
+ * grids exist for the reference screenshot comparison.
+ */
+function StepGrid(props: {
+  defaultValue: number;
+  maxValue: number;
+  minValue: number;
+  step: number;
+}) {
+  return (
+    <Stage>
+      <View class="w-96">
+        <Slider
+          defaultValue={props.defaultValue}
+          maxValue={props.maxValue}
+          minValue={props.minValue}
+          step={props.step}
+        >
+          <Label>Volume</Label>
+          <Slider.Output testID="output" />
+          <Slider.Track>
+            <Slider.Steps />
+            <Slider.Fill />
+            <Slider.Thumb />
+          </Slider.Track>
+          <Slider.Marks />
+        </Slider>
+      </View>
+    </Stage>
+  );
+}
+
+function StepsNegative() {
+  return <StepGrid defaultValue={-0.3} maxValue={0.3} minValue={-0.3} step={0.1} />;
+}
+
+function StepsOffset() {
+  return <StepGrid defaultValue={10} maxValue={21} minValue={10} step={3} />;
+}
+
+function StepsTiny() {
+  return <StepGrid defaultValue={0} maxValue={3e-7} minValue={0} step={1e-7} />;
+}
+
+function StepsOvershoot() {
+  return <StepGrid defaultValue={5} maxValue={10} minValue={5} step={20} />;
+}
+
+function StepsZeroRange() {
+  return <StepGrid defaultValue={5} maxValue={5} minValue={5} step={1} />;
 }
 
 function WithMarks() {
@@ -357,6 +421,11 @@ export const sliderScenarios: Record<string, Component> = {
   "slider/disabled": Disabled,
   "slider/range": Range,
   "slider/with-steps": WithSteps,
+  "slider/steps-negative": StepsNegative,
+  "slider/steps-offset": StepsOffset,
+  "slider/steps-tiny": StepsTiny,
+  "slider/steps-overshoot": StepsOvershoot,
+  "slider/steps-zero-range": StepsZeroRange,
   "slider/with-marks": WithMarks,
   "slider/with-steps-and-marks": WithStepsAndMarks,
   "slider/range-with-steps-and-marks": RangeWithStepsAndMarks,

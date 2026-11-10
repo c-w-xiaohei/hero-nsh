@@ -218,6 +218,27 @@ test("T-011 renders two thumbs with independent accessible names", async () => {
  * Steps and marks
  * -----------------------------------------------------------------------------------------------*/
 
+// heroui/packages/react/tests/components/slider/slider.test.tsx:272
+// Partial port (port sheet T-015): the dots have no text, testID or role, so the
+// five upstream parameter sets live in the shared scenarios for the reference
+// screenshot comparison. This pins that each of them opens and formats its
+// minimum; the dot sequence itself stays with the screenshot.
+test("T-015 renders steps from minValue to maxValue by step for the five documented grids", async () => {
+  const grids = [
+    { scenario: "slider/steps-negative", text: "-0.3" },
+    { scenario: "slider/steps-offset", text: "10" },
+    { scenario: "slider/steps-tiny", text: "0" },
+    { scenario: "slider/steps-overshoot", text: "5" },
+    { scenario: "slider/steps-zero-range", text: "5" },
+  ];
+
+  for (const { scenario, text } of grids) {
+    const app = await openScenario(scenario, { locale: "en-US" });
+
+    expect(app.shows(`id:output >> text:${text}`)).toBe(true);
+  }
+});
+
 // heroui/packages/react/tests/components/slider/slider.test.tsx:286
 // Rewritten port (port sheet T-016): the dots cannot be counted, but Steps
 // returns null for more than 1000 dots, so the whole subtree is absent — a
@@ -424,3 +445,51 @@ for (const { dir, locale } of DIRECTIONS) {
     }
   }
 }
+
+/* -------------------------------------------------------------------------------------------------
+ * Regressions
+ * -----------------------------------------------------------------------------------------------*/
+
+// Regression X-001, evidence:
+//   src/components/slider/create-slider-state.ts:37-65, 285-311
+// Upstream: tmp/vendor/react-spectrum/packages/react-aria-components/src/Slider.tsx:340-351 hands
+// the whole SliderState to the render prop, and react-stately 3.51.0 useSliderState.d.ts:32-40
+// declares `readonly defaultValues: number[]`. Port sheet tmp/port-sheets/slider.md:74 lists it as
+// the first-frame snapshot: the restricted defaultValue when one was given, otherwise the first
+// values.
+test("X-001 exposes the first-frame defaultValues through the Root render prop", async () => {
+  // Uncontrolled: the snapshot is the restricted defaultValue.
+  let app = await openCase("state-defaults", { defaultValue: 30 }, { platform: "web" });
+
+  expect(app.shows("id:default-values >> text:30")).toBe(true);
+
+  // It is a snapshot, not the live values: an arrow key leaves it at 30.
+  await app.keyboard.press("tab");
+  await app.keyboard.press("arrowright");
+  expect(app.shows("id:output >> text:31")).toBe(true);
+  expect(app.shows("id:default-values >> text:30")).toBe(true);
+
+  // The snapshot is restricted to the slider's bounds.
+  app = await openCase(
+    "state-defaults",
+    { defaultValue: 150, maxValue: 100 },
+    { platform: "web" },
+  );
+  expect(app.shows("id:default-values >> text:100")).toBe(true);
+
+  // Controlled without a defaultValue: the first values are the snapshot.
+  app = await openCase("state-defaults", { controlled: true, value: 40 }, { platform: "web" });
+  expect(app.shows("id:default-values >> text:40")).toBe(true);
+});
+
+// Regression X-002, evidence:
+//   src/components/slider/slider-mark.tsx:160-163
+// Research 4.1 (tmp/heroui-nsh-port-research.md:175) and the 4.6 anti-pattern list (:292): every
+// read of props.children builds new native views, so a Mark reads its children once. The probe
+// child runs on each build, so two discarded trees show up as two extra calls.
+test("X-002 builds a Mark's children exactly once", async () => {
+  const app = await openCase("mark-children");
+
+  expect(callsOf(app, "markChild")).toHaveLength(1);
+  expect(app.shows("id:marks >> text:Quiet")).toBe(true);
+});
