@@ -28,16 +28,29 @@ export interface RadioGroupValidationError {
   message?: string;
 }
 
+/**
+ * What `validate` may return. `@react-types/shared` types it as
+ * `true | ValidationError | null | undefined`, and `ValidationError` is
+ * `string | string[]`; the object form is React Aria's own shorthand.
+ */
+export type RadioGroupValidationResult =
+  | true
+  | string
+  | RadioGroupValidationError
+  | readonly (string | RadioGroupValidationError)[]
+  | null
+  | undefined;
+
 /* -------------------------------------------------------------------------------------------------
  * Creation
  * -----------------------------------------------------------------------------------------------*/
 
 export interface CreateRadioGroupStateProps {
-  /** The selected value, controlled. */
-  value?: Accessor<string | undefined>;
+  /** The selected value, controlled; `null` means nothing is selected. */
+  value?: Accessor<string | null | undefined>;
 
-  /** The selected value when initially rendered, uncontrolled. */
-  defaultValue?: Accessor<string | undefined>;
+  /** The selected value when initially rendered, uncontrolled; `null` is none. */
+  defaultValue?: Accessor<string | null | undefined>;
 
   /** Called with the next value whenever the user changes the selection. */
   onChange?: (value: string) => void;
@@ -55,10 +68,7 @@ export interface CreateRadioGroupStateProps {
   isInvalid?: Accessor<boolean | undefined>;
 
   /** Runs whenever the value is committed; `true` means valid. */
-  validate?: Accessor<
-    | ((value: string) => true | string | RadioGroupValidationError | null | undefined)
-    | undefined
-  >;
+  validate?: Accessor<((value: string) => RadioGroupValidationResult) | undefined>;
 
   /**
    * When the validation message appears: `"native"` (the default) waits for
@@ -80,10 +90,14 @@ export interface RadioGroupState {
   /** The selected value, `null` when nothing is selected. */
   selectedValue: Accessor<string | null>;
 
-  /** Selects a value; a read-only group ignores it (see `commitValidation`). */
-  setSelectedValue: (value: string) => void;
+  /** Selects a value; a read-only or disabled group ignores it. */
+  setSelectedValue: (value: string | null) => void;
 
-  /** The `defaultValue` the group was created with, `null` when absent. */
+  /**
+   * The selected value the group was created with: a controlled `value` as it
+   * was at creation, else `defaultValue`, else `null`
+   * (`useRadioGroupState`'s `initialValue`).
+   */
   defaultSelectedValue: Accessor<string | null>;
 
   /** The value of the item that held the focus last. */
@@ -115,16 +129,26 @@ export interface RadioGroupStateInternal extends RadioGroupState {
   commitValidation: () => void;
 }
 
-function toValidationErrors(
-  result: true | string | RadioGroupValidationError | null | undefined,
-): readonly string[] {
+function toValidationErrors(result: RadioGroupValidationResult): readonly string[] {
   if (result === true || result === null || result === undefined) {
     return [];
   }
 
-  const message = typeof result === "string" ? result : result.message;
+  // `@react-types/shared`'s `ValidationError` is `string | string[]`, and
+  // `useFormValidationState` runs the result through `asArray()`; the object
+  // form is React Aria's `{ message }` shorthand.
+  const entries = Array.isArray(result) ? result : [result];
+  const messages: string[] = [];
 
-  return typeof message === "string" && message.length > 0 ? [message] : [];
+  for (const entry of entries) {
+    const message = typeof entry === "string" ? entry : entry.message;
+
+    if (typeof message === "string" && message.length > 0) {
+      messages.push(message);
+    }
+  }
+
+  return messages;
 }
 
 /**
@@ -147,11 +171,18 @@ export function createRadioGroupState(
 
   const selectedValue = computed<string | null>(() => rawValue() ?? null);
 
-  // `useRadioGroupState` records `props.defaultValue` once, at creation, and
-  // hands the same snapshot back through `state.defaultSelectedValue`; it is
-  // not re-read from a controlled parent.
-  const defaultValueSnapshot = untracked(() => props.defaultValue?.() ?? null);
-  const defaultSelectedValue: Accessor<string | null> = () => defaultValueSnapshot;
+  const initialSelectedValue = untracked<string | null>(() => {
+    const controlled = props.value?.();
+
+    return controlled !== undefined ? controlled : (props.defaultValue?.() ?? null);
+  });
+
+  // `useRadioGroupState` records its initial selected value once, at creation,
+  // and hands it back through `state.defaultSelectedValue`: a controlled
+  // parent's first `value`, else `props.defaultValue`, else `null`
+  // (`value !== undefined ? initialValue : defaultValue ?? null`). It never
+  // follows a later controlled change.
+  const defaultSelectedValue: Accessor<string | null> = () => initialSelectedValue;
 
   const lastFocusedValue = signal<string | null>(null);
 
@@ -202,7 +233,13 @@ export function createRadioGroupState(
 
   return {
     selectedValue,
-    setSelectedValue: (value: string) => {
+    // `useRadioGroupState.setSelectedValue`: a read-only or disabled group
+    // ignores the write (`!isReadOnly && !isDisabled`).
+    setSelectedValue: (value: string | null) => {
+      if (isReadOnly() || isDisabled()) {
+        return;
+      }
+
       setRawValue(value);
     },
     defaultSelectedValue,

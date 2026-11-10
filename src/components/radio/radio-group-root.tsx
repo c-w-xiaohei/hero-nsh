@@ -8,7 +8,7 @@ import { FieldContext } from "../label/context";
 import {
   createRadioGroupState,
   type RadioGroupState,
-  type RadioGroupValidationError,
+  type RadioGroupValidationResult,
 } from "./create-radio-group-state";
 import type { RadioGroupRenderProps } from "./radio-context";
 import {
@@ -63,11 +63,11 @@ export interface RadioGroupRootProps
   /** The visual variant, carried to every item's Control and dot. @default "primary" */
   variant?: RadioGroupVariant;
 
-  /** The selected value, controlled. */
-  value?: string;
+  /** The selected value, controlled; `null` means nothing is selected. */
+  value?: string | null;
 
-  /** The initially selected value, uncontrolled. */
-  defaultValue?: string;
+  /** The initially selected value, uncontrolled; `null` is none. */
+  defaultValue?: string | null;
 
   /** Called with the next value whenever the user changes the selection. */
   onChange?: (value: string) => void;
@@ -84,10 +84,11 @@ export interface RadioGroupRootProps
   /** Marks the group invalid; a `FieldError` inside it shows its message. */
   isInvalid?: boolean;
 
-  /** Runs on every selection commit; `true` means valid. */
-  validate?: (
-    value: string,
-  ) => true | string | RadioGroupValidationError | null | undefined;
+  /**
+   * Runs on every selection commit; `true` means valid. A string array is
+   * flattened to messages, as `useFormValidationState` does.
+   */
+  validate?: (value: string) => RadioGroupValidationResult;
 
   /** When the group's validation message appears: `native` after the first commit, `aria` live. @default "native" */
   validationBehavior?: "native" | "aria";
@@ -232,10 +233,11 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
 
   // What the render prop's `state` exposes: RAC's `RadioGroupState` surface,
   // without the `FormValidationState` members the sheet keeps internal (§8).
-  // `setSelectedValue` is RAC's wrapper: a read-only group ignores it, it
-  // clears `lastFocusedValue` and commits validation.
-  const setSelectedValue = (value: string) => {
-    if (isReadOnly()) {
+  // `setSelectedValue` clears `lastFocusedValue` and commits validation; a
+  // read-only or disabled group ignores the call altogether
+  // (`useRadioGroupState.setSelectedValue`: `!isReadOnly && !isDisabled`).
+  const setSelectedValue = (value: string | null) => {
+    if (isReadOnly() || isDisabled()) {
       return;
     }
 
@@ -282,6 +284,19 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
     setSelectedValue(value);
   };
 
+  // The item the arrow keys moved the focus to, while that focus stays inside
+  // the group. React Aria focuses the next radio even when its `select()` is a
+  // no-op (a read-only group, or a controlled parent that ignored `onChange`),
+  // and its DOM focus lands on a radio that is not the tab stop. NSH can only
+  // focus a view that is `focusable`, so the arrow target is one too until the
+  // group loses the focus; after that the tab stop is the selected item again,
+  // as upstream's roving tabindex leaves it.
+  const rovingValue = signal<string | null>(null);
+
+  // `move()` is handing the focus to another item: a blur on the way there is
+  // not the group losing the focus.
+  let focusHandoff = false;
+
   // The single tab stop: the selected item, else the last focused one, else the
   // first enabled item. The item's Content is `focusable` only there, which is
   // the roving tabindex React Aria gives a same-name radio group.
@@ -303,7 +318,18 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
     return first ? first.value() : null;
   });
 
-  const isTabStop = (value: string) => tabStopValue() === value;
+  // The single tab stop is `tabStopValue` while the focus is outside the group.
+  // While the focus is inside it (or on its way in through an arrow handoff),
+  // only the roving target is `focusable`: React Aria gives the other radios
+  // `tabIndex=-1`, so Tab leaves the group instead of stepping to the selected
+  // item. Once the focus leaves, the tab stop is the selected item again.
+  const isTabStop = (value: string) => {
+    if (focusedValue() != null || focusHandoff) {
+      return rovingValue() === value || (rovingValue() == null && tabStopValue() === value);
+    }
+
+    return tabStopValue() === value;
+  };
 
   // --- Focus within and the roving focus -------------------------------------
   const focusedTokens = signal<ReadonlySet<object>>(new Set());
@@ -326,6 +352,7 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
       // the tab stop can return there while nothing is selected.
       state.setLastFocusedValue(value);
       focusedValue.set(value);
+      focusHandoff = false;
     } else {
       next.delete(token);
     }
@@ -349,6 +376,14 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
 
     focusedValue.set(null);
 
+    // The roving target is cleared when the focus really leaves the group. A
+    // handoff between two items (the arrow keys) is not a leave: its blur can
+    // arrive before the next focus, and clearing then would take the target's
+    // `focusable` away from the focus that is still coming.
+    if (!focusHandoff) {
+      rovingValue.set(null);
+    }
+
     // `useRadioGroup.ts:83-87`: an empty group with no selection forgets the
     // last focused value on blur.
     if (state.selectedValue() == null) {
@@ -361,12 +396,10 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
   // `useRadioGroup.ts:122-142`: Down is always the next item and Up always the
   // previous one; Right / Left follow the reading direction, which NSH cannot
   // read, so they behave as LTR (vertical groups never swap them either). Both
-  // wrap around and skip disabled items.
+  // wrap around and skip disabled items. The handler deliberately has no
+  // read-only guard: upstream focuses the next radio and only the value write
+  // inside `select()` is guarded, so a read-only group still roves.
   const move = (step: 1 | -1) => {
-    if (isDisabled() || isReadOnly()) {
-      return;
-    }
-
     const list = items();
     const count = list.length;
 
@@ -386,7 +419,11 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
         continue;
       }
 
+      // The value first, then the focus: `select()` may be a no-op, and the
+      // roving target is focusable either way.
       select(next.value());
+      rovingValue.set(next.value());
+      focusHandoff = true;
       pendingFocus.set(next.value());
 
       return;
@@ -403,11 +440,15 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
       arrowright: () => move(1),
       arrowleft: () => move(-1),
     },
+    // A held arrow keeps moving through the group (`useRadioGroup` passes
+    // `allowRepeats: true`; the list collection uses `repeat: true`).
+    options: { repeat: true },
   });
 
   // The value is written first (`select`), then the focus moves: the target
-  // item's `focusable` is true only after the selection changed, so the call
-  // has to wait for the render that applied it (port sheet §5).
+  // item's `focusable` is true after the render that applied either the new
+  // selection or the roving target, so the call waits for that render (port
+  // sheet §5).
   effect(() => {
     const target = pendingFocus();
 
@@ -497,7 +538,10 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
     isTabStop,
     setItemFocused,
     select,
-    requestFocus: (value) => pendingFocus.set(value),
+    requestFocus: (value) => {
+      rovingValue.set(value);
+      pendingFocus.set(value);
+    },
   };
 
   // Pressing the group's `<label>` focuses its radio group (the tab stop)
