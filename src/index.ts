@@ -26,6 +26,7 @@ export * from "./components/link";
 export * from "./components/progress-bar";
 export * from "./components/avatar";
 export * from "./components/error-message";
+export * from "./components/toggle-button";
 export * from "./components/select";
 export * from "./components/icons";
 export * from "./components/form";
