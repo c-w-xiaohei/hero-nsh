@@ -1,54 +1,54 @@
-import { split, View } from "nsh";
 import type { JSX } from "nsh";
 
-import { renderChildren } from "./children";
+import { ButtonRoot } from "../button/button-root";
+import type { ButtonRenderProps, ButtonRootProps } from "../button/button-root";
 import { joinClassNames } from "./class-names";
-import type { ButtonRootProps } from "../button";
+import { ToastContext, ToastItemContext } from "./toast-context";
+import { toastVariants } from "./toast.styles";
 
 /**
  * The props of `Toast.ActionButton` (= `ToastActionButton`): HeroUI 3.2.7's
  * `ComponentPropsWithRef<typeof Button>` — every HeroUI `Button` prop
  * (`children`, `variant`, `size`, `onPress`, `isDisabled`, …) plus
  * `className`. The queue's `actionProps` travels through unchanged.
- *
- * STUB: the body is a plain `View` with the caller's children; the part
- * implementer replaces the body with the ported `Button`, not the file name or
- * the props.
  */
 export interface ToastActionButtonProps extends ButtonRootProps {}
 
-/** `Toast.ActionButton` / `ToastActionButton`: the action inside a toast. */
+/**
+ * `Toast.ActionButton` / `ToastActionButton`: the action inside a toast,
+ * rendered by the merged `Button` (port sheet §1 row `Toast.ActionButton`,
+ * §5). The region's `action` slot carries R-048's grid placement and R-023's
+ * opacity transition; the caller's `className` comes after it and therefore
+ * wins on anything it restates.
+ */
 export function ToastActionButton(props: ToastActionButtonProps): JSX.Element {
-  const [local, rest] = split(props, [
-    "children",
-    "className",
-    "style",
-    "ref",
-    "id",
-    "nativeID",
-    "testID",
-    "tooltip",
-    "onLayout",
-  ] as const);
+  const region = ToastContext();
+  const item = ToastItemContext();
 
-  const className = () => {
-    const value = local.className;
+  // R-048: `.toast__action` → `col-start-2 row-start-2 justify-self-start
+  // sm:col-start-3 sm:row-start-1`; R-023 → `transition-opacity duration-200
+  // ease-out-fluid motion-reduce:transition-none`. Both live in the `action`
+  // slot of `toast.styles.ts`; outside a provider the table's defaults stand.
+  const slots = () => region.slots?.() ?? toastVariants();
 
-    return typeof value === "string" ? value : undefined;
+  // R-051: `.toast:not(:has(.toast__indicator)) .toast__action` →
+  // `col-start-1 sm:col-start-2`. NSH has no `:has()`, so the single-track
+  // placement is appended when no indicator registered (the root's
+  // `hasIndicator`), later classes winning over the slot's two-column pair.
+  const className = (values: ButtonRenderProps) => {
+    const own = props.className;
+    const ownClass = typeof own === "function" ? own(values) : own;
+
+    return joinClassNames(
+      slots().action(),
+      ownClass,
+      item.hasIndicator?.() ? undefined : "col-start-1 sm:col-start-2",
+    );
   };
 
   return (
-    <View
-      {...(rest as Record<string, unknown>)}
-      ref={(next) => local.ref?.(next)}
-      testID={local.testID}
-      nativeID={local.id ?? local.nativeID}
-      tooltip={local.tooltip}
-      class={joinClassNames(className())}
-      style={typeof local.style === "function" ? undefined : local.style}
-      onLayout={local.onLayout}
-    >
-      {renderChildren(local.children as JSX.Element)}
-    </View>
+    <ButtonRoot {...props} className={className}>
+      {props.children}
+    </ButtonRoot>
   );
 }
