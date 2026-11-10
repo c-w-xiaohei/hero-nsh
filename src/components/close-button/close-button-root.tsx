@@ -2,6 +2,7 @@ import type {
   AccessibilityState,
   Bounds,
   ContextMenuEvent,
+  Edges,
   JSX,
   MouseEvent as NshMouseEvent,
   PressEvent,
@@ -77,6 +78,14 @@ export interface CloseButtonRootProps
 
   /** Leaves the button out of the Tab order. */
   excludeFromTabOrder?: boolean;
+
+  /**
+   * How far outside its bounds presses still count, as a view's `hitSlop`.
+   * Added for Tag's remove button, whose visible box is 12 × 12 while its
+   * pressable area must be 24 × 24 (port sheet R-023); optional and absent by
+   * default, so every existing use is unchanged.
+   */
+  hitSlop?: number | Partial<Edges>;
 
   /** Accepted, no effect: a pointer press does not focus a view in NSH. */
   preventFocusOnPress?: boolean;
@@ -397,6 +406,7 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
       role={toAccessibilityRole(props.role, "button")}
       disabled={isDisabled()}
       focusable={props.excludeFromTabOrder === true ? false : undefined}
+      hitSlop={props.hitSlop}
       accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel ?? "Close"}
       accessibilityState={accessibilityState()}
       accessibilityElementsHidden={props["aria-hidden"] ?? props.accessibilityElementsHidden}
