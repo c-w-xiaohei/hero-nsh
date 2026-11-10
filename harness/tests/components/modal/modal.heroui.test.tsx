@@ -59,6 +59,7 @@ test("T-002 supports Escape dismiss", async () => {
   expect(closes).toEqual([[false]]);
 
   await app.waitFor(CONTENT, { state: "gone" });
+  expect(app.shows(CONTENT)).toBe(false);
 });
 
 // heroui/packages/react/tests/components/modal/modal.test.tsx:73
