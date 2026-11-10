@@ -14,6 +14,8 @@ import {
   createListState,
   type SelectionValue,
 } from "../../primitives";
+import { FieldsetContext } from "../fieldset/context";
+import { ToolbarContext } from "../toolbar/context";
 import { renderChildren } from "./children";
 import { type AriaProps, type DataProps, type GlobalDomProps } from "./dom-props";
 import {
@@ -148,8 +150,13 @@ function normalizeSelection(
  * `selectedKeys` contract (port sheet §3.2, criterion B3).
  */
 export function ToggleButtonGroupRoot(props: ToggleButtonGroupRootProps) {
+  // HeroUI's Toolbar provides React Aria's `ToggleButtonGroupContext` with its
+  // own orientation, so a group inside a toolbar inherits the axis (port sheet
+  // toolbar §5, cross-unit change 3). `null` outside a toolbar.
+  const toolbar = ToolbarContext();
+
   const orientation = computed<ToggleButtonGroupOrientation>(
-    () => props.orientation ?? "horizontal",
+    () => props.orientation ?? toolbar?.orientation() ?? "horizontal",
   );
   const fullWidth = computed(() => props.fullWidth ?? false);
   const isDetached = computed(() => props.isDetached ?? false);
@@ -157,9 +164,13 @@ export function ToggleButtonGroupRoot(props: ToggleButtonGroupRootProps) {
     props.selectionMode ?? "single";
 
   // `undefined` when the prop is absent; a member treats it as `false` while
-  // still being able to tell the group was never disabled.
+  // still being able to tell the group was never disabled. Fieldset sheet §5.2:
+  // a disabled `Fieldset` disables the whole group and wins over its own props.
+  const fieldset = FieldsetContext();
   const groupIsDisabled = () =>
-    props.isDisabled ?? (props["aria-disabled"] === true ? true : undefined);
+    fieldset?.isDisabled() === true
+      ? true
+      : (props.isDisabled ?? (props["aria-disabled"] === true ? true : undefined));
 
   // R-027 … R-030, R-046, R-048, R-028, R-029, R-044, R-045.
   const slots = computed(() =>
@@ -254,23 +265,30 @@ export function ToggleButtonGroupRoot(props: ToggleButtonGroupRootProps) {
   // while a member has the keyboard focus and unbinds on blur or unmount.
   // Orientation picks the axis, and each gets its own scope so a changed
   // `orientation` rebinds instead of keeping the first object read at mount.
-  createKeymapScope({
-    isActive: () => isFocusWithin() && orientation() === "horizontal",
-    bindings: {
-      left: () => moveFocus(-1),
-      right: () => moveFocus(1),
-    },
-    options: { repeat: true },
-  });
+  //
+  // Inside a Toolbar the arrows belong to the toolbar: upstream's `useToolbar`
+  // handles them in the capture phase, before any group could, and a nested
+  // group leaves its own handler off (port sheet toolbar §5). The members are
+  // registered with the toolbar too, so the outer scope reaches them.
+  if (!toolbar) {
+    createKeymapScope({
+      isActive: () => isFocusWithin() && orientation() === "horizontal",
+      bindings: {
+        left: () => moveFocus(-1),
+        right: () => moveFocus(1),
+      },
+      options: { repeat: true },
+    });
 
-  createKeymapScope({
-    isActive: () => isFocusWithin() && orientation() === "vertical",
-    bindings: {
-      up: () => moveFocus(-1),
-      down: () => moveFocus(1),
-    },
-    options: { repeat: true },
-  });
+    createKeymapScope({
+      isActive: () => isFocusWithin() && orientation() === "vertical",
+      bindings: {
+        up: () => moveFocus(-1),
+        down: () => moveFocus(1),
+      },
+      options: { repeat: true },
+    });
+  }
 
   const renderProps: ToggleButtonGroupRenderProps = {
     orientation,
@@ -313,7 +331,11 @@ export function ToggleButtonGroupRoot(props: ToggleButtonGroupRootProps) {
     return typeof value === "function" ? value(renderProps) : value;
   };
 
-  const role = () => (selectionMode() === "single" ? "radiogroup" : "toolbar");
+  // Upstream: `useToggleButtonGroup` overrides the role only in single mode
+  // (`radiogroup`); in multiple mode the group is a toolbar, and inside another
+  // toolbar it is the `group` a nested `useToolbar` renders.
+  const role = () =>
+    selectionMode() === "single" ? "radiogroup" : toolbar ? "group" : "toolbar";
 
   // Read `props.children` once, inside the provider and at the placement
   // (the exception in the common rules). The function form is called in that

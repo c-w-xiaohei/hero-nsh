@@ -238,6 +238,9 @@ export function ColorInputGroupInput(props: ColorInputGroupInputProps): JSX.Elem
     "keyboardType",
     "onFocus",
     "onBlur",
+    "placeholder",
+    "autoFocus",
+    "onSubmit",
     "onMouseEnter",
     "onMouseLeave",
     "onHoverStart",
@@ -331,6 +334,22 @@ export function ColorInputGroupInput(props: ColorInputGroupInputProps): JSX.Elem
   const hovered = signal(false);
   const focused = signal(false);
 
+  // --- Focus handle ---------------------------------------------------------
+  // A Label press focuses the field's control through `label for` upstream;
+  // the handle is registered while the input is mounted (port sheet §5).
+  let inputNode: InputRef | undefined;
+
+  const handleRef = (node: InputRef) => {
+    inputNode = node;
+    local.ref?.(node);
+  };
+
+  const registerFocus = field?.registerInputFocus;
+
+  if (registerFocus) {
+    cleanup(registerFocus(() => inputNode?.focus()));
+  }
+
   // --- Classes --------------------------------------------------------------
   const buildRenderProps = (): ColorInputGroupInputRenderProps => ({
     isHovered: hovered,
@@ -406,13 +425,22 @@ export function ColorInputGroupInput(props: ColorInputGroupInputProps): JSX.Elem
     focused.set(true);
     // `:focus-within` on the group, written by its only focus stop (§2, R-010).
     group?.setFocusWithin(true);
+    field?.onFocus?.();
     local.onFocus?.();
   };
 
   const handleBlur = () => {
+    // The field commits before the focus flips, as React Aria's blur handler
+    // does, so an announce still sees the field as focused.
+    field?.onBlur?.();
     focused.set(false);
     group?.setFocusWithin(false);
     local.onBlur?.();
+  };
+
+  const handleSubmit = (event: { text: string }) => {
+    field?.onSubmit?.(event);
+    local.onSubmit?.(event);
   };
 
   // The input unmounting while focused must not leave the group lit.
@@ -425,10 +453,14 @@ export function ColorInputGroupInput(props: ColorInputGroupInputProps): JSX.Elem
   return (
     <Input
       {...hostProps(rest)}
-      ref={(node) => local.ref?.(node)}
+      ref={handleRef}
       nativeID={local.id ?? local.nativeID}
       value={value()}
+      placeholder={local.placeholder ?? field?.placeholder?.()}
+      autoFocus={local.autoFocus ?? field?.autoFocus?.()}
       onChange={handleChange}
+      onSubmit={handleSubmit}
+      submitBehavior={field?.onSubmit !== undefined ? "submit" : undefined}
       disabled={isDisabled()}
       // A disabled text field accepts no edits upstream. NSH 0.4.0's `disabled`
       // host prop blocks presses and focus and sets the accessibility state but

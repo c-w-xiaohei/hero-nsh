@@ -16,6 +16,7 @@ import {
 import { DescriptionContext } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
 import { FieldContext } from "../label/context";
+import type { RadioGroupVariant } from "../radio-group/radio-group.styles";
 import type { RadioFieldRenderProps, RadioPressHandlers } from "./radio-context";
 import {
   FALLBACK_RADIO_ITEM_CONTEXT,
@@ -23,7 +24,7 @@ import {
   RadioItemContext,
   type RadioItemContextValue,
 } from "./radio-context";
-import { radioVariants, type RadioGroupVariant } from "./radio.styles";
+import { radioVariants } from "./radio.styles";
 import { renderChildren } from "./render-children";
 
 /* -------------------------------------------------------------------------------------------------

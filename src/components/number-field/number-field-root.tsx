@@ -12,6 +12,7 @@ import { DescriptionContext } from "../description/context";
 import type { DescriptionContextValue } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
 import type { FieldErrorState } from "../field-error/context";
+import { FieldsetContext } from "../fieldset/context";
 import { FieldContext } from "../label/context";
 import type { FieldState } from "../label/context";
 import { joinClassNames } from "./class-names";
@@ -291,7 +292,11 @@ export function NumberFieldRoot(props: NumberFieldRootProps): JSX.Element {
   } as NumberFieldContextValue["slots"];
 
   // --- Effective state ------------------------------------------------------
-  const isDisabled = computed(() => local.isDisabled ?? false);
+  // Fieldset sheet §5.2: a disabled `Fieldset` disables the whole field.
+  const fieldset = FieldsetContext();
+  const isDisabled = computed(
+    () => fieldset?.isDisabled() === true || (local.isDisabled ?? false),
+  );
   const isReadOnly = computed(() => local.isReadOnly ?? false);
   const isRequired = computed(() => local.isRequired ?? false);
 

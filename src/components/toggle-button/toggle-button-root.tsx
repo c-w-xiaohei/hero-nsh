@@ -17,6 +17,8 @@ import {
   createToggleState,
   isKeyboardPress,
 } from "../../primitives";
+import { FieldsetContext } from "../fieldset/context";
+import { ToolbarContext } from "../toolbar/context";
 import { renderChildren } from "./children";
 import { type AriaProps, type DataProps, type GlobalDomProps } from "./dom-props";
 import { toggleButtonGroupItemClasses } from "./toggle-button-group-classes";
@@ -166,6 +168,10 @@ export interface ToggleButtonRootProps
  */
 export function ToggleButtonRoot(props: ToggleButtonRootProps) {
   const group = ToggleButtonGroupContext();
+  // Port sheet toolbar §5: a ToggleButton inside a Toolbar also joins the
+  // toolbar's arrow-key registry, whether or not it sits in a group. Outside
+  // one this is `null` and nothing changes.
+  const toolbar = ToolbarContext();
 
   // `id` is an identity, so it is read once. In a group it is the selection
   // key; without a group it is the view's DOM id upstream.
@@ -179,7 +185,14 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
   // RAC's useToggleButtonGroupItem reads `disabled || group.isDisabled`; the
   // child cannot turn a disabled group back on. A member without an `id`
   // works as a standalone toggle and ignores the group's disabled state.
+  // Fieldset sheet §5.2: a disabled `Fieldset` comes first and cannot be turned
+  // back on, as a native `<fieldset disabled>` has it.
+  const fieldset = FieldsetContext();
   const isDisabled = computed(() => {
+    if (fieldset?.isDisabled() === true) {
+      return true;
+    }
+
     if (isGroupItem && group) {
       return ownIsDisabled() === true || group.isDisabled() === true;
     }
@@ -304,6 +317,19 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
         // The same expression the view gets: NSH's only focusability knob.
         focusable: () => props.excludeFromTabOrder !== true && !isBlocked(),
         focused: isFocused,
+        focus: focusSelf,
+      }),
+    );
+  }
+
+  if (toolbar) {
+    // The toolbar's own registry (port sheet toolbar §5, cross-unit change 2):
+    // the same focus signal and the same focusability test the group gets, so
+    // the outer arrows walk through group members and skip disabled ones.
+    cleanup(
+      toolbar.registerItem({
+        focused: isFocused,
+        focusable: () => props.excludeFromTabOrder !== true && !isBlocked(),
         focus: focusSelf,
       }),
     );

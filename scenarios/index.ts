@@ -32,6 +32,7 @@ import { iconsScenarios } from "./icons.scenarios";
 import { formScenarios } from "./form.scenarios";
 import { switchGroupScenarios } from "./switch-group.scenarios";
 import { colorSwatchScenarios } from "./color-swatch.scenarios";
+import { colorFieldScenarios } from "./color-field.scenarios";
 import { alertScenarios } from "./alert.scenarios";
 import { paginationScenarios } from "./pagination.scenarios";
 import { accordionScenarios } from "./accordion.scenarios";
@@ -46,6 +47,16 @@ import { textFieldScenarios } from "./textfield.scenarios";
 import { inputScenarios } from "./input.scenarios";
 import { textAreaScenarios } from "./textarea.scenarios";
 import { comboBoxScenarios } from "./combo-box.scenarios";
+import { tabsScenarios } from "./tabs.scenarios";
+import { timeFieldScenarios } from "./time-field.scenarios";
+import { inputOtpScenarios } from "./input-otp.scenarios";
+import { cardScenarios } from "./card.scenarios";
+import { fieldsetScenarios } from "./fieldset.scenarios";
+import { colorAreaScenarios } from "./color-area.scenarios";
+import { tagScenarios } from "./tag.scenarios";
+import { toolbarScenarios } from "./toolbar.scenarios";
+import { colorSliderScenarios } from "./color-slider.scenarios";
+import { sliderScenarios } from "./slider.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -95,4 +106,15 @@ export const scenarios: Record<string, Component> = {
   ...inputScenarios,
   ...textAreaScenarios,
   ...comboBoxScenarios,
+  ...tabsScenarios,
+  ...timeFieldScenarios,
+  ...inputOtpScenarios,
+  ...cardScenarios,
+  ...fieldsetScenarios,
+  ...colorAreaScenarios,
+  ...tagScenarios,
+  ...toolbarScenarios,
+  ...colorSliderScenarios,
+  ...sliderScenarios,
+  ...colorFieldScenarios,
 };

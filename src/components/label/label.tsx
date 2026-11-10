@@ -1,6 +1,7 @@
 import { cleanup, computed, split, Text } from "nsh";
 import type { JSX, PressEvent, TextProps } from "nsh";
 
+import { FieldsetContext } from "../fieldset/context";
 import { FieldContext } from "./context";
 import { labelVariants } from "./label.styles";
 
@@ -81,6 +82,12 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
   // so every handler below closes over this value.
   const field = FieldContext();
 
+  // R-008: `[data-disabled="true"] .label` dims every Label inside a disabled
+  // `<fieldset>`, whether or not it sits in a field root. The field's own state
+  // is the first leg; a Label placed directly under a Fieldset reads the
+  // fieldset's context as the fallback (port sheet §5.2).
+  const fieldset = FieldsetContext();
+
   // R-003 / R-004: a required field root makes its atomic Labels show the
   // asterisk. Groups do not provide `isRequired`, so their options stay bare.
   const isRequired = computed(
@@ -88,9 +95,13 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
   );
 
   // R-006: the disabled look reaches every Label inside a disabled field,
-  // like the CSS descendant selector it replaces.
+  // like the CSS descendant selector it replaces. A disabled fieldset is ORed
+  // in: `<fieldset disabled>` cannot be undone by a Label's own `isDisabled`.
   const isDisabled = computed(
-    () => local.isDisabled === true || field?.isDisabled?.() === true,
+    () =>
+      fieldset?.isDisabled() === true ||
+      local.isDisabled === true ||
+      field?.isDisabled?.() === true,
   );
 
   // R-008 / R-009: invalid arrives from the field root. `aria-invalid` has no
@@ -99,6 +110,22 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
   const isInvalid = computed(
     () => local.isInvalid === true || field?.isInvalid?.() === true,
   );
+
+  // A field that lays its parts out on a grid puts this Label in place through
+  // `partClass` (Slider's R-004 / R-005). It goes after the variant classes and
+  // before the caller's `className`, so a caller can still restate it.
+  const classes = computed(() => {
+    const extra = [field?.partClass?.(), local.className]
+      .filter((part): part is string => typeof part === "string" && part.length > 0)
+      .join(" ");
+
+    return labelVariants({
+      className: extra.length > 0 ? extra : undefined,
+      isDisabled: isDisabled(),
+      isInvalid: isInvalid(),
+      isRequired: isRequired(),
+    });
+  });
 
   // The single read of `children` (research 4.1, 4.6): a read builds new native
   // views, so the value is cached in a computed that both the field
@@ -150,12 +177,7 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
       ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
       nativeID={local.id ?? local.nativeID}
       style={local.style}
-      class={labelVariants({
-        className: local.className,
-        isDisabled: isDisabled(),
-        isInvalid: isInvalid(),
-        isRequired: isRequired(),
-      })}
+      class={classes()}
       // A `<label>` is not a keyboard focus stop upstream; without this a
       // pressable Text would become one (Tab moves between pressables). A
       // caller's own `focusable` still wins: HeroUI forwards whatever `rest`

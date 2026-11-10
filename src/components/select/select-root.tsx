@@ -34,6 +34,7 @@ import { DescriptionContext } from "../description/context";
 import type { DescriptionContextValue } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
 import type { FieldErrorState } from "../field-error/context";
+import { FieldsetContext } from "../fieldset/context";
 import { FieldContext } from "../label/context";
 import type { FieldState } from "../label/context";
 import { formatListText } from "./select-list-format";
@@ -316,7 +317,10 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
   /* -------------------------------------------------------------------------------------------
    * Field state
    * ----------------------------------------------------------------------------------------- */
-  const isDisabled = () => local.isDisabled ?? false;
+  // Fieldset sheet §5.2: a disabled `Fieldset` disables the trigger.
+  const fieldset = FieldsetContext();
+  const isDisabled = () =>
+    fieldset?.isDisabled() === true || (local.isDisabled ?? false);
   const isRequired = () => local.isRequired ?? false;
   const isInvalid = () => local.isInvalid ?? false;
 

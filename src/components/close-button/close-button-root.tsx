@@ -2,6 +2,7 @@ import type {
   AccessibilityState,
   Bounds,
   ContextMenuEvent,
+  Edges,
   JSX,
   MouseEvent as NshMouseEvent,
   PressEvent,
@@ -16,6 +17,7 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { FieldsetContext } from "../fieldset/context";
 import { renderChildren } from "./children";
 import { CloseIcon } from "./close-icon";
 import { closeButtonVariants, type CloseButtonVariants } from "./close-button.styles";
@@ -77,6 +79,14 @@ export interface CloseButtonRootProps
 
   /** Leaves the button out of the Tab order. */
   excludeFromTabOrder?: boolean;
+
+  /**
+   * How far outside its bounds presses still count, as a view's `hitSlop`.
+   * Added for Tag's remove button, whose visible box is 12 × 12 while its
+   * pressable area must be 24 × 24 (port sheet R-023); optional and absent by
+   * default, so every existing use is unchanged.
+   */
+  hitSlop?: number | Partial<Edges>;
 
   /** Accepted, no effect: a pointer press does not focus a view in NSH. */
   preventFocusOnPress?: boolean;
@@ -191,7 +201,12 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
   // R-007: `aria-disabled` and `isDisabled` are the same state, and RAC writes
   // `aria-disabled="true"` for a pending button too (Button.tsx:172), so the
   // pending look reuses R-007's declarations below (R-008).
+  // Fieldset sheet §5.2: a disabled `Fieldset` replaces the browser's native
+  // propagation and RAC's `ButtonContext`, so it is ORed in and a close button
+  // cannot re-enable itself.
+  const fieldset = FieldsetContext();
   const isDisabled = () =>
+    fieldset?.isDisabled() === true ||
     props.isDisabled === true ||
     props["aria-disabled"] === true ||
     props["aria-disabled"] === "true";
@@ -397,6 +412,7 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
       role={toAccessibilityRole(props.role, "button")}
       disabled={isDisabled()}
       focusable={props.excludeFromTabOrder === true ? false : undefined}
+      hitSlop={props.hitSlop}
       accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel ?? "Close"}
       accessibilityState={accessibilityState()}
       accessibilityElementsHidden={props["aria-hidden"] ?? props.accessibilityElementsHidden}

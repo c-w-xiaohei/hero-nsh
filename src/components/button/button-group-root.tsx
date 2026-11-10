@@ -22,6 +22,7 @@ import {
 import type { ButtonSize, ButtonVariant } from "./button.styles";
 import { type AriaProps, type GlobalDomProps } from "./dom-props";
 import { toAccessibilityRole } from "./roles";
+import { ToolbarContext } from "../toolbar/context";
 
 /** The live state HeroUI hands to a group's `className` and `style`. */
 export interface ButtonGroupRenderProps {
@@ -72,6 +73,10 @@ export interface ButtonGroupRootProps extends AriaProps, GlobalDomProps {
  * down through context.
  */
 export function ButtonGroupRoot(props: ButtonGroupRootProps) {
+  // Port sheet toolbar §5, cross-unit change 5: in a vertical toolbar the group
+  // starts at the leading edge, as `.toolbar--vertical .button-group` says.
+  const toolbar = ToolbarContext();
+
   const orientation = computed<ButtonGroupOrientation>(() => props.orientation ?? "horizontal");
   const fullWidth = computed(() => props.fullWidth ?? false);
   const isDisabled = computed(
@@ -117,8 +122,17 @@ export function ButtonGroupRoot(props: ButtonGroupRootProps) {
     return typeof className === "function" ? className(renderProps) : className;
   };
 
+  // R-015: `.toolbar--vertical .button-group` → `justify-content: flex-start`.
+  // The base slot centers its members; this lands after it, so it wins, and
+  // before the caller's `className`.
   const classes = computed(() =>
-    [slots().base(), resolvedClassName() ?? ""].filter((part) => part !== "").join(" "),
+    [
+      slots().base(),
+      toolbar?.orientation() === "vertical" ? "justify-start" : "",
+      resolvedClassName() ?? "",
+    ]
+      .filter((part) => part !== "")
+      .join(" "),
   );
 
   const resolvedStyle = () => {

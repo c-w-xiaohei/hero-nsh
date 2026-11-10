@@ -18,6 +18,8 @@ import {
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { FormContext } from "../form/context";
+import { FieldsetContext } from "../fieldset/context";
+import { ToolbarContext } from "../toolbar/context";
 import { ButtonGroupContext } from "./button-group-context";
 import { buttonGroupItemClasses } from "./button-group-classes";
 import { buttonVariants, type ButtonVariants } from "./button.styles";
@@ -122,6 +124,9 @@ export function ButtonRoot(props: ButtonRootProps) {
   // Form through its context; outside a Form this is `undefined` and nothing
   // changes.
   const form = FormContext();
+  // Port sheet toolbar §5: a Button written inside a Toolbar joins its arrow-key
+  // registry. Outside one this is `null` and nothing changes.
+  const toolbar = ToolbarContext();
 
   const isHovered = signal(false);
   const isPressed = signal(false);
@@ -154,7 +159,15 @@ export function ButtonRoot(props: ButtonRootProps) {
   const ownIsDisabled = () =>
     props.isDisabled ?? (props["aria-disabled"] === true ? true : undefined);
   // `??`, not `||`: a Button's own `false` overrides a disabled group.
-  const isDisabled = computed(() => ownIsDisabled() ?? group?.isDisabled() ?? false);
+  // Fieldset sheet §5.2: a disabled `Fieldset` replaces the browser's native
+  // `<fieldset disabled>` propagation and RAC's `ButtonContext`, so it is ORed
+  // in ahead of both and a Button cannot re-enable itself with `false`.
+  const fieldset = FieldsetContext();
+  const isDisabled = computed(
+    () =>
+      fieldset?.isDisabled() === true ||
+      (ownIsDisabled() ?? group?.isDisabled() ?? false),
+  );
 
   const size = computed(() => props.size ?? group?.size());
   const variant = computed(() => props.variant ?? group?.variant());
@@ -343,6 +356,21 @@ export function ButtonRoot(props: ButtonRootProps) {
 
   if (group) {
     cleanup(group.registerItem({ focused: isFocused, focusVisible: isFocusVisible }));
+  }
+
+  // The toolbar walks its registered controls instead of enumerating the DOM
+  // (port sheet toolbar §5, cross-unit change 1). Everything the arrows need is
+  // already here: the focus signal, the ref's `focus()`, and the two reasons a
+  // Button is not a Tab stop. A pending Button stays focusable upstream, so it
+  // only leaves the walk when disabled or explicitly kept out of the Tab order.
+  if (toolbar) {
+    cleanup(
+      toolbar.registerItem({
+        focused: isFocused,
+        focusable: () => props.excludeFromTabOrder !== true && !isDisabled(),
+        focus: () => node?.focus(),
+      }),
+    );
   }
 
   // RAC reports a pending button as unavailable but keeps it focusable, so

@@ -3,6 +3,7 @@ import { computed, signal, split, untracked, View } from "nsh";
 
 import { DescriptionContext } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
+import { FieldsetContext } from "../fieldset/context";
 import { FieldContext } from "../label/context";
 import type { CheckboxGroupRenderProps } from "./checkbox-context";
 import { CheckboxGroupContext, type CheckboxGroupContextValue } from "./checkbox-context";
@@ -210,7 +211,12 @@ export function CheckboxGroupRoot(props: CheckboxGroupRootProps): JSX.Element {
     validationBehavior: () => local.validationBehavior,
   });
 
-  const isDisabled = computed(() => local.isDisabled === true);
+  // Fieldset sheet §5.2: a disabled `Fieldset` disables the whole group; the
+  // group cannot re-enable itself with its own `false`.
+  const fieldset = FieldsetContext();
+  const isDisabled = computed(
+    () => fieldset?.isDisabled() === true || local.isDisabled === true,
+  );
   const isReadOnly = computed(() => local.isReadOnly === true);
   const isRequired = computed(() => local.isRequired === true);
   const isInvalid = state.isInvalid;

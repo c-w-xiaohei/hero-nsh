@@ -51,6 +51,15 @@ export interface FieldState {
 
   /** The label's press was released. */
   pressFieldUp?: (event: PressEvent) => void;
+
+  /**
+   * The classes the field root would otherwise apply to its Labels through a
+   * descendant selector (`.color-field [data-slot="label"] { @apply w-fit }`,
+   * a group's indentation, …). The field root decides them; the Label only
+   * appends them after its own variant classes, the same channel
+   * `DescriptionContext.partClass` uses.
+   */
+  partClass?: () => string | undefined;
 }
 
 export const FieldContext = context<FieldState | undefined>(undefined);
