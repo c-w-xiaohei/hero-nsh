@@ -511,8 +511,9 @@ test("T-051 supports deselection", async () => {
 });
 
 // kobalte/packages/core/src/combobox/combobox.test.tsx:3337
-// Partial port (port sheet T-056): with the field disabled, Tab focuses nothing
-// there and Space does not open the list; `aria-expanded="false"` is dropped.
+// Partial port (port sheet T-056): with the field disabled, the trigger never
+// takes focus and Space does not open the list; `aria-expanded="false"` is
+// dropped.
 test("T-056 does not open on a Space press when disabled", async () => {
   const app = await openCase("disabled");
 
@@ -522,5 +523,8 @@ test("T-056 does not open on a Space press when disabled", async () => {
 
   expect(combo.getListbox(app)).toBe(false);
   expect(callsOf(app, "openChange")).toHaveLength(0);
-  expect(combo.focusEvents(app)).toHaveLength(0);
+  // Upstream asserts only `document.activeElement !== trigger` (:3383); the
+  // trigger's own focus probe stands for it. Tab may still land on the disabled
+  // input on the reused web page, which is the host's behavior, not the field's.
+  expect(callsOf(app, "triggerFocus")).toHaveLength(0);
 });

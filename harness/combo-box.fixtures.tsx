@@ -51,7 +51,7 @@ import { probe } from "@scenario/probe";
  *   empty             typing to an empty collection closes the popover
  *   tab-handoff       two comboboxes and a Submit button (T-010)
  *   items-40          forty rows and a Continue button (T-012)
- *   outside           the animals plus a pressable outside view (T-030)
+ *   outside           the animals plus an outside view above the field (T-030)
  *   modal             a ComboBox inside an open nsh/base Dialog (T-011)
  *
  * It sits next to harness/nsh.json on purpose: NSH takes the entry's own
@@ -152,6 +152,12 @@ type ComboProps = {
 function Combo(props: ComboProps) {
   return (
     <View class="w-[256px] items-start gap-2">
+      {/* Above the field, so the press target stays outside the popover rectangle. */}
+      {props.outside ? (
+        <View testID="outside" role="button" onPress={() => undefined}>
+          <Text>Outside</Text>
+        </View>
+      ) : null}
       <ComboBox
         className="w-[256px]"
         selectionMode={props.multiple ? "multiple" : "single"}
@@ -201,11 +207,6 @@ function Combo(props: ComboProps) {
         {props.description ? <Description>{props.description}</Description> : null}
         {props.error ? <FieldError>{props.error}</FieldError> : null}
       </ComboBox>
-      {props.outside ? (
-        <View testID="outside" role="button" onPress={() => undefined}>
-          <Text>Outside</Text>
-        </View>
-      ) : null}
     </View>
   );
 }
