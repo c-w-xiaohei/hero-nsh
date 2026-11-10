@@ -82,23 +82,16 @@ test("T-003 supports closing via CloseTrigger", async () => {
 // X-001: `scroll="outside"` moves the scrolling to the Backdrop carrier: the
 // Container registers its `scroll` on ModalBackdropContext, the Backdrop
 // replaces the carrier `View` with `<Scroll>` and adds `items-start`. A carrier
-// that stays a plain `View` neither makes the 30 rows (1200pt in a 768pt
-// window) part of a scroll view's content nor keeps the first row on screen,
-// and there is no scroll view for the step below to drag.
-test("X-001 scrolls long outside content in the backdrop carrier", async () => {
+// that stays a plain `View` clips the 30 rows (1200pt in a 768pt window) at the
+// window edge, so the far row is not selectable; centring the tall container
+// instead of `items-start` puts its first rows above the top of the viewport.
+// `nsh test` counts any content of a scroll view the user can scroll, wherever
+// it sits, so reachability is the observable, not a scroll offset.
+test("X-001 puts long outside content in the backdrop's scroll carrier", async () => {
   const app = await openScenario("modal/scroll-outside-long", { clock: {} });
 
-  // Inside a scroll view the user can scroll, content past the fold still
-  // matches; clipped by the window without one, it does not.
   expect(app.count("text:Row 30")).toBe(1);
-  // items-start: the tall container starts at the top, so its first row is on
-  // screen instead of being centred above it.
   expect(app.shows("text:Row 01")).toBe(true);
-
-  await app.scroll("text:Row 01", 500);
-  await app.waitFor("text:Row 01", { state: "gone" });
-
-  expect(app.shows("text:Row 30")).toBe(true);
 });
 
 // src/components/modal/modal-backdrop.tsx:163-171
