@@ -57,6 +57,11 @@ import { tagScenarios } from "./tag.scenarios";
 import { toolbarScenarios } from "./toolbar.scenarios";
 import { colorSliderScenarios } from "./color-slider.scenarios";
 import { sliderScenarios } from "./slider.scenarios";
+import { dateFieldScenarios } from "./date-field.scenarios";
+import { inputGroupScenarios } from "./input-group.scenarios";
+import { colorSwatchPickerScenarios } from "./color-swatch-picker.scenarios";
+import { colorPickerScenarios } from "./color-picker.scenarios";
+import { modalScenarios } from "./modal.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -117,4 +122,9 @@ export const scenarios: Record<string, Component> = {
   ...colorSliderScenarios,
   ...sliderScenarios,
   ...colorFieldScenarios,
+  ...dateFieldScenarios,
+  ...inputGroupScenarios,
+  ...colorSwatchPickerScenarios,
+  ...colorPickerScenarios,
+  ...modalScenarios,
 };

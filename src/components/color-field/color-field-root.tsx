@@ -10,6 +10,7 @@ import { computed, effect, keymap, signal, split, untracked, View } from "nsh";
 
 import { ColorInputGroupFieldContext } from "../color-input-group/context";
 import type { ColorInputGroupFieldValue } from "../color-input-group/context";
+import { ColorPickerColorContext } from "../color-picker/color-picker-context";
 import { DescriptionContext } from "../description/context";
 import type { DescriptionContextValue } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
@@ -330,18 +331,36 @@ function ColorFieldInstance(props: { field: ColorFieldRootProps }): JSX.Element 
   // getter and a `hue` → `saturation` change takes effect without a remount.
   const channelAtMount = local.channel;
 
+  // RAC provides `{ value, onChange }` from a surrounding `ColorPicker` through
+  // its slotted context and merges it only where the caller left the prop out
+  // (port sheet §5, change 1). Outside a picker this is `undefined`.
+  const outer = ColorPickerColorContext();
+
+  /** The field's value: its own prop, else the picker's color. */
+  const resolveValue = () =>
+    local.value !== undefined ? local.value : outer?.value();
+
+  /** Reports a change, and the picker around the field hears it as well. */
+  const handleChange = (color: Color | null) => {
+    local.onChange?.(color);
+
+    if (color !== null && local.value === undefined) {
+      outer?.onChange(color);
+    }
+  };
+
   let handle: ColorFieldStateHandle;
 
   if (channelAtMount === undefined) {
     handle = createColorFieldState({
       get value() {
-        return local.value;
+        return resolveValue();
       },
       get defaultValue() {
         return local.defaultValue;
       },
       get onChange() {
-        return local.onChange;
+        return handleChange;
       },
       get validate() {
         return local.validate;
@@ -357,13 +376,13 @@ function ColorFieldInstance(props: { field: ColorFieldRootProps }): JSX.Element 
           return local.colorSpace;
         },
         get value() {
-          return local.value;
+          return resolveValue();
         },
         get defaultValue() {
           return local.defaultValue;
         },
         get onChange() {
-          return local.onChange;
+          return handleChange;
         },
         get validate() {
           return local.validate;

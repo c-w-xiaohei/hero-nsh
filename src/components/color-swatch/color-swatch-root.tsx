@@ -1,6 +1,7 @@
 import { computed, split, View } from "nsh";
 import type { JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
 
+import { ColorPickerColorContext } from "../color-picker/color-picker-context";
 import { joinClassNames } from "./class-names";
 import type { AriaProps, DataProps, DomEventProps, GlobalDomProps } from "./color-swatch-dom-props";
 import { viewProps } from "./color-swatch-dom-props";
@@ -156,13 +157,20 @@ export function ColorSwatchRoot(props: ColorSwatchRootProps): JSX.Element {
   ] as const);
 
   /**
+   * RAC supplies the color from a `ColorPicker` around this swatch through its
+   * slotted context, and only when the caller passed none (port sheet §5,
+   * change 1). Outside a picker the context is `undefined` and nothing changes.
+   */
+  const outerColor = ColorPickerColorContext();
+
+  /**
    * The resolved color: a string goes through `parseColor`, a `Color` is used
    * as it is, and both `undefined` and `""` mean upstream's `#fff0` (white at
    * alpha 0, fully transparent). It is the only derived value the render props
    * expose.
    */
   const resolvedColor = computed<Color>(() => {
-    const value = local.color;
+    const value = local.color !== undefined ? local.color : outerColor?.value();
 
     if (value === undefined || value === "") {
       return parseColor("#fff0");

@@ -36,7 +36,12 @@ export const cardVariants = tv({
     // (14 / 20).
     description: "text-sm leading-5 text-muted",
     // R-007: `.card__content` → `@apply flex flex-1 flex-col gap-1` (gap 4).
-    content: "flex flex-1 flex-col gap-1",
+    // `flex-auto` instead of `flex-1`: NSH stores `flex-1` as a zero *length*
+    // basis, so a Card measured on the cross axis (a row with `items-start` /
+    // `items-center`) sums its children's bases and the content contributes 0.
+    // `flex-auto` keeps upstream's `1 1 0%` behaviour in every parent (skill
+    // §2.5).
+    content: "flex flex-auto flex-col gap-1",
     // R-008: `.card__footer` → `@apply flex flex-row items-center`.
     footer: "flex flex-row items-center",
   },
