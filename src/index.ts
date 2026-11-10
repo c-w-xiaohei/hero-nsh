@@ -57,3 +57,4 @@ export * from "./components/color-area";
 export * from "./components/tag";
 export * from "./components/toolbar";
 export * from "./components/color-slider";
+export * from "./components/slider";

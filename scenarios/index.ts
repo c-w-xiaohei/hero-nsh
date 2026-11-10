@@ -54,6 +54,7 @@ import { colorAreaScenarios } from "./color-area.scenarios";
 import { tagScenarios } from "./tag.scenarios";
 import { toolbarScenarios } from "./toolbar.scenarios";
 import { colorSliderScenarios } from "./color-slider.scenarios";
+import { sliderScenarios } from "./slider.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -111,4 +112,5 @@ export const scenarios: Record<string, Component> = {
   ...tagScenarios,
   ...toolbarScenarios,
   ...colorSliderScenarios,
+  ...sliderScenarios,
 };
