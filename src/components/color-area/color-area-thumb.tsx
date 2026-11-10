@@ -144,6 +144,15 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
     isFocused,
     isFocusVisible,
     isDisabled,
+    // React Aria's `useRenderProps` pair (utils.tsx:183-186, 255-261): the
+    // `thumb` slot's class and the thumb's own positioning/color style, so a
+    // caller can append to or replace them. Getters keep both live.
+    get defaultClassName() {
+      return slots().thumb();
+    },
+    get defaultStyle(): ViewStyle {
+      return baseThumbStyle();
+    },
   };
 
   /* -------------------------------------------------------------------------------------------
@@ -200,6 +209,16 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
 
   const isRtl = () => direction() === "rtl";
 
+  // React Aria's `keyboardUpdate` (useColorArea.ts:114-118) wraps PageUp /
+  // PageDown / Home / End in a drag start and stop, so each of them reports
+  // `onChangeEnd` once (and `isDragging` is true for the length of the change).
+  // Arrow keys never set the dragging state upstream, and neither do they here.
+  const pageStep = (apply: () => void) => {
+    state.setDragging(true);
+    apply();
+    state.setDragging(false);
+  };
+
   // RAC's mapping: arrows move one channel step, Shift / Page keys one page,
   // Home / End jump horizontally, and Left / Right swap in a right-to-left
   // locale. Shift on Home / End / Page never changes the amount upstream.
@@ -207,59 +226,70 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
     left: () =>
       step(() =>
         isRtl()
-          ? state.incrementX(state.xStep())
-          : state.decrementX(state.xStep()),
+          ? state.incrementX(state.xChannelStep())
+          : state.decrementX(state.xChannelStep()),
       ),
     "shift+left": () =>
       step(() =>
         isRtl()
-          ? state.incrementX(state.xPageSize())
-          : state.decrementX(state.xPageSize()),
+          ? state.incrementX(state.xChannelPageStep())
+          : state.decrementX(state.xChannelPageStep()),
       ),
     right: () =>
       step(() =>
         isRtl()
-          ? state.decrementX(state.xStep())
-          : state.incrementX(state.xStep()),
+          ? state.decrementX(state.xChannelStep())
+          : state.incrementX(state.xChannelStep()),
       ),
     "shift+right": () =>
       step(() =>
         isRtl()
-          ? state.decrementX(state.xPageSize())
-          : state.incrementX(state.xPageSize()),
+          ? state.decrementX(state.xChannelPageStep())
+          : state.incrementX(state.xChannelPageStep()),
       ),
-    up: () => step(() => state.incrementY(state.yStep())),
-    "shift+up": () => step(() => state.incrementY(state.yPageSize())),
-    down: () => step(() => state.decrementY(state.yStep())),
-    "shift+down": () => step(() => state.decrementY(state.yPageSize())),
+    up: () => step(() => state.incrementY(state.yChannelStep())),
+    "shift+up": () => step(() => state.incrementY(state.yChannelPageStep())),
+    down: () => step(() => state.decrementY(state.yChannelStep())),
+    "shift+down": () => step(() => state.decrementY(state.yChannelPageStep())),
     home: () =>
       step(() =>
-        isRtl()
-          ? state.incrementX(state.xPageSize())
-          : state.decrementX(state.xPageSize()),
+        pageStep(() =>
+          isRtl()
+            ? state.incrementX(state.xChannelPageStep())
+            : state.decrementX(state.xChannelPageStep()),
+        ),
       ),
     "shift+home": () =>
       step(() =>
-        isRtl()
-          ? state.incrementX(state.xPageSize())
-          : state.decrementX(state.xPageSize()),
+        pageStep(() =>
+          isRtl()
+            ? state.incrementX(state.xChannelPageStep())
+            : state.decrementX(state.xChannelPageStep()),
+        ),
       ),
     end: () =>
       step(() =>
-        isRtl()
-          ? state.decrementX(state.xPageSize())
-          : state.incrementX(state.xPageSize()),
+        pageStep(() =>
+          isRtl()
+            ? state.decrementX(state.xChannelPageStep())
+            : state.incrementX(state.xChannelPageStep()),
+        ),
       ),
     "shift+end": () =>
       step(() =>
-        isRtl()
-          ? state.decrementX(state.xPageSize())
-          : state.incrementX(state.xPageSize()),
+        pageStep(() =>
+          isRtl()
+            ? state.decrementX(state.xChannelPageStep())
+            : state.incrementX(state.xChannelPageStep()),
+        ),
       ),
-    pageup: () => step(() => state.incrementY(state.yPageSize())),
-    "shift+pageup": () => step(() => state.incrementY(state.yPageSize())),
-    pagedown: () => step(() => state.decrementY(state.yPageSize())),
-    "shift+pagedown": () => step(() => state.decrementY(state.yPageSize())),
+    pageup: () => step(() => pageStep(() => state.incrementY(state.yChannelPageStep()))),
+    "shift+pageup": () =>
+      step(() => pageStep(() => state.incrementY(state.yChannelPageStep()))),
+    pagedown: () =>
+      step(() => pageStep(() => state.decrementY(state.yChannelPageStep()))),
+    "shift+pagedown": () =>
+      step(() => pageStep(() => state.decrementY(state.yChannelPageStep()))),
   };
 
   // Bound only while this thumb has the focus, and dropped on blur or unmount
@@ -351,28 +381,33 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
   );
 
   // R-020: the absolute position, from each channel's fraction; `y` is the
-  // value fraction, so the top edge is `1 - y`. The half-size offsets are
-  // margins, not `translate(-50%, -50%)`: NSH's `onLayout` and `measure()` do
-  // not apply transforms, so a translated thumb would report a box 8 points off
-  // its drawn center (and the geometry tests' only channel is that box). R-011 /
-  // R-021: the fill is the display color (alpha forced to 1), the only inline
-  // color.
-  const thumbStyle = computed<StyleProp<ViewStyle>>(() => {
+  // value fraction, so the top edge is `1 - y`. React Aria's
+  // `useColorAreaGradient.ts:120-121` mirrors the horizontal fraction in a
+  // right-to-left locale (`x = 1 - x`), exactly like the gradient it sits on.
+  // The half-size offsets are margins, not `translate(-50%, -50%)`: NSH's
+  // `onLayout` and `measure()` do not apply transforms, so a translated thumb
+  // would report a box 8 points off its drawn center (and the geometry tests'
+  // only channel is that box). R-011 / R-021: the fill is the display color
+  // (alpha forced to 1), the only inline color.
+  const baseThumbStyle = computed<ViewStyle>(() => {
     const position = state.getThumbPosition();
     // R-017: the thumb is 16 points, 20 while dragging.
     const halfSize = state.isDragging() ? 10 : 8;
+    const x = isRtl() ? 1 - position.x : position.x;
 
-    return [
-      {
-        left: `${position.x * 100}%`,
-        top: `${position.y * 100}%`,
-        marginLeft: -halfSize,
-        marginTop: -halfSize,
-        backgroundColor: displayColor().toString("css"),
-      },
-      typeof local.style === "function" ? local.style(renderProps) : local.style,
-    ];
+    return {
+      left: `${x * 100}%`,
+      top: `${position.y * 100}%`,
+      marginLeft: -halfSize,
+      marginTop: -halfSize,
+      backgroundColor: displayColor().toString("css"),
+    };
   });
+
+  const thumbStyle = computed<StyleProp<ViewStyle>>(() => [
+    baseThumbStyle(),
+    typeof local.style === "function" ? local.style(renderProps) : local.style,
+  ]);
 
   return (
     <View

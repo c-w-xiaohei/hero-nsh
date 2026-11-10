@@ -101,7 +101,7 @@ export interface ColorAreaRootProps
    */
   value?: string | Color;
 
-  /** The color before the user interacts. @default "hsl(0, 100%, 50%)" */
+  /** The color before the user interacts. @default "#ffffff" */
   defaultValue?: string | Color;
 
   /** Called once for every change, the whole interaction included. */
@@ -139,6 +139,9 @@ export interface ColorAreaRootProps
 
   /** Accepted, no effect: NSH has no hidden inputs. */
   yName?: string;
+
+  /** Accepted, no effect: NSH has no form element to associate these with. */
+  form?: string;
 
   /** A DOM id upstream; maps to `nativeID`, the name other elements refer to. */
   id?: string;
@@ -194,6 +197,7 @@ export function ColorAreaRoot(props: ColorAreaRootProps): JSX.Element {
     "name",
     "xName",
     "yName",
+    "form",
     "id",
     "nativeID",
     "ref",
@@ -239,7 +243,22 @@ export function ColorAreaRoot(props: ColorAreaRootProps): JSX.Element {
     colorAreaVariants({ showDots: local.showDots ?? false }),
   );
 
-  const renderProps: ColorAreaRenderProps = { state, isDisabled };
+  // React Aria's `useRenderProps` hands the component's own class and style to
+  // the caller's class/style/children functions as `defaultClassName` /
+  // `defaultStyle` (react-aria-components/src/utils.tsx:255-261). Here the
+  // default class is the `base` slot and the root has no inline style of its
+  // own (the gradient is a child layer), so the pair is the slot string and an
+  // empty object; both are getters, so a later read still sees the right slot.
+  const renderProps: ColorAreaRenderProps = {
+    state,
+    isDisabled,
+    get defaultClassName() {
+      return slots().base();
+    },
+    get defaultStyle(): ViewStyle {
+      return {};
+    },
+  };
 
   const classes = computed(() =>
     joinClassNames(
@@ -310,10 +329,14 @@ export function ColorAreaRoot(props: ColorAreaRootProps): JSX.Element {
       return;
     }
 
-    // `y` is the value fraction, which grows upwards; the pointer's `dy` grows
-    // downwards, hence the minus.
+    // React Aria's `useColorArea.ts:212`: the horizontal delta is negated in a
+    // right-to-left locale, because the gradient (and the value axis) runs the
+    // other way. `y` is the value fraction, which grows upwards; the pointer's
+    // `dy` grows downwards, hence the minus.
+    const xDirection = direction() === "rtl" ? -1 : 1;
+
     state.setThumbPercent({
-      x: clamp01(origin.x + dx / width),
+      x: clamp01(origin.x + (xDirection * dx) / width),
       y: clamp01(origin.y - dy / height),
     });
   }
@@ -348,8 +371,15 @@ export function ColorAreaRoot(props: ColorAreaRootProps): JSX.Element {
         return;
       }
 
+      // React Aria's `useColorArea.ts:298-299`: the press fraction is measured
+      // from the mirrored edge in a right-to-left locale, exactly like the
+      // gradient that is painted there.
       const origin = {
-        x: clamp01(event.locationX / width),
+        x: clamp01(
+          direction() === "rtl"
+            ? 1 - event.locationX / width
+            : event.locationX / width,
+        ),
         y: clamp01(1 - event.locationY / height),
       };
 

@@ -12,14 +12,19 @@
  * form-control / form-reset wiring is gone: NSH has no form submission.
  */
 
-import { type Accessor, computed, signal } from "nsh";
+import { type Accessor, computed, signal, untracked } from "nsh";
 
 import { createControllableSignal } from "../../primitives";
 import type { Color, ColorChannel, ColorSpace } from "./colors";
 import { normalizeColor, parseColor } from "./colors";
 
-/** React Aria's `DEFAULT_COLOR`: hue 0, fully saturated, mid lightness. */
-const DEFAULT_COLOR = "hsl(0, 100%, 50%)";
+/**
+ * React Stately's `DEFAULT_COLOR` (`react-stately/src/color/useColorAreaState.ts:105`):
+ * opaque white, not Kobalte's fully saturated red. An area with neither `value`
+ * nor `defaultValue` starts white, so the thumb sits at the top-left corner and
+ * `onChange` reports white, exactly as HeroUI's does.
+ */
+const DEFAULT_COLOR = "#ffffff";
 
 /** A color prop: a CSS string (HeroUI) or an already parsed `Color` (Kobalte). */
 export type ColorAreaColorValue = string | Color;
@@ -28,7 +33,7 @@ export interface CreateColorAreaStateProps {
   /** The controlled value; `undefined` leaves the state uncontrolled. */
   value?: Accessor<ColorAreaColorValue | undefined>;
 
-  /** The uncontrolled initial value; HeroUI's default is `hsl(0, 100%, 50%)`. */
+  /** The uncontrolled initial value; HeroUI's default is `#ffffff`. */
   defaultValue?: Accessor<ColorAreaColorValue | undefined>;
 
   /** The space the axes are read in; `undefined` keeps the value's own space. */
@@ -77,8 +82,18 @@ export interface ColorAreaState {
   /** The current color, converted to `colorSpace` when one is given. */
   value: Accessor<Color>;
 
-  /** Sets the color (the controlled prop still wins; `onChange` hears it). */
-  setValue: (value: Color) => void;
+  /**
+   * React Stately's `defaultValue`: the initial color (the controlled value at
+   * mount, otherwise `defaultValue`, otherwise white), which `resetValue`
+   * returns to. It does not follow later changes.
+   */
+  defaultValue: Accessor<Color>;
+
+  /**
+   * Sets the color (the controlled prop still wins; `onChange` hears it). Like
+   * React Stately (line 29) it also takes a CSS string, parsed on the way in.
+   */
+  setValue: (value: ColorAreaColorValue) => void;
 
   /** The color's value on each axis, in channel units. */
   xValue: Accessor<number>;
@@ -86,10 +101,28 @@ export interface ColorAreaState {
   setXValue: (value: number) => void;
   setYValue: (value: number) => void;
 
-  /** One arrow key's step on each axis (React Stately's channel `step`). */
+  /**
+   * Sets both channels from a point in the box: `x` from the left edge and `y`
+   * from the top edge, both 0–1, exactly React Stately's `setColorFromPoint`.
+   */
+  setColorFromPoint: (x: number, y: number) => void;
+
+  /**
+   * One arrow key's step on each axis (React Stately's `xChannelStep` /
+   * `yChannelStep`, the channel's `step`).
+   */
+  xChannelStep: Accessor<number>;
+  yChannelStep: Accessor<number>;
+  /** One PageUp / Shift+Arrow jump on each axis (the channel's `pageSize`). */
+  xChannelPageStep: Accessor<number>;
+  yChannelPageStep: Accessor<number>;
+
+  /**
+   * Kobalte's names for the same four steps; kept so code written against this
+   * port's earlier surface keeps compiling (hover only, same accessors).
+   */
   xStep: Accessor<number>;
   yStep: Accessor<number>;
-  /** One PageUp / Shift+Arrow jump on each axis (the channel `pageSize`). */
   xPageSize: Accessor<number>;
   yPageSize: Accessor<number>;
 
@@ -110,7 +143,19 @@ export interface ColorAreaState {
 
   /** Whether a pointer interaction is in progress. */
   isDragging: Accessor<boolean>;
+
+  /**
+   * React Stately's `setDragging`. Leaving the dragging state (true → false)
+   * fires `onChangeEnd` once; PageUp / PageDown / Home / End wrap their change
+   * in this pair exactly as React Aria's `keyboardUpdate` does.
+   */
+  setDragging: (dragging: boolean) => void;
+
+  /** Kobalte's name for `setDragging`; kept as an alias. */
   setIsDragging: (dragging: boolean) => void;
+
+  /** React Stately's `getDisplayColor`: the current color with alpha forced to 1. */
+  getDisplayColor: () => Color;
 
   /**
    * The thumb's position as fractions of the box: `x` from the left edge, `y`
@@ -162,13 +207,29 @@ export function createColorAreaState(
     return value === undefined ? parseColor(DEFAULT_COLOR) : normalizeColor(value);
   });
 
-  const [resolvedValue, setValue] = createControllableSignal<Color>({
+  const [resolvedValue, setResolvedValue] = createControllableSignal<Color>({
     value: () => controlledValue(),
     defaultValue: () => initialValue(),
     onChange: (color) => props.onChange?.(color),
   });
 
   const isDisabled = () => props.isDisabled?.() ?? false;
+
+  // React Stately's `setValue` takes `string | Color` (line 29) and parses the
+  // string form; the controlled signal's identity check then sees a `Color`.
+  const setValue = (value: ColorAreaColorValue) => {
+    setResolvedValue(normalizeColor(value));
+  };
+
+  // React Stately's `defaultValue`: the initial value, captured once. In
+  // controlled mode it is the controlled color at mount (`useState(colorValue)`),
+  // otherwise the `defaultValue` prop (or white), and later changes do not move
+  // it, so `resetValue` stays a reset rather than a "current value" recall.
+  // `resolvedValue` always has a value: `defaultValue` supplies white when the
+  // caller gives neither prop (state.ts:107-111).
+  const mountValue = untracked(() => resolvedValue())!;
+  const defaultValue: Accessor<Color> = () =>
+    controlledValue() === undefined ? initialValue() : mountValue;
 
   // RAC fix 1 (§5): `colorSpace` converts the value before any axis is read, so
   // both the channels and the callbacks speak the requested space.
@@ -189,10 +250,16 @@ export function createColorAreaState(
   const xChannelRange = computed(() => color().getChannelRange(channels().xChannel));
   const yChannelRange = computed(() => color().getChannelRange(channels().yChannel));
 
-  const xStep = () => xChannelRange().step;
-  const yStep = () => yChannelRange().step;
-  const xPageSize = () => xChannelRange().pageSize;
-  const yPageSize = () => yChannelRange().pageSize;
+  // React Stately's names first (`xChannelStep` …), the Kobalte names as
+  // aliases: both are the same accessor, so they cannot disagree.
+  const xChannelStep = () => xChannelRange().step;
+  const yChannelStep = () => yChannelRange().step;
+  const xChannelPageStep = () => xChannelRange().pageSize;
+  const yChannelPageStep = () => yChannelRange().pageSize;
+  const xStep = xChannelStep;
+  const yStep = yChannelStep;
+  const xPageSize = xChannelPageStep;
+  const yPageSize = yChannelPageStep;
   const xMinValue = () => xChannelRange().minValue;
   const xMaxValue = () => xChannelRange().maxValue;
   const yMinValue = () => yChannelRange().minValue;
@@ -280,63 +347,58 @@ export function createColorAreaState(
     };
   };
 
-  const updateValue = (value: ColorAreaThumbValue) => {
-    if (isDisabled()) {
-      return;
+  // React Stately's `setColorFromPoint`: the point is 0–1 from the left and
+  // from the top; only the axes that really changed are snapped and written, so
+  // a drag keeps the untouched channel's exact value.
+  const setColorFromPoint = (x: number, y: number) => {
+    const xMin = xMinValue();
+    const xMax = xMaxValue();
+    const yMin = yMinValue();
+    const yMax = yMaxValue();
+
+    let newXValue = xMin + clamp(x, 0, 1) * (xMax - xMin);
+    let newYValue = yMin + (1 - clamp(y, 0, 1)) * (yMax - yMin);
+    let nextColor: Color | undefined;
+
+    if (newXValue !== xValue()) {
+      newXValue = snapValueToStep(newXValue, xMin, xMax, xStep());
+      nextColor = color().withChannelValue(channels().xChannel, newXValue);
     }
 
-    const xSnappedValue = snapValueToStep(
-      value.x,
-      xMinValue(),
-      xMaxValue(),
-      xStep(),
-    );
-    const ySnappedValue = snapValueToStep(
-      value.y,
-      yMinValue(),
-      yMaxValue(),
-      yStep(),
-    );
+    if (newYValue !== yValue()) {
+      newYValue = snapValueToStep(newYValue, yMin, yMax, yStep());
+      nextColor = (nextColor ?? color()).withChannelValue(
+        channels().yChannel,
+        newYValue,
+      );
+    }
 
-    if (xSnappedValue === xValue() && ySnappedValue === yValue()) {
+    if (nextColor !== undefined) {
+      setValue(nextColor);
+    }
+  };
+
+  // Kobalte's `setThumbValue`: both channels from raw channel values, snapped
+  // to their steps and clamped to their ranges.
+  const setThumbValue = (value: ColorAreaThumbValue) => {
+    const x = snapValueToStep(value.x, xMinValue(), xMaxValue(), xStep());
+    const y = snapValueToStep(value.y, yMinValue(), yMaxValue(), yStep());
+
+    if (x === xValue() && y === yValue()) {
       return;
     }
 
     setValue(
       color()
-        .withChannelValue(channels().xChannel, xSnappedValue)
-        .withChannelValue(channels().yChannel, ySnappedValue),
+        .withChannelValue(channels().xChannel, x)
+        .withChannelValue(channels().yChannel, y),
     );
   };
 
-  const getRoundedValues = (value: ColorAreaThumbValue): ColorAreaThumbValue => {
-    const x =
-      Math.round((value.x - xMinValue()) / xStep()) * xStep() + xMinValue();
-    const y =
-      Math.round((value.y - yMinValue()) / yStep()) * yStep() + yMinValue();
-
-    return { x, y };
-  };
-
-  const getPercentValues = (xPercent: number, yPercent: number) => {
-    const x = xPercent * (xMaxValue() - xMinValue()) + xMinValue();
-    const y = yPercent * (yMaxValue() - yMinValue()) + yMinValue();
-    const rounded = getRoundedValues({ x, y });
-
-    return {
-      x: clamp(rounded.x, xMinValue(), xMaxValue()),
-      y: clamp(rounded.y, yMinValue(), yMaxValue()),
-    };
-  };
-
-  // A drag's end reports once (Kobalte's `updateDragging`). RAC fix 3 (§5): the
-  // root used to call `onChange` a second time after every drag move; here the
-  // controlled signal is the only caller, so one change is one callback.
-  const setIsDragging = (dragging: boolean) => {
-    if (isDisabled()) {
-      return;
-    }
-
+  // React Stately's `setDragging`: leaving the dragging state reports the end of
+  // the interaction once (`onChangeEnd`), which is what a drag's release and
+  // each PageUp / PageDown / Home / End do. Kobalte's name stays as an alias.
+  const setDragging = (dragging: boolean) => {
     const wasDragging = isDragging();
 
     isDragging.set(dragging);
@@ -347,16 +409,22 @@ export function createColorAreaState(
   };
 
   const resetValue = () => {
-    setValue(initialValue());
+    setValue(defaultValue());
   };
 
   return {
     value: color,
+    defaultValue,
     setValue,
     xValue,
     yValue,
     setXValue,
     setYValue,
+    setColorFromPoint,
+    xChannelStep,
+    yChannelStep,
+    xChannelPageStep,
+    yChannelPageStep,
     xStep,
     yStep,
     xPageSize,
@@ -371,11 +439,15 @@ export function createColorAreaState(
     decrementY,
     channels,
     isDragging,
-    setIsDragging,
+    setDragging,
+    setIsDragging: setDragging,
     getThumbPosition,
     getThumbPercent,
-    setThumbPercent: (value) => updateValue(getPercentValues(value.x, value.y)),
-    setThumbValue: updateValue,
+    getDisplayColor: () => color().withChannelValue("alpha", 1),
+    // `y` is the value fraction (it grows upwards); `setColorFromPoint` wants a
+    // fraction from the top edge, the same point the pointer reports.
+    setThumbPercent: (value) => setColorFromPoint(value.x, 1 - value.y),
+    setThumbValue,
     resetValue,
     isDisabled,
   };

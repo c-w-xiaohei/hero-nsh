@@ -7,7 +7,7 @@
  * is registered as an intentional difference in port sheet §8.
  */
 
-import type { Accessor, JSX } from "nsh";
+import type { Accessor, JSX, ViewStyle } from "nsh";
 
 import type { Color } from "./colors";
 import type { ColorAreaState } from "./create-color-area-state";
@@ -19,6 +19,19 @@ export interface ColorAreaRenderProps {
 
   /** Whether every interaction is blocked. */
   isDisabled: Accessor<boolean>;
+
+  /**
+   * The `base` slot's class string, before the caller's `className` — React
+   * Aria's `useRenderProps` `defaultClassName` (utils.tsx:183-186).
+   */
+  defaultClassName: string;
+
+  /**
+   * The root's own inline style, which it applies before the caller's —
+   * React Aria's `defaultStyle`. Empty here: the gradient and the border are
+   * child layers, so the root writes no style of its own.
+   */
+  defaultStyle: ViewStyle;
 }
 
 /**
@@ -46,6 +59,20 @@ export interface ColorThumbRenderProps {
 
   /** Whether every interaction is blocked (R-018). */
   isDisabled: Accessor<boolean>;
+
+  /**
+   * The `thumb` slot's class string, before the caller's `className` — React
+   * Aria's `useRenderProps` `defaultClassName` (utils.tsx:183-186).
+   */
+  defaultClassName: string;
+
+  /**
+   * The thumb's base inline style (`left` / `top` percentages, the half-size
+   * margins and the display color), which it applies before the caller's —
+   * React Aria's `defaultStyle`. A getter, so a read inside a render function
+   * sees the live position and size.
+   */
+  defaultStyle: ViewStyle;
 }
 
 /** `children` as a node or a render prop, for both parts. */
