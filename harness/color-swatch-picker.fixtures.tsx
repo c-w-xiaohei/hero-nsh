@@ -24,6 +24,14 @@ import { probe } from "@scenario/probe";
  *                 through onLayout; no `layout` prop, so the picker keeps its
  *                 default (T-003)
  *   layout-stack  the same tree with layout="stack" (T-003)
+ *   custom-indicator
+ *                 three presets whose Indicator holds a caller block instead of
+ *                 the default check, with the middle preset selected by
+ *                 defaultValue (X-001): upstream's `.color-swatch-picker__indicator
+ *                 > *` rule scales every direct child to 0 and only raises the
+ *                 selected item's to 1, so a picture taken now has one lime
+ *                 block, on the middle swatch. A port that scales only the
+ *                 default checkmark paints the block on all three.
  *
  * The wrappers in the layout cases are not HeroUI API, which is why the shape
  * is a fixture: a shared scenario has to stay inside HeroUI's own JSX. They
@@ -87,11 +95,31 @@ function LayoutCase(props: { layout?: "grid" | "stack" }) {
   );
 }
 
+const CUSTOM_COLORS = ["#ef4444", "#22c55e", "#3b82f6"] as const;
+
+function CustomIndicatorCase() {
+  return (
+    <Stage>
+      <ColorSwatchPicker aria-label="Color presets" defaultValue="#22c55e">
+        {CUSTOM_COLORS.map((color) => (
+          <ColorSwatchPicker.Item color={color}>
+            <ColorSwatchPicker.Swatch />
+            <ColorSwatchPicker.Indicator>
+              <View class="size-3 rounded-full" style={{ backgroundColor: "#a3e635" }} />
+            </ColorSwatchPicker.Indicator>
+          </ColorSwatchPicker.Item>
+        ))}
+      </ColorSwatchPicker>
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "select");
 
   if (name === "layout-grid") return <LayoutCase />;
   if (name === "layout-stack") return <LayoutCase layout="stack" />;
+  if (name === "custom-indicator") return <CustomIndicatorCase />;
 
   return <SelectCase />;
 }
