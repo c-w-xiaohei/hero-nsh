@@ -139,7 +139,8 @@ export function createColorChannelFieldState(
 
   // --- The channel, read from an empty-safe color ---------------------------
   // An empty field edits the black of its color space, as React Aria's channel
-  // state does; writing a channel then gives the field a real value.
+  // state does: the ranges, the step and the format still come from a color,
+  // while the value itself is `NaN` so the input shows nothing.
   const displayColor = computed<Color>(() => {
     const base = colorValue() ?? parseColor("#000000");
     const requested = props.colorSpace;
@@ -179,12 +180,13 @@ export function createColorChannelFieldState(
   // Every value member is a getter over the color: the number field is fully
   // controlled by the color, so a commit or a step writes the color and the
   // text follows it through NumberField's own formatting effect.
+  //
+  // An empty color is `NaN`, not the black the display is measured against:
+  // upstream passes `colorValue === null ? NaN : …` to `useNumberFieldState`
+  // (`useColorChannelFieldState.ts:52-58`), and NumberField renders `NaN` as an
+  // empty input, so clearing the channel can clear the color.
   const localWrite = (value: number) => {
-    if (Number.isNaN(value)) {
-      return;
-    }
-
-    setColorValue(colorForNumber(value));
+    setColorValue(Number.isNaN(value) ? null : colorForNumber(value));
   };
 
   const validateNumber = (value: number) => {
@@ -197,7 +199,7 @@ export function createColorChannelFieldState(
 
   const numberProps: CreateNumberFieldStateProps = {
     get value() {
-      return channelNumber();
+      return colorValue() === null ? NaN : channelNumber();
     },
     get onChange() {
       return localWrite;

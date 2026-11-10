@@ -228,13 +228,37 @@ function joinedText(readers: readonly (() => string | undefined)[]): string | un
  * its display text, the validation result and the contexts the parts and the
  * already-ported Label / Description / FieldError read.
  *
+ * Upstream picks a different inner component on `channel`'s presence
+ * (`react-aria-components/src/ColorField.tsx:137-143`), so React unmounts the
+ * hex field and mounts a channel field: new state, new signals, fresh focus.
+ * NSH has no reconciliation by component type; an `<If>` keyed by the presence
+ * is its equivalent, so the whole instance lives under one and is disposed and
+ * re-created when `channel` appears or disappears.
+ */
+export function ColorFieldRoot(props: ColorFieldRootProps): JSX.Element {
+  const [local] = split(props, ["channel"] as const);
+
+  const hasChannel = computed(() => local.channel !== undefined);
+
+  return (
+    <If when={hasChannel()} else={<ColorFieldInstance field={props} />}>
+      <ColorFieldInstance field={props} />
+    </If>
+  );
+}
+
+/**
+ * One mounted ColorField. Everything it creates — the state factory, the
+ * contexts, the key bindings, the focus signal — belongs to this instance and
+ * goes away with it, which is what the remount above relies on.
+ *
  * It reads `props.children` exactly once, at the placement inside every
  * provider (the provider exception in the common rules): a `computed` built in
  * the body would evaluate outside them, and the parts would lose the field
  * state. The root itself has no role, like upstream's plain `<div>`.
  */
-export function ColorFieldRoot(props: ColorFieldRootProps): JSX.Element {
-  const [local, rest] = split(props, [
+function ColorFieldInstance(props: { field: ColorFieldRootProps }): JSX.Element {
+  const [local, rest] = split(props.field, [
     "children",
     "className",
     "style",
@@ -297,55 +321,63 @@ export function ColorFieldRoot(props: ColorFieldRootProps): JSX.Element {
   const focusWithin = signal(false);
 
   // --- Field state ----------------------------------------------------------
-  // Which state machine the field runs is fixed when the instance is created,
-  // as React's conditional hook call is: HeroUI renders a different inner
-  // component for `channel` and remounts it when the prop's presence changes.
-  // The props stay live through `local`'s getters.
-  const channelProp = local.channel;
+  // Which state machine the field runs follows `channel`'s presence, as
+  // upstream's conditional component call does. The presence is settled above:
+  // `ColorFieldRoot` remounts this instance when it flips, so the value read
+  // here is the presence this instance was created for. The channel *name*
+  // stays live, as upstream re-reads `props.channel` on every render
+  // (`useColorChannelFieldState.ts:52-84`), so the factory reads it through a
+  // getter and a `hue` → `saturation` change takes effect without a remount.
+  const channelAtMount = local.channel;
 
-  const handle: ColorFieldStateHandle =
-    channelProp === undefined
-      ? createColorFieldState({
-          get value() {
-            return local.value;
-          },
-          get defaultValue() {
-            return local.defaultValue;
-          },
-          get onChange() {
-            return local.onChange;
-          },
-          get validate() {
-            return local.validate;
-          },
-        })
-      : createColorChannelFieldState(
-          {
-            channel: channelProp,
-            get colorSpace() {
-              return local.colorSpace;
-            },
-            get value() {
-              return local.value;
-            },
-            get defaultValue() {
-              return local.defaultValue;
-            },
-            get onChange() {
-              return local.onChange;
-            },
-            get validate() {
-              return local.validate;
-            },
-            get isDisabled() {
-              return local.isDisabled;
-            },
-            get isReadOnly() {
-              return local.isReadOnly;
-            },
-          },
-          focusWithin,
-        );
+  let handle: ColorFieldStateHandle;
+
+  if (channelAtMount === undefined) {
+    handle = createColorFieldState({
+      get value() {
+        return local.value;
+      },
+      get defaultValue() {
+        return local.defaultValue;
+      },
+      get onChange() {
+        return local.onChange;
+      },
+      get validate() {
+        return local.validate;
+      },
+    });
+  } else {
+    handle = createColorChannelFieldState(
+      {
+        get channel() {
+          return local.channel ?? channelAtMount;
+        },
+        get colorSpace() {
+          return local.colorSpace;
+        },
+        get value() {
+          return local.value;
+        },
+        get defaultValue() {
+          return local.defaultValue;
+        },
+        get onChange() {
+          return local.onChange;
+        },
+        get validate() {
+          return local.validate;
+        },
+        get isDisabled() {
+          return local.isDisabled;
+        },
+        get isReadOnly() {
+          return local.isReadOnly;
+        },
+      },
+      focusWithin,
+    );
+  }
 
   const isInvalid = computed(
     () =>
@@ -440,13 +472,16 @@ export function ColorFieldRoot(props: ColorFieldRootProps): JSX.Element {
   const accessibilityHint = computed(() => joinedText([descriptionText, errorText]));
 
   // React Aria's `useColorChannelField` falls back to the channel's own name
-  // ("Hue") when the field has neither `aria-label` nor a Label.
+  // ("Hue") when the field has neither `aria-label` nor a Label. The name is
+  // read live, so a channel-name change renames the field too.
   const channelName = computed(() => {
-    if (channelProp === undefined) {
+    if (channelAtMount === undefined) {
       return undefined;
     }
 
-    return (handle.colorValue() ?? parseColor("#000000")).getChannelName(channelProp);
+    const channel = local.channel ?? channelAtMount;
+
+    return (handle.colorValue() ?? parseColor("#000000")).getChannelName(channel);
   });
 
   const accessibilityLabel = computed(
@@ -508,7 +543,8 @@ export function ColorFieldRoot(props: ColorFieldRootProps): JSX.Element {
   // --- Render props and classes ---------------------------------------------
   const renderProps: ColorFieldRenderProps = {
     state: handle.state,
-    channel: channelProp ?? "hex",
+    // The machine's channel, with a live name (see the state selection above).
+    channel: channelAtMount === undefined ? "hex" : (local.channel ?? channelAtMount),
     isDisabled,
     isInvalid,
     isReadOnly,

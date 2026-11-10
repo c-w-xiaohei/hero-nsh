@@ -5,9 +5,10 @@
  * The port sheet §2 fixes the model: the committed `Color | null` and the
  * input's text are two separate pieces of state. Typing edits only the text;
  * a commit (blur, Enter, a step) parses it and writes the value. Text the
- * hex grammar cannot accept is bounced back into the native input. The value
- * model itself is ColorSwatch's port of Kobalte's `colors/`, imported from
- * that component's public entry so this unit never copies it (port sheet §5).
+ * hex grammar cannot accept is bounced back into the native input; empty text
+ * is a clear, not a rejection. The value model itself is ColorSwatch's port of
+ * Kobalte's `colors/`, imported from that component's public entry so this
+ * unit never copies it (port sheet §5).
  */
 
 import type { Accessor } from "nsh";
@@ -293,35 +294,47 @@ export function createColorFieldState(
   const isInvalid = computed(() => validationErrors().length > 0);
 
   // --- Commands -------------------------------------------------------------
-  const publish = (next: Color | null) => {
-    setColorValue(next);
-    inputValue.set(colorText(next));
-    validationErrors.set(normalizeColorFieldValidation(props.validate?.(next)));
+  // Every command validates the color that is committed *after* its write: a
+  // controlled parent may reject the change, and validation follows the value
+  // the field really holds, as React Aria's render-time validation does.
+  const revalidate = () => {
+    validationErrors.set(normalizeColorFieldValidation(props.validate?.(colorValue())));
   };
 
   const commit = () => {
-    const parsed = parseText(inputValue());
     const current = colorValue();
-    // A text that is not a color ("", "#04") is not a value: the committed one
-    // shows again, as React Aria's commit does (`setInputValue(colorValue …)`).
-    const target = parsed ?? current;
 
-    if (parsed) {
-      if (!current || current.toString("hex") !== parsed.toString("hex")) {
-        setColorValue(parsed);
-      }
-
-      inputValue.set(colorText(parsed));
-    } else {
-      inputValue.set(colorText(current));
+    // Empty text is a clear, not an unparsable value: React Aria's commit
+    // writes `null` first, then shows '' when the write landed and the
+    // committed hex when a controlled parent kept its value
+    // (`useColorFieldState.ts:138-145`).
+    if (inputValue().trim() === "") {
+      setColorValue(null);
+      inputValue.set(colorText(colorValue()));
+      revalidate();
+      return;
     }
 
-    validationErrors.set(normalizeColorFieldValidation(props.validate?.(target)));
-  };
+    const parsed = parseText(inputValue());
 
-  // A field starts from 0: `increment` on an empty field gives "#000001", the
-  // smallest color, mirroring React Aria's spin-button step from zero.
-  const hexInt = (): number => colorValue()?.toHexInt() ?? 0;
+    if (!parsed) {
+      // A half-typed text ("#04") is not a value: the committed one shows again
+      // (`useColorFieldState.ts:148-152`).
+      inputValue.set(colorText(current));
+      return;
+    }
+
+    // Upstream's `safelySetColorValue`: a text that names the committed color
+    // writes nothing, so no `onChange` fires (`:108-117`).
+    if (!current || current.toHexInt() !== parsed.toHexInt()) {
+      setColorValue(parsed);
+    }
+
+    // In a controlled state the parent may ignore the write, so the text comes
+    // from the effective value, not from the parsed one (`:154-159`).
+    inputValue.set(colorText(colorValue()));
+    revalidate();
+  };
 
   const fromHexInt = (value: number): Color => {
     const clamped = Math.max(0, Math.min(0xffffff, value));
@@ -329,10 +342,47 @@ export function createColorFieldState(
     return parseColor(`#${clamped.toString(16).padStart(6, "0")}`);
   };
 
-  const increment = () => publish(fromHexInt(hexInt() + 1));
-  const decrement = () => publish(fromHexInt(hexInt() - 1));
-  const incrementToMax = () => publish(fromHexInt(0xffffff));
-  const decrementToMin = () => publish(fromHexInt(0));
+  /** The color the text names, as upstream's `parsedValue` (`:125-133`). */
+  const stepBase = (): Color | null => parseText(inputValue()) ?? null;
+
+  /**
+   * Writes the color a step produced. Upstream's `safelySetColorValue` skips a
+   * write whose hex integer is the committed one, so a step at a bound fires no
+   * `onChange` (`:108-117`); with no state change there is no render, so the
+   * text is written back by hand (`:170-174`).
+   */
+  const applyStep = (next: Color) => {
+    const current = colorValue();
+
+    if (current !== null && current.toHexInt() === next.toHexInt()) {
+      inputValue.set(colorText(current));
+    } else {
+      setColorValue(next);
+      // The effect above mirrors the committed value into the text; writing it
+      // here as well keeps the step visible in the same pass. A controlled
+      // parent that rejected the write leaves `colorValue` untouched, and the
+      // typed text is kept, exactly as upstream does.
+      const landed = colorValue();
+
+      if (landed !== null && landed.toHexInt() === next.toHexInt()) {
+        inputValue.set(colorText(landed));
+      }
+    }
+
+    revalidate();
+  };
+
+  // Steps start from the text the user typed, not from the committed value
+  // (`useColorFieldState.ts:163-186`); an empty or partial text steps from 0,
+  // the black of the hex range, so the first increment is "#000001".
+  const stepBy = (delta: number) => {
+    applyStep(fromHexInt((stepBase()?.toHexInt() ?? 0) + delta));
+  };
+
+  const increment = () => stepBy(1);
+  const decrement = () => stepBy(-1);
+  const incrementToMax = () => applyStep(fromHexInt(0xffffff));
+  const decrementToMin = () => applyStep(fromHexInt(0));
 
   // --- Public surface -------------------------------------------------------
   const state: ColorFieldState = {
