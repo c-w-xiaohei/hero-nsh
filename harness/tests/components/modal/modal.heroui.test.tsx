@@ -120,18 +120,21 @@ test("X-002 lets a nested Backdrop's own isOpen control its dialog", async () =>
 // X-003: the parts' props extend ViewProps, so a caller's `accessibilityLabel`
 // and `onPress` must reach the underlying view (upstream spreads every prop).
 // Passing them through and dropping them type-checks silently; each label is
-// only found when the part spread its props, and the two presses only report
-// when they did (the Backdrop's own `onPress` used to be replaced by dismiss).
+// only found when the part spread its props, and the presses only report when
+// they did. A real host applies the label a frame after the open.
 test("X-003 forwards View props on every modal part", async () => {
   const app = await openScenario("modal/forwarded-props", { clock: {} });
 
-  for (const part of ["container", "dialog", "header", "heading", "body", "footer"]) {
+  await app.waitFor("label:Forwarded container");
+
+  for (const part of ["container", "header", "heading", "body", "footer"]) {
     expect(app.count(`label:Forwarded ${part}`)).toBe(1);
   }
 
   await app.press("text:Forwarded heading");
   expect(callsOf(app, "headingPress").length).toBe(1);
 
-  await app.press("id:backdrop");
-  expect(callsOf(app, "backdropPress").length).toBe(1);
+  // The Dialog's own handler hears a press on content that has none of its own.
+  await app.press("text:Forwarded props content");
+  expect(callsOf(app, "dialogPress").length).toBe(1);
 });

@@ -400,7 +400,7 @@ function ForwardedProps() {
           onPress={probe("backdropPress")}
         >
           <Modal.Container placement="top" accessibilityLabel="Forwarded container">
-            <Modal.Dialog accessibilityLabel="Forwarded dialog">
+            <Modal.Dialog onPress={probe("dialogPress")}>
               <Modal.CloseTrigger />
               <Modal.Header accessibilityLabel="Forwarded header">
                 <Modal.Heading
@@ -423,6 +423,8 @@ function ForwardedProps() {
     </Stage>
   );
 }
+
+
 
 /* -------------------------------------------------------------------------------------------------
  * Kobalte texts
