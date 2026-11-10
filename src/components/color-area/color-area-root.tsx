@@ -143,6 +143,18 @@ export interface ColorAreaRootProps
   /** A DOM id upstream; maps to `nativeID`, the name other elements refer to. */
   id?: string;
 
+  /** Accepted, no effect: NSH has no RAC slot context. */
+  slot?: string;
+
+  /** Accepted, no effect: NSH has no DOM render function to replace the element. */
+  render?: unknown;
+
+  /** Accepted, no effect: a `<div>`'s native tooltip does not exist in NSH. */
+  title?: string;
+
+  /** Accepted, no effect: NSH moves focus between pressables, not through a `tabIndex`. */
+  tabIndex?: number;
+
   /** The accessible name of the group, and the base of the thumb's name. */
   "aria-label"?: string;
 

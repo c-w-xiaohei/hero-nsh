@@ -81,6 +81,15 @@ export interface ColorAreaThumbProps
   /** Every hover change, in both directions. */
   onHoverChange?: (isHovering: boolean) => void;
 
+  /** A DOM id upstream; maps to `nativeID`. */
+  id?: string;
+
+  /** Accepted, no effect: a `<div>`'s native tooltip does not exist in NSH. */
+  title?: string;
+
+  /** Accepted, no effect: NSH moves focus between pressables, not through a `tabIndex`. */
+  tabIndex?: number;
+
   /** Forwarded to the thumb `View` as a callback, never as a ref store. */
   ref?: (node: ViewRef) => void;
 }
@@ -111,6 +120,8 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
     "onMouseEnter",
     "onMouseLeave",
     "ref",
+    "id",
+    "nativeID",
     "focusable",
     "role",
     "aria-label",
@@ -370,6 +381,7 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
         context.setThumbRef(node);
         local.ref?.(node);
       }}
+      nativeID={local.id ?? local.nativeID}
       // R-023: the role, the value and the Tab stop live on the thumb itself,
       // where React Aria keeps them on the horizontal hidden input. A disabled
       // thumb leaves the Tab order.
