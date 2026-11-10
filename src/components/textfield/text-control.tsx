@@ -349,6 +349,18 @@ export interface TextControlConfig {
 
   /** `rows` maps to a height (`TextArea` only). */
   usesRows: boolean;
+
+  /**
+   * Whether the control appends its own hover / focus / invalid / disabled
+   * classes (`R-012 … R-015` in `text-control.tsx`). `false` when the owner
+   * draws those states on a shell it owns: `InputGroup` paints the fill, the
+   * ring and the outline on the group and keeps the control transparent, so
+   * both would otherwise draw the same states twice. The value wiring, the
+   * attribute mappings and the inline style are unaffected.
+   *
+   * @default true
+   */
+  stateClasses?: boolean;
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -759,6 +771,13 @@ export function renderTextControl(
   };
 
   const classes = computed(() => {
+    // An owner that draws the states on a shell of its own (InputGroup) keeps
+    // only the slot classes and the caller's `className`; the control would
+    // otherwise paint a second focus ring and a second invalid outline.
+    if (config.stateClasses === false) {
+      return joinClassNames(baseClass(), resolvedClassName());
+    }
+
     const secondary = variant() === "secondary";
     const isFocused = focused();
     const invalid = isInvalid();

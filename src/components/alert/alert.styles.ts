@@ -43,7 +43,11 @@ export const alertVariants = tv({
     // (port sheet §8).
     base: "flex w-full flex-row items-start justify-start gap-4 bg-surface px-4 py-3 shadow-surface dark:shadow-surface-dark rounded-3xl",
     // R-006: `.alert__content` → `flex h-full grow flex-col items-start`.
-    content: "flex h-full grow flex-col items-start",
+    // NSH's `grow` leaves `flex-shrink` at 0; upstream keeps CSS's default 1, so
+    // an Alert with a trailing action could not give the text any room at
+    // narrow widths and the description was clipped. `flex-auto` writes grow
+    // and shrink together and keeps the automatic basis (skill §1.2).
+    content: "flex h-full flex-auto flex-col items-start",
     // R-007: `.alert__indicator` → `flex items-center justify-center p-1
     // select-none` (padding 4; `select-none` is NSH's `userSelect: "none"` and
     // reaches the texts inside).
