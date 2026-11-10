@@ -51,6 +51,20 @@ function layoutOf(app: App, name: string): LayoutCall {
   return found;
 }
 
+// X-001: plain children must stay live, not be frozen at their first read.
+// src/components/tag/tag-root.tsx:197-200 (TagContent) and
+// src/components/tag/tag-children.tsx:11-33
+test("X-001 keeps plain tag children live when a signal changes", async () => {
+  const app = await openFixture("live-children");
+
+  expect(app.shows("text:One")).toBe(true);
+
+  await app.press("role:button[Update]");
+
+  expect(app.shows("text:Updated")).toBe(true);
+  expect(app.count("text:One")).toBe(0);
+});
+
 // heroui/packages/react/tests/components/tag/tag.test.tsx:23
 test("T-001 renders with row role and accessible name", async () => {
   const app = await openScenario("tag/default");

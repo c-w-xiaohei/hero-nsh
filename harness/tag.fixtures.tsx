@@ -48,6 +48,10 @@ import { probe } from "@scenario/probe";
  *   aria-label                 the group's aria-label names the grid (T-038)
  *   row-aria-label             a tag's aria-label overrides its textValue
  *                              (T-036)
+ *   live-children              a tag whose plain children read a signal, plus
+ *                              an Update button (X-001)
+ *   press-log                  single News / Travel, the rows' press lifecycle
+ *                              routed to probes (X-002)
  *
  * The focus marker `▶` stands in for `document.activeElement`: focus is
  * virtual, the row that holds `focusedKey` reads it from `isFocused`. The
@@ -99,12 +103,18 @@ function MarkedRow(props: {
   label: string;
   isDisabled?: boolean;
   removes?: boolean;
+  presses?: boolean;
 }) {
   return (
     <Tag
       id={props.id}
       textValue={props.label}
       isDisabled={props.isDisabled}
+      onPress={props.presses ? probe("press") : undefined}
+      onPressStart={props.presses ? probe("pressStart") : undefined}
+      onPressUp={props.presses ? probe("pressUp") : undefined}
+      onPressEnd={props.presses ? probe("pressEnd") : undefined}
+      onPressChange={props.presses ? probe("pressChange") : undefined}
     >
       {(values) => [
         <Text>{props.label}</Text>,
@@ -288,6 +298,40 @@ function ItemsMapped() {
             {item.name}
           </Tag>
         )}
+      </TagGroup.List>
+    </TagGroup>
+  );
+}
+
+function LiveChildren() {
+  const label = signal("One");
+
+  return (
+    <View class="flex flex-col gap-4">
+      <TagGroup aria-label="Options" selectionMode="single">
+        <TagGroup.List>
+          <Tag id="one" textValue="One">
+            {label()}
+          </Tag>
+        </TagGroup.List>
+      </TagGroup>
+      <View
+        role="button"
+        class="px-3 py-1 bg-default"
+        onPress={() => label.set("Updated")}
+      >
+        <Text>Update</Text>
+      </View>
+    </View>
+  );
+}
+
+function PressLog() {
+  return (
+    <TagGroup aria-label="Options" selectionMode="single">
+      <TagGroup.List>
+        <MarkedRow id="news" label="News" presses />
+        <MarkedRow id="travel" label="Travel" presses />
       </TagGroup.List>
     </TagGroup>
   );
@@ -484,6 +528,14 @@ function Fixture() {
         </TagGroup.List>
       </TagGroup>
     );
+  }
+
+  if (name === "live-children") {
+    return <LiveChildren />;
+  }
+
+  if (name === "press-log") {
+    return <PressLog />;
   }
 
   return <MarkedGroup rows={ONE_TWO_THREE} />;

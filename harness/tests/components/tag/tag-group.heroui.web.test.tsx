@@ -31,6 +31,27 @@ function openFixture(name: string, options_: ScenarioOptions = {}) {
   });
 }
 
+// X-002: a keyboard activation of the focused tag must run the tag's press
+// lifecycle, not only the selection. src/components/tag/tag-group-list.tsx:466-480,
+// src/components/tag/tag-root.tsx:392-427
+test("X-002 fires the tag's press lifecycle on Space and Enter", async () => {
+  for (const key of ["space", "enter"]) {
+    const app = await openFixture("press-log", { platform: "web" });
+
+    await app.keyboard.press("tab");
+
+    expect(app.count("role:row[News] >> text:▶")).toBe(1);
+
+    await app.keyboard.press(key);
+
+    expect(callsOf(app, "pressStart")).toHaveLength(1);
+    expect(callsOf(app, "pressUp")).toHaveLength(1);
+    expect(callsOf(app, "pressEnd")).toHaveLength(1);
+    expect(callsOf(app, "pressChange")).toEqual([[true], [false]]);
+    expect(callsOf(app, "press")).toHaveLength(1);
+  }
+});
+
 // heroui/packages/react/tests/components/tag-group/tag-group.test.tsx:169
 // Ported (port sheet T-015): upstream focuses the first row directly; here Tab
 // enters the grid and lands on the first row, whose delete binding then runs.
