@@ -51,3 +51,4 @@ export * from "./components/tabs";
 export * from "./components/time-field";
 export * from "./components/input-otp";
 export * from "./components/radio-group";
+export * from "./components/card";
