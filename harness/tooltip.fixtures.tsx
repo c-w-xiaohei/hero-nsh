@@ -77,6 +77,27 @@ function ContentHover() {
 function Fixture() {
   const name = String(host.params.case ?? "close-delay");
 
+  if (name === "position-props") {
+    const variant = String(host.params.variant ?? "default");
+
+    return (
+      <View class="flex-1 items-start bg-background p-6">
+        <Tooltip defaultOpen delay={0}>
+          <Button>Position anchor</Button>
+          <Tooltip.Content
+            showArrow
+            crossOffset={variant === "cross" ? 36 : undefined}
+            arrowBoundaryOffset={variant === "boundary" ? 28 : undefined}
+            placement="top start"
+          >
+            <Tooltip.Arrow testID="position-arrow" />
+            Position tip
+          </Tooltip.Content>
+        </Tooltip>
+      </View>
+    );
+  }
+
   if (name === "warm-swap") return <WarmSwap />;
   if (name === "content-hover") return <ContentHover />;
 
