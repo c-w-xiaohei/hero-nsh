@@ -45,6 +45,7 @@ import { radioScenarios } from "./radio.scenarios";
 import { textFieldScenarios } from "./textfield.scenarios";
 import { inputScenarios } from "./input.scenarios";
 import { textAreaScenarios } from "./textarea.scenarios";
+import { comboBoxScenarios } from "./combo-box.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -93,4 +94,5 @@ export const scenarios: Record<string, Component> = {
   ...textFieldScenarios,
   ...inputScenarios,
   ...textAreaScenarios,
+  ...comboBoxScenarios,
 };
