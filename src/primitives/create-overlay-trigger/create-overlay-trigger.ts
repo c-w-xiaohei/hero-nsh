@@ -65,6 +65,38 @@ export interface OverlayTriggerContextValue {
 
   /** The registered trigger, if any. */
   triggerRef: Accessor<ViewRef | undefined>;
+
+  /**
+   * The press channel a trigger part other than the owner can use (dropdown
+   * port sheet §5, second change). A root that needs to tell a keyboard press
+   * from a pointer press, or that opens on something other than a press,
+   * supplies it; `Button` calls it instead of `toggle()` when it is present.
+   * Absent elsewhere, where a press always toggles.
+   */
+  triggerPress?: (source: "keyboard" | "pointer") => void;
+
+  /**
+   * The long-press half of the same channel: a root whose `trigger` mode opens
+   * on a held press (Dropdown's `longPress`) supplies it, and `Button` calls it
+   * when a press is held. Absent elsewhere.
+   */
+  triggerLongPress?: () => void;
+
+  /**
+   * The key half of the same channel (dropdown port sheet §5): the trigger's
+   * ArrowDown opens the menu on its first row, ArrowUp on its last. `keys`
+   * names the family that asked, because upstream gates them differently
+   * (`useMenuTrigger.ts:88-100`): `"arrow"` (plain ArrowDown / ArrowUp) does
+   * nothing while `trigger` is `longPress`, `"altArrow"` (Alt+ArrowDown,
+   * Alt+ArrowUp) opens in every mode, and `"activation"` (Alt+Enter,
+   * Alt+Space) opens only in `longPress` mode, on the first row — upstream's
+   * `open(trigger === 'longPress', e, 'first')`. Absent elsewhere, so no other
+   * trigger part binds keys.
+   */
+  triggerKeyOpen?: (
+    strategy: "first" | "last",
+    keys?: "arrow" | "altArrow" | "activation",
+  ) => void;
 }
 
 export interface CreateOverlayTriggerResult {

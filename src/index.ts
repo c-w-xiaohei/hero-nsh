@@ -43,3 +43,4 @@ export * from "./components/disclosure";
 export * from "./components/disclosure-group";
 export * from "./components/menu";
 export * from "./components/checkbox";
+export * from "./components/dropdown";

@@ -115,6 +115,23 @@ export interface MenuItemRootProps<T = unknown> extends MenuItemVariants {
   /** Whether the row's submenu is open; feeds `isOpen` and `accessibilityState.expanded`. */
   "aria-expanded"?: boolean | "true" | "false";
 
+  /**
+   * Registers the row as a submenu trigger (dropdown port sheet §5, first
+   * change): the menu root calls it on ArrowRight while this row holds the
+   * virtual focus, and the row's own activation calls it on a press. `focusFirst`
+   * is the keyboard entry, which also takes the submenu's focus. Absent means
+   * the row is not a submenu trigger.
+   */
+  openSubmenu?: (focusFirst?: boolean) => void;
+
+  /**
+   * Closes the submenu this row opened and keeps the focus on the row
+   * (`useSubmenuTrigger.ts:188-210`); returns whether a submenu was open, so
+   * ArrowLeft falls through to the collection when this row's submenu is
+   * already closed. Absent on rows without a submenu.
+   */
+  closeSubmenu?: () => boolean;
+
   isDisabled?: boolean;
 
   /** Overrides the Section's and the Menu's value for this row (section 1). */
@@ -260,6 +277,8 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     "aria-describedby",
     "aria-haspopup",
     "aria-expanded",
+    "openSubmenu",
+    "closeSubmenu",
     "aria-hidden",
     "isDisabled",
     "variant",
@@ -511,6 +530,12 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     }
 
     if (hasSubmenu()) {
+      // A submenu trigger never acts: it opens its submenu instead. React Aria
+      // opens on press start for the keyboard and on the press for a pointer
+      // (`useSubmenuTrigger.ts:233-250`), and the row carries no action; the
+      // keyboard entry also takes the focus to the submenu's first row.
+      local.openSubmenu?.(source === "keyboard");
+
       return;
     }
 
@@ -553,6 +578,12 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     disabled: () => local.isDisabled === true || list.isDisabledKey(key),
     ref: () => node,
     activate,
+    openSubmenu: local.openSubmenu
+      ? (focusFirst?: boolean) => local.openSubmenu?.(focusFirst)
+      : undefined,
+    closeSubmenu: local.closeSubmenu
+      ? () => local.closeSubmenu?.() ?? false
+      : undefined,
   };
 
   const register = section?.register ?? list.register;

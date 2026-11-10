@@ -41,6 +41,23 @@ export interface MenuItemDescriptor {
   ref: () => ViewRef | undefined;
 
   /**
+   * Present when the row opens a submenu (port sheet dropdown §5, first
+   * change): ArrowRight on the focused row and a press on the row itself call
+   * it instead of acting. `focusFirst` is the keyboard entry, which also takes
+   * the focus (upstream `openSubmenu('first')`). Absent on every other row,
+   * which keeps Menu's own ArrowRight and activation behavior.
+   */
+  openSubmenu?: (focusFirst?: boolean) => void;
+
+  /**
+   * Present on the same rows: ArrowLeft while this row holds the focus closes
+   * the submenu it opened and keeps the focus on the row
+   * (`useSubmenuTrigger.ts:188-210`). It answers whether a submenu was open, so
+   * a closed one lets the key fall through. Absent elsewhere.
+   */
+  closeSubmenu?: () => boolean;
+
+  /**
    * The one activation entry: a pointer press, Return / Space on the focused
    * root, and the keymap bindings all arrive here. It runs the selection
    * half, then the action half, then the close decision (port sheet section 5).

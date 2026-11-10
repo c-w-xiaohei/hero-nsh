@@ -123,6 +123,32 @@ export interface MenuRootProps<T = unknown> extends MenuVariants {
   shouldFocusWrap?: boolean;
 
   /**
+   * Whether focusing the menu root selects its first entry (default `true`).
+   * React Aria's Menu leaves no entry focused when the root takes focus with
+   * `autoFocus` off; Dropdown passes `false` so the first arrow lands on the
+   * first row, as upstream (dropdown port sheet §5, fourth change). `"last"`
+   * enters from the other end, which is React Aria's `focusStrategy: "last"`
+   * (`focusIn` on `ArrowUp`).
+   */
+  focusFirstItemOnFocus?: boolean | "first" | "last";
+
+  /**
+   * Called by ArrowLeft while the menu holds the keyboard focus (dropdown port
+   * sheet §5, first change): the owner closes its submenu and moves focus back
+   * instead of the key falling through to the collection. Absent means the
+   * arrow keeps its collection behavior.
+   */
+  onArrowLeft?: () => void;
+
+  /**
+   * While this returns `true`, the focused row is dropped. A menu whose layer
+   * unmounts on close (React Aria's popover) starts every open fresh; one that
+   * stays mounted while closed (Dropdown's, port sheet §6.1) would reopen on
+   * the row the last open left behind. Absent means the focused row is kept.
+   */
+  resetFocusKeyWhen?: () => boolean;
+
+  /**
    * `"clearSelection"` upstream. In practice React Aria's `useMenu` skips the
    * Escape selection clearing (Escape closes the menu), so both values behave
    * the same here; accepted, no effect.
@@ -259,6 +285,9 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     "renderEmptyState",
     "autoFocus",
     "shouldFocusWrap",
+    "focusFirstItemOnFocus",
+    "onArrowLeft",
+    "resetFocusKeyWhen",
     "escapeKeyBehavior",
     "dragAndDropHooks",
     "onScroll",
@@ -377,6 +406,9 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     // `false`, so the root states it explicitly (port sheet section 1).
     shouldFocusWrap: () => local.shouldFocusWrap ?? true,
     disallowEmptySelection,
+    // `focusFirstItemOnFocus: "last"` is React Aria's `focusStrategy: "last"`:
+    // entering the collection from the end picks its last row.
+    enterFrom: () => (local.focusFirstItemOnFocus === "last" ? "end" : "start"),
     focusCollection: focusRoot,
   });
 
@@ -465,7 +497,10 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
       modality.onFocus();
     }
 
-    selectableList.onFocusIn();
+    if (local.focusFirstItemOnFocus !== false) {
+      selectableList.onFocusIn();
+    }
+
     local.onFocus?.();
   };
 
@@ -474,6 +509,16 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     selectableList.onFocusOut();
     local.onBlur?.();
   };
+
+  // A collection that stays mounted while its layer closes (Dropdown's popover,
+  // port sheet §6.1) must drop the row the last open focused; React Aria
+  // unmounts the Menu on close, which drops it. Re-arms `focusFirstItemOnFocus`
+  // for the next open instead of starting on a stale row.
+  effect(() => {
+    if (local.resetFocusKeyWhen?.() === true) {
+      manager().setFocusedKey(undefined);
+    }
+  });
 
   // R-014: a keyboard activation arrives as a press on the focused view; the
   // pressed key drives the focused row's pressed state (a real pointer press
@@ -518,15 +563,74 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
   //
   // Keymap matches the modifiers exactly, so the Shift and Control forms of a
   // shortcut are separate bindings; each one forwards its own modifiers.
+  //
+  // Right and left first ask the focused row whether it owns the key (dropdown
+  // port sheet §5, first change): a submenu trigger opens on ArrowRight, and a
+  // menu inside a submenu closes on ArrowLeft. Both return without moving the
+  // focus; every other row falls through to the collection unchanged.
+  const openFocusedSubmenu = (): boolean => {
+    const key = manager().focusedKey();
+    const descriptor = key == null ? undefined : findItemDescriptor(descriptors(), key);
+
+    if (descriptor?.openSubmenu) {
+      modality.setKeyboardModality();
+      // The keyboard entry takes the submenu's focus (`openSubmenu('first')`).
+      descriptor.openSubmenu(true);
+
+      return true;
+    }
+
+    return false;
+  };
+
+  const closeWithArrowLeft = (): boolean => {
+    // An open submenu belongs to the row that opened it: ArrowLeft closes it
+    // and keeps the focus on that row (`useSubmenuTrigger.ts:188-210`). Only
+    // then does the menu's own `onArrowLeft` (a submenu closing itself) run.
+    const key = manager().focusedKey();
+    const descriptor = key == null ? undefined : findItemDescriptor(descriptors(), key);
+
+    if (descriptor?.closeSubmenu?.() === true) {
+      modality.setKeyboardModality();
+
+      return true;
+    }
+
+    if (!local.onArrowLeft) {
+      return false;
+    }
+
+    modality.setKeyboardModality();
+    local.onArrowLeft();
+
+    return true;
+  };
+
   const navigationBindings: Record<string, () => void> = {
     down: () => runKey("down"),
     "shift+down": () => runKey("down", { shift: true }),
     up: () => runKey("up"),
     "shift+up": () => runKey("up", { shift: true }),
-    left: () => runKey("left"),
-    "shift+left": () => runKey("left", { shift: true }),
-    right: () => runKey("right"),
-    "shift+right": () => runKey("right", { shift: true }),
+    left: () => {
+      if (!closeWithArrowLeft()) {
+        runKey("left");
+      }
+    },
+    "shift+left": () => {
+      if (!closeWithArrowLeft()) {
+        runKey("left", { shift: true });
+      }
+    },
+    right: () => {
+      if (!openFocusedSubmenu()) {
+        runKey("right");
+      }
+    },
+    "shift+right": () => {
+      if (!openFocusedSubmenu()) {
+        runKey("right", { shift: true });
+      }
+    },
     home: () => runKey("home"),
     "shift+home": () => runKey("home", { shift: true }),
     end: () => runKey("end"),
