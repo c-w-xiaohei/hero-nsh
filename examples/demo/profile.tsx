@@ -80,7 +80,9 @@ function About() {
           Mathematician, occasional programmer, and the person who keeps the billing runbooks in
           order. Ask me about invoices, exports, or why the March report is late.
         </Typography.Paragraph>
-        <Typography.Code>timezone: Europe/Berlin</Typography.Code>
+        <View class="self-start rounded-md bg-default px-1.5 py-0.5">
+          <Text class="font-mono text-sm text-foreground">timezone: Europe/Berlin</Text>
+        </View>
       </Card.Content>
     </Card>
   );

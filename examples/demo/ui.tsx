@@ -39,10 +39,10 @@ export function Section(props: { title: string; children?: JSX.Element }) {
   );
 }
 
-/** A responsive card grid: one column on phones, three from the sm breakpoint. */
+/** A responsive card grid: one column on phones, three from the md breakpoint. */
 export function Grid(props: { children?: JSX.Element; cols?: string }) {
   return (
-    <View class={`grid grid-cols-1 gap-4 ${props.cols ?? "sm:grid-cols-3"}`}>
+    <View class={`grid grid-cols-1 gap-4 ${props.cols ?? "md:grid-cols-3"}`}>
       {props.children}
     </View>
   );

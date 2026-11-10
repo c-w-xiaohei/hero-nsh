@@ -36,8 +36,9 @@ const SORTS = [
 
 function Filters() {
   return (
-    <View class="flex-row flex-wrap items-end gap-3">
-      <SearchField className="w-full sm:w-[240px]" name="search">
+    <View class="w-full gap-4 rounded-3xl bg-surface p-4 shadow-surface dark:shadow-surface-dark lg:w-[240px] lg:shrink-0">
+      <Text class="text-sm font-medium text-foreground">Filters</Text>
+      <SearchField className="w-full" name="search">
         <Label>Search orders</Label>
         <SearchField.Group>
           <SearchField.SearchIcon />
@@ -46,7 +47,7 @@ function Filters() {
         </SearchField.Group>
       </SearchField>
 
-      <Select className="w-full sm:w-[180px]" defaultSelectedKey="newest">
+      <Select className="w-full" defaultSelectedKey="newest">
         <Label>Sort by</Label>
         <Select.Trigger>
           <Select.Value />
@@ -172,19 +173,21 @@ function App() {
         </Tabs.ListContainer>
 
         <Tabs.Panel className="gap-4 pt-4" id="all">
-          <Filters />
-          <View class="rounded-3xl bg-surface p-2 shadow-surface dark:shadow-surface-dark">
-            <View class="flex-row items-center justify-between px-3 pb-1 pt-2">
-              <Text class="text-xs font-medium text-muted">Order</Text>
-              <Text class="text-xs font-medium text-muted">Amount</Text>
-            </View>
-            <OrderList />
-          </View>
-          <View class="flex-row items-center gap-3">
-            <Skeleton className="h-10 w-10 rounded-full" />
-            <Text class="text-sm text-muted">Loading more orders…</Text>
-          </View>
-          <Pagination>
+          <View class="flex-col gap-4 lg:flex-row lg:items-start">
+            <Filters />
+            <View class="flex-1 gap-4">
+              <View class="rounded-3xl bg-surface p-2 shadow-surface dark:shadow-surface-dark">
+                <View class="flex-row items-center justify-between px-3 pb-1 pt-2">
+                  <Text class="text-xs font-medium text-muted">Order</Text>
+                  <Text class="text-xs font-medium text-muted">Amount</Text>
+                </View>
+                <OrderList />
+              </View>
+              <View class="flex-row items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <Text class="text-sm text-muted">Loading more orders…</Text>
+              </View>
+              <Pagination>
             <Pagination.Content>
               <Pagination.Item>
                 <Pagination.Previous aria-label="Previous page">
@@ -205,8 +208,10 @@ function App() {
                   <Pagination.NextIcon />
                 </Pagination.Next>
               </Pagination.Item>
-            </Pagination.Content>
-          </Pagination>
+                </Pagination.Content>
+              </Pagination>
+            </View>
+          </View>
         </Tabs.Panel>
 
         <Tabs.Panel className="pt-4" id="open">

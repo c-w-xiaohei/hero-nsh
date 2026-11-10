@@ -102,10 +102,29 @@ function TwoFactor() {
 
 function App() {
   return (
-    <View class="flex-1 items-center justify-center bg-background-secondary p-4 sm:p-8">
-      <View class="w-full flex-row flex-wrap items-start justify-center gap-6">
-        <SignIn />
-        <TwoFactor />
+    <View class="flex-1 flex-row bg-background-secondary">
+      <View class="hidden flex-1 flex-col justify-between bg-accent p-10 md:flex">
+        <Text class="text-xl font-semibold text-accent-foreground">Acme</Text>
+        <View class="max-w-[380px] gap-3">
+          <Text class="text-4xl font-semibold leading-tight text-accent-foreground">
+            Welcome back.
+          </Text>
+          <Text class="text-sm text-accent-foreground opacity-80">
+            Orders, customers and billing for the whole team, in one workspace.
+          </Text>
+        </View>
+        <Text class="text-xs text-accent-foreground opacity-70">© 2026 Acme Inc.</Text>
+      </View>
+
+      <View class="flex-1 items-center justify-center p-4 sm:p-8">
+        <View class="w-full max-w-[400px] gap-4">
+          <View class="items-center gap-1 md:hidden">
+            <Text class="text-xl font-semibold text-foreground">Acme</Text>
+            <Text class="text-sm text-muted">Sign in to your workspace</Text>
+          </View>
+          <SignIn />
+          <TwoFactor />
+        </View>
       </View>
     </View>
   );
