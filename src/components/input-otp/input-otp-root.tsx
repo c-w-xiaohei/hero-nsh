@@ -613,11 +613,31 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
   };
 
   const handleChange = (event: { value: string }) => {
-    // Upstream's `onChange` holds the candidate to `maxLength` before anything
-    // else; the host's own limit is not enough (the web target inserts past it).
-    const candidate = event.value.slice(0, maxLength());
     const previous = untracked(() => text());
     const previousSelection = untracked(() => selection());
+
+    // Upstream's caret and its model are the same DOM selection, so a digit
+    // typed over the selected cell replaces it. NSH's input keeps its own caret
+    // for insertion: `app.type` writes at the end, and a programmatic
+    // `setSelection` on a full field does not move it (measured on headless and
+    // the web). A pure append from the host that arrives while this field's
+    // selection covers cells is therefore replayed on that selection, which is
+    // how the model sees the edit; otherwise the host's text is the edit.
+    const appended =
+      event.value.length > previous.length && event.value.startsWith(previous)
+        ? event.value.slice(previous.length)
+        : undefined;
+    const coversCells = previousSelection.start !== previousSelection.end;
+    const lower = Math.min(previousSelection.start, previousSelection.end);
+    const upper = Math.max(previousSelection.start, previousSelection.end);
+    const edited =
+      appended !== undefined && coversCells
+        ? previous.slice(0, lower) + appended + previous.slice(upper)
+        : event.value;
+
+    // Upstream's `onChange` holds the candidate to `maxLength` before anything
+    // else; the host's own limit is not enough (the web target inserts past it).
+    const candidate = edited.slice(0, maxLength());
 
     const accepted = accept(candidate);
 
@@ -866,7 +886,12 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
             // Upstream's input has no Enter handler: Return neither blurs nor
             // moves the selection (the sibling ports' ruling, port sheet §5).
             submitBehavior="submit"
-            maxLength={maxLength()}
+            // R-§2: the host does not cap the text. Upstream's `<input>` also
+            // holds to `maxLength`, but its caret selection replaces the last
+            // cell before the limit is reached; NSH's host counts the raw
+            // insertion, so a cap here would drop the keystroke and the
+            // type-over could never be computed. `handleChange` holds the code
+            // to `maxLength` (upstream's `onChange` does the same slice).
             placeholder={local.placeholder}
             autoFocus={local.autoFocus}
             autoComplete={autoComplete()}
