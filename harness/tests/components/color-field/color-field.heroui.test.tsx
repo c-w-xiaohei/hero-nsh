@@ -224,7 +224,9 @@ test("S-002 should step a channel field within its range", async () => {
 
 // port sheet 4b.2 S-003 (React Aria `useKeyboard`: Enter commits): the return
 // key commits the typed text without a blur first, and the committed text is
-// normalized to the uppercase hex form.
+// normalized to the uppercase hex form. The `controlled` fixture writes the
+// signal back, so the normalized text comes from the accepted value, not from
+// the field echoing the requested color.
 test("S-003 should commit on Enter without leaving the field", async () => {
   const app = await openCase("controlled");
 
@@ -236,4 +238,59 @@ test("S-003 should commit on Enter without leaving the field", async () => {
   expect(calls.length).toBeGreaterThanOrEqual(1);
   expect(String(calls[calls.length - 1][0]).toLowerCase()).toBe("#ef4444");
   expect(app.value("id:color-input")).toBe("#EF4444");
+});
+
+// Regression X-001, evidence: src/components/color-field/create-color-field-state.ts:302-320
+// React Aria's `commit` treats empty text as a clear, not as the unparsable
+// fallback: it writes null through the controllable setter, so `onChange(null)`
+// fires, and then shows '' when the parent accepts the write or the committed
+// hex when it rejects it
+// (react-spectrum/packages/@react-stately/color/src/useColorFieldState.ts
+// `commit`; useColorFieldState.test.js "clears the value when the input is
+// cleared"). The old probe on `controlled` (#0485F7) recorded no onChange and
+// left the committed text, so an empty commit never reached the parent.
+test("X-001 clears the value on an empty commit", async () => {
+  const accepted = await openCase("controlled");
+
+  await accepted.clear("id:color-input");
+  await accepted.type("id:outside", "x");
+
+  const acceptedCalls = callsOf(accepted, "onChange");
+  expect(acceptedCalls.length).toBeGreaterThanOrEqual(1);
+  expect(acceptedCalls[acceptedCalls.length - 1][0]).toBeNull();
+  expect(accepted.value("id:color-input")).toBe("");
+
+  // A controlled parent that ignores the write still sees the clear, and the
+  // field falls back to the color it is still showing.
+  const rejected = await openCase("controlled-reject");
+
+  await rejected.clear("id:color-input");
+  await rejected.type("id:outside", "x");
+
+  const rejectedCalls = callsOf(rejected, "onChange");
+  expect(rejectedCalls.length).toBeGreaterThanOrEqual(1);
+  expect(rejectedCalls[rejectedCalls.length - 1][0]).toBeNull();
+  expect(rejected.value("id:color-input")).toBe("#0485F7");
+});
+
+// Regression X-002, evidence: src/components/color-field/create-color-field-state.ts:296-300,322-335
+// React Aria steps from `parsedValue`, the text the user typed, not from the
+// committed `colorValue`; it writes the input text only when the stepped color
+// equals the committed one, so a controlled parent that rejects the edit keeps
+// the typed text
+// (react-spectrum/packages/@react-stately/color/src/useColorFieldState.ts
+// `increment` / `safelySetColorValue`). On `controlled-reject` (#0485F7) the
+// old code stepped to #0485F8 and rewrote the text; the typed #FF0000 must step
+// to #FF0001 and stay in the input.
+test("X-002 steps from the typed text, not the committed color", async () => {
+  const app = await openCase("controlled-reject");
+
+  await app.clear("id:color-input");
+  await app.type("id:color-input", "#FF0000");
+  await app.keyboard.press("arrowup");
+
+  const calls = callsOf(app, "onChange");
+  expect(calls.length).toBeGreaterThanOrEqual(1);
+  expect(String(calls[calls.length - 1][0]).toLowerCase()).toBe("#ff0001");
+  expect(app.value("id:color-input")).toBe("#FF0000");
 });

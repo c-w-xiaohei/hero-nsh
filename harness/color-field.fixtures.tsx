@@ -29,10 +29,15 @@ import { probe } from "@scenario/probe";
  *   disabled           isDisabled, defaultValue #0485F7, onChange probe, input
  *                      testID color-input (T-010)
  *   prefix-suffix      Prefix "#", Suffix "%" as raw strings (T-011)
- *   controlled         `value` lives in a signal; onChange records the hex
+ *   controlled         `value` lives in a signal and onChange writes it back,
+ *                      a real controlled field; onChange also records the hex
  *                      string; the `set-value` button swaps #0485F7 for
  *                      #EF4444; the `outside` input is the blur target
- *                      (T-005, T-006, S-003)
+ *                      (T-005, T-006, S-003, X-001)
+ *   controlled-reject  the same shape, but nothing writes the signal: a
+ *                      controlled parent that ignores every edit, so the text
+ *                      only changes through the field's own writes
+ *                      (X-001, X-002)
  *   channel-hue        channel="hue" colorSpace="hsl", controlled
  *                      hsl(200, 50%, 50%), onChange records the hue channel
  *                      (T-007)
@@ -121,15 +126,18 @@ function PrefixSuffixCase() {
   );
 }
 
-function ControlledCase() {
-  const value = signal(parseColor("#0485F7"));
+function ControlledCase(props: { writes: boolean }) {
+  const value = signal<ColorValue | null>(parseColor("#0485F7"));
 
   return (
     <Stage>
       <ColorField
         name="color"
         value={value()}
-        onChange={(color: ColorValue | null) => probe("onChange")(color ? color.toString("hex") : null)}
+        onChange={(color: ColorValue | null) => {
+          if (props.writes) value.set(color);
+          probe("onChange")(color ? color.toString("hex") : null);
+        }}
       >
         <Label>Color</Label>
         <ColorField.Group>
@@ -254,7 +262,8 @@ function Fixture() {
   if (name === "required-invalid") return <RequiredInvalidCase />;
   if (name === "disabled") return <DisabledCase />;
   if (name === "prefix-suffix") return <PrefixSuffixCase />;
-  if (name === "controlled") return <ControlledCase />;
+  if (name === "controlled") return <ControlledCase writes />;
+  if (name === "controlled-reject") return <ControlledCase writes={false} />;
   if (name === "channel-hue") return <ChannelCase channel="hue" label="Hue" />;
   if (name === "channel-saturation") {
     return <ChannelCase channel="saturation" label="Saturation" controlled={false} />;
