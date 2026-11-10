@@ -16,7 +16,7 @@ import {
   Pagination,
   SearchField,
   Select,
-  Skeleton,
+  Separator,
   Tabs,
 } from "hero-nsh";
 import { Page } from "./ui";
@@ -36,9 +36,8 @@ const SORTS = [
 
 function Filters() {
   return (
-    <View class="w-full gap-4 rounded-3xl bg-surface p-4 shadow-surface dark:shadow-surface-dark lg:w-[240px] lg:shrink-0">
-      <Text class="text-sm font-medium text-foreground">Filters</Text>
-      <SearchField className="w-full" name="search">
+    <View class="flex-row flex-wrap items-end gap-3">
+      <SearchField className="w-full sm:w-[260px]" name="search">
         <Label>Search orders</Label>
         <SearchField.Group>
           <SearchField.SearchIcon />
@@ -47,7 +46,7 @@ function Filters() {
         </SearchField.Group>
       </SearchField>
 
-      <Select className="w-full" defaultSelectedKey="newest">
+      <Select className="w-full sm:w-[180px]" defaultSelectedKey="newest">
         <Label>Sort by</Label>
         <Select.Trigger>
           <Select.Value />
@@ -87,6 +86,25 @@ function Filters() {
   );
 }
 
+function Summary() {
+  return (
+    <View class="grid grid-cols-3 gap-4 rounded-3xl bg-surface p-4 shadow-surface dark:shadow-surface-dark">
+      <View class="gap-1">
+        <Text class="text-xs text-muted">Orders</Text>
+        <Text class="text-xl font-semibold text-foreground">4</Text>
+      </View>
+      <View class="gap-1">
+        <Text class="text-xs text-muted">Open</Text>
+        <Text class="text-xl font-semibold text-foreground">2</Text>
+      </View>
+      <View class="gap-1">
+        <Text class="text-xs text-muted">Revenue</Text>
+        <Text class="text-xl font-semibold text-foreground">$1,664</Text>
+      </View>
+    </View>
+  );
+}
+
 function OrderList() {
   return (
     <ListBox aria-label="Orders" className="w-full" selectionMode="single">
@@ -114,9 +132,38 @@ function OrderList() {
   );
 }
 
+function PaginationRow() {
+  return (
+    <Pagination>
+      <Pagination.Content>
+        <Pagination.Item>
+          <Pagination.Previous aria-label="Previous page">
+            <Pagination.PreviousIcon />
+          </Pagination.Previous>
+        </Pagination.Item>
+        <Pagination.Item>
+          <Pagination.Link isActive>1</Pagination.Link>
+        </Pagination.Item>
+        <Pagination.Item>
+          <Pagination.Link>2</Pagination.Link>
+        </Pagination.Item>
+        <Pagination.Item>
+          <Pagination.Link>3</Pagination.Link>
+        </Pagination.Item>
+        <Pagination.Item>
+          <Pagination.Next aria-label="Next page">
+            <Pagination.NextIcon />
+          </Pagination.Next>
+        </Pagination.Item>
+      </Pagination.Content>
+    </Pagination>
+  );
+}
+
 function App() {
   return (
     <Page
+      maxWidth="max-w-[1000px]"
       title="Orders"
       note="Everything sold this month, newest first."
       actions={
@@ -173,43 +220,18 @@ function App() {
         </Tabs.ListContainer>
 
         <Tabs.Panel className="gap-4 pt-4" id="all">
-          <View class="flex-col gap-4 lg:flex-row lg:items-start">
-            <Filters />
-            <View class="flex-1 gap-4">
-              <View class="rounded-3xl bg-surface p-2 shadow-surface dark:shadow-surface-dark">
-                <View class="flex-row items-center justify-between px-3 pb-1 pt-2">
-                  <Text class="text-xs font-medium text-muted">Order</Text>
-                  <Text class="text-xs font-medium text-muted">Amount</Text>
-                </View>
-                <OrderList />
+          <Filters />
+          <Summary />
+          <View class="rounded-3xl bg-surface shadow-surface dark:shadow-surface-dark">
+            <View class="p-2">
+              <OrderList />
+            </View>
+            <Separator />
+            <View class="flex-row items-center justify-between gap-4 px-4 py-3">
+              <Text class="text-xs text-muted">4 orders</Text>
+              <View class="ms-auto w-fit">
+                <PaginationRow />
               </View>
-              <View class="flex-row items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-full" />
-                <Text class="text-sm text-muted">Loading more orders…</Text>
-              </View>
-              <Pagination>
-            <Pagination.Content>
-              <Pagination.Item>
-                <Pagination.Previous aria-label="Previous page">
-                  <Pagination.PreviousIcon />
-                </Pagination.Previous>
-              </Pagination.Item>
-              <Pagination.Item>
-                <Pagination.Link isActive>1</Pagination.Link>
-              </Pagination.Item>
-              <Pagination.Item>
-                <Pagination.Link>2</Pagination.Link>
-              </Pagination.Item>
-              <Pagination.Item>
-                <Pagination.Link>3</Pagination.Link>
-              </Pagination.Item>
-              <Pagination.Item>
-                <Pagination.Next aria-label="Next page">
-                  <Pagination.NextIcon />
-                </Pagination.Next>
-              </Pagination.Item>
-                </Pagination.Content>
-              </Pagination>
             </View>
           </View>
         </Tabs.Panel>
