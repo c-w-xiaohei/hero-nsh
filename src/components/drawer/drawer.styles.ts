@@ -26,10 +26,10 @@ export const drawerVariants = tv({
   },
   variants: {
     placement: {
-      bottom: { dialog: "w-full max-h-[85vh] rounded-t-2xl" },
-      top: { dialog: "w-full max-h-[85vh] rounded-b-2xl pb-2", handle: "pb-0" },
-      left: { dialog: "h-full rounded-none w-80 max-w-[85vw] sm:w-96" },
-      right: { dialog: "h-full rounded-none w-80 max-w-[85vw] sm:w-96" },
+      bottom: { dialog: "w-full max-h-[85%] rounded-t-2xl" },
+      top: { dialog: "w-full max-h-[85%] rounded-b-2xl pb-2", handle: "pb-0" },
+      left: { dialog: "h-full rounded-none w-80 max-w-[85%] sm:w-96" },
+      right: { dialog: "h-full rounded-none w-80 max-w-[85%] sm:w-96" },
     },
     variant: {
       opaque: { backdrop: "bg-backdrop" },
