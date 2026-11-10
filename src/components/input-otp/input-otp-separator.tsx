@@ -16,7 +16,7 @@ import { InputOTPContext } from "./input-otp-context";
  * children it is given (port sheet §1.5).
  */
 export interface InputOTPSeparatorProps
-  extends Omit<ViewProps, "children" | "class" | "classList" | "style" | "ref">,
+  extends Omit<ViewProps, "children" | "class" | "classList" | "style" | "ref" | "testID">,
     AriaProps,
     DataProps,
     GlobalDomProps {

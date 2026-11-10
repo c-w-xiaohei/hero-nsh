@@ -158,6 +158,7 @@ export interface InputOTPRootProps
       | "onPaste"
       | "onMouseEnter"
       | "onMouseLeave"
+      | "onPress"
       | "readonly"
       | "maxLength"
       | "keyboardType"
@@ -168,6 +169,10 @@ export interface InputOTPRootProps
       | "multiline"
       | "placeholder"
       | "disabled"
+      | "caret"
+      | "pasteBehavior"
+      | "selectedRange"
+      | "testID"
     >,
     AriaProps,
     DataProps,

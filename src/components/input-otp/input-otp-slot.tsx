@@ -25,7 +25,7 @@ const EASE_OUT: [number, number, number, number] = [0, 0, 0.58, 1];
  * same three values from the root's code and active cells (port sheet §1.4).
  */
 export interface InputOTPSlotProps
-  extends Omit<ViewProps, "children" | "class" | "classList" | "style" | "ref">,
+  extends Omit<ViewProps, "children" | "class" | "classList" | "style" | "ref" | "testID">,
     AriaProps,
     DataProps,
     GlobalDomProps {
@@ -116,17 +116,21 @@ export function InputOTPSlot(props: InputOTPSlotProps): JSX.Element {
 
   // `OTPInputContext.slots[index]`: past `maxLength` there is no entry, so the
   // cell is empty and never active even when a controlled code is longer.
-  const char = computed<string | undefined>(() => {
+  const inRange = computed(() => {
     const at = index();
 
-    if (at < 0 || at >= (ctx?.maxLength() ?? 0)) {
+    return at >= 0 && at < (ctx?.maxLength() ?? 0);
+  });
+
+  const char = computed<string | undefined>(() => {
+    if (!inRange()) {
       return undefined;
     }
 
-    return ctx?.value()[at];
+    return ctx?.value()[index()];
   });
 
-  const isActive = computed(() => ctx?.activeSlots().includes(index()) ?? false);
+  const isActive = computed(() => inRange() && (ctx?.activeSlots().includes(index()) ?? false));
 
   const hasFakeCaret = computed(() => isActive() && char() === undefined);
 

@@ -16,7 +16,7 @@ import { InputOTPContext } from "./input-otp-context";
  * sheet §1.3).
  */
 export interface InputOTPGroupProps
-  extends Omit<ViewProps, "class" | "classList" | "style" | "ref">,
+  extends Omit<ViewProps, "class" | "classList" | "style" | "ref" | "testID">,
     AriaProps,
     DataProps,
     GlobalDomProps {
