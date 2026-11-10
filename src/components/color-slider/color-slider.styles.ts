@@ -40,7 +40,7 @@ export const colorSliderVariants = tv({
     // R-016: `.color-slider__output` → `font-weight: 500` → `font-medium`.
     // R-016: `.color-slider__output` → `font-variant-numeric: tabular-nums`
     // → `tabular-nums`.
-    output: "text-sm font-medium tabular-nums",
+    output: "text-sm font-medium text-foreground tabular-nums",
     // R-018: `.color-slider__track` → `position: relative` → `relative`.
     // R-018's `rounded-2xl` is dead: both orientation blocks restate
     // `rounded-none` (R-032 / R-062), so the radius is always 0 and only the

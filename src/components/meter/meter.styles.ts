@@ -47,7 +47,7 @@ export const meterVariants = tv({
     // R-014: `.meter .meter__output` → `grid-area: output`; NSH writes the
     // cell explicitly and pins the text to the column's end, which is what
     // the `auto` column did.
-    output: "text-sm font-medium tabular-nums col-start-2 row-start-1 justify-self-end",
+    output: "text-sm font-medium text-foreground tabular-nums col-start-2 row-start-1 justify-self-end",
     // R-015: `.meter .meter__track` → `position: relative` → `relative`.
     // R-016: `.meter .meter__track` → `overflow: hidden` → `overflow-hidden`.
     // R-017: `.meter .meter__track` → `border-radius: 4` → `rounded-sm`.
