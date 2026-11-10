@@ -29,6 +29,7 @@ test("T-002 supports Escape dismiss when dismissable", async () => {
 // Ported: disabled keyboard dismissal keeps content open and does not request close.
 test("T-003 blocks Escape dismiss when keyboard dismiss is disabled", async () => {
   const app = await openScenario("drawer/escape-disabled", { clock: {} });
+  expect(app.shows(CONTENT)).toBe(true);
   await app.keyboard.press("escape");
   expect(app.shows(CONTENT)).toBe(true);
   expect(callsOf(app, "openChange").filter((args) => args[0] === false)).toEqual([]);
@@ -55,6 +56,7 @@ test("T-005 exposes right placement behavior", async () => {
 // Ported: a scenario button updates the external controlled value; Escape calls back but cannot change it.
 test("T-006 supports controlled isOpen", async () => {
   const app = await openScenario("drawer/controlled", { clock: {} });
+  expect(app.shows(CONTENT)).toBe(false);
   await app.press("role:button[Enable controlled Drawer]");
   expect(app.shows(CONTENT)).toBe(true);
   await app.keyboard.press("escape");
