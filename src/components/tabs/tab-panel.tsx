@@ -49,7 +49,10 @@ export interface TabPanelProps {
   /** Accepted, no effect: NSH has no cross-element references. */
   "aria-describedby"?: string;
 
-  /** Accepted, no effect: the role is fixed to `region` (port sheet §8). */
+  /**
+   * The panel's role: `region` unless the caller asks for `group`. NSH has no
+   * `tabpanel` (port sheet §8).
+   */
   role?: "region" | "group";
 
   /** A DOM id upstream; maps to `nativeID`. */
@@ -151,9 +154,10 @@ export function TabPanel(props: TabPanelProps): JSX.Element | null {
         ref={(node) => local.ref?.(node)}
         nativeID={local.nativeID}
         testID={local.testID}
-        // R-047: the panel slot carries the box; the role is `region` because
-        // `AccessibilityRole` has no `tabpanel` (port sheet §8).
-        role="region"
+        // R-047: the panel slot carries the box; the role is `region` (or the
+        // caller's `group`) because `AccessibilityRole` has no `tabpanel`
+        // (port sheet §8).
+        role={local.role ?? "region"}
         accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel}
         accessibilityElementsHidden={
           isSelected() ? local.accessibilityElementsHidden : true
