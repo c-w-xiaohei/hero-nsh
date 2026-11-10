@@ -109,3 +109,50 @@ test("X-005 opens the menu on its first or last row from the trigger's arrow key
   expect(callsOf(app, "onAction")[1]?.[0]).toBe("delete-file");
   expect(menu(app)).toBe(false);
 });
+
+// src/components/dropdown/dropdown-trigger.tsx:184-185, src/components/button/button-root.tsx:146-147
+// Probe: on a press-mode trigger, Tab then Alt+Enter opened the menu and Enter
+// ran "delete-file", its last row. Upstream
+// react-aria/src/menu/useMenuTrigger.ts:93-98 binds both Alt activation keys to
+// `open(trigger === 'longPress', e, 'first')`: the first row, and only in
+// longPress mode. So press mode must ignore them, and longPress must open on
+// "New file" through either trigger path.
+test("X-006 opens Alt+Enter and Alt+Space on the first row only in longPress mode", async () => {
+  // Press mode: neither Alt activation key opens anything.
+  const press = await openFixture("default");
+
+  await press.keyboard.press("tab");
+  await press.keyboard.press("alt+enter");
+  await press.clock!.runFor(20);
+  expect(menu(press)).toBe(false);
+
+  await press.keyboard.press("alt+space");
+  await press.clock!.runFor(20);
+  expect(menu(press)).toBe(false);
+
+  // LongPress mode: both keys open on the first row and Enter runs it.
+  for (const name of ["long-press-button", "long-press-trigger"]) {
+    const app = await openFixture(name);
+
+    await app.keyboard.press("tab");
+    await app.keyboard.press("alt+enter");
+    await app.waitFor("role:menu");
+    await app.clock!.runFor(20);
+
+    await app.keyboard.press("enter");
+    await app.clock!.runFor(200);
+
+    expect(callsOf(app, "onAction")[0]?.[0]).toBe("new-file");
+    expect(menu(app)).toBe(false);
+
+    await app.keyboard.press("alt+space");
+    await app.waitFor("role:menu");
+    await app.clock!.runFor(20);
+
+    await app.keyboard.press("enter");
+    await app.clock!.runFor(200);
+
+    expect(callsOf(app, "onAction")[1]?.[0]).toBe("new-file");
+    expect(menu(app)).toBe(false);
+  }
+});

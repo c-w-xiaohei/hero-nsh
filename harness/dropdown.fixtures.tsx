@@ -24,6 +24,8 @@ import { probe } from "@scenario/probe";
  *   dialog-handoff    controlled isOpen closed in onAction, Dialog opens (T-006/T-008)
  *   drawer-handoff    select "Open drawer" opens a Dialog in the same action
  *   inside-dialog     a Dropdown inside an open Dialog; its row still acts (T-013)
+ *   long-press-button `trigger="longPress"` with a Button trigger (X-006)
+ *   long-press-trigger the same mode on the `Dropdown.Trigger` path (X-006)
  *
  * It sits next to harness/nsh.json on purpose: NSH takes the entry's own
  * directory as the app's root, so an entry under harness/tests/... finds no
@@ -52,6 +54,60 @@ function DefaultCase() {
             </Dropdown.Item>
             <Dropdown.Item id="copy-link" textValue="Copy link">
               <Label>Copy link</Label>
+            </Dropdown.Item>
+            <Dropdown.Item id="delete-file" textValue="Delete file">
+              <Label>Delete file</Label>
+            </Dropdown.Item>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * LongPress: both trigger paths, for the Alt activation keys (X-006)
+ * -----------------------------------------------------------------------------------------------*/
+
+/** `trigger="longPress"` with a Button trigger, the upstream LongPressTrigger story. */
+function LongPressButtonCase() {
+  return (
+    <View class="items-start gap-2 p-4">
+      <Dropdown trigger="longPress">
+        <Button aria-label="Menu" variant="secondary">
+          Long Press
+        </Button>
+        <Dropdown.Popover>
+          <Dropdown.Menu onAction={probe("onAction")}>
+            <Dropdown.Item id="new-file" textValue="New file">
+              <Label>New file</Label>
+            </Dropdown.Item>
+            <Dropdown.Item id="open-file" textValue="Open file">
+              <Label>Open file</Label>
+            </Dropdown.Item>
+            <Dropdown.Item id="delete-file" textValue="Delete file">
+              <Label>Delete file</Label>
+            </Dropdown.Item>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
+    </View>
+  );
+}
+
+/** The same long-press mode with `Dropdown.Trigger` as the trigger path. */
+function LongPressTriggerCase() {
+  return (
+    <View class="items-start gap-2 p-4">
+      <Dropdown trigger="longPress">
+        <Dropdown.Trigger aria-label="Menu">Long Press</Dropdown.Trigger>
+        <Dropdown.Popover>
+          <Dropdown.Menu onAction={probe("onAction")}>
+            <Dropdown.Item id="new-file" textValue="New file">
+              <Label>New file</Label>
+            </Dropdown.Item>
+            <Dropdown.Item id="open-file" textValue="Open file">
+              <Label>Open file</Label>
             </Dropdown.Item>
             <Dropdown.Item id="delete-file" textValue="Delete file">
               <Label>Delete file</Label>
@@ -180,6 +236,14 @@ function Case() {
 
   if (name === "dialog-handoff") {
     return <ControlledHandoffCase />;
+  }
+
+  if (name === "long-press-button") {
+    return <LongPressButtonCase />;
+  }
+
+  if (name === "long-press-trigger") {
+    return <LongPressTriggerCase />;
   }
 
   if (name === "inside-dialog") {
