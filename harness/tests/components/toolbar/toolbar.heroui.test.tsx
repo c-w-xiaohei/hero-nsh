@@ -90,14 +90,22 @@ test("T-003 exposes vertical orientation BEM modifier", async () => {
 // the background, radius and shadow, which are paint and belong to the
 // screenshot comparison. The padding is measured here: the child sits 4 points
 // inside the root on every side, so the root is 8 points taller.
+//
+// `onLayout` reports the frame in the parent (types.d.ts:808), so the two
+// origins live in different spaces: the root sits in `Stage`'s `p-6` and
+// reports 24, the button sits in the toolbar's own `p-1` and reports 4. The
+// inset is therefore the child's origin itself; only the extents, which do not
+// depend on the origin, compare across the two frames.
 test("T-004 exposes attached BEM modifier", async () => {
   const app = await openScenario("toolbar/attached");
   await firstFrame(app, "attached-root", "attached-0");
   const root = frame(app, "attached-root");
   const child = frame(app, "attached-0");
 
-  expect(child.x - root.x).toBe(4);
+  expect(child.x).toBe(4);
+  expect(child.y).toBe(4);
   expect(root.height - child.height).toBe(8);
+  expect(root.width - child.width).toBe(8);
 });
 
 // heroui/packages/react/tests/components/toolbar/toolbar.test.tsx:66
