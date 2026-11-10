@@ -538,6 +538,10 @@ export function TextFieldRoot(props: TextFieldRootProps): JSX.Element {
     // NSH reports the three DOM composition events on one; the field fans it
     // back out to the event HeroUI's caller asked for (§8).
     onCompositionChange: (event) => {
+      // The root's own `onCompositionChange` is a published prop, so it must
+      // fire on every phase, before the fan-out picks the phase callback.
+      local.onCompositionChange?.(event);
+
       if (!event.composing) {
         local.onCompositionEnd?.(event);
         return;

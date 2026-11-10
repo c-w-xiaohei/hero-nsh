@@ -96,6 +96,21 @@ export interface TextControlDomProps {
   step?: number | string;
   multiple?: boolean;
   accept?: string;
+  alt?: string;
+  src?: string;
+  width?: number | string;
+  height?: number | string;
+  formAction?: string;
+  formEncType?: string;
+  formMethod?: string;
+  formNoValidate?: boolean;
+  formTarget?: string;
+  dirName?: string;
+  popover?: string;
+  accessKey?: string;
+  title?: string;
+  tabIndex?: number;
+  draggable?: boolean;
   capture?: boolean | "user" | "environment";
   autoSave?: string;
   results?: number;
@@ -106,6 +121,8 @@ export interface TextControlDomProps {
   onInput?: unknown;
   onCopy?: unknown;
   onCut?: unknown;
+  onLoad?: unknown;
+  onError?: unknown;
   /** The HTML `onSelect`, mapped to NSH's selection payload. */
   onSelect?: (event: { start: number; end: number }) => void;
   onClick?: unknown;
@@ -746,15 +763,18 @@ export function renderTextControl(
     const isFocused = focused();
     const invalid = isInvalid();
     const disabled = isDisabled();
+    // R-012 / R-031 and R-019 / R-038: `:hover:not(:focus)` applies to an
+    // unfocused control only. Upstream's hover rule
+    // (`.input:hover:not(:focus):not(:focus-visible)`, 0,4,0) outranks
+    // `[data-invalid="true"]` (0,2,0) in input.css:28-32 against :44-48
+    // (textarea.css:27-31 against :47-51 repeats it), so an invalid hovered
+    // control keeps the hover fill. NSH resolves later classes as winners, so
+    // the invalid fill below is skipped while this holds and the hover fill is
+    // emitted last.
+    const hoverFill = hovered() && !isFocused && !disabled;
 
     return joinClassNames(
       baseClass(),
-      // R-012 / R-031: `:hover:not(:focus)` → `bg-field-hover`. The focus
-      // exclusion must be a signal: NSH's variant order puts `hover:` after
-      // `focus:`, so stacking those classes would let hover win.
-      hovered() && !isFocused && !disabled && !secondary ? "bg-field-hover" : undefined,
-      // R-019 / R-038: the secondary twin → `bg-default-hover`.
-      hovered() && !isFocused && !disabled && secondary ? "bg-default-hover" : undefined,
       // R-013 / R-032: `status-focused-field` → `ring-2 ring-focus ring-offset-0
       // outline-none` plus the focus fill. Invalid controls use the danger pair
       // below instead of the focus ring.
@@ -766,12 +786,18 @@ export function renderTextControl(
       isFocused && secondary ? "bg-default" : undefined,
       // R-014 / R-033: `status-invalid-field`'s unfocused half → `outline-1
       // outline-danger outline-solid`, with the invalid focus fill.
-      invalid ? "outline-1 outline-danger outline-solid bg-field-focus" : undefined,
+      invalid ? "outline-1 outline-danger outline-solid" : undefined,
       // R-014 / R-033: its focused half → `ring-2 ring-danger ring-offset-0`.
       invalid && isFocused ? "ring-2 ring-danger ring-offset-0" : undefined,
+      invalid && !hoverFill ? "bg-field-focus" : undefined,
       // R-021 / R-040: secondary invalid keeps the `--default` fill; the ring /
-      // outline is R-014's.
-      invalid && secondary ? "bg-default" : undefined,
+      // outline is R-014's. The hover fill wins over it like the primary pair.
+      invalid && secondary && !hoverFill ? "bg-default" : undefined,
+      // R-012 / R-031: `:hover:not(:focus)` → `bg-field-hover`, last so it
+      // outranks the invalid fill as it does upstream.
+      hoverFill && !secondary ? "bg-field-hover" : undefined,
+      // R-019 / R-038: the secondary twin → `bg-default-hover`.
+      hoverFill && secondary ? "bg-default-hover" : undefined,
       // R-015 / R-034: `status-disabled` → `opacity: .5`, `cursor: not-allowed`,
       // `pointer-events: none`, as literals (the theme has no such tokens).
       disabled ? "opacity-50 cursor-not-allowed pointer-events-none" : undefined,
