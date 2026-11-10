@@ -18,22 +18,15 @@ export const tooltipVariants = tv({
     // theme, the smaller of the two); R-005 `box-shadow: var(--overlay-shadow)`
     // → the overlay shadow pair, which cannot switch with the appearance.
     //
-    // R-006's 150ms `ease-smooth` enter sits on the base so the duration and
-    // curve stay applied after the starting classes come off (a transition
-    // needs both at the destination); R-011 overrides the duration inline for
-    // the 100ms exit.
+    // State-specific durations are assigned by classList, keeping one owner.
     //
     // R-003 `break-all` is not written: NSH's text layout has no `word-break`,
     // so an unbreakable long word may overflow (registered in port sheet §8).
-    base: "max-w-xs bg-overlay p-2 text-xs rounded-xl shadow-overlay dark:shadow-overlay-dark duration-150 ease-smooth",
+    base: "max-w-xs bg-overlay p-2 text-xs rounded-xl shadow-overlay dark:shadow-overlay-dark ease-smooth",
     // R-016 `.tooltip__trigger` → `inline-block` (NSH resolves it to
-    // `display: block`, the same computed result inside a flex parent); R-017
-    // the three transitions (the property list is the inline
-    // `transitionProperty`, because one element has one curve); R-018
-    // `motion-reduce:transition-none`, with reduce-motion also clearing the
-    // inline list in the part, since an inline value beats the class.
-    trigger:
-      "inline-block duration-150 ease-smooth transition-colors transition-shadow motion-reduce:transition-none",
+    // `display: block`, the same computed result inside a flex parent); the
+    // inline property list is the sole transition-property owner.
+    trigger: "inline-block duration-150 ease-smooth",
   },
 });
 

@@ -53,7 +53,7 @@ const ARROW_HALF = 6;
  */
 export function TooltipArrow(props: TooltipArrowProps) {
   const position = TooltipPositionContext();
-  const { anchorBounds, overlayBounds, side, placement } = position ?? DEFAULT_POSITION;
+  const { anchorBounds, overlayBounds, side, placement, arrowBoundaryOffset } = position ?? DEFAULT_POSITION;
 
   const values: TooltipArrowRenderValues = { placement };
 
@@ -91,7 +91,7 @@ export function TooltipArrow(props: TooltipArrowProps) {
 
     // Port sheet §5.6: the centre may travel between 6 and length − 6, the
     // radius keeping the arch's ends inside the rounded corner.
-    const min = Math.min(ARROW_HALF, length / 2);
+    const min = Math.min(ARROW_HALF + arrowBoundaryOffset(), length / 2);
     const max = Math.max(min, length - min);
 
     return Math.max(min, Math.min(centre, max));
@@ -164,4 +164,6 @@ const DEFAULT_POSITION: TooltipPositionContextValue = {
   overlayBounds: () => undefined,
   side: () => "top",
   placement: () => null,
+  crossOffset: () => 0,
+  arrowBoundaryOffset: () => 0,
 };

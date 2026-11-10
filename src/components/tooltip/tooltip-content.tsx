@@ -23,10 +23,8 @@ import { tooltipVariants } from "./tooltip.styles";
  * Content
  * -----------------------------------------------------------------------------------------------*/
 
-// Inline owners for the two transition properties NSH has no single class for:
-// the property list (every phase) and the shorter exit duration (R-006 / R-011).
+// The transition property list has one inline owner; durations are classes.
 const TRANSITION_STYLE = { transitionProperty: "opacity, transform" } as const;
-const EXIT_DURATION_STYLE = { transitionDuration: "100ms" } as const;
 
 /** The live state HeroUI hands to `Content`'s `className` and `style` functions. */
 export interface TooltipRenderValues {
@@ -71,13 +69,13 @@ export interface TooltipContentProps {
   /** The safe-area margin (default 12; React Aria's `containerPadding`). */
   containerPadding?: number;
 
-  /** Accepted, no effect: the core Overlay has no separate cross-axis offset. */
+  /** Displacement along the anchor's cross axis. */
   crossOffset?: number;
 
   /** Accepted, no effect: the core Overlay always flips when the other side fits. */
   shouldFlip?: boolean;
 
-  /** Accepted, no effect: the arrow clamps itself inside the corner radius instead. */
+  /** Additional inset when clamping the arrow near the content's corners. */
   arrowBoundaryOffset?: number;
 
   /** HeroUI's own flag: it only picks the default offset (7 instead of 3). */
@@ -315,7 +313,9 @@ export function TooltipContent(props: TooltipContentProps) {
 
     if (presence.isExiting() && !skipsAnimation()) {
       // R-011: the 100ms exit, out of the pointer's way while it plays.
-      list["opacity-0 scale-95 pointer-events-none"] = true;
+      list["opacity-0 scale-95 pointer-events-none duration-100"] = true;
+    } else {
+      list["duration-150"] = true;
     }
 
     return list;
@@ -323,8 +323,13 @@ export function TooltipContent(props: TooltipContentProps) {
 
   const style = () => [
     TRANSITION_STYLE,
-    presence.isExiting() && !skipsAnimation() ? EXIT_DURATION_STYLE : undefined,
     { transformOrigin: transformOrigin() },
+    {
+      translate:
+        side() === "top" || side() === "bottom"
+          ? ([props.crossOffset ?? 0, 0] as [number, number])
+          : ([0, props.crossOffset ?? 0] as [number, number]),
+    },
     resolvedStyle(),
   ];
 
@@ -333,6 +338,8 @@ export function TooltipContent(props: TooltipContentProps) {
     overlayBounds,
     side,
     placement: () => positionedSide() ?? null,
+    crossOffset: () => props.crossOffset ?? 0,
+    arrowBoundaryOffset: () => props.arrowBoundaryOffset ?? 0,
   };
 
   /* -------------------------------------------------------------------------------------------

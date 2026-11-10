@@ -81,6 +81,8 @@ export interface TooltipPositionContextValue {
    * core Overlay has positioned the content once.
    */
   placement: Accessor<TooltipSide | null>;
+  crossOffset: Accessor<number>;
+  arrowBoundaryOffset: Accessor<number>;
 }
 
 export const TooltipPositionContext = context<TooltipPositionContextValue | null>(null);
