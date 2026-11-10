@@ -101,7 +101,11 @@ export function SeparatorRoot(props: SeparatorRootProps): JSX.Element {
 
   // Kobalte's default (`packages/core/src/separator/separator-root.tsx`), kept
   // as the authority for the default value; HeroUI resolves the same fallback.
-  const orientation = computed(() => local.orientation ?? "horizontal");
+  // A container may name the axis instead: a Toolbar's separators run across
+  // it, and upstream hands that down in `SeparatorContext` (port sheet §5).
+  const orientation = computed(
+    () => local.orientation ?? container?.orientation?.() ?? "horizontal",
+  );
 
   // `isDecorative` is a pure accessibility switch upstream: it never changes
   // the screen, only whether assistive technology can reach the divider.
@@ -135,7 +139,7 @@ export function SeparatorRoot(props: SeparatorRootProps): JSX.Element {
       class={separatorVariants({
         orientation: orientation(),
         variant: local.variant,
-        className: [container?.partClass?.(), local.className]
+        className: [container?.partClass?.(orientation()), local.className]
           .filter((name): name is string => typeof name === "string" && name.length > 0)
           .join(" "),
       })}
