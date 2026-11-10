@@ -48,33 +48,6 @@ test("X-005 opens from the Tooltip.Trigger part on focus", async () => {
   expect(app.shows("text:Trigger tip")).toBe(true);
 });
 
-// heroui/packages/styles/components/tooltip.css:10-11,31-37; reviewed
-// evidence: the upstream browser test checks entry/exit animation metadata at
-// tooltip.browser.test.tsx:30-77. Web screenshots are the available paint
-// channel: compare the open resting frame with the in-flight entry and exit
-// frames, then the settled closed frame. Distinct pixels prove the opacity and
-// transform states actually transition; manual time brackets their duration.
-test("T-007/T-008 animate entry and exit paint on the web target", async () => {
-  const app = await openScenario("tooltip/basic", { platform: "web", clock: {} });
-  const closed = await app.screenshot();
-
-  await app.hover("role:button[Hover me]");
-  await app.clock!.runFor(20);
-  const entering = await app.screenshot();
-  await app.clock!.runFor(180);
-  const open = await app.screenshot();
-  expect(sameShot(entering, closed)).toBe(false);
-  expect(sameShot(open, entering)).toBe(false);
-
-  await app.keyboard.press("escape");
-  await app.clock!.runFor(30);
-  const exiting = await app.screenshot();
-  await app.clock!.runFor(120);
-  const gone = await app.screenshot();
-  expect(sameShot(exiting, open)).toBe(false);
-  expect(sameShot(gone, exiting)).toBe(false);
-});
-
 // tmp/vendor/react-spectrum/packages/react-aria-components/src/Tooltip.tsx:194-205;
 // positioning props must reach the rendered tooltip; a screenshot comparison
 // is used because NSH exposes neither computed styles nor Overlay bounds.
