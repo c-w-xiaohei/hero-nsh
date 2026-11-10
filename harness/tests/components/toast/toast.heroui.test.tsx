@@ -146,7 +146,7 @@ test("T-015 calls the original onClose when an update omits it", async () => {
 
   await showToast(app, "Add");
   await showToast(app, "Update");
-  await showToast(app, "Close");
+  await showToast(app, "Close toast");
 
   expect(callsOf(app, "onClose")).toHaveLength(1);
 });

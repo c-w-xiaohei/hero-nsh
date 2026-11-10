@@ -222,7 +222,7 @@ function OnCloseUpdate() {
           toast.close(id());
         }}
       >
-        Close
+        Close toast
       </Button>
     </Frame>
   );
