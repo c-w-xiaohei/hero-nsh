@@ -50,8 +50,8 @@ export type InputOTPTextAlign = "left" | "center" | "right";
  * The members of HeroUI's `OTPInput` props (a real `<input>`'s attributes) that
  * exist only because the DOM does. They are accepted so code written against
  * HeroUI keeps compiling; NSH has no form submission, browser constraint
- * validation or DOM key events, and port sheet §1.2 / §8 register that each one
- * has no effect.
+ * validation or DOM key events, and port sheet §1.2 / §8 register that they
+ * have no effect. `readOnly` is the exception: NSH's `readonly` carries it.
  */
 export interface InputOTPRootDomProps {
   /** Accepted, no effect: NSH has no form submission. */
@@ -63,7 +63,10 @@ export interface InputOTPRootDomProps {
   /** Accepted, no effect: NSH has no browser constraint validation. */
   required?: boolean;
 
-  /** Accepted, no effect: read-only is `isDisabled`'s editing half. */
+  /**
+   * Read-only: the code can be selected and copied but not changed. The field
+   * keeps focus and the caret, and does not dim as a disabled one does.
+   */
   readOnly?: boolean;
 
   /** Accepted, no effect: NSH has no browser constraint validation. */
@@ -268,7 +271,10 @@ export interface InputOTPRootProps
   /** The input lost focus. */
   onBlur?: () => void;
 
-  /** The user pasted; NSH reports the content instead of a DOM `ClipboardEvent`. Called before the insert. */
+  /**
+   * The user pasted; NSH reports the content instead of a DOM `ClipboardEvent`.
+   * Called after the insert and its `onChange`, as upstream.
+   */
   onPaste?: (event: PasteEvent) => void;
 
   /** The pointer came over the input; upstream's `onMouseOver`. */
@@ -470,9 +476,66 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
 
   let inputNode: InputRef | undefined;
 
+  // The selection the field last held, as `input-otp`'s `prev`: the
+  // normalisation below picks which side of the caret the one-character
+  // selection covers by comparing the caret with it.
+  let lastSelection: { start: number; end: number } | undefined;
+
   const setSelection = (start: number, end: number) => {
-    selection.set({ start, end });
+    const next = { start, end };
+
+    selection.set(next);
+    lastSelection = next;
     inputNode?.setSelection(start, end);
+  };
+
+  // `input-otp`'s `selectionchange` handler (`dist/index.js`, the `f` function):
+  // the caret never rests between cells. A collapsed caret becomes a
+  // one-character selection around itself, except in the two places where a
+  // caret is the real answer: at the start of an empty code, and at the end of
+  // a code shorter than `maxLength`. At `maxLength` the caret selects the last
+  // cell backwards, which is what makes typing over a full code replace the
+  // character under it instead of growing past the limit.
+  const normalizeSelection = (start: number, end: number): { start: number; end: number } => {
+    if (start !== end) {
+      return { start, end };
+    }
+
+    const code = text();
+    const limit = maxLength();
+
+    // No code: nothing to put under the caret (upstream's `C.length !== 0`).
+    if (code.length === 0) {
+      return { start, end };
+    }
+
+    // A caret at the end of a code that can still grow stays a caret.
+    if (start === code.length && code.length < limit) {
+      return { start, end };
+    }
+
+    const caret = Math.max(0, Math.min(start, limit));
+
+    if (caret === 0) {
+      return { start: 0, end: 1 };
+    }
+
+    if (caret === limit) {
+      return { start: Math.max(0, limit - 1), end: limit };
+    }
+
+    if (limit > 1 && code.length > 1) {
+      const previous = lastSelection;
+      const backward = previous !== undefined && caret < previous.end;
+      const previousWasCollapsedBeforeEnd =
+        previous !== undefined && previous.start === previous.end && previous.start < limit;
+      const offset = backward && !previousWasCollapsedBeforeEnd ? -1 : 0;
+      const from = Math.max(0, caret + offset);
+
+      return { start: from, end: from + 1 };
+    }
+
+    return { start, end };
   };
 
   // `input-otp`'s active cells: nothing without focus, the caret's cell alone
@@ -550,7 +613,9 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
   };
 
   const handleChange = (event: { value: string }) => {
-    const candidate = event.value;
+    // Upstream's `onChange` holds the candidate to `maxLength` before anything
+    // else; the host's own limit is not enough (the web target inserts past it).
+    const candidate = event.value.slice(0, maxLength());
     const previous = untracked(() => text());
     const previousSelection = untracked(() => selection());
 
@@ -560,8 +625,7 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
       // Upstream's `preventDefault`: the code stays, the host's text is put
       // back and the caret returns to where it was.
       correctHost(previous);
-      selection.set(previousSelection);
-      inputNode?.setSelection(previousSelection.start, previousSelection.end);
+      setSelection(previousSelection.start, previousSelection.end);
       return;
     }
 
@@ -575,18 +639,26 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
     if (expected !== candidate) {
       correctHost(expected);
       const caret = Math.min(previousSelection.start, expected.length);
-      selection.set({ start: caret, end: caret });
-      inputNode?.setSelection(caret, caret);
+      const next = normalizeSelection(caret, caret);
+      setSelection(next.start, next.end);
       return;
     }
 
+    // The host kept characters the code did not (the web target does not hold
+    // an insertion to `maxLength`): its text is put back to the accepted code.
+    if (event.value !== candidate) {
+      correctHost(expected);
+    }
+
+    // Upstream normalises the caret on the selection change that follows an
+    // edit; NSH reports the selection after this handler, so it is done here
+    // against the code that just landed.
     const caret = caretAfterEdit(previous, candidate);
-    selection.set({ start: caret, end: caret });
+    const next = normalizeSelection(caret, caret);
+    setSelection(next.start, next.end);
   };
 
   const handlePaste = (event: PasteEvent) => {
-    local.onPaste?.(event);
-
     if (isDisabled()) {
       return;
     }
@@ -602,28 +674,48 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
     const candidate = (current.slice(0, lower) + pasted + current.slice(upper)).slice(0, maxLength());
     const accepted = accept(candidate);
 
-    if (accepted === null) {
-      return;
+    if (accepted !== null) {
+      setValue(accepted);
+
+      const expected = value() ?? "";
+
+      if (expected !== candidate) {
+        correctHost(expected);
+      }
+
+      // Upstream's paste caret: `min(length, maxLength - 1) … length`, which
+      // is the whole last cell when the paste filled the field.
+      setSelection(Math.min(expected.length, Math.max(0, maxLength() - 1)), expected.length);
     }
 
-    setValue(accepted);
-
-    const expected = value() ?? "";
-    const caret = Math.min(lower + pasted.length, expected.length);
-
-    if (expected !== candidate) {
-      correctHost(expected);
-    }
-
-    selection.set({ start: caret, end: caret });
-    inputNode?.setSelection(caret, caret);
+    // Upstream inserts first and then calls the caller's handler, so the code
+    // and `onChange` are already out by now.
+    local.onPaste?.(event);
   };
 
   const handleSelectionChange = (event: { start: number; end: number }) => {
-    selection.set({ start: event.start, end: event.end });
+    const previous = untracked(() => selection());
+    const next = normalizeSelection(event.start, event.end);
+
+    if (next.start !== event.start || next.end !== event.end) {
+      // The host's caret sat between cells; put its selection on the cell.
+      setSelection(next.start, next.end);
+    } else {
+      // The host's own range (including the echo of this field's
+      // `setSelection`): hold it, without writing it back a second time.
+      selection.set(next);
+      lastSelection = next;
+    }
+
+    // The report that just echoes this field's own `setSelection` is not a move
+    // the user made, and upstream's DOM `select` event would not fire for it.
+    if (previous.start === next.start && previous.end === next.end) {
+      return;
+    }
+
     // HeroUI's `onSelect` is a DOM event on the same element; NSH has only the
     // selection channel, so it is reported through it (port sheet §1.2).
-    local.onSelect?.(event);
+    local.onSelect?.({ start: next.start, end: next.end });
   };
 
   const handleFocus = () => {
@@ -767,8 +859,13 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
             onPress={handlePress}
             disabled={isDisabled()}
             // NSH 0.4.0's headless input stays editable with `disabled` alone;
-            // a disabled field is non-editable, which `readonly` carries.
-            readonly={isDisabled()}
+            // a disabled field is non-editable, which `readonly` carries. A
+            // `readOnly` field is the same non-editing half without the dim,
+            // focus loss and blocked pointer of `disabled`.
+            readonly={isDisabled() || (local.readOnly ?? false)}
+            // Upstream's input has no Enter handler: Return neither blurs nor
+            // moves the selection (the sibling ports' ruling, port sheet §5).
+            submitBehavior="submit"
             maxLength={maxLength()}
             placeholder={local.placeholder}
             autoFocus={local.autoFocus}
