@@ -151,7 +151,9 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
       nativeID={local.id ?? local.nativeID}
       style={local.style}
       class={labelVariants({
-        className: local.className,
+        className: [field?.partClass?.(), local.className]
+          .filter((name): name is string => typeof name === "string" && name.length > 0)
+          .join(" "),
         isDisabled: isDisabled(),
         isInvalid: isInvalid(),
         isRequired: isRequired(),
