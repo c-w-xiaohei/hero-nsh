@@ -238,7 +238,7 @@ function TabHandoffCase() {
       <ComboBox className="w-[256px]">
         <Label>First Animal</Label>
         <ComboBox.InputGroup>
-          <Input placeholder="Search animals..." />
+          <Input placeholder="Search animals..." onBlur={probe("firstInputBlur")} />
           <ComboBox.Trigger />
         </ComboBox.InputGroup>
         <ComboBox.Popover>
@@ -253,7 +253,11 @@ function TabHandoffCase() {
       <ComboBox className="w-[256px]" onChange={(value: unknown) => probe("change")(normalizeSelection(value, false))}>
         <Label>Second Animal</Label>
         <ComboBox.InputGroup>
-          <Input placeholder="Search animals..." onFocus={probe("secondInputFocus")} />
+          <Input
+            placeholder="Search animals..."
+            onFocus={probe("secondInputFocus")}
+            onBlur={probe("secondInputBlur")}
+          />
           <ComboBox.Trigger />
         </ComboBox.InputGroup>
         <ComboBox.Popover>

@@ -40,9 +40,11 @@ async function settle(app: App): Promise<void> {
 
 // heroui/packages/react/tests/components/combo-box/combo-box.browser.test.tsx:73
 // Partial port (port sheet T-010): the whole handoff chain is kept — the first
-// field opens on focus, Tab hands off to the second (only one listbox on screen
-// once the first has exited), ArrowDown + Enter select, focus stays in the
-// second input, ArrowDown + Escape close, Tab reaches Submit. The
+// field opens on focus, Tab records the first input blur and second input focus
+// callbacks (only one listbox remains once the first has exited), ArrowDown +
+// Enter select without a second-input blur callback, ArrowDown + Escape close,
+// and Tab records Submit focus. These callback probes do not query active DOM
+// focus. The
 // `aria-expanded` / `aria-activedescendant` / `aria-hidden` assertions are
 // dropped: no attribute channel.
 test("T-010 preserves sibling Tab handoff, selection and Escape", async () => {
@@ -57,7 +59,8 @@ test("T-010 preserves sibling Tab handoff, selection and Escape", async () => {
   await settle(app);
 
   expect(app.count(combo.COMBO_BOX_LISTBOX)).toBe(1);
-  expect(combo.endsOn(app, "secondInputFocus")).toBe(true);
+  expect(callsOf(app, "firstInputBlur")).toHaveLength(1);
+  expect(callsOf(app, "secondInputFocus")).toHaveLength(1);
 
   await app.keyboard.press("arrowdown");
   await app.clock!.runFor(20);
@@ -65,7 +68,7 @@ test("T-010 preserves sibling Tab handoff, selection and Escape", async () => {
   await settle(app);
 
   expect(callsOf(app, "change")).toEqual([["cat"]]);
-  expect(combo.endsOn(app, "secondInputFocus")).toBe(true);
+  expect(callsOf(app, "secondInputBlur")).toHaveLength(0);
   expect(combo.getListbox(app)).toBe(false);
 
   await app.keyboard.press("arrowdown");
