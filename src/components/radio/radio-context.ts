@@ -1,8 +1,11 @@
 import type { Accessor, PressEvent, ViewRef } from "nsh";
 import { context } from "nsh";
 
+// The two dimensions belong to the group; only their types come down here, and
+// `import type` is erased, so the group's runtime import of this module is not
+// part of a cycle.
+import type { RadioGroupOrientation, RadioGroupVariant } from "../radio-group/radio-group.styles";
 import type { RadioGroupState } from "./create-radio-group-state";
-import type { RadioGroupOrientation, RadioGroupVariant } from "./radio.styles";
 
 /* -------------------------------------------------------------------------------------------------
  * Press callbacks

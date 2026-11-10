@@ -9,25 +9,25 @@ import {
   createRadioGroupState,
   type RadioGroupState,
   type RadioGroupValidationResult,
-} from "./create-radio-group-state";
-import type { RadioGroupRenderProps } from "./radio-context";
+} from "../radio/create-radio-group-state";
+import type { RadioGroupRenderProps } from "../radio/radio-context";
 import {
   RadioGroupContext,
   type RadioGroupContextValue,
   type RadioGroupItem,
-} from "./radio-context";
+} from "../radio/radio-context";
+import { renderChildren } from "../radio/render-children";
 import {
   radioGroupVariants,
   type RadioGroupOrientation,
   type RadioGroupVariant,
-} from "./radio.styles";
-import { renderChildren } from "./render-children";
+} from "./radio-group.styles";
 
 /* -------------------------------------------------------------------------------------------------
  * Render props
  * -----------------------------------------------------------------------------------------------*/
 
-export type { RadioGroupRenderProps } from "./radio-context";
+export type { RadioGroupRenderProps } from "../radio/radio-context";
 
 /* -------------------------------------------------------------------------------------------------
  * RadioGroup Root
@@ -208,8 +208,10 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
   ] as const);
 
   // --- Orientation and variant ------------------------------------------------
-  // R-026 / R-027: both are group state; the item reads the orientation for its
-  // `mt-4` and the Control reads the variant for R-029—R-032.
+  // R-001—R-004 are the group's own classes (see `radio-group.styles.ts`).
+  // Both dimensions are context state: the item reads the orientation for its
+  // `mt-4` (R-002) and the Control reads the variant for the item-side rules
+  // (R-005—R-008).
   const orientation = computed<RadioGroupOrientation>(() => local.orientation ?? "vertical");
   const variant = computed<RadioGroupVariant>(() => local.variant ?? "primary");
 
@@ -530,7 +532,7 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
     isRequired,
     isInvalid,
     validationErrors: state.validationErrors,
-    // R-026: `&[data-orientation="vertical"] [data-slot="radio"] { mt-4 }`.
+    // R-002: `&[data-orientation="vertical"] [data-slot="radio"] { mt-4 }`.
     // NSH has no descendant selector, so the group hands the class to every
     // item root, the first one included, exactly as the stylesheet does.
     itemClass: () => (orientation() === "vertical" ? "mt-4" : undefined),

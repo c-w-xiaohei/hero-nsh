@@ -46,3 +46,4 @@ export * from "./components/menu";
 export * from "./components/checkbox";
 export * from "./components/dropdown";
 export * from "./components/radio";
+export * from "./components/radio-group";
