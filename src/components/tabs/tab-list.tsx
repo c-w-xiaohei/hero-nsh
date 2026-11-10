@@ -162,8 +162,7 @@ export function TabList(props: TabListProps): JSX.Element | null {
 
   // R-024: `min-width: 100%` for horizontal tabs. Inside NSH's scroll box the
   // list's parent is content sized, so a percentage resolves to `auto`; the
-  // measured viewport is the same length as a number, and the class keeps the
-  // 100% for the frames before the first measurement.
+  // measured viewport is the same length as a number (port sheet §6).
   const minWidth = computed<StyleProp<ViewStyle>>(() => {
     if (tabs.orientation() !== "horizontal") {
       return undefined;
