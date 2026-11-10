@@ -8,8 +8,8 @@ import { tv } from "tailwind-variants";
  * of `packages/styles/components/radio.css`.
  *
  * HeroUI's table names four BEM slots and no dimension; the visible dimensions
- * (`variant`, `orientation`) belong to `RadioGroup` and reach the item through
- * its context. NSH has no BEM CSS and no descendant selectors (D18), so the
+ * (`variant`, `orientation`) belong to `RadioGroup` (`radio-group` unit) and
+ * reach the item through its `RadioGroupContext`. NSH has no BEM CSS and no descendant selectors (D18), so the
  * static declarations of each slot live here, while every rule whose appearance
  * depends on a state (selected, hover, pressed, focus-visible, invalid,
  * disabled, the group's variant) is a `classList` in the part that owns it
@@ -58,44 +58,3 @@ export const radioVariants = tv({
 });
 
 export type RadioVariants = VariantProps<typeof radioVariants>;
-
-/**
- * RadioGroup's variant table, mirroring `@heroui/styles` 3.2.7
- * `packages/styles/src/components/radio-group/radio-group.styles.ts` plus
- * `packages/styles/components/radio-group.css`.
- *
- * Two dimensions live here: `variant` (whose visible effects are carried to
- * each item's Control and dot through the group context, R-029—R-032) and
- * `orientation` (R-026 / R-027).
- */
-export const radioGroupVariants = tv({
-  // R-025: `.radio-group` → `flex flex-col`.
-  base: "flex flex-col",
-  variants: {
-    // R-027: `&[data-orientation="horizontal"]` → `flex-row flex-wrap gap-4`.
-    // R-026 (vertical, `mt-4` on every item) travels through the item context,
-    // because NSH has no descendant selector.
-    orientation: {
-      vertical: "",
-      horizontal: "flex-row flex-wrap gap-4",
-    },
-    variant: {
-      // R-028: `.radio-group--primary` is an empty block (the default).
-      primary: "",
-      // R-033: `.radio-group--secondary` produces a BEM class only here; the
-      // CSS declarations are the descendant rules R-029—R-032, carried to each
-      // item by the group context. D18 drops the name.
-      secondary: "",
-    },
-  },
-  defaultVariants: {
-    variant: "primary",
-    orientation: "vertical",
-  },
-});
-
-export type RadioGroupVariants = VariantProps<typeof radioGroupVariants>;
-
-export type RadioGroupVariant = NonNullable<RadioGroupVariants["variant"]>;
-
-export type RadioGroupOrientation = NonNullable<RadioGroupVariants["orientation"]>;

@@ -1,5 +1,5 @@
 import type { Bounds, JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
-import { computed, effect, signal, split, untracked, View } from "nsh";
+import { cleanup, computed, effect, signal, split, untracked, View } from "nsh";
 
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
 import { DescriptionContext } from "../description/context";
@@ -9,25 +9,25 @@ import {
   createRadioGroupState,
   type RadioGroupState,
   type RadioGroupValidationResult,
-} from "./create-radio-group-state";
-import type { RadioGroupRenderProps } from "./radio-context";
+} from "../radio/create-radio-group-state";
+import type { RadioGroupRenderProps } from "../radio/radio-context";
 import {
   RadioGroupContext,
   type RadioGroupContextValue,
   type RadioGroupItem,
-} from "./radio-context";
+} from "../radio/radio-context";
+import { renderChildren } from "../radio/render-children";
 import {
   radioGroupVariants,
   type RadioGroupOrientation,
   type RadioGroupVariant,
-} from "./radio.styles";
-import { renderChildren } from "./render-children";
+} from "./radio-group.styles";
 
 /* -------------------------------------------------------------------------------------------------
  * Render props
  * -----------------------------------------------------------------------------------------------*/
 
-export type { RadioGroupRenderProps } from "./radio-context";
+export type { RadioGroupRenderProps } from "../radio/radio-context";
 
 /* -------------------------------------------------------------------------------------------------
  * RadioGroup Root
@@ -208,8 +208,10 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
   ] as const);
 
   // --- Orientation and variant ------------------------------------------------
-  // R-026 / R-027: both are group state; the item reads the orientation for its
-  // `mt-4` and the Control reads the variant for R-029—R-032.
+  // R-001—R-004 are the group's own classes (see `radio-group.styles.ts`).
+  // Both dimensions are context state: the item reads the orientation for its
+  // `mt-4` (R-002) and the Control reads the variant for the item-side rules
+  // (R-005—R-008).
   const orientation = computed<RadioGroupOrientation>(() => local.orientation ?? "vertical");
   const variant = computed<RadioGroupVariant>(() => local.variant ?? "primary");
 
@@ -336,6 +338,68 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
   const focusedValue = signal<string | null>(null);
   const pendingFocus = signal<string | null>(null);
 
+  // `useRadioGroup.ts:82-91` reports the group's focus through `useFocusWithin`,
+  // which fires `onBlur` / `onFocusChange(false)` only when the focus leaves the
+  // group container: the element that took the focus (`relatedTarget`) lies
+  // outside it. NSH delivers the outgoing item's blur before the next item's
+  // focus, with no relatedTarget, so an empty token set is not proof of a leave
+  // on its own: the arrow keys empty it on the way to the next radio. The leave
+  // is committed one task later, and a focus that arrives in between cancels
+  // it, which is the containment check `useFocusWithin` performs synchronously.
+  let leaveTimer: ReturnType<typeof setTimeout> | undefined;
+  let leaveAttempts = 0;
+
+  const cancelLeave = () => {
+    if (leaveTimer != null) {
+      clearTimeout(leaveTimer);
+      leaveTimer = undefined;
+    }
+
+    leaveAttempts = 0;
+  };
+
+  cleanup(cancelLeave);
+
+  const leaveGroup = () => {
+    leaveTimer = undefined;
+
+    if (focusedTokens().size > 0) {
+      return;
+    }
+
+    // A handoff's `focus()` runs from the effect that `pendingFocus` drives
+    // (port sheet §5); while that effect is still due, the leave waits, so it
+    // cannot land between the blur and the focus of an arrow move. Two attempts
+    // bound the wait for a handoff whose item no longer exists.
+    if (pendingFocus() != null && leaveAttempts < 2) {
+      leaveAttempts += 1;
+      leaveTimer = setTimeout(leaveGroup, 0);
+
+      return;
+    }
+
+    leaveAttempts = 0;
+    focusedValue.set(null);
+
+    // The roving target is cleared when the focus really leaves the group. A
+    // handoff whose target never took the focus still needs the item
+    // `focusable` for the call that is already on its way (port sheet §5).
+    if (!focusHandoff) {
+      rovingValue.set(null);
+    }
+
+    focusHandoff = false;
+
+    // `useRadioGroup.ts:83-87`: an empty group with no selection forgets the
+    // last focused value on blur.
+    if (state.selectedValue() == null) {
+      state.setLastFocusedValue(null);
+    }
+
+    local.onFocusChange?.(false);
+    local.onBlur?.();
+  };
+
   const setItemFocused = (token: object, value: string, focused: boolean) => {
     const current = focusedTokens();
     const had = current.has(token);
@@ -347,50 +411,39 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
     const next = new Set(current);
 
     if (focused) {
+      // A focus that lands before the deferred leave runs is a move inside the
+      // group, so the group never stopped being focused and no leave is left to
+      // report.
+      const wasFocused = current.size > 0 || leaveTimer != null;
+
+      cancelLeave();
       next.add(token);
+      focusedTokens.set(next);
+
       // `useRadioGroup`'s focus handler records the item that took the focus so
       // the tab stop can return there while nothing is selected.
       state.setLastFocusedValue(value);
       focusedValue.set(value);
       focusHandoff = false;
-    } else {
-      next.delete(token);
-    }
 
-    const wasFocused = current.size > 0;
-    const isFocused = next.size > 0;
+      if (wasFocused) {
+        return;
+      }
 
-    focusedTokens.set(next);
-
-    if (wasFocused === isFocused) {
-      return;
-    }
-
-    local.onFocusChange?.(isFocused);
-
-    if (isFocused) {
+      local.onFocusChange?.(true);
       local.onFocus?.();
 
       return;
     }
 
-    focusedValue.set(null);
+    next.delete(token);
+    focusedTokens.set(next);
 
-    // The roving target is cleared when the focus really leaves the group. A
-    // handoff between two items (the arrow keys) is not a leave: its blur can
-    // arrive before the next focus, and clearing then would take the target's
-    // `focusable` away from the focus that is still coming.
-    if (!focusHandoff) {
-      rovingValue.set(null);
+    if (next.size > 0 || leaveTimer != null) {
+      return;
     }
 
-    // `useRadioGroup.ts:83-87`: an empty group with no selection forgets the
-    // last focused value on blur.
-    if (state.selectedValue() == null) {
-      state.setLastFocusedValue(null);
-    }
-
-    local.onBlur?.();
+    leaveTimer = setTimeout(leaveGroup, 0);
   };
 
   // `useRadioGroup.ts:122-142`: Down is always the next item and Up always the
@@ -433,7 +486,7 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
   createKeymapScope({
     // The list keys are bound only while one item has the focus; the arrow keys
     // on a focused view are the group's, never a global command.
-    isActive: () => focusedValue() != null,
+    isActive: () => focusedTokens().size > 0 || focusHandoff,
     bindings: {
       arrowdown: () => move(1),
       arrowup: () => move(-1),
@@ -530,7 +583,7 @@ export function RadioGroupRoot(props: RadioGroupRootProps): JSX.Element {
     isRequired,
     isInvalid,
     validationErrors: state.validationErrors,
-    // R-026: `&[data-orientation="vertical"] [data-slot="radio"] { mt-4 }`.
+    // R-002: `&[data-orientation="vertical"] [data-slot="radio"] { mt-4 }`.
     // NSH has no descendant selector, so the group hands the class to every
     // item root, the first one included, exactly as the stylesheet does.
     itemClass: () => (orientation() === "vertical" ? "mt-4" : undefined),

@@ -22,6 +22,9 @@ import { probe } from "@scenario/probe";
  *                   `disabled`, `disabledValue`; onChange, per-item
  *                   onFocus / onBlur and the "Selected: …" text from the
  *                   group's `state` accessor
+ *   group-focus     Plan with defaultValue "a", the group's own onFocus /
+ *                   onBlur / onFocusChange recorded, and a focusable `after`
+ *                   view past the group so Tab can leave it
  *   pets            Favorite Pet (Dogs / Cats / Dragons); params: `label`,
  *                   `ariaLabel`, `description`, `default`, `disabled`
  *                   (true / false), `readonly`, `required`, `invalid`,
@@ -141,6 +144,7 @@ type GroupProps = {
   disabledValue?: string;
   controlTestID?: string;
   layout?: boolean;
+  focusProbes?: boolean;
 };
 
 function groupBody(props: GroupProps) {
@@ -173,7 +177,12 @@ function groupAttrs(props: GroupProps) {
     isInvalid: props.invalid,
     isReadOnly: props.readonly,
     isRequired: props.required,
+    onBlur: props.focusProbes ? () => probe("groupBlur")("group") : undefined,
     onChange: probe("onChange"),
+    onFocus: props.focusProbes ? () => probe("groupFocus")("group") : undefined,
+    onFocusChange: props.focusProbes
+      ? (isFocused: boolean) => probe("groupFocusChange")(isFocused)
+      : undefined,
     orientation: props.orientation,
     variant: props.variant,
   };
@@ -268,6 +277,17 @@ function ControlledCase() {
         testID="force"
       >
         <Text>force</Text>
+      </View>
+    </Stage>
+  );
+}
+
+function GroupFocusCase() {
+  return (
+    <Stage>
+      <Group ariaLabel="Favorite Pet" defaultValue="a" focusProbes options={PLAN} />
+      <View class="h-9 items-center px-2 bg-default" focusable role="button" testID="after">
+        <Text>after</Text>
       </View>
     </Stage>
   );
@@ -474,6 +494,7 @@ function Fixture() {
   if (name === "pets") return <PetsCase />;
   if (name === "controlled") return <ControlledCase />;
   if (name === "layout") return <LayoutCase />;
+  if (name === "group-focus") return <GroupFocusCase />;
   if (name === "controlled-state") return <ControlledStateCase />;
   if (name === "set-value") return <SetValueCase />;
   if (name === "null-default") return <NullDefaultCase />;
