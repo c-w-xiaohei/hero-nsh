@@ -11,8 +11,8 @@ import { callsOf } from "../../helpers/calls";
  *
  * All cases run on the headless desktop (`platform: "windows"`), which the port
  * sheet gives for these rows: typing focuses an input on every platform,
- * `app.press` moves the focus to the outside input, and nothing here needs Tab
- * focus movement. T-012 moves the focus with Tab, so it lives in
+ * typing into the outside input moves the focus away from the field, and
+ * nothing here needs Tab focus movement. T-012 moves the focus with Tab, so it lives in
  * color-field.heroui.web.test.tsx.
  *
  * Translation choices, one row at a time (SOP 3.2):
@@ -79,7 +79,7 @@ test("T-004 should support fullWidth as the root's width", async () => {
 
 // heroui/packages/react/tests/components/color-field/color-field.test.tsx:70
 // T-005: typing only writes the input text; the value is committed on blur, and
-// pressing the outside input is the blur. Nothing reaches onChange before it.
+// typing into the outside input is the blur. Nothing reaches onChange before it.
 test("T-005 should type a hex value and commit it on blur", async () => {
   const app = await openCase("controlled");
 
