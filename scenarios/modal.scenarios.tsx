@@ -27,6 +27,14 @@ import type { Component } from "./types";
  * `modal/labelled` carries the Kobalte dialog suite's texts (title /
  * description); NSH has no id relation channel, so only the text matters
  * (port sheet §5.6).
+ *
+ * The three regression entries at the end back the X-00x cases:
+ * `modal/scroll-outside-long` puts 30 x 40pt rows in an outside-scroll dialog
+ * (taller than the 768pt test window, so the carrier has to be a `Scroll`);
+ * `modal/backdrop-open` gives `Modal.Backdrop` its own `isOpen`, with the Root
+ * left closed; `modal/forwarded-props` puts an `accessibilityLabel` on every
+ * part, `onPress` on the Heading and the Backdrop body (`testID="backdrop"`,
+ * `isDismissable={false}` so only the caller's handler can run).
  */
 
 /* -------------------------------------------------------------------------------------------------
@@ -317,6 +325,106 @@ function ScrollOutside() {
 }
 
 /* -------------------------------------------------------------------------------------------------
+ * Regression fixtures (X-001 … X-003)
+ * -----------------------------------------------------------------------------------------------*/
+
+/* 30 rows of 40pt each: taller than the 768pt window the tests open. */
+const LONG_ROWS = Array.from({ length: 30 }, (_, index) => index + 1);
+
+function ScrollOutsideLong() {
+  return (
+    <Stage>
+      <Modal defaultOpen onOpenChange={probe("openChange")}>
+        <Button>Open modal</Button>
+        <Modal.Backdrop>
+          <Modal.Container scroll="outside">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>Scroll: Outside</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                {LONG_ROWS.map((row) => (
+                  <Text class="h-10">{`Row ${String(row).padStart(2, "0")}`}</Text>
+                ))}
+              </Modal.Body>
+              <Modal.Footer>
+                <Button slot="close">Confirm</Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+    </Stage>
+  );
+}
+
+function BackdropOwnOpen() {
+  const open = signal(true);
+
+  return (
+    <Stage>
+      <Modal>
+        <Button>Open modal</Button>
+        <Modal.Backdrop
+          isOpen={open()}
+          onOpenChange={(isOpen: boolean) => {
+            probe("backdropOpen")(isOpen);
+            open.set(isOpen);
+          }}
+        >
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Backdrop-owned modal</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <Text>Backdrop owned content</Text>
+              </Modal.Body>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+    </Stage>
+  );
+}
+
+function ForwardedProps() {
+  return (
+    <Stage>
+      <Modal defaultOpen>
+        <Button>Open modal</Button>
+        <Modal.Backdrop
+          testID="backdrop"
+          isDismissable={false}
+          onPress={probe("backdropPress")}
+        >
+          <Modal.Container placement="top" accessibilityLabel="Forwarded container">
+            <Modal.Dialog accessibilityLabel="Forwarded dialog">
+              <Modal.CloseTrigger />
+              <Modal.Header accessibilityLabel="Forwarded header">
+                <Modal.Heading
+                  accessibilityLabel="Forwarded heading"
+                  onPress={probe("headingPress")}
+                >
+                  Forwarded heading
+                </Modal.Heading>
+              </Modal.Header>
+              <Modal.Body accessibilityLabel="Forwarded body">
+                <Text>Forwarded props content</Text>
+              </Modal.Body>
+              <Modal.Footer accessibilityLabel="Forwarded footer">
+                <Text>Footer text</Text>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+    </Stage>
+  );
+}
+
+/* -------------------------------------------------------------------------------------------------
  * Kobalte texts
  * -----------------------------------------------------------------------------------------------*/
 
@@ -352,5 +460,8 @@ export const modalScenarios: Record<string, Component> = {
   "modal/trigger": CustomTrigger,
   "modal/dismiss-behaviour": DismissBehaviour,
   "modal/scroll-outside": ScrollOutside,
+  "modal/scroll-outside-long": ScrollOutsideLong,
+  "modal/backdrop-open": BackdropOwnOpen,
+  "modal/forwarded-props": ForwardedProps,
   "modal/labelled": Labelled,
 };
