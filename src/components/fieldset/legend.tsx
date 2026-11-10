@@ -1,6 +1,7 @@
 import type { JSX, StyleProp, TextProps, TextStyle, ViewRef } from "nsh";
 import { computed, split, Text } from "nsh";
 
+import { FieldsetContext } from "./context";
 import type { FieldsetDomProps } from "./fieldset-dom-props";
 import { fieldsetVariants } from "./fieldset.styles";
 
@@ -12,8 +13,10 @@ import { fieldsetVariants } from "./fieldset.styles";
  * The props of `Fieldset.Legend`: HeroUI 3.2.7's `FieldsetLegendProps`, the
  * props of a `<legend>` element, expressed with NSH's text host props.
  *
- * Its classes are self-sufficient (R-003), so the part does not read the
- * root's context: it can be placed anywhere, as upstream's can.
+ * The slot class comes from the root (R-003): upstream reads `slots?.legend`
+ * from `FieldsetContext` and composes it onto `className` only when a root is
+ * above (`fieldset.tsx:115-122`), so this part follows the same rule and stays
+ * classless — apart from its own `className` — outside a `Fieldset`.
  */
 export interface FieldsetLegendProps
   extends Omit<TextProps, "children" | "class" | "style" | "ref">,
@@ -43,8 +46,15 @@ export function FieldsetLegend(props: FieldsetLegendProps): JSX.Element {
     "render",
   ] as const);
 
+  const fieldset = FieldsetContext();
+
+  // Upstream's `composeSlotClassName(undefined, className)` applies nothing but
+  // the caller's class when there is no root (`compose.ts:22-28`); the default
+  // context is `{}` (`fieldset.tsx:29`).
   const classes = computed(() =>
-    fieldsetVariants().legend({ className: local.className }),
+    fieldset === undefined
+      ? local.className
+      : fieldsetVariants().legend({ className: local.className }),
   );
 
   // The one read of `props.children`, at the placement. A bare string is what a

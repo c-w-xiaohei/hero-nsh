@@ -2,6 +2,7 @@ import type { JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
 import { computed, split, View } from "nsh";
 
 import { renderChildren } from "./children";
+import { FieldsetContext } from "./context";
 import type { FieldsetDomProps } from "./fieldset-dom-props";
 import { fieldsetVariants } from "./fieldset.styles";
 
@@ -45,8 +46,14 @@ export function FieldGroup(props: FieldGroupProps): JSX.Element {
     "render",
   ] as const);
 
+  const fieldset = FieldsetContext();
+
+  // Upstream reads `slots?.fieldGroup` from the root context and applies only
+  // `className` outside a `Fieldset` (`compose.ts:22-28`, `fieldset.tsx:142-148`).
   const classes = computed(() =>
-    fieldsetVariants().fieldGroup({ className: local.className }),
+    fieldset === undefined
+      ? local.className
+      : fieldsetVariants().fieldGroup({ className: local.className }),
   );
 
   // The one read of `props.children`, at the placement. A bare string inside a

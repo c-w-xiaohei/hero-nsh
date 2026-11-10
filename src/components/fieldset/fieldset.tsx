@@ -9,6 +9,7 @@ import type {
 } from "nsh";
 import { computed, split, View } from "nsh";
 
+import { renderChildren } from "./children";
 import { FieldsetContext, type FieldsetContextValue } from "./context";
 import type { FieldsetDomProps } from "./fieldset-dom-props";
 import { fieldsetVariants } from "./fieldset.styles";
@@ -110,7 +111,11 @@ export function FieldsetRoot(props: FieldsetRootProps): JSX.Element {
 
   // The one read of `props.children`, inside the provider and at the placement
   // (research 4.1, 4.6; a component that provides a context must read it here,
-  // not through a `computed` created outside the provider's owner).
+  // not through a `computed` created outside the provider's owner). The value
+  // goes through this unit's `renderChildren`, the way `<fieldset>` shows a
+  // bare string: upstream types the prop as `ReactNode` and renders
+  // `<Fieldset>Content</Fieldset>` as text (fieldset.test.tsx:25, :34-36), while
+  // a string directly inside a `View` is not drawn.
   return (
     <FieldsetContext.Provider value={contextValue}>
       <View
@@ -125,7 +130,7 @@ export function FieldsetRoot(props: FieldsetRootProps): JSX.Element {
         // A `<fieldset>` is not a focus stop upstream (common rules).
         focusable={props.focusable ?? false}
       >
-        {local.children}
+        {renderChildren(local.children)}
       </View>
     </FieldsetContext.Provider>
   );

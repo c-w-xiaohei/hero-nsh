@@ -23,7 +23,9 @@ import type { Accessor } from "nsh";
  * `Fieldset`, so a control rendered on its own keeps its own expression. The
  * root always provides the value (not only while disabled, as upstream wraps
  * the `Provider`), because the accessor lets a subtree follow `disabled` back to
- * `false` without remounting.
+ * `false` without remounting; `Legend`, `Group` and `Actions` also read it for
+ * presence, since upstream composes their slot class only when a root exists
+ * (`fieldset.tsx:115-122`, `compose.ts:22-28`).
  *
  * Internal module: not re-exported from `index.ts`.
  */
