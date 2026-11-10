@@ -34,6 +34,7 @@ import {
 } from "nsh";
 
 import { createInteractionModality } from "../../primitives";
+import { ColorPickerColorContext } from "../color-picker/color-picker-context";
 import { joinClassNames } from "./class-names";
 import { ColorAreaBackground } from "./color-area-background";
 import type { ColorAreaContextValue } from "./color-area-context";
@@ -215,13 +216,25 @@ export function ColorAreaRoot(props: ColorAreaRootProps): JSX.Element {
     () => local["aria-label"] ?? local.accessibilityLabel,
   );
 
+  // RAC provides `{ value, onChange }` from a surrounding `ColorPicker` through
+  // its slotted context and merges it only where the caller left the prop out
+  // (port sheet §5, change 1). Outside a picker this is `undefined`.
+  const outer = ColorPickerColorContext();
+
   const state = createColorAreaState({
-    value: () => local.value,
+    value: () => (local.value !== undefined ? local.value : outer?.value()),
     defaultValue: () => local.defaultValue,
     colorSpace: () => local.colorSpace,
     xChannel: () => local.xChannel,
     yChannel: () => local.yChannel,
-    onChange: (color) => local.onChange?.(color),
+    onChange: (color) => {
+      local.onChange?.(color);
+
+      // Only when the picker around this area is the one driving its value.
+      if (local.value === undefined) {
+        outer?.onChange(color);
+      }
+    },
     onChangeEnd: (color) => local.onChangeEnd?.(color),
     isDisabled,
   });

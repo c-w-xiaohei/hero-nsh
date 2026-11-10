@@ -9,6 +9,7 @@ import type {
 import { computed, locale, signal, split, untracked, View } from "nsh";
 
 import { createInteractionModality } from "../../primitives/create-interaction-modality";
+import { ColorPickerColorContext } from "../color-picker/color-picker-context";
 import type { FieldState } from "../label/context";
 import { FieldContext } from "../label/context";
 import type { Color, ColorChannel, ColorSpace } from "../color-swatch";
@@ -220,10 +221,22 @@ export function ColorSliderRoot(props: ColorSliderRootProps): JSX.Element {
   );
 
   // --- Value and geometry ----------------------------------------------------
+  // RAC provides `{ value, onChange }` from a surrounding `ColorPicker` through
+  // its slotted context and merges it only where the caller left the prop out
+  // (port sheet §5, change 1). Outside a picker this is `undefined`.
+  const outer = ColorPickerColorContext();
+
   const state = createColorSliderState({
-    value: () => local.value,
+    value: () => (local.value !== undefined ? local.value : outer?.value()),
     defaultValue: () => local.defaultValue,
-    onChange: (value) => local.onChange?.(value),
+    onChange: (value) => {
+      local.onChange?.(value);
+
+      // Only when the picker around this slider is the one driving its value.
+      if (local.value === undefined) {
+        outer?.onChange(value);
+      }
+    },
     onChangeEnd: (value) => local.onChangeEnd?.(value),
     channel: () => local.channel,
     colorSpace,
