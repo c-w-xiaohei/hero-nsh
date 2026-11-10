@@ -100,6 +100,22 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
     () => local.isInvalid === true || field?.isInvalid?.() === true,
   );
 
+  // A field that lays its parts out on a grid puts this Label in place through
+  // `partClass` (Slider's R-004 / R-005). It goes after the variant classes and
+  // before the caller's `className`, so a caller can still restate it.
+  const classes = computed(() => {
+    const extra = [field?.partClass?.(), local.className]
+      .filter((part): part is string => typeof part === "string" && part.length > 0)
+      .join(" ");
+
+    return labelVariants({
+      className: extra.length > 0 ? extra : undefined,
+      isDisabled: isDisabled(),
+      isInvalid: isInvalid(),
+      isRequired: isRequired(),
+    });
+  });
+
   // The single read of `children` (research 4.1, 4.6): a read builds new native
   // views, so the value is cached in a computed that both the field
   // registration below and the placement in the root `Text` share. It must stay
@@ -150,12 +166,7 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
       ref={(node) => (typeof local.ref === "function" ? local.ref(node) : undefined)}
       nativeID={local.id ?? local.nativeID}
       style={local.style}
-      class={labelVariants({
-        className: local.className,
-        isDisabled: isDisabled(),
-        isInvalid: isInvalid(),
-        isRequired: isRequired(),
-      })}
+      class={classes()}
       // A `<label>` is not a keyboard focus stop upstream; without this a
       // pressable Text would become one (Tab moves between pressables). A
       // caller's own `focusable` still wins: HeroUI forwards whatever `rest`

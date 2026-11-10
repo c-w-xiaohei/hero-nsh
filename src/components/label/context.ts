@@ -51,6 +51,18 @@ export interface FieldState {
 
   /** The label's press was released. */
   pressFieldUp?: (event: PressEvent) => void;
+
+  /**
+   * Classes the field appends to every Label inside it, after the Label's own
+   * variant classes and before the caller's `className`.
+   *
+   * HeroUI reaches these through a descendant selector on the field's block
+   * class (`.slider [data-slot="label"] { @apply w-fit ...; grid-area: label }`).
+   * NSH has no descendant selector, and a field that lays its parts out on a
+   * grid has no other way to put the caller's Label in the right cell. Additive
+   * and optional: a field that has nothing to say leaves every Label as it was.
+   */
+  partClass?: () => string | undefined;
 }
 
 export const FieldContext = context<FieldState | undefined>(undefined);
