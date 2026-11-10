@@ -153,15 +153,17 @@ test("T-009 should expose accessible description via Description", async () => {
 });
 
 // heroui/packages/react/tests/components/color-field/color-field.test.tsx:176
-// T-010: a disabled field reports a disabled input and takes no edit. The
-// input step refuses a non-editable input (`not editable`, no error code), the
-// text stays as it was and onChange never fires.
+// T-010: a disabled field reports a disabled input and takes no edit. Upstream
+// only asserts that the input is disabled and that typing `x` leaves onChange
+// untouched. The headless host also refuses the step (`not editable`), but a
+// real browser drops the keys silently, so the refusal is tolerated rather
+// than required; the typed text never lands and onChange never fires.
 test("T-010 should support disabled state and block typing", async () => {
   const app = await openCase("disabled");
 
   expect(app.enabled("id:color-input")).toBe(false);
 
-  await expect(app.type("id:color-input", "x")).rejects.toThrow("not editable");
+  await app.type("id:color-input", "x").catch(() => undefined);
   expect(app.value("id:color-input")).toBe("#0485F7");
   expect(callsOf(app, "onChange")).toHaveLength(0);
 });
