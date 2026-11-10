@@ -169,20 +169,24 @@ export function DropdownTrigger(props: DropdownTriggerProps) {
   const isFocusVisible = computed(() => focused() && modality.isKeyboard());
 
   // React Aria's `useMenuTrigger` binds the trigger's arrows and the Alt forms
-  // of Return, Space and the arrows (`useMenuTrigger.ts:78-108`): ArrowDown
+  // of Return, Space and the arrows (`useMenuTrigger.ts:88-100`): ArrowDown
   // opens on the first row, ArrowUp on the last, and each key's focus strategy
-  // rides on the open. Return and Space need no binding here: a keyboard press
-  // on a focused view arrives as a native press, which `openFromPress` routes.
-  // The bindings exist only while the trigger holds the keyboard focus.
+  // rides on the open. Alt+Enter and Alt+Space are the `longPress` trigger's
+  // keyboard activation, so they open only in that mode and on the first row;
+  // in `press` mode upstream leaves them alone, a plain Return or Space being
+  // the activation there. Return and Space themselves need no binding here: a
+  // keyboard press on a focused view arrives as a native press, which
+  // `openFromPress` routes. The bindings exist only while the trigger holds the
+  // keyboard focus.
   createKeymapScope({
     isActive: focused,
     bindings: {
-      arrowdown: () => overlay?.triggerKeyOpen?.("first", true),
-      "alt+arrowdown": () => overlay?.triggerKeyOpen?.("first"),
-      arrowup: () => overlay?.triggerKeyOpen?.("last", true),
-      "alt+arrowup": () => overlay?.triggerKeyOpen?.("last"),
-      "alt+enter": () => overlay?.triggerKeyOpen?.("last"),
-      "alt+space": () => overlay?.triggerKeyOpen?.("last"),
+      arrowdown: () => overlay?.triggerKeyOpen?.("first", "arrow"),
+      "alt+arrowdown": () => overlay?.triggerKeyOpen?.("first", "altArrow"),
+      arrowup: () => overlay?.triggerKeyOpen?.("last", "arrow"),
+      "alt+arrowup": () => overlay?.triggerKeyOpen?.("last", "altArrow"),
+      "alt+enter": () => overlay?.triggerKeyOpen?.("first", "activation"),
+      "alt+space": () => overlay?.triggerKeyOpen?.("first", "activation"),
     },
   });
 

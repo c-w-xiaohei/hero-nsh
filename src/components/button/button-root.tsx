@@ -131,20 +131,21 @@ export function ButtonRoot(props: ButtonRootProps) {
   const isFocusVisible = computed(() => isFocused() && modality.isKeyboard());
 
   // A Button placed in a Dropdown root is that overlay's trigger, so it takes
-  // the trigger's arrow keys (`useMenuTrigger.ts:78-108`, dropdown port sheet
-  // §5): ArrowDown opens on the first row, ArrowUp on the last, the Alt forms
-  // in every mode and the plain ones outside `longPress`. Outside such a root
-  // the context has no channel and the Button binds nothing.
+  // the trigger's keys (`useMenuTrigger.ts:88-100`, dropdown port sheet §5):
+  // ArrowDown opens on the first row, ArrowUp on the last, the Alt arrows in
+  // every mode, the plain arrows only outside `longPress`, and the Alt forms of
+  // Return and Space only in `longPress` mode, on the first row. Outside such a
+  // root the context has no channel and the Button binds nothing.
   createKeymapScope({
     isActive: isFocused,
     bindings: overlayTrigger?.triggerKeyOpen
       ? {
-          arrowdown: () => overlayTrigger?.triggerKeyOpen?.("first", true),
-          "alt+arrowdown": () => overlayTrigger?.triggerKeyOpen?.("first"),
-          arrowup: () => overlayTrigger?.triggerKeyOpen?.("last", true),
-          "alt+arrowup": () => overlayTrigger?.triggerKeyOpen?.("last"),
-          "alt+enter": () => overlayTrigger?.triggerKeyOpen?.("last"),
-          "alt+space": () => overlayTrigger?.triggerKeyOpen?.("last"),
+          arrowdown: () => overlayTrigger?.triggerKeyOpen?.("first", "arrow"),
+          "alt+arrowdown": () => overlayTrigger?.triggerKeyOpen?.("first", "altArrow"),
+          arrowup: () => overlayTrigger?.triggerKeyOpen?.("last", "arrow"),
+          "alt+arrowup": () => overlayTrigger?.triggerKeyOpen?.("last", "altArrow"),
+          "alt+enter": () => overlayTrigger?.triggerKeyOpen?.("first", "activation"),
+          "alt+space": () => overlayTrigger?.triggerKeyOpen?.("first", "activation"),
         }
       : {},
   });

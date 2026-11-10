@@ -120,13 +120,24 @@ export function DropdownRoot(props: DropdownRootProps) {
     }
   };
 
-  // The arrow keys of `MenuTrigger`'s trigger props (`useMenuTrigger.ts:78-108`),
+  // The keys of `MenuTrigger`'s trigger props (`useMenuTrigger.ts:88-100`),
   // shared by `Dropdown.Trigger` and a Button placed in the root: ArrowDown
-  // opens on the first row, ArrowUp on the last, and the plain keys are off in
-  // `longPress` mode (which opens only on the hold; a keyboard activation still
-  // opens, through the press channel). The Alt forms stay live in every mode.
-  const triggerKeyOpen = (strategy: "first" | "last", plain?: boolean) => {
-    if (plain === true && triggerMode() === "longPress") {
+  // opens on the first row, ArrowUp on the last. The gate is the second
+  // argument upstream and it differs per family: the plain arrows do nothing in
+  // `longPress` mode (`open(trigger !== 'longPress', e, 'first')`), the Alt
+  // arrows stay live in every mode, and the Alt forms of Return and Space open
+  // only in `longPress` mode, on the first row (`open(trigger === 'longPress',
+  // e, 'first')`) — in `press` mode upstream does nothing for those two, since
+  // a plain Return already arrives as the trigger's press.
+  const triggerKeyOpen = (
+    strategy: "first" | "last",
+    keys: "arrow" | "altArrow" | "activation" = "altArrow",
+  ) => {
+    if (keys === "arrow" && triggerMode() === "longPress") {
+      return;
+    }
+
+    if (keys === "activation" && triggerMode() !== "longPress") {
       return;
     }
 
