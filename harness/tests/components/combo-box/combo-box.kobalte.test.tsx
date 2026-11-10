@@ -137,6 +137,7 @@ test("T-059 selects the clicked option after filtering", async () => {
   await app.waitFor(combo.COMBO_BOX_LISTBOX);
   await app.type(combo.COMBO_BOX, "ap");
 
+  expect(combo.inputValue(app)).toBe("ap");
   expect(app.shows("role:option[Apple]")).toBe(true);
   expect(app.shows("role:option[Grapes]")).toBe(true);
   expect(app.shows("role:option[Pineapple]")).toBe(true);

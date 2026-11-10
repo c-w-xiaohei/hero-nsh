@@ -129,3 +129,118 @@ test("T-006 renders FieldError when invalid", async () => {
 
   expect(app.shows("text:Please choose an animal")).toBe(true);
 });
+
+/*
+ * Port regressions from the deep review of round 2. Each one is written to the
+ * required React Aria behavior, not to the port's current one.
+ */
+
+// src/components/combo-box/combo-box-root.tsx:376-378 (review finding);
+// upstream packages/react-stately/src/combobox/useComboBoxState.ts:309-316
+// (`onOpenChange` carries `menuOpenTrigger.current` only while opening) and
+// :338,343 (the trigger press opens with "manual", arrows included). Closing
+// passes no source; the probe serialises that `undefined` as null.
+test("X-001 reports the action that opened the list and drops the source on close", async () => {
+  const app = await openCase("log");
+
+  await app.press(combo.COMBO_BOX_TRIGGER);
+  await app.waitFor(combo.COMBO_BOX_LISTBOX);
+  await app.clock!.runFor(20);
+
+  expect(callsOf(app, "openChange")).toEqual([[true, "manual"]]);
+
+  await app.press(combo.COMBO_BOX_TRIGGER);
+  await settle(app);
+
+  expect(callsOf(app, "openChange")).toEqual([
+    [true, "manual"],
+    [false, null],
+  ]);
+});
+
+// src/components/combo-box/combo-box-root.tsx:759-784 (review finding);
+// upstream packages/react-stately/src/combobox/useComboBoxState.ts:328,338,350-374
+// (a collection with nothing displayable is not opened unless
+// allowsEmptyCollection is set or the root owns the collection). The field
+// mounts on an empty, uncontrolled collection, so the trigger press is the open
+// path under test.
+test("X-004 does not open a collection that has nothing to display", async () => {
+  const app = await openCase("no-items");
+
+  expect(combo.getListbox(app)).toBe(false);
+
+  await app.press(combo.COMBO_BOX_TRIGGER);
+  await settle(app);
+
+  expect(combo.getListbox(app)).toBe(false);
+  expect(callsOf(app, "openChange")).toHaveLength(0);
+});
+
+// src/components/combo-box/combo-box-root.tsx:759-784 (review finding);
+// upstream packages/react-stately/src/combobox/useComboBoxState.ts:328,338,350-374:
+// `allowsEmptyCollection` keeps the empty list displayable, so the trigger does
+// open it — a guard that always refuses would be wrong.
+test("X-005 opens an empty list when allowsEmptyCollection is set", async () => {
+  const app = await openCase("no-items-allowed");
+
+  expect(combo.getListbox(app)).toBe(false);
+
+  await app.press(combo.COMBO_BOX_TRIGGER);
+  await app.waitFor(combo.COMBO_BOX_LISTBOX);
+
+  expect(combo.getListbox(app)).toBe(true);
+  expect(combo.getOptions(app)).toBe(0);
+});
+
+// src/components/combo-box/combo-box-root.tsx:362-365 (review finding);
+// upstream packages/react-stately/src/combobox/useComboBoxState.ts:298-303 skips
+// the default filter only for the controlled `items` prop, and
+// packages/react-aria-components/src/ComboBox.tsx:206-213 forwards only
+// `props.items`, so `defaultItems` stays filtered.
+test("X-006 filters a defaultItems collection while typing", async () => {
+  const app = await openCase("default-items");
+
+  await app.press(combo.COMBO_BOX);
+  await app.waitFor(combo.COMBO_BOX_LISTBOX);
+
+  expect(combo.getOptions(app)).toBe(3);
+
+  await app.type(combo.COMBO_BOX, "Tw");
+  await app.clock!.runFor(20);
+
+  expect(combo.inputValue(app)).toBe("Tw");
+  expect(app.shows("role:option[Two]")).toBe(true);
+  expect(app.shows("role:option[One]")).toBe(false);
+  expect(app.shows("role:option[Three]")).toBe(false);
+});
+
+// src/components/combo-box/combo-box-trigger.tsx:36-96 (review finding);
+// upstream packages/react/src/components/combo-box/combo-box.tsx:170-176 makes
+// `ComboBoxTriggerProps extends ButtonProps`, so the caller's press handlers run
+// alongside the internal toggle.
+test("X-010 runs the trigger's press handlers beside its own toggle", async () => {
+  const app = await openCase("log");
+
+  await app.press(combo.COMBO_BOX_TRIGGER);
+  await app.waitFor(combo.COMBO_BOX_LISTBOX);
+  await app.clock!.runFor(20);
+
+  expect(callsOf(app, "triggerPress")).toHaveLength(1);
+  expect(callsOf(app, "triggerPressChange")).toEqual([[true], [false]]);
+  expect(callsOf(app, "triggerPressStart")).toHaveLength(1);
+  expect(callsOf(app, "triggerPressUp")).toHaveLength(1);
+  expect(callsOf(app, "triggerPressEnd")).toHaveLength(1);
+  expect(combo.getListbox(app)).toBe(true);
+
+  await app.press(combo.COMBO_BOX_TRIGGER);
+  await settle(app);
+
+  expect(callsOf(app, "triggerPress")).toHaveLength(2);
+  expect(callsOf(app, "triggerPressChange")).toEqual([
+    [true],
+    [false],
+    [true],
+    [false],
+  ]);
+  expect(combo.getListbox(app)).toBe(false);
+});

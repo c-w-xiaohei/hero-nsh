@@ -140,3 +140,110 @@ test("T-012 moves the controlled list's highlight without adding a popup Tab sto
   expect(combo.getListbox(app)).toBe(false);
   expect(combo.endsOn(app, "submitFocus")).toBe(true);
 });
+
+/*
+ * Port regressions from the deep review of round 2. Each one is written to the
+ * required React Aria behavior, not to the port's current one; they need
+ * keyboard focus, so they live in this `.web.` file.
+ */
+
+// src/components/combo-box/combo-box-root.tsx:759-784 (review finding);
+// upstream packages/react-stately/src/combobox/useComboBoxState.ts:328,338 with
+// `menuTrigger === "focus"` sets `showAllItems`, so the focus open shows the
+// whole collection, not just the selected row.
+test("X-002 shows every option on a focus open and reports the focus source", async () => {
+  const app = await openCase("default-key");
+
+  await app.keyboard.press("tab");
+  await app.waitFor(combo.COMBO_BOX_LISTBOX);
+  await app.clock!.runFor(20);
+
+  expect(callsOf(app, "openChange")).toEqual([[true, "focus"]]);
+  expect(combo.getOptions(app)).toBe(3);
+  expect(app.shows("role:option[Cat]")).toBe(true);
+  expect(app.shows("role:option[Dog]")).toBe(true);
+  expect(app.shows("role:option[Panda]")).toBe(true);
+});
+
+// src/components/combo-box/combo-box-root.tsx:376-378 (review finding);
+// upstream packages/react-stately/src/combobox/useComboBoxState.ts:338,343: an
+// ArrowDown / ArrowUp open names the action "manual", like the trigger press.
+test("X-003 reports an ArrowDown open as manual", async () => {
+  const app = await openCase("manual");
+
+  await app.keyboard.press("tab");
+  await app.keyboard.press("arrowdown");
+  await app.waitFor(combo.COMBO_BOX_LISTBOX);
+  await app.clock!.runFor(20);
+
+  expect(callsOf(app, "openChange")).toEqual([[true, "manual"]]);
+});
+
+// src/components/combo-box/combo-box-root.tsx:676-712 (review finding);
+// upstream packages/react-stately/src/combobox/useComboBoxState.ts:466-478:
+// clearing the input of a single field whose selection is not fully controlled
+// clears the selection through the normal callback path.
+test("X-007 clears a single selection when the input becomes empty", async () => {
+  const app = await openCase("default-key");
+
+  await app.type(combo.COMBO_BOX, "");
+  await app.waitFor(combo.COMBO_BOX_LISTBOX);
+
+  expect(combo.inputValue(app)).toBe("Cat");
+
+  await app.keyboard.press("backspace");
+  await app.keyboard.press("backspace");
+  await app.keyboard.press("backspace");
+  await app.clock!.runFor(20);
+
+  expect(combo.inputValue(app)).toBe("");
+  expect(callsOf(app, "change")).toEqual([[null]]);
+  expect(callsOf(app, "selectionChange")).toEqual([[null]]);
+  expect(combo.getListbox(app)).toBe(true);
+  expect(combo.selectedOptions(app)).toBe(0);
+});
+
+// src/components/combo-box/combo-box-root.tsx:176 (review finding);
+// upstream packages/react-aria/src/combobox/useComboBox.ts:68,174-186 passes the
+// root's `shouldFocusWrap` to `useSelectableCollection`, so the highlight wraps
+// at both ends.
+test("X-008 wraps the highlight at both ends with shouldFocusWrap", async () => {
+  const app = await openCase("wrap");
+
+  await combo.open(app);
+  await app.clock!.runFor(20);
+
+  expect(combo.isFocusedOption(app, "One")).toBe(true);
+
+  await app.keyboard.press("arrowup");
+  await app.clock!.runFor(20);
+
+  expect(combo.isFocusedOption(app, "Three")).toBe(true);
+  expect(combo.focusedOptions(app)).toBe(1);
+
+  await app.keyboard.press("arrowdown");
+  await app.clock!.runFor(20);
+
+  expect(combo.isFocusedOption(app, "One")).toBe(true);
+  expect(combo.focusedOptions(app)).toBe(1);
+});
+
+// src/components/combo-box/combo-box-root.tsx:879-904 (review finding);
+// upstream packages/react-aria/src/combobox/useComboBox.ts:316-324 binds the list
+// keydown only when the field is neither read-only nor disabled; a read-only
+// field's list never opens.
+test("X-009 keeps a read-only field's list closed on the list keys", async () => {
+  const app = await openCase("read-only");
+
+  await app.keyboard.press("tab");
+  await app.clock!.runFor(20);
+
+  expect(combo.getListbox(app)).toBe(false);
+
+  await app.keyboard.press("arrowdown");
+  await app.keyboard.press("arrowup");
+  await settle(app);
+
+  expect(combo.getListbox(app)).toBe(false);
+  expect(callsOf(app, "openChange")).toHaveLength(0);
+});

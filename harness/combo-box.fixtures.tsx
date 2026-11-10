@@ -49,6 +49,10 @@ import { probe } from "@scenario/probe";
  *   items             items on the root + function children + Value
  *   default-items     defaultItems on the root + function children
  *   empty             typing to an empty collection closes the popover
+ *   no-items      an empty items collection (X-004)
+ *   no-items-allowed  the same with allowsEmptyCollection (X-005)
+ *   read-only         isReadOnly: no typing and no menu (X-009)
+ *   wrap              shouldFocusWrap on the root (X-008)
  *   tab-handoff       two comboboxes and a Submit button (T-010)
  *   items-40          forty rows and a Continue button (T-012)
  *   outside           the animals plus an outside view above the field (T-030)
@@ -139,6 +143,8 @@ type ComboProps = {
   menuTrigger?: "focus" | "input" | "manual";
   allowsCustomValue?: boolean;
   allowsEmpty?: boolean;
+  readOnly?: boolean;
+  shouldFocusWrap?: boolean;
   defaultFilter?: (text: string, inputValue: string) => boolean;
   inputValue?: string;
   onInputChange?: (value: string) => void;
@@ -168,6 +174,8 @@ function Combo(props: ComboProps) {
         allowsCustomValue={props.allowsCustomValue}
         allowsEmptyCollection={props.allowsEmpty}
         defaultFilter={props.defaultFilter}
+        isReadOnly={props.readOnly}
+        shouldFocusWrap={props.shouldFocusWrap}
         items={props.itemsProp ? props.items : undefined}
         defaultItems={props.defaultItems ? props.items : undefined}
         defaultValue={props.multiple ? props.defaultKeys : props.defaultKey}
@@ -178,6 +186,9 @@ function Combo(props: ComboProps) {
           props.onInputChange?.(value);
         }}
         onChange={(value: unknown) => probe("change")(normalizeSelection(value, props.multiple === true))}
+        onSelectionChange={(value: unknown) =>
+          probe("selectionChange")(normalizeSelection(value, props.multiple === true))
+        }
         onOpenChange={(...args: unknown[]) => probe("openChange")(...args)}
       >
         <Label>{props.label ?? "Favorite Animal"}</Label>
@@ -192,6 +203,11 @@ function Combo(props: ComboProps) {
             testID="combo-box-trigger"
             onFocus={probe("triggerFocus")}
             onBlur={probe("triggerBlur")}
+            onPress={probe("triggerPress")}
+            onPressChange={probe("triggerPressChange")}
+            onPressStart={probe("triggerPressStart")}
+            onPressUp={probe("triggerPressUp")}
+            onPressEnd={probe("triggerPressEnd")}
           >
             {props.customIndicator ? <Text>⇅</Text> : undefined}
           </ComboBox.Trigger>
@@ -441,6 +457,22 @@ function Case() {
 
   if (name === "empty") {
     return <Combo items={PETS} />;
+  }
+
+  if (name === "no-items") {
+    return <Combo items={[]} />;
+  }
+
+  if (name === "no-items-allowed") {
+    return <Combo allowsEmpty items={[]} />;
+  }
+
+  if (name === "read-only") {
+    return <Combo items={ITEMS} label="Label" placeholder="Placeholder" readOnly />;
+  }
+
+  if (name === "wrap") {
+    return <Combo items={ITEMS} label="Label" placeholder="Placeholder" shouldFocusWrap />;
   }
 
   if (name === "async-input") {
