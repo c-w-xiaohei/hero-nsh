@@ -27,3 +27,15 @@ test("T-007 opens on focus", async () => {
 
   expect(app.shows(TIP)).toBe(true);
 });
+
+// No upstream row: the review found that the `Tooltip.Trigger` part had no
+// case of its own. React Aria's `useFocusable` makes it a Tab stop, so keyboard
+// focus on the part opens its tip, exactly as on the Button trigger of T-007.
+test("X-005 opens from the Tooltip.Trigger part on focus", async () => {
+  const app = await openScenario("tooltip/trigger", { platform: "web", clock: {} });
+
+  await app.keyboard.press("tab");
+  await app.clock!.runFor(20);
+
+  expect(app.shows("text:Trigger tip")).toBe(true);
+});

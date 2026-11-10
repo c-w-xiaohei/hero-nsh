@@ -130,3 +130,121 @@ test("T-008 closes with an exit hold instead of unmounting at once", async () =>
   await app.clock!.runFor(120);
   expect(app.count(TIP)).toBe(0);
 });
+
+/*
+ * Follow-up round, the review's findings. The warmup and swap cases run the
+ * `warm-swap` fixture (delay 50, closeDelay 200); each case states the behavior
+ * the fix must reach, not the current one.
+ */
+
+// src/components/tooltip/tooltip-content.tsx:173-191, 308, 318
+// HeroUI's `TooltipAnimationScope` clears React Aria's warmup
+// `shouldSkipAnimation` for the descendants unless the Root prop is true
+// (heroui/packages/react/src/components/tooltip/tooltip.tsx:41-54), and
+// `TooltipContent` turns its exit hold on from that cleared value
+// (tooltip.tsx:128-131, utils/use-overlay-exit-hold.ts:88,99, `enabled`
+// defaults to true). Gating the hold on the RAC flag alone therefore drops the
+// 100 ms fade on every close once the family is warm. The behavior: the default
+// holds, and only `shouldSkipAnimation` on the Root removes the hold.
+test("X-001 keeps the 100ms exit hold on a close after a warm open", async () => {
+  const app = await openFixture("warm-swap");
+  const tip = "text:Warm tip";
+
+  // Cold open: the 50 ms warmup timer runs, so `show(false)` marks the open
+  // as not skipping the animation.
+  await app.hover("role:button[Warmup]");
+  await app.clock!.runFor(80);
+  expect(app.shows(tip)).toBe(true);
+
+  // Close it (closeDelay 200) and let the 100 ms exit hold pass: the family
+  // stays warm for the 500 ms cooldown.
+  await app.hover("id:away");
+  await app.clock!.runFor(340);
+  expect(app.count(tip)).toBe(0);
+
+  // Warm reopen within the cooldown: HeroUI opens it at once, and RAC marks
+  // this open as `shouldSkipAnimation` — which HeroUI clears for the content.
+  await app.hover("role:button[Warmup]");
+  await app.clock!.runFor(20);
+  expect(app.shows(tip)).toBe(true);
+
+  // Close again. The closeDelay has run out just before the assertion; the
+  // content is in its 100 ms exit hold and has not unmounted.
+  await app.hover("id:away");
+  await app.clock!.runFor(220);
+  expect(app.count(tip)).toBe(1);
+
+  await app.clock!.runFor(120);
+  expect(app.count(tip)).toBe(0);
+});
+
+// src/components/tooltip/tooltip-content.tsx:190-191, 308, 318
+// A target swap closes the previous tooltip through `closeOtherTooltips`,
+// which is the one path that sets `skipAnimation` on purpose (port sheet §6
+// deviation 4). HeroUI still fades the closed tip out: `data-exiting` comes
+// from the content's own flag, not from RAC's warmup flag. The closed tip has
+// to stay mounted for the 100 ms hold, next to the newly opened one.
+test("X-002 keeps the closed tip for the 100ms exit hold on a target swap", async () => {
+  const app = await openFixture("warm-swap");
+  const first = "text:First tip";
+  const second = "text:Second tip";
+
+  // Warm the family with a separate instance, as upstream's
+  // `primeTooltipWarmup` does, so the swapped-in tooltip opens without the
+  // 50 ms delay.
+  await app.hover("role:button[Warmup]");
+  await app.clock!.runFor(80);
+  await app.hover("id:away");
+  await app.clock!.runFor(340);
+
+  await app.hover("role:button[First]");
+  await app.clock!.runFor(20);
+  expect(app.shows(first)).toBe(true);
+
+  // Move the pointer to the other trigger: First closes (immediately through
+  // the open of Second, or after its closeDelay), Second opens at once.
+  await app.hover("role:button[Second]");
+  await app.clock!.runFor(20);
+  expect(app.shows(second)).toBe(true);
+  expect(app.count(first)).toBe(1);
+
+  // The hold ends long before this, whether First closed at once or after its
+  // 200 ms closeDelay; Second stays open.
+  await app.clock!.runFor(500);
+  expect(app.count(first)).toBe(0);
+  expect(app.shows(second)).toBe(true);
+});
+
+// No upstream row: the finding that every case used a `Button` trigger, so the
+// `Tooltip.Trigger` part — the second trigger form HeroUI exports — was only
+// covered by the screenshot scenario. It is a hover source like the Button.
+test("X-003 opens from the Tooltip.Trigger part on hover", async () => {
+  const app = await openScenario("tooltip/trigger", { clock: {} });
+
+  await app.hover("role:button[Hover me]");
+  await app.clock!.runFor(20);
+
+  expect(app.shows("text:Trigger tip")).toBe(true);
+});
+
+// No upstream row: the finding that the port sheet §5.10 promises a
+// `content-hover` fixture and nothing covered content hover. HeroUI keeps the
+// tooltip open while the pointer is over the content: entering the content
+// cancels the closeDelay that the trigger's leave started.
+test("X-004 stays open while the pointer is over the content", async () => {
+  const app = await openFixture("content-hover");
+  const tip = "text:Content hover tip";
+
+  await app.hover("role:button[Hover me]");
+  await app.clock!.runFor(20);
+  expect(app.shows(tip)).toBe(true);
+
+  await app.hover(tip);
+  await app.clock!.runFor(500);
+  expect(app.shows(tip)).toBe(true);
+
+  // Leaving the content starts the 300 ms closeDelay, then the 100 ms hold.
+  await app.hover("id:away");
+  await app.clock!.runFor(500);
+  expect(app.count(tip)).toBe(0);
+});
