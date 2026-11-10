@@ -36,8 +36,13 @@ export interface ComboBoxValueProps<T = any> {
     | JSX.Element
     | ((values: ComboBoxValueRenderProps<T>) => JSX.Element);
 
-  /** Shown when nothing is selected and no `children` are given. */
-  placeholder?: string;
+  /**
+   * Shown when nothing is selected and no `children` are given. React Aria's
+   * `ComboBoxValueProps.placeholder` is a `ReactNode`
+   * (`ComboBox.tsx:395-407`), so an element renders as it is; a string is
+   * wrapped in `Text` (bare strings do not render in NSH).
+   */
+  placeholder?: string | JSX.Element;
 
   /** Appended after the value's own classes; function form gets accessors. */
   className?:
@@ -143,7 +148,7 @@ export function ComboBoxValue<T = any>(
   const hasContent = () =>
     local.children != null ||
     combo.selectedText() != null ||
-    typeof local.placeholder === "string";
+    local.placeholder != null;
 
   // R-011: `.combo-box__value:empty` → `hidden`. There is no `:empty` here, so
   // the same derived question is asked: would this value show anything?
@@ -174,9 +179,23 @@ export function ComboBoxValue<T = any>(
       return children as JSX.Element;
     }
 
-    const text = combo.selectedText() ?? local.placeholder;
+    const selected = combo.selectedText();
 
-    return text == null ? null : <Text>{text}</Text>;
+    if (selected != null) {
+      return <Text>{selected}</Text>;
+    }
+
+    const placeholder = local.placeholder;
+
+    if (placeholder == null) {
+      return null;
+    }
+
+    return typeof placeholder === "string" ? (
+      <Text>{placeholder}</Text>
+    ) : (
+      (placeholder as JSX.Element)
+    );
   };
 
   return (

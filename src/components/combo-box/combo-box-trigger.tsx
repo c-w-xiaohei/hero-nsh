@@ -66,9 +66,11 @@ export interface ComboBoxTriggerProps {
   value?: string;
 
   /** The press started, ended or changed; `onPress` toggles the list. */
+  onPress?: (event: PressEvent) => void;
   onPressStart?: (event: PressEvent) => void;
   onPressUp?: (event: PressEvent) => void;
   onPressEnd?: (event: PressEvent) => void;
+  onPressChange?: (isPressed: boolean) => void;
   onHoverStart?: (event: unknown) => void;
   onHoverEnd?: (event: unknown) => void;
   onHoverChange?: (isHovered: boolean) => void;
@@ -119,9 +121,11 @@ export function ComboBoxTrigger(props: ComboBoxTriggerProps): JSX.Element {
     "form",
     "name",
     "value",
+    "onPress",
     "onPressStart",
     "onPressUp",
     "onPressEnd",
+    "onPressChange",
     "onHoverStart",
     "onHoverEnd",
     "onHoverChange",
@@ -151,6 +155,7 @@ export function ComboBoxTrigger(props: ComboBoxTriggerProps): JSX.Element {
 
   const focused = signal(false);
   const hovered = signal(false);
+  const pressed = signal(false);
 
   // Upstream the trigger is disabled by the field's `isDisabled` *or* its
   // `isReadOnly` (`useComboBox.ts:517`): a read-only field cannot open.
@@ -212,19 +217,43 @@ export function ComboBoxTrigger(props: ComboBoxTriggerProps): JSX.Element {
       combo.notePointer();
     }
 
-    local.onPressStart?.(event);
+    // Before the caller's `onPress`, as the internal toggle is the trigger's
+    // own press action (React Aria's ComboBox trigger toggles in its
+    // `onPressStart`, `useComboBox.ts:344-352`).
     combo.toggle();
-    local.onPressEnd?.(event);
+    local.onPress?.(event);
   };
 
   const handlePressDown = (event: PressEvent) => {
+    if (isDisabled()) {
+      return;
+    }
+
     if (!isKeyboardPress(event)) {
       combo.notePointer();
     }
+
+    pressed.set(true);
+    // Button's press phases (`button-root.tsx`): the start and the pressed
+    // state belong to the press going down.
+    local.onPressStart?.(event);
+    local.onPressChange?.(true);
   };
 
   const handlePressUp = (event: PressEvent) => {
+    if (pressed()) {
+      pressed.set(false);
+      local.onPressChange?.(false);
+    }
+
+    if (isDisabled()) {
+      return;
+    }
+
+    // NSH reports the release as the press's last phase, so Button ends the
+    // press here (`onPressUp` then `onPressEnd`).
     local.onPressUp?.(event);
+    local.onPressEnd?.(event);
   };
 
   const handleMouseEnter = (event: unknown) => {

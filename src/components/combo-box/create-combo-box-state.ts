@@ -26,7 +26,12 @@ export interface CreateComboBoxFilterStateProps {
   /** The input's text: the display value and the filter at once. */
   inputValue: Accessor<string>;
 
-  /** The root's dynamic collection; when present the default filter is off. */
+  /**
+   * The caller-controlled collection (`props.items` only): when present the
+   * default filter is off. `defaultItems` is an uncontrolled collection and
+   * stays filtered, exactly as upstream (`useComboBoxState.ts:298-306` skips
+   * the filter only when `props.items != null`).
+   */
   items: Accessor<Iterable<unknown> | undefined>;
 }
 

@@ -212,7 +212,13 @@ function filterData(
 ): any[] {
   return nodes.flatMap((node) => {
     if (Array.isArray(node.children)) {
-      return [{ ...node, children: filterData(node.children, matches, inputValue) }];
+      const children = filterData(node.children, matches, inputValue);
+
+      // `useComboBoxState.ts:679-683`: a section survives only while one of its
+      // filtered children is an item, so a filtered list keeps no empty header.
+      return children.some((child) => !Array.isArray(child.children))
+        ? [{ ...node, children }]
+        : [];
     }
 
     return matches(node.textValue ?? "", inputValue) ? [node] : [];
@@ -513,7 +519,10 @@ export function ListBoxRoot<T>(
     collection: list.collection,
     selectionManager: list.selectionManager,
     autoFocus: () => local.autoFocus,
-    shouldFocusWrap: () => local.shouldFocusWrap,
+    // A field that owns this list through the owner contract carries the wrap
+    // setting itself (ComboBox's `shouldFocusWrap`, `useComboBox.ts:174-182`);
+    // the caller-written list has no prop for it.
+    shouldFocusWrap: () => local.shouldFocusWrap ?? owner?.shouldFocusWrap?.(),
     orientation: () => local.orientation ?? "vertical",
     disallowEmptySelection,
     focusCollection: focusRoot,
@@ -533,6 +542,10 @@ export function ListBoxRoot<T>(
         },
         focusedKey: () => manager().focusedKey(),
         findItem: (key) => findItemDescriptor(descriptors(), key),
+        // The unfiltered option count: a field's open guard asks for it
+        // (`useComboBoxState.ts:335`), because a live filter cuts the
+        // collection the keyboard walks.
+        itemCount: () => collectItemKeys(dataSource(), new Set<string>()).size,
         // The field's list stays mounted while it closes; its typeahead prefix
         // must not survive the close (the closed list would search "thf").
         resetTypeAhead: selectableList.resetTypeAhead,

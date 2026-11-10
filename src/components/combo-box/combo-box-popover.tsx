@@ -401,9 +401,12 @@ export function ComboBoxPopover(props: ComboBoxPopoverProps): JSX.Element {
     // R-036: the checkmark does not animate in a ComboBox (the comment upstream
     // says single-select, but the rule matches unconditionally).
     suppressIndicatorTransition: () => true,
-    // The listbox's name: upstream `aria-labelledby` points at the field's
-    // label; NSH hands the registered text down instead.
-    accessibilityLabel: () => combo.labelText(),
+    // The listbox's name (`useComboBox.ts:360-364`): the visible Label, else the
+    // field's own `aria-label`, else the localized default "Suggestions"
+    // (`@react-aria/combobox` en-US `listboxLabel`). NSH hands the text down
+    // instead of an id reference.
+    accessibilityLabel: () =>
+      combo.labelText() ?? combo.ariaLabel() ?? "Suggestions",
   };
 
   const handleCancel = () => {

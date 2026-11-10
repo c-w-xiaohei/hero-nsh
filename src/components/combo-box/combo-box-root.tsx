@@ -30,6 +30,7 @@ import {
   OverlayTriggerContext,
   type SelectionManager,
   type SelectionMode,
+  type FocusStrategy,
 } from "../../primitives";
 import { createControllableSignal } from "../../primitives/create-controllable-signal";
 import { renderChildren } from "../list-box/children";
@@ -175,7 +176,11 @@ export interface ComboBoxRootProps<T = unknown> extends ComboBoxVariants {
   /** Wraps the keyboard focus at either end of the list. */
   shouldFocusWrap?: boolean;
 
-  /** The list opened or closed; `menuTrigger` is the mode, as upstream. */
+  /**
+   * The list opened or closed. The second argument is the action that opened it
+   * (`"focus"`, `"input"` or `"manual"`) and is `undefined` on close, as React
+   * Aria reports it (`useComboBoxState.ts:310-313`).
+   */
   onOpenChange?: (isOpen: boolean, menuTrigger?: ComboBoxMenuTrigger) => void;
 
   isDisabled?: boolean;
@@ -373,8 +378,15 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
   /* -------------------------------------------------------------------------------------------
    * Open state and the list registry (port sheet §5, first and third changes)
    * ----------------------------------------------------------------------------------------- */
+  // React Aria's `menuOpenTrigger` ref (`useComboBoxState.ts:309`): the action
+  // that asked for the open, reported as `onOpenChange`'s second argument while
+  // open and `undefined` on close (`:310-313`). The default is `"focus"`, as
+  // upstream's ref starts.
+  let menuOpenTrigger: ComboBoxMenuTrigger | undefined = "focus";
+
   const overlay = createOverlayTrigger({
-    onOpenChange: (open) => local.onOpenChange?.(open, menuTrigger()),
+    onOpenChange: (open) =>
+      local.onOpenChange?.(open, open ? menuOpenTrigger : undefined),
   });
 
   // The field's focus handle, registered by the `Input` inside the field; the
@@ -434,6 +446,10 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
 
   const focusedKey = computed(() => selectionManager()?.focusedKey());
 
+  // A selection write the field performs because the input emptied is not a
+  // choice: the list's close-on-selection rule stands down for it.
+  let clearingSelection = false;
+
   /* -------------------------------------------------------------------------------------------
    * Selection: HeroUI's official and deprecated spellings, normalized
    * ----------------------------------------------------------------------------------------- */
@@ -485,6 +501,27 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
       : new Set<string>([String(key)]);
   });
 
+  /**
+   * Whether the application owns the selection through `value` / `selectedKey`
+   * (multiple mode only knows the official `value`).
+   */
+  const selectionControlled = () =>
+    isMultiple()
+      ? local.value !== undefined
+      : local.value !== undefined || local.selectedKey !== undefined;
+
+  /** Whether the application owns the input text through `inputValue`. */
+  const inputControlled = () => local.inputValue !== undefined;
+
+  /**
+   * React Aria's sync rule (`useComboBoxState.ts:481-488`): after a selection
+   * change it resets the input only when at least one of the text and the
+   * selection is uncontrolled. When it owns both, the application writes the
+   * text itself in its change callback.
+   */
+  const syncsInputOnSelection = () =>
+    !(inputControlled() && selectionControlled());
+
   /** React Aria's `resetInputValue`: the chosen text, or nothing in multiple mode. */
   const resetInputValue = (keys: "all" | Set<string>) => {
     if (isMultiple()) {
@@ -504,8 +541,11 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
     // not in an effect: a single selection writes the chosen item's text, a
     // multiple one clears the input (`useComboBoxState.ts:526-560`). Doing it
     // here is what keeps a later registry refresh from overwriting the text the
-    // user is typing.
-    resetInputValue(keys);
+    // user is typing. An application that controls both the text and the
+    // selection writes the text itself (`useComboBoxState.ts:481-488`).
+    if (syncsInputOnSelection()) {
+      resetInputValue(keys);
+    }
 
     if (isMultiple()) {
       local.onChange?.(keys === "all" ? [] : Array.from(keys));
@@ -603,19 +643,66 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
   const filter = createComboBoxFilterState({
     isOpen: overlay.isOpen,
     inputValue: text,
-    // The default filter only runs when the root owns no collection
-    // (`useComboBoxState.ts:298-306`).
-    items,
+    // The default filter only runs when the caller controls the collection
+    // through `items`; `defaultItems` is an uncontrolled collection and is
+    // filtered like rows written as children (`useComboBoxState.ts:298-306`,
+    // where only `props.items != null` skips the filter).
+    items: () => local.items,
   });
 
-  const hasVisibleOptions = () => {
+  /** The options the list currently shows (React Aria's `filteredCollection.size`). */
+  const visibleOptionCount = () => {
     const collection = list()?.collection();
 
-    if (!collection) {
-      return true;
+    return collection ? getItemCount(collection) : 0;
+  };
+
+  /**
+   * The collection before the filter (React Aria's `originalCollection.size`):
+   * the items the root owns, else the count the registered list reports.
+   */
+  const originalOptionCount = () => {
+    const entries = itemList();
+
+    return entries ? entries.length : (listControls()?.itemCount?.() ?? 0);
+  };
+
+  /**
+   * React Aria's open guard (`useComboBoxState.ts:332-337`): nothing to show
+   * means no open, unless the field allows an empty collection or the caller
+   * controls the items (an empty controlled list may be swapped on open).
+   * `displayAllItems` is the manual open and the focus open of a `"focus"`
+   * field, which show every option even when the text filters them all out.
+   */
+  const canDisplayOptions = (displayAllItems: boolean) =>
+    local.allowsEmptyCollection === true ||
+    visibleOptionCount() > 0 ||
+    (displayAllItems && originalOptionCount() > 0) ||
+    local.items != null;
+
+  /**
+   * Opens the list for one action, recording which action it was and applying
+   * React Aria's show-all window: a manual open (trigger, arrow keys) and a
+   * focus open of a `"focus"` field show the whole collection until the first
+   * typed character (`useComboBoxState.ts:327-347`, `:364-367`).
+   */
+  const openList = (
+    trigger: ComboBoxMenuTrigger | undefined,
+    strategy?: FocusStrategy | boolean,
+  ) => {
+    const displayAllItems =
+      trigger === "manual" || (trigger === "focus" && menuTrigger() === "focus");
+
+    if (!canDisplayOptions(displayAllItems)) {
+      return;
     }
 
-    return getItemCount(collection) > 0;
+    if (displayAllItems && !overlay.isOpen() && local.items === undefined) {
+      filter.showAllOptions();
+    }
+
+    menuOpenTrigger = trigger;
+    open(strategy);
   };
 
   const commitSelection = () => setInputText(selectedText() ?? "");
@@ -687,8 +774,31 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
 
     filter.noteInput();
 
+    // React Aria clears a single selection when the user empties the input, as
+    // long as the application does not own both the text and the selection
+    // (`useComboBoxState.ts:465-479`). The list must not treat that write as a
+    // choice (its own close-on-selection rule), so `clearingSelection` tells
+    // the close check to stand down for it.
+    if (
+      !isMultiple() &&
+      next === "" &&
+      (local.inputValue === undefined || !selectionControlled())
+    ) {
+      const manager = selectionManager();
+
+      if (manager && manager.selectedKeys().size > 0) {
+        clearingSelection = true;
+
+        try {
+          manager.setSelectedKeys(new Set<string>());
+        } finally {
+          clearingSelection = false;
+        }
+      }
+    }
+
     const canShowEmpty = local.allowsEmptyCollection === true;
-    const visible = hasVisibleOptions();
+    const visible = visibleOptionCount() > 0;
 
     if (overlay.isOpen() && !canShowEmpty && !visible) {
       close();
@@ -707,7 +817,7 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
       menuTrigger() !== "manual" &&
       (visible || canShowEmpty)
     ) {
-      open();
+      openList("input");
     }
   };
 
@@ -757,10 +867,15 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
   };
 
   const openManually = (strategy: "first" | "last" | boolean) => {
+    // A read-only field wires no list key upstream (`useComboBox.ts:311-319`),
+    // and a disabled one cannot be focused at all; either way nothing opens.
+    if (isReadOnly() || isDisabled()) {
+      return;
+    }
+
     // The trigger and the arrow keys show every option; the first typed
     // character clears that window (`useComboBoxState.ts:338`, `:364`).
-    filter.showAllOptions();
-    open(strategy);
+    openList("manual", strategy);
   };
 
   const handleInputFocus = () => {
@@ -772,14 +887,17 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
 
     // A disabled field takes no focus at all upstream (the host refuses it), so
     // it never opens: NSH's web host can still deliver the focus of a Tab stop
-    // to a disabled input, and the field would open a list it cannot use.
+    // to a disabled input, and the field would open a list it cannot use. A
+    // read-only field opens no list either (`useComboBoxState.ts:598-603`).
     if (
       !isDisabled() &&
       !isReadOnly() &&
       menuTrigger() === "focus" &&
       !overlay.isOpen()
     ) {
-      open();
+      // A focus open of a `"focus"` field shows every option; the guard inside
+      // `openList` keeps an empty collection closed.
+      openList("focus");
     }
   };
 
@@ -877,7 +995,9 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
   };
 
   effect(() => {
-    if (!inputFocused()) {
+    // A read-only field wires no key handler upstream, and a disabled one takes
+    // no focus (`useComboBox.ts:311-319`): neither binds the list keys.
+    if (!inputFocused() || isReadOnly() || isDisabled()) {
       return;
     }
 
@@ -904,7 +1024,7 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
   });
 
   effect(() => {
-    if (!inputFocused() || !overlay.isOpen()) {
+    if (!inputFocused() || !overlay.isOpen() || isReadOnly() || isDisabled()) {
       return;
     }
 
@@ -975,7 +1095,10 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
     shouldFocusOnHover: () => true,
     shouldSelectOnPressUp: () => true,
     escape: () => revert(),
-    closeOnSelection: () => !isMultiple(),
+    // A press or a key chooses; the field's own write while the input empties
+    // does not (React Aria closes on a value, never on a clear,
+    // `useComboBoxState.ts:456-463`).
+    closeOnSelection: () => !isMultiple() && !clearingSelection,
     close,
     isActive: overlay.isOpen,
     registerList: (state: ListState, controls: ListOwnerListControls) =>
@@ -984,6 +1107,9 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
     defaultFilter: () => local.defaultFilter,
     // The list is a virtual-focus collection: the input is the only Tab stop.
     isTabStop: () => false,
+    // `useComboBox.ts:173-182` hands the root's `shouldFocusWrap` to the list's
+    // keyboard delegate; the caller-written ListBox has no prop for it.
+    shouldFocusWrap: () => local.shouldFocusWrap === true,
     items,
   };
 
@@ -1016,7 +1142,12 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
     isRequired,
     isInvalid,
     accessibilityLabel,
-    accessibilityHint: computed(() => joinedText([descriptionText, errorText])),
+    // R-002 hides the Description of an invalid field, which also takes it out
+    // of the accessible tree upstream (`combo-box.css:7-11`); the hint must not
+    // keep announcing text the field no longer shows.
+    accessibilityHint: computed(() =>
+      joinedText([() => (isInvalid() ? undefined : descriptionText()), errorText]),
+    ),
     type: () => undefined,
     inputMode: () => undefined,
     enterKeyHint: () => undefined,
@@ -1101,7 +1232,7 @@ export function ComboBoxRoot<T>(props: ComboBoxRootProps<T>): JSX.Element {
     slots,
     variant: () => (variant() === "secondary" ? "secondary" : "primary"),
     isOpen: overlay.isOpen,
-    open,
+    open: (strategy) => openList(undefined, strategy),
     close,
     commitClose,
     toggle,

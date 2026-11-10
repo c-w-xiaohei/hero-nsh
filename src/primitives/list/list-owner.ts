@@ -58,6 +58,14 @@ export interface ListOwnerListControls {
    * binds the same delegate itself while its root is focused.
    */
   handleKeyDown?: (event: { key: string }) => boolean;
+
+  /**
+   * How many options the collection holds before the owner's filter. The field
+   * asks it for the emptiness guard of its open paths, where React Aria reads
+   * `originalCollection.size` (`useComboBoxState.ts:335`): a focus open shows
+   * every option, so a live filter must not decide whether it may open.
+   */
+  itemCount?: () => number;
 }
 
 /**
@@ -155,6 +163,14 @@ export interface ListOwner {
    * a virtual-focus collection and the input is the only stop.
    */
   isTabStop?: () => boolean;
+
+  /**
+   * Whether the collection's keyboard focus wraps at either end. A field that
+   * owns a virtual-focus list passes its own `shouldFocusWrap` here: the
+   * caller-written `ListBox` carries no such prop (`useComboBox.ts:173-182`),
+   * so the owner is the only source. Absent means the list's own prop decides.
+   */
+  shouldFocusWrap?: () => boolean;
 
   /**
    * The field's dynamic collection (`items ?? defaultItems`), used when the
