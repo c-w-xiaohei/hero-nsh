@@ -1,10 +1,13 @@
 # Examples
 
-Five standalone product pages built with `hero-nsh`. Each file mounts itself, keeps its own
-state, and has no navigation around it: open it, run it, copy what you need.
+Five standalone product pages and one component catalogue built with `hero-nsh`. Each product
+page mounts itself, keeps its own state, and has no navigation around it: open it, run it, copy
+what you need. `gallery.tsx` is the other way round: every export on one scrolling page, grouped
+by what it is for, which is the fastest way to see what the package draws.
 
 | Page | Run it |
 |---|---|
+| `demo/gallery/index.tsx` | `nsh run examples/demo/gallery.tsx --target web` |
 | `demo/login.tsx` | `nsh run examples/demo/login.tsx --target web` |
 | `demo/settings.tsx` | `nsh run examples/demo/settings.tsx --target web` |
 | `demo/orders.tsx` | `nsh run examples/demo/orders.tsx --target web` |
