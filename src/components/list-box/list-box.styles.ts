@@ -56,7 +56,7 @@ export const listboxItemVariants = tv({
     // R-015: the selected blocks are empty too: selection has no background,
     // only the indicator (R-019 / R-020) shows it.
     item: [
-      "relative flex min-h-9 w-full items-center justify-start gap-3 rounded-2xl px-2 py-1.5 outline-none select-none",
+      "relative flex min-h-9 w-full items-center justify-start gap-3 rounded-2xl px-2 py-1.5 text-foreground outline-none select-none",
       `transition duration-[250ms] ${ease.outQuart} motion-reduce:transition-none cursor-pointer`,
       "hover:bg-default",
     ].join(" "),

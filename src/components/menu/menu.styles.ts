@@ -30,7 +30,7 @@ export const menuItemVariants = tv({
     // R-015: hover background (`hover:` is pointer-only in NSH, so upstream's
     // `@media (hover: hover)` wrapper has no counterpart).
     item: [
-      "relative flex min-h-9 w-full items-center justify-start gap-3 rounded-2xl px-2 py-1.5 outline-none select-none",
+      "relative flex min-h-9 w-full items-center justify-start gap-3 rounded-2xl px-2 py-1.5 text-foreground outline-none select-none",
       `transition duration-[250ms] ${ease.outQuart} motion-reduce:transition-none cursor-pointer`,
       "hover:bg-default",
     ].join(" "),
