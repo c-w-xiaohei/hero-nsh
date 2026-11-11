@@ -1,9 +1,11 @@
 name: CI
 
-# Types, the headless engine, a browser and the packed tarball, one job each.
-# The test jobs shard their file list in two and run four (headless) or two
-# (web) files at once: `nsh test` takes one path, so the list is the parallel
-# unit.
+# Types, the headless engine, a browser, Win32 and the packed tarball.
+#
+# Every test job takes one third of its file list, and three runners run those
+# thirds at once: `nsh test` takes a single path, so the file is the parallel
+# unit. On one machine a job runs four files at once (headless), two (web) or
+# one (Windows, where a second run would take the focus the cases assert).
 #
 # What runs where is the file name: `.headless.` needs the headless engine,
 # `.web.` needs a browser, `.windows.` needs Win32, everything else runs on the
@@ -45,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1]
+        shard: [0, 1, 2]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -53,7 +55,7 @@ jobs:
         run: |
           find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \
             ! -name '*.web.test.*' ! -name '*.browser.test.*' ! -name '*.windows.test.*' \
-            | sort | awk -v s='${{ matrix.shard }}' 'NR % 2 == s' \
+            | sort | awk -v s='${{ matrix.shard }}' 'NR % 3 == s' \
             | xargs -r -n1 -P4 nsh test
 
   web:
@@ -61,15 +63,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1]
+        shard: [0, 1, 2]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - name: Tests
         run: |
           find harness/tests -name '*.web.test.tsx' \
-            | sort | awk -v s='${{ matrix.shard }}' 'NR % 2 == s' \
+            | sort | awk -v s='${{ matrix.shard }}' 'NR % 3 == s' \
             | xargs -r -n1 -P2 nsh test --target web
+
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - name: Tests
+        shell: bash
+        run: |
+          files=($(find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \
+            ! -name '*.headless.test.*' ! -name '*.web.test.*' ! -name '*.browser.test.*' \
+            | sort))
+          for ((i = ${{ matrix.shard }}; i < ${#files[@]}; i += 3)); do
+            nsh test "${files[$i]}" --target windows
+          done
 
   packaging:
     runs-on: ubuntu-24.04
