@@ -21,7 +21,7 @@ export const calendarYearPickerVariants = tv({
     // R-061: a grid item is blockified and stretched to its column, so the
     // button is `w-full` (not `w-fit`); R-063: interactive cursor.
     yearCell:
-      "relative flex h-8 w-full items-center justify-center rounded-3xl px-2.5 text-sm font-medium outline-none select-none cursor-pointer",
+      "relative flex h-8 w-full items-center justify-center rounded-3xl px-2.5 text-sm font-medium text-default-foreground outline-none select-none cursor-pointer",
   },
   variants: {},
 });
