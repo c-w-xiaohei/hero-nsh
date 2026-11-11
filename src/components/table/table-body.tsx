@@ -80,6 +80,12 @@ export function TableBody(props: TableBodyProps) {
 
   const hasItems = computed(() => local.items != null);
 
+  // `items` is a reactive input: read it outside `<If>`, whose function child
+  // runs untracked and would freeze the list at its first evaluation.
+  const items = computed(
+    () => (local.items as readonly unknown[] | undefined) ?? [],
+  );
+
   const renderRow = (item: unknown, index: number): JSX.Element => {
     const children = local.children;
 
@@ -106,11 +112,7 @@ export function TableBody(props: TableBodyProps) {
       style={resolvedStyle()}
     >
       <If when={showEmpty()}>{() => local.renderEmptyState?.(renderProps)}</If>
-      <If when={hasItems()}>
-        <Each of={local.items as readonly unknown[]}>
-          {(item, index) => renderRow(item(), index())}
-        </Each>
-      </If>
+      <Each of={items()}>{(item, index) => renderRow(item(), index())}</Each>
       <If when={!hasItems()}>
         {renderPartChildren(local.children as JSX.Element, renderProps)}
       </If>

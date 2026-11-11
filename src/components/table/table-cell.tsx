@@ -9,7 +9,7 @@ import {
   claimPress,
   type TableCellRenderProps,
 } from "./table-context";
-import { cellFocusKey } from "./create-table-collection";
+import { cellFocusKey, type TableColumnDescriptor } from "./create-table-collection";
 import { type TablePartProps } from "./table-props";
 import { useTableSlots, useTableVariant } from "./table-slots";
 
@@ -82,6 +82,15 @@ export function TableCell(props: TableCellProps) {
 
   const cellKey = cellFocusKey(rowKey, columnIndex);
 
+  // The column at this cell's start column. The columns register before the
+  // bodies do, so it is known by the time the collection reads this cell's
+  // descriptor (which may be immediately: `cells.set` notifies synchronously).
+  const columnDescriptor = (): TableColumnDescriptor | undefined => {
+    const columns = [...registry.columns()].sort((a, b) => a.order - b.order);
+
+    return columns[columnIndex];
+  };
+
   cleanup(
     registry.registerCell({
       key: cellKey,
@@ -89,9 +98,9 @@ export function TableCell(props: TableCellProps) {
       columnIndex,
       colSpan: () => Math.max(1, local.colSpan ?? 1),
       textValue: () => local.textValue ?? textOf(local.children as JSX.Element),
-      // A tree column's cells are the row's header cells (the stories' tree
-      // cell); HeroUI has no `isRowHeader` on `Cell`, it comes from the column.
-      isRowHeader: () => local.isTreeColumn === true,
+      // HeroUI has no `isRowHeader` on `Cell`; the column carries it.
+      isRowHeader: () =>
+        local.isTreeColumn === true || columnDescriptor()?.isRowHeader() === true,
       ref: () => node,
     }),
   );
@@ -103,7 +112,9 @@ export function TableCell(props: TableCellProps) {
   const isPressed = signal(false);
 
   const isSelected = computed(() => state.isSelected(rowKey));
-  const isDisabled = computed(() => rowModel()?.isDisabled ?? false);
+  // The selection manager covers `disabledKeys` and `disabledBehavior` (§1);
+  // the descriptor's own flag is the collection's business.
+  const isDisabled = computed(() => state.isDisabled(rowKey));
   const isExpanded = computed(() => state.isExpanded(rowKey));
   const hasChildItems = computed(() => rowModel()?.hasChildItems ?? false);
   const level = computed(() => rowModel()?.level ?? local.level ?? 1);
@@ -245,9 +256,16 @@ export function TableCell(props: TableCellProps) {
 
     focusCell();
 
-    if (state.selectionMode() !== "none") {
+    // §1 events: the press selects the row, and reports the row action when
+    // the row cannot be selected or the table replaces its selection on each
+    // press. The row's own `onAction` follows from the bubbling press.
+    const selectable = state.selectionMode() !== "none";
+
+    if (selectable) {
       state.rowSelectionManager.select(rowKey);
-    } else if (rowModel()?.descriptor) {
+    }
+
+    if (!selectable || state.selectionBehavior() === "replace") {
       table.onRowAction(rowKey);
     }
 

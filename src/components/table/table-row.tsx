@@ -1,8 +1,8 @@
 import type { JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { cleanup, computed, signal, split, View } from "nsh";
+import { cleanup, computed, openUrl, signal, split, untracked, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives";
-import { renderPartChildren, textOf } from "./table-children";
+import { renderChildren } from "./table-children";
 import {
   TableRowContext,
   TableStateContext,
@@ -18,7 +18,8 @@ export interface TableRowProps extends TablePartProps {
 
   value?: unknown;
   textValue?: string;
-  columns?: unknown;
+  /** The columns a function child draws a cell for (React Aria's `columns`). */
+  columns?: readonly unknown[];
 
   isDisabled?: boolean;
   disabledBehavior?: "all" | "selection";
@@ -38,14 +39,22 @@ export interface TableRowProps extends TablePartProps {
   hrefLang?: string;
   routerOptions?: unknown;
 
-  onHoverStart?: unknown;
-  onHoverEnd?: unknown;
+  onHoverStart?: (event?: unknown) => void;
+  onHoverEnd?: (event?: unknown) => void;
   onHoverChange?: (isHovering: boolean) => void;
 
-  children?: JSX.Element | ((values: TableRowRenderProps) => JSX.Element);
+  /**
+   * The cells of the row. A function child renders one cell per entry of
+   * `columns`, exactly as React Aria's `Row` does; the render-props function
+   * is Cell's contract, not Row's.
+   */
+  children?: JSX.Element | ((item: unknown) => JSX.Element);
 }
 
 let generatedRowCount = 0;
+
+/** `http:`, `mailto:`, `tel:` …: what `openUrl` accepts; `#anchor` is not. */
+const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:/i;
 
 /**
  * `Table.Row` / `TableRow`: one `role="row"` grid row. It registers its key,
@@ -106,7 +115,6 @@ export function TableRow(props: TableRowProps) {
   const { state, registry, layout, modality } = table;
   const parentRow = TableRowContext();
 
-
   const key = local.id != null ? String(local.id) : `row-${generatedRowCount++}`;
 
   let node: ViewRef | undefined;
@@ -115,7 +123,10 @@ export function TableRow(props: TableRowProps) {
     registry.registerRow({
       key,
       parentKey: () => parentRow?.rowKey,
-      textValue: () => local.textValue ?? textOf(local.children as JSX.Element),
+      // A row provides the context its cells read, so its children may only be
+      // read inside that provider (`_common`, the children rule). The
+      // collection derives a row's text from its first texted cell instead.
+      textValue: () => local.textValue ?? "",
       hasChildItems: () => local.hasChildItems,
       isDisabled: () => local.isDisabled === true,
       ref: () => node,
@@ -126,17 +137,22 @@ export function TableRow(props: TableRowProps) {
 
   const isHovered = signal(false);
   const isPressed = signal(false);
-
-  // The cell cursor: each cell takes the next column index in render order.
-  let nextCell = 0;
+  const isRowFocused = signal(false);
 
   const isSelected = computed(() => state.isSelected(key));
-  const isDisabled = computed(() => model()?.isDisabled ?? local.isDisabled === true);
+  // The selection manager is the source (§1, the tree's four values): it
+  // covers the row's own `isDisabled` and `disabledKeys`, and it ignores both
+  // while `disabledBehavior` is `"selection"` — such a row still acts, only
+  // its selection is refused.
+  const isDisabled = computed(() => state.isDisabled(key));
   const isExpanded = computed(() => state.isExpanded(key));
   const hasChildItems = computed(() => model()?.hasChildItems ?? local.hasChildItems === true);
   const level = computed(() => model()?.level ?? parentRow?.level ?? 1);
 
-  const isFocused = computed(() => state.focusedCellIn(key));
+  // The row view is a Tab stop of its own (§8): while it holds the focus
+  // itself, no cell of it is the focused cell yet, so the row's own signal
+  // keeps R-045–R-048's ring and the row's render props honest.
+  const isFocused = computed(() => isRowFocused() || state.focusedCellIn(key));
   const isFocusVisible = computed(() => isFocused() && table.isKeyboard());
 
   const renderProps: TableRowRenderProps = {
@@ -177,6 +193,38 @@ export function TableRow(props: TableRowProps) {
       : style;
   };
 
+  // React Aria's `Row` draws one cell per entry of `columns` when its children
+  // is a function; without `columns` the children is the static cell tree.
+  const columnList = computed(
+    () => (local.columns as readonly unknown[] | undefined) ?? [],
+  );
+  const hasColumns = computed(() => local.columns != null);
+
+  const renderColumnCell = (column: unknown): JSX.Element => {
+    const children = local.children;
+
+    if (typeof children !== "function") {
+      return null;
+    }
+
+    return renderChildren(
+      untracked(() => (children as (item: unknown) => JSX.Element)(column)),
+    );
+  };
+
+  // The one children read, at its placement (the compiler's zero-argument
+  // reactive child passes through; a one-argument function is `columns`' form
+  // and has nothing to draw without columns).
+  const staticChildren = (): JSX.Element => {
+    const children = local.children;
+
+    if (typeof children === "function" && children.length >= 1) {
+      return null;
+    }
+
+    return renderChildren(children as JSX.Element);
+  };
+
   const stateClasses = computed(() =>
     [
       // R-034 (last row drops its border) is inert for the reason R-033 gives:
@@ -187,8 +235,9 @@ export function TableRow(props: TableRowProps) {
       // surface) are drag-and-drop states; `dragAndDropHooks` has no NSH
       // channel and the states never occur (§8).
       //
-      // R-037: a disabled row is dimmed and takes nothing.
-      isDisabled() ? "opacity-50 cursor-not-allowed" : "",
+      // R-037: upstream's `status-disabled` — dimmed, the not-allowed cursor,
+      // and inert. Written as literal values, the theme has no such variable.
+      isDisabled() ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
       // R-038: upstream only cancels the browser's outline.
       "outline-none",
     ]
@@ -196,16 +245,35 @@ export function TableRow(props: TableRowProps) {
       .join(" "),
   );
 
+  const isSelectable = () => state.selectionMode() !== "none";
+
   const runAction = () => {
     if (isDisabled()) {
       return;
     }
 
-    if (state.selectionMode() !== "none") {
+    const selectable = isSelectable();
+
+    if (selectable) {
       state.rowSelectionManager.select(key);
-    } else {
+    }
+
+    // §1 events: a press reports the row action when the row cannot be
+    // selected, and when `selectionBehavior` is `"replace"` (the press is the
+    // action, and it also replaces the selection).
+    if (!selectable || state.selectionBehavior() === "replace") {
       local.onAction?.();
       table.onRowAction(key);
+    }
+  };
+
+  // `href` opens on press, as Link does: the host's opener takes an absolute
+  // URL only, a relative path fires the handlers and stops there (§8).
+  const followHref = () => {
+    const href = local.href;
+
+    if (href !== undefined && ABSOLUTE_URL.test(href)) {
+      void openUrl(href).catch(() => {});
     }
   };
 
@@ -235,8 +303,14 @@ export function TableRow(props: TableRowProps) {
     }
 
     // A press on a cell of this row was handled there; the bubbling copy is
-    // not a second activation.
+    // not a second activation. The row's own `onAction` and `href` still
+    // apply to it, exactly as upstream's row-level handlers do.
     if (!claimPress(event)) {
+      if (!isDisabled() && (!isSelectable() || state.selectionBehavior() === "replace")) {
+        local.onAction?.();
+      }
+
+      followHref();
       local.onPress?.(event);
       return;
     }
@@ -244,13 +318,26 @@ export function TableRow(props: TableRowProps) {
     state.noteFocus();
     state.focusView(key, state.focusedColumnIndex() ?? 0);
     runAction();
+    followHref();
     local.onPress?.(event);
   };
+
+  // The cell cursor: each cell takes the next column index in render order,
+  // past the columns a spanning cell already occupies (§4, `columnIndex`
+  // respects col spanning). The cells of this row registered before the
+  // caller are exactly its predecessors, so the cursor is their span total.
+  const nextCellIndex = (): number =>
+    untracked(() =>
+      registry
+        .cells()
+        .filter((cell) => cell.rowKey === key)
+        .reduce((total, cell) => total + Math.max(1, cell.colSpan()), 0),
+    );
 
   const contextValue = {
     rowKey: key,
     level: level(),
-    nextCellIndex: () => nextCell++,
+    nextCellIndex,
   };
 
   // A tree row renders inside its parent row (port sheet §3): it has to span
@@ -287,18 +374,22 @@ export function TableRow(props: TableRowProps) {
         }}
         onFocus={() => {
           state.noteFocus();
+          isRowFocused.set(true);
         }}
         onBlur={() => {
           state.noteBlur();
+          isRowFocused.set(false);
         }}
         onMouseEnter={(event) => {
           isHovered.set(true);
           local.onHoverChange?.(true);
+          local.onHoverStart?.(event);
           local.onMouseEnter?.(event);
         }}
         onMouseLeave={(event) => {
           isHovered.set(false);
           local.onHoverChange?.(false);
+          local.onHoverEnd?.(event);
           local.onMouseLeave?.(event);
         }}
         onPressDown={handlePressDown}
@@ -309,7 +400,12 @@ export function TableRow(props: TableRowProps) {
           .join(" ")}
         style={[rowStyle(), resolvedStyle()]}
       >
-        {renderPartChildren(local.children as JSX.Element, renderProps)}
+        {/* A function child draws one cell per column; a plain tree is the
+            static form (port sheet §1, Row's children). */}
+        <Each of={columnList()}>
+          {(column) => renderColumnCell(column())}
+        </Each>
+        <If when={!hasColumns()}>{staticChildren()}</If>
         {/* R-045–R-048: one inset ring for the whole row while a cell of it
             has the keyboard focus. R-046 is the left segment, R-047 the right
             one and R-048 the middle cells' top and bottom edges; the single
