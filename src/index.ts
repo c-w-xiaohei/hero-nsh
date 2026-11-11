@@ -63,4 +63,5 @@ export * from "./components/date-field";
 export * from "./components/input-group";
 export * from "./components/color-swatch-picker";
 export * from "./components/color-picker";
+export * from "./components/calendar-year-picker";
 export * from "./components/modal";
