@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, radius, shadow } from "../../tokens/geometry";
+
 /**
  * Select's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/select/select.styles.ts` and the declarations
@@ -34,8 +36,8 @@ export const selectVariants = tv({
     // R-050: `.select__trigger--full-width` → `w-full`, on the `fullWidth`
     // dimension.
     trigger: [
-      "relative flex min-h-9 items-center rounded-field border-0 border-field-border bg-field px-3 py-2 text-sm text-field-foreground shadow-field dark:shadow-field-dark select-none cursor-pointer",
-      "duration-150 ease-smooth motion-reduce:transition-none",
+      `relative flex min-h-9 items-center ${radius.field} border-0 border-field-border bg-field px-3 py-2 text-sm text-field-foreground ${shadow.field.both} select-none cursor-pointer`,
+      `duration-150 ${ease.smooth} motion-reduce:transition-none`,
     ].join(" "),
     // R-018: `.select__value` → `flex-1 text-start text-base text-current
     // sm:text-sm`. `wrap-break-word` is dropped: NSH has neither the class nor
@@ -63,7 +65,7 @@ export const selectVariants = tv({
       "hover:bg-default-hover",
       // R-027: `:active` → `transform: scale(0.93)`.
       "active:scale-[0.93]",
-      "transition-opacity duration-150 ease-smooth motion-reduce:transition-none",
+      `transition-opacity duration-150 ${ease.smooth} motion-reduce:transition-none`,
     ].join(" "),
     // R-046: `.select__popover` → the 22pt overlay card. `radius-2xl` (16) +
     // `spacing` (4) × 1.5 = 22 in this theme, so the min() cap never applies.
@@ -73,8 +75,8 @@ export const selectVariants = tv({
     // R-036 / R-037: the duration and curve of the enter and exit transitions
     // (the property list and the shorter exit are inline).
     popover: [
-      "bg-overlay p-0 text-sm rounded-[22px] shadow-overlay dark:shadow-overlay-dark overflow-hidden",
-      "duration-150 ease-smooth",
+      `bg-overlay p-0 text-sm rounded-[22px] ${shadow.overlay.both} overflow-hidden`,
+      `duration-150 ${ease.smooth}`,
     ].join(" "),
   },
   defaultVariants: {

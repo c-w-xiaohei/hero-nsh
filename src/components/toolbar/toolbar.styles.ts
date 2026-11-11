@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { shadow } from "../../tokens/geometry";
+
 /**
  * Toolbar's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/toolbar/toolbar.styles.ts` plus every
@@ -55,9 +57,9 @@ export const toolbarVariants = tv({
       // has a light and a dark value, so it follows the appearance by itself.
       // R-018: `.toolbar--attached` → `padding: 0.25rem` (4 points).
       // R-019: `.toolbar--attached` → `box-shadow: var(--overlay-shadow)`.
-      // A shadow cannot switch with the appearance here, so the dark value is
-      // written beside it (common rules, "Theme notes").
-      true: "rounded-3xl bg-surface p-1 shadow-overlay dark:shadow-overlay-dark",
+      // A shadow cannot switch with the appearance here, so both halves come
+      // from `shadow.overlay` in `src/tokens/geometry.ts`.
+      true: `rounded-3xl bg-surface p-1 ${shadow.overlay.both}`,
     },
   },
   defaultVariants: {

@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { shadow } from "../../tokens/geometry";
+
 /**
  * Alert's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/alert/alert.styles.ts` plus the declarations
@@ -41,7 +43,7 @@ export const alertVariants = tv({
     // theme's `radius.3xl` is 24, so `min(32, 24)` is 24 and `rounded-3xl`
     // matches. A theme that raised 3xl above 32 would exceed upstream's cap
     // (port sheet §8).
-    base: "flex w-full flex-row items-start justify-start gap-4 bg-surface px-4 py-3 shadow-surface dark:shadow-surface-dark rounded-3xl",
+    base: `flex w-full flex-row items-start justify-start gap-4 bg-surface px-4 py-3 ${shadow.surface.both} rounded-3xl`,
     // R-006: `.alert__content` → `flex h-full grow flex-col items-start`.
     // NSH's `grow` leaves `flex-shrink` at 0; upstream keeps CSS's default 1, so
     // an Alert with a trailing action could not give the text any room at

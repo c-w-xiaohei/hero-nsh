@@ -1,17 +1,19 @@
 import type { VariantProps } from "tailwind-variants";
 import { tv } from "tailwind-variants";
 
+import { ease, shadow } from "../../tokens/geometry";
+
 // HeroUI 3.2.7 drawer slots and the two public variant axes.
 export const drawerVariants = tv({
   slots: {
     // R-001, R-002, R-035, R-004, R-005
-    trigger: "inline-block w-fit cursor-pointer duration-[250ms] ease-out-quart motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]",
+    trigger: `inline-block w-fit cursor-pointer duration-[250ms] ${ease.outQuart} motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]`,
     // R-006, R-036, R-007, R-037, R-038, R-008, R-009, R-010
     backdrop: "absolute inset-0",
     // R-011, R-039, R-040, R-012, R-013, R-014
     content: "flex flex-col flex-1 w-full min-w-0 pointer-events-none",
     // R-015, R-041, R-016, R-017, R-042, R-018, R-019, R-020, R-021, R-022
-    dialog: "relative flex flex-col bg-overlay shadow-overlay dark:shadow-overlay-dark outline-none p-6 pointer-events-auto transition duration-[250ms] ease-out-quart motion-reduce:transition-none",
+    dialog: `relative flex flex-col bg-overlay ${shadow.overlay.both} outline-none p-6 pointer-events-auto transition duration-[250ms] ${ease.outQuart} motion-reduce:transition-none`,
     // R-023
     header: "flex flex-col gap-3 mb-0",
     // R-024

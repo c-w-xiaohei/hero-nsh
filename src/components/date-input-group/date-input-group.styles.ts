@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, radius, shadow } from "../../tokens/geometry";
+
 /**
  * DateInputGroup's variant table, mirroring `@heroui/styles` 3.2.7
  * (`packages/styles/src/components/date-input-group/date-input-group.styles.ts`)
@@ -18,8 +20,8 @@ export const dateInputGroupVariants = tv({
   slots: {
     // R-001: `.date-input-group` → `inline-flex h-9 items-center overflow-hidden
     // rounded-field bg-field text-sm text-field-foreground shadow-field
-    // outline-none`; `dark:shadow-field-dark` is the theme note's dark half of
-    // `shadow-surface` and `shadow-field`.
+    // outline-none`; the shadow's dark half comes from `shadow.field` in
+    // `src/tokens/geometry.ts`.
     // R-002: the stylesheet's `border-width: var(--border-width-field)` plus
     // `border-color: var(--field-border)` are deleted: the default theme fixes
     // the width at 0 with a transparent colour, and NSH has neither token, so
@@ -32,9 +34,9 @@ export const dateInputGroupVariants = tv({
     // `ease-out` becomes `ease-smooth`; registered in the port sheet §8).
     // R-004: `@apply motion-reduce:transition-none`.
     base: [
-      "inline-flex h-9 items-center overflow-hidden rounded-field border-0 bg-field",
-      "text-sm text-field-foreground shadow-field dark:shadow-field-dark outline-none",
-      "duration-150 ease-smooth motion-reduce:transition-none",
+      `inline-flex h-9 items-center overflow-hidden ${radius.field} border-0 bg-field`,
+      `text-sm text-field-foreground ${shadow.field.both} outline-none`,
+      `duration-150 ${ease.smooth} motion-reduce:transition-none`,
     ].join(" "),
 
     // R-009: `.date-input-group__input` → the full upstream declaration list.

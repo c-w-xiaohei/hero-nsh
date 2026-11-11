@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { shadow } from "../../tokens/geometry";
+
 /**
  * ColorSlider's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/color-slider/color-slider.styles.ts` plus the
@@ -70,7 +72,7 @@ export const colorSliderVariants = tv({
     // R-025: `.color-slider__thumb` → `motion-reduce:transition-none` →
     // `motion-reduce:transition-none`.
     thumb:
-      "absolute flex items-center justify-center rounded-2xl cursor-grab border-3 border-white shadow-overlay dark:shadow-overlay-dark z-10 transition-shadow duration-150 ease-out motion-reduce:transition-none",
+      `absolute flex items-center justify-center rounded-2xl cursor-grab border-3 border-white ${shadow.overlay.both} z-10 transition-shadow duration-150 ease-out motion-reduce:transition-none`,
   },
 });
 

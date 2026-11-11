@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, radius, shadow } from "../../tokens/geometry";
+
 /*
  * SearchField's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/search-field/search-field.styles.ts` plus the
@@ -47,15 +49,15 @@ export const searchFieldVariants = tv({
      * classList (R-011), `bg-field-focus` for an invalid primary group (R-013).
      * R-009: `transition: background-color 150ms var(--ease-smooth),
      * border-color 150ms var(--ease-smooth), box-shadow 150ms var(--ease-out)`
-     * → one NSH transition, `duration-150 ease-smooth`; NSH gives an element
-     * one duration and one curve, and the shadow's `ease-out` is registered in
-     * §8. The shadow follows the appearance through the `dark:` pair (theme
-     * notes).
+     * → one NSH transition, `duration-150` and the smooth curve; NSH gives an
+     * element one duration and one curve, and the shadow's `ease-out` is
+     * registered in §8. The shadow's two halves come from `shadow.field` in
+     * `src/tokens/geometry.ts`.
      * R-010: `@apply motion-reduce:transition-none` →
      * `motion-reduce:transition-none`.
      */
     group:
-      "relative inline-flex flex-row h-9 items-center overflow-hidden rounded-field border-0 bg-field text-sm text-field-foreground shadow-field dark:shadow-field-dark outline-none transition duration-150 ease-smooth motion-reduce:transition-none",
+      `relative inline-flex flex-row h-9 items-center overflow-hidden ${radius.field} border-0 bg-field text-sm text-field-foreground ${shadow.field.both} outline-none transition duration-150 ${ease.smooth} motion-reduce:transition-none`,
     /*
      * R-015: `.search-field__input` → `flex-1 rounded-none border-0
      * bg-transparent px-3 py-2 text-base shadow-none outline-none sm:text-sm`.
@@ -103,8 +105,8 @@ export const searchFieldVariants = tv({
     // R-025: `.search-field--primary` is an empty block; primary is the
     // default, so the value stays empty to keep the table's shape upstream's.
     // R-026: `.search-field--secondary .search-field__group` → `@apply
-    // shadow-none`, with `dark:shadow-none` covering the base's
-    // `dark:shadow-field-dark`.
+    // shadow-none`, with `dark:shadow-none` covering the dark half of the
+    // base's `shadow.field.both`.
     // R-027: the same block's `background-color:
     // var(--search-field-group-bg)` → `bg-default`.
     // R-028: secondary reassigns the three fill tokens to `--default` /

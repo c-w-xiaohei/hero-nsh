@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease } from "../../tokens/geometry";
+
 /*
  * The two variant tables of `@heroui/styles` 3.2.7
  * (`packages/styles/src/components/tag/tag.styles.ts` and
@@ -32,7 +34,7 @@ export const tagVariants = tv({
       // blockified `inline-flex` in a column parent stretches to the parent's
       // width, and the tag's own background would paint across it (skill §4.2).
       "relative inline-flex w-fit items-center rounded-xl px-2 py-1 text-xs font-medium select-none",
-      "origin-center transform-gpu motion-reduce:transition-none duration-[100ms] ease-smooth",
+      `origin-center transform-gpu motion-reduce:transition-none duration-[100ms] ${ease.smooth}`,
       "cursor-pointer",
     ].join(" "),
     // R-022: `.tag__remove-button` → `size-3`; the visible box is 12 × 12 and

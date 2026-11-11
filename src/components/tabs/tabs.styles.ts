@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { shadow } from "../../tokens/geometry";
+
 /**
  * Tabs' variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/tabs/tabs.styles.ts` plus the declarations of
@@ -14,7 +16,7 @@ import { tv } from "tailwind-variants";
  * here instead of a `data-*` rule (port sheet §1). BEM class names are not
  * carried over (D18), so each slot holds the declarations its block applied.
  * Every colour is a theme token, so light and dark switch by themselves; the
- * one shadow must be paired (`_common`, theme notes).
+ * one shadow pair comes from `shadow.surface` in `src/tokens/geometry.ts`.
  */
 export const tabsVariants = tv({
   slots: {
@@ -88,14 +90,14 @@ export const tabsVariants = tv({
     // press from a keyboard focus).
     tab: "relative flex h-8 items-center justify-center rounded-3xl px-4 text-center text-sm font-medium text-muted outline-none z-1 cursor-pointer transition duration-150 ease-[cubic-bezier(0.25,0.1,0.25,1)] motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed",
     // R-051: `.tabs__indicator` → `absolute start-0 top-0 size-full
-    // rounded-3xl bg-segment` plus `box-shadow: var(--surface-shadow)`, which
-    // must be written as a pair so the appearance can switch.
+    // rounded-3xl bg-segment` plus `box-shadow: var(--surface-shadow)`, both
+    // halves of which come from `shadow.surface` in `src/tokens/geometry.ts`.
     // R-052: `z-index: -1` → `z-[-1]`.
     // R-053 / R-054 / R-055: the transition is inline style in
     // `tab-indicator.tsx` (NSH does not transition translate or layout).
     // R-062: the secondary look is on the `variant` dimension below.
     tabIndicator:
-      "absolute start-0 top-0 size-full rounded-3xl bg-segment shadow-surface dark:shadow-surface-dark z-[-1]",
+      `absolute start-0 top-0 size-full rounded-3xl bg-segment ${shadow.surface.both} z-[-1]`,
     // R-022: `.tabs__list` → `@apply inline-flex p-1`.
     // R-023: `width: max-content` is deleted: NSH has no `max-content`; an
     // inline flex row is already content sized, and `min-w-full` keeps the

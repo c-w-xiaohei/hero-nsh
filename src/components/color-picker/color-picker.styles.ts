@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, shadow } from "../../tokens/geometry";
+
 /**
  * ColorPicker's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/color-picker/color-picker.styles.ts` and the
@@ -29,7 +31,7 @@ export const colorPickerVariants = tv({
     // disabled look, already on `Popover.Trigger`) are not repeated here: one
     // owner per property.
     trigger:
-      "inline-flex items-center gap-3 rounded-sm text-sm cursor-pointer duration-150 ease-smooth motion-reduce:transition-none",
+      `inline-flex items-center gap-3 rounded-sm text-sm cursor-pointer duration-150 ${ease.smooth} motion-reduce:transition-none`,
     // R-110: `.color-picker__popover` → `min-w-62` (62 × 4pt = 248).
     // R-114: `bg-overlay px-2 pt-2 pb-3`. R-115: `box-shadow:
     // var(--overlay-shadow)` → the surface/overlay pair (theme notes: a shadow
@@ -43,7 +45,7 @@ export const colorPickerVariants = tv({
     // R-112 (`scrollbar-none` — not a class in NSH) and R-113 (`overflow-*` /
     // `overscroll-*` — no channel; port sheet §8) are deleted.
     popover:
-      "min-w-[248px] bg-overlay px-2 pt-2 pb-3 shadow-overlay dark:shadow-overlay-dark rounded-[20px] flex flex-col gap-3 outline-none",
+      `min-w-[248px] bg-overlay px-2 pt-2 pb-3 ${shadow.overlay.both} rounded-[20px] flex flex-col gap-3 outline-none`,
   },
 });
 

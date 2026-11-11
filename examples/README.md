@@ -20,9 +20,9 @@ An NSH app is a directory with `nsh.json`, and `nsh.json` cannot extend another 
 app directory therefore holds the shared setup for every page:
 
 - `theme` points at `../../theme/hero-nsh.theme.json`;
-- `tailwind` repeats the radius, shadow and easing tokens the components use. Without them
-  the app still builds, but classes such as `ease-smooth` and `dark:shadow-surface-dark`
-  are dropped with a warning;
+- there is no `tailwind` block. The radius, shadow and easing the components draw with come
+  from `src/tokens/geometry.ts` and the `radius-field` token of the theme file, so an app
+  needs nothing beyond `theme` (an installed package works the same way);
 - `resolve.alias` sends `hero-nsh` to `../../src/index.ts`, so the pages run against this
   checkout instead of an installed package;
 - `fonts/` holds Inter, because the web host only serves assets inside the app directory.

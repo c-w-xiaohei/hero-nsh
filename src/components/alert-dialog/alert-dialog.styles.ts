@@ -1,5 +1,7 @@
 import { tv } from "tailwind-variants";
 
+import { ease, shadow } from "../../tokens/geometry";
+
 /**
  * AlertDialog's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/alert-dialog/alert-dialog.styles.ts` plus
@@ -61,7 +63,7 @@ export const alertDialogVariants = tv({
     // classes move; NSH has one property list per view, and the transform and
     // opacity are its members (R-027 clears it under reduced motion).
     container:
-      "flex flex-col items-center h-full w-full min-w-0 flex-1 p-4 sm:w-fit sm:p-10 pointer-events-none transition duration-[250ms] ease-out-quad motion-reduce:transition-none",
+      `flex flex-col items-center h-full w-full min-w-0 flex-1 p-4 sm:w-fit sm:p-10 pointer-events-none transition duration-[250ms] ${ease.outQuad} motion-reduce:transition-none`,
     // R-028 `.alert-dialog__dialog` → `relative`;
     // R-029 → `flex min-h-0 w-full flex-col max-h-full`;
     // R-030 → `bg-overlay shadow-overlay outline-none` (the dark half of the
@@ -69,7 +71,7 @@ export const alertDialogVariants = tv({
     // --radius-3xl)` → `rounded-3xl` (24 in this theme); R-032 → `p-6`;
     // R-033 → `overflow-hidden`; R-034 → `pointer-events-auto`.
     dialog:
-      "relative flex min-h-0 w-full flex-col max-h-full bg-overlay shadow-overlay dark:shadow-overlay-dark outline-none rounded-3xl p-6 overflow-hidden pointer-events-auto",
+      `relative flex min-h-0 w-full flex-col max-h-full bg-overlay ${shadow.overlay.both} outline-none rounded-3xl p-6 overflow-hidden pointer-events-auto`,
     // R-061 `.alert-dialog__footer` → `flex flex-row items-center justify-end
     // gap-2`; R-062 → `mt-0`. R-065 / R-066 (the margin a preceding part adds)
     // are read from the Dialog's part order, see `alert-dialog-footer.tsx`.
@@ -97,7 +99,7 @@ export const alertDialogVariants = tv({
     // R-005 disabled → `opacity-50 cursor-not-allowed pointer-events-none`
     // under `disabled:`; R-006 pressed → `scale-[0.97]` under `active:`.
     trigger:
-      "inline-block w-fit cursor-pointer duration-150 ease-smooth motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]",
+      `inline-block w-fit cursor-pointer duration-150 ${ease.smooth} motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]`,
   },
   variants: {
     size: {

@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, radius, shadow } from "../../tokens/geometry";
+
 /**
  * Input's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/input/input.styles.ts` expanded with the
@@ -18,8 +20,8 @@ export const inputVariants = tv({
   /*
    * R-005: `.input` → `@apply rounded-field border bg-field px-3 py-2 text-base
    * text-field-foreground shadow-field outline-none
-   * placeholder:text-field-placeholder sm:text-sm`. `dark:shadow-field-dark`
-   * is the theme note's dark half of `shadow-field`.
+   * placeholder:text-field-placeholder sm:text-sm`; both halves of
+   * `shadow-field` come from `shadow.field` in `src/tokens/geometry.ts`.
    * R-006: `border-width: var(--border-width-field)` → `border-0`: the default
    * theme's field border width is 0, and NSH has no field border width token
    * (§8: a theme that changes it is not followed). `border` and this rule are
@@ -28,13 +30,14 @@ export const inputVariants = tv({
    * sites: this `bg-field`, `bg-field-hover` in R-012 and `bg-field-focus` in
    * R-013.
    * R-010: the transition property list is inline in `text-control.tsx`
-   * (`transitionProperty`); `duration-150 ease-smooth` carry the timing here.
+   * (`transitionProperty`); `duration-150` and the smooth curve from
+   * `src/tokens/geometry.ts` carry the timing here.
    * R-011: `@apply motion-reduce:transition-none`.
    */
   base: [
-    "rounded-field border-0 bg-field px-3 py-2 text-base text-field-foreground",
-    "shadow-field dark:shadow-field-dark outline-none placeholder:text-field-placeholder sm:text-sm",
-    "duration-150 ease-smooth motion-reduce:transition-none",
+    `${radius.field} border-0 bg-field px-3 py-2 text-base text-field-foreground`,
+    `${shadow.field.both} outline-none placeholder:text-field-placeholder sm:text-sm`,
+    `duration-150 ${ease.smooth} motion-reduce:transition-none`,
   ].join(" "),
   defaultVariants: {
     fullWidth: false,

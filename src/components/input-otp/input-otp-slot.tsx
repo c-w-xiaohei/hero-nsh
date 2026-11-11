@@ -6,7 +6,7 @@ import type { AriaProps, DataProps, GlobalDomProps } from "./input-otp-dom-props
 import { hostProps } from "./input-otp-dom-props";
 import { InputOTPContext } from "./input-otp-context";
 
-/** `ease-smooth`'s cubic bezier (`harness/nsh.json`), as the native animations take it. */
+/** `ease.smooth`'s cubic bezier (`EASE_VALUES`, `src/tokens/geometry.ts`), as the native animations take it. */
 const EASE_SMOOTH: [number, number, number, number] = [0.25, 0.1, 0.25, 1];
 
 /** CSS's `ease-out`, the caret's per-segment curve. */

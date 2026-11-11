@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
+import { ease } from "../../tokens/geometry";
+
 /**
  * Pagination's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/components/pagination.css` plus the six BEM slots of
@@ -58,7 +60,7 @@ export const paginationVariants = tv({
      * R-014: the pressed block → `active:bg-default-hover
      * active:scale-[0.97]`.
      */
-    link: "relative inline-flex size-9 origin-center items-center justify-center rounded-3xl text-sm font-medium whitespace-nowrap outline-none select-none bg-transparent text-default-foreground cursor-pointer duration-[250ms] ease-smooth hover:bg-default-hover active:bg-default-hover active:scale-[0.97] md:size-8",
+    link: `relative inline-flex size-9 origin-center items-center justify-center rounded-3xl text-sm font-medium whitespace-nowrap outline-none select-none bg-transparent text-default-foreground cursor-pointer duration-[250ms] ${ease.smooth} hover:bg-default-hover active:bg-default-hover active:scale-[0.97] md:size-8`,
     // R-016: `.pagination__ellipsis` → `inline-flex size-9 items-center
     // justify-center text-sm text-muted select-none md:size-8`.
     ellipsis:

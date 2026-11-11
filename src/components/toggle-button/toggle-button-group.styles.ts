@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
+import { ease } from "../../tokens/geometry";
+
 /*
  * ToggleButtonGroup variant table (HeroUI 3.2.7,
  * packages/styles/components/toggle-button-group.css). HeroUI's table only
@@ -17,7 +19,7 @@ export const toggleButtonGroupVariants = tv({
     // orientation rules below: a border without a color is drawn in the
     // element's text color, which is what currentColor asked for.
     separator:
-      "absolute rounded-sm opacity-15 pointer-events-none transition-opacity duration-150 ease-smooth motion-reduce:transition-none",
+      `absolute rounded-sm opacity-15 pointer-events-none transition-opacity duration-150 ${ease.smooth} motion-reduce:transition-none`,
   },
   variants: {
     // R-030, after `w-fit` in the class string.

@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, shadow } from "../../tokens/geometry";
+
 /**
  * Tooltip's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/tooltip/tooltip.styles.ts` and the CSS block
@@ -22,11 +24,11 @@ export const tooltipVariants = tv({
     //
     // R-003 `break-all` is not written: NSH's text layout has no `word-break`,
     // so an unbreakable long word may overflow (registered in port sheet §8).
-    base: "max-w-xs bg-overlay p-2 text-xs rounded-xl shadow-overlay dark:shadow-overlay-dark ease-smooth",
+    base: `max-w-xs bg-overlay p-2 text-xs rounded-xl ${shadow.overlay.both} ${ease.smooth}`,
     // R-016 `.tooltip__trigger` → `inline-block` (NSH resolves it to
     // `display: block`, the same computed result inside a flex parent); the
     // inline property list is the sole transition-property owner.
-    trigger: "inline-block duration-150 ease-smooth",
+    trigger: `inline-block duration-150 ${ease.smooth}`,
   },
 });
 

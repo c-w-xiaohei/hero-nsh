@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, shadow } from "../../tokens/geometry";
+
 /**
  * ComboBox's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/combo-box/combo-box.styles.ts` and the
@@ -48,8 +50,8 @@ export const comboBoxVariants = tv({
     // R-022: the popover is not a focus stop (the input keeps the focus), so
     // upstream's `outline-none` is only a fallback here.
     popover: [
-      "flex flex-col overflow-hidden bg-overlay p-0 text-sm rounded-[22px] shadow-overlay dark:shadow-overlay-dark outline-none",
-      "duration-150 ease-smooth",
+      `flex flex-col overflow-hidden bg-overlay p-0 text-sm rounded-[22px] ${shadow.overlay.both} outline-none`,
+      `duration-150 ${ease.smooth}`,
     ].join(" "),
   },
   defaultVariants: {

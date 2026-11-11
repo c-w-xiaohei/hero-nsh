@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
+import { ease } from "../../tokens/geometry";
+
 /*
  * ToggleButton variant table (HeroUI 3.2.7,
  * packages/styles/components/toggle-button.css). Each class string is the NSH
@@ -21,7 +23,7 @@ export const toggleButtonVariants = tv({
     "relative flex h-10 w-fit shrink origin-center items-center justify-center gap-2 rounded-3xl px-4 text-sm font-medium whitespace-nowrap outline-none select-none md:h-9",
     // R-003: one duration and one curve (the property list is the inline
     // `transitionProperty` in toggle-button-root.tsx).
-    "duration-[250ms] ease-smooth motion-reduce:transition-none",
+    `duration-[250ms] ${ease.smooth} motion-reduce:transition-none`,
     // R-004: `cursor: var(--cursor-interactive)`, written as the literal class
     // because the theme has no cursor token.
     "cursor-pointer",

@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, shadow } from "../../tokens/geometry";
+
 /**
  * Modal's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/modal/modal.styles.ts` and the CSS block
@@ -61,13 +63,14 @@ export const modalVariants = tv({
     // classes move; NSH has one property list per view, and the transform and
     // opacity are its members.
     container:
-      "flex flex-col items-center w-full min-w-0 flex-1 p-4 sm:w-fit sm:p-10 pointer-events-none transition duration-[250ms] ease-out-quad motion-reduce:transition-none",
+      `flex flex-col items-center w-full min-w-0 flex-1 p-4 sm:w-fit sm:p-10 pointer-events-none transition duration-[250ms] ${ease.outQuad} motion-reduce:transition-none`,
     // R-032 `.modal__dialog` → `relative` + `flex w-full flex-col`; R-033 →
-    // `bg-overlay shadow-overlay outline-none` (the dark half of the shadow
-    // pair, per the theme notes); R-034 radius `min(32px, --radius-3xl)` →
-    // `rounded-3xl` (24px in this theme); R-035 → `p-6 pointer-events-auto`.
+    // `bg-overlay shadow-overlay outline-none` (the dark half comes from
+    // `shadow.overlay` in `src/tokens/geometry.ts`); R-034 radius `min(32px,
+    // --radius-3xl)` → `rounded-3xl` (24px in this theme); R-035 → `p-6
+    // pointer-events-auto`.
     dialog:
-      "relative flex w-full flex-col bg-overlay shadow-overlay dark:shadow-overlay-dark outline-none rounded-3xl p-6 pointer-events-auto",
+      `relative flex w-full flex-col bg-overlay ${shadow.overlay.both} outline-none rounded-3xl p-6 pointer-events-auto`,
     // R-056 `.modal__footer` → `flex flex-row items-center justify-end gap-2
     // mt-0`.
     footer: "flex flex-row items-center justify-end gap-2 mt-0",
@@ -89,7 +92,7 @@ export const modalVariants = tv({
     // disabled → `opacity-50 cursor-not-allowed pointer-events-none` under
     // `disabled:`; R-006 pressed → `scale-[0.97]` under `active:`.
     trigger:
-      "inline-block w-fit cursor-pointer duration-[250ms] ease-out-quart motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]",
+      `inline-block w-fit cursor-pointer duration-[250ms] ${ease.outQuart} motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]`,
   },
   variants: {
     scroll: {

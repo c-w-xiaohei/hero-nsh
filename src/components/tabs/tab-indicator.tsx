@@ -72,7 +72,7 @@ export interface TabIndicatorProps {
  * Constants
  * ----------------------------------------------------------------------------------------------- */
 
-/** `--ease-out-fluid: cubic-bezier(0.32, 0.72, 0, 1)` from `harness/nsh.json`. */
+/** `--ease-out-fluid: cubic-bezier(0.32, 0.72, 0, 1)`, the curve `EASE_VALUES.outFluid` carries in `src/tokens/geometry.ts`. */
 const INDICATOR_EASING: [number, number, number, number] = [0.32, 0.72, 0, 1];
 
 /** Upstream's `transition-duration: 250ms`. */

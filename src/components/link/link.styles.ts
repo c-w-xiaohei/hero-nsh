@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
+import { ease } from "../../tokens/geometry";
+
 /*
  * Link variant table (HeroUI 3.2.7, packages/styles/src/components/link/
  * link.styles.ts plus the declarations of packages/styles/components/link.css).
@@ -40,7 +42,7 @@ export const linkVariants = tv({
      */
     base: [
       "relative inline-flex h-fit w-fit items-center rounded-xl font-medium text-link no-underline decoration-separator-tertiary decoration-[1.5px] underline-offset-4",
-      "group cursor-pointer duration-150 ease-smooth",
+      `group cursor-pointer duration-150 ${ease.smooth}`,
       "hover:underline hover:decoration-muted/50 active:underline active:decoration-muted",
       "disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:no-underline",
     ].join(" "),

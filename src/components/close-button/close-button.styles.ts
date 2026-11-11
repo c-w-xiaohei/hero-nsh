@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
+import { ease } from "../../tokens/geometry";
+
 /*
  * CloseButton's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/components/close-button.css`.
@@ -23,7 +25,7 @@ export const closeButtonVariants = tv({
   // it lives in the inline `transitionProperty` of
   // `close-button-root.tsx`; `ease-out-quart` is the theme's
   // `--ease-out-quart`.
-  base: "relative inline-flex h-6 w-6 shrink-0 origin-center items-center justify-center rounded-xl p-1 select-none cursor-pointer duration-[250ms] ease-out-quart",
+  base: `relative inline-flex h-6 w-6 shrink-0 origin-center items-center justify-center rounded-xl p-1 select-none cursor-pointer duration-[250ms] ${ease.outQuart}`,
   variants: {
     variant: {
       // R-012: `.close-button--default` → `bg-default text-muted`.

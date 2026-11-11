@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, radius, shadow } from "../../tokens/geometry";
+
 /**
  * TextArea's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/textarea/textarea.styles.ts` expanded with
@@ -14,8 +16,8 @@ export const textAreaVariants = tv({
   /*
    * R-023: `.textarea` → `@apply rounded-field border bg-field px-3 py-2
    * text-base text-field-foreground shadow-field outline-none
-   * placeholder:text-field-placeholder sm:text-sm`; `dark:shadow-field-dark`
-   * is the theme note's dark half of `shadow-field`.
+   * placeholder:text-field-placeholder sm:text-sm`; both halves of
+   * `shadow-field` come from `shadow.field` in `src/tokens/geometry.ts`.
    * R-024: `min-height: 38px` → `min-h-[38px]`.
    * R-025: `border-width: var(--border-width-field)` → `border-0` (the default
    * theme's field border width is 0; §8 registers it).
@@ -23,13 +25,14 @@ export const textAreaVariants = tv({
    * use sites: this `bg-field`, `bg-field-hover` in R-031 and `bg-field-focus`
    * in R-032.
    * R-029: the transition property list is inline in `text-control.tsx`
-   * (`transitionProperty`); `duration-150 ease-smooth` carry the timing here.
+   * (`transitionProperty`); `duration-150` and the smooth curve from
+   * `src/tokens/geometry.ts` carry the timing here.
    * R-030: `@apply motion-reduce:transition-none`.
    */
   base: [
-    "rounded-field border-0 bg-field px-3 py-2 text-base text-field-foreground",
-    "shadow-field dark:shadow-field-dark outline-none placeholder:text-field-placeholder sm:text-sm",
-    "min-h-[38px] duration-150 ease-smooth motion-reduce:transition-none",
+    `${radius.field} border-0 bg-field px-3 py-2 text-base text-field-foreground`,
+    `${shadow.field.both} outline-none placeholder:text-field-placeholder sm:text-sm`,
+    `min-h-[38px] duration-150 ${ease.smooth} motion-reduce:transition-none`,
   ].join(" "),
   defaultVariants: {
     fullWidth: false,

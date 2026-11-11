@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
+import { ease } from "../../tokens/geometry";
+
 /*
  * Button variant table (HeroUI 3.2.7, packages/styles/components/button.css).
  * Each class string is the NSH translation of the CSS rule named to its right.
@@ -12,7 +14,7 @@ export const buttonVariants = tv({
   // background; R-007 disabled look; R-009 pressed transform.
   base: [
     "relative inline-flex h-10 w-fit shrink origin-center items-center justify-center gap-2 rounded-3xl px-4 text-sm font-medium whitespace-nowrap outline-none select-none md:h-9",
-    "duration-[250ms] ease-smooth cursor-pointer bg-transparent",
+    `duration-[250ms] ${ease.smooth} cursor-pointer bg-transparent`,
     "active:scale-[0.97]",
     "disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none",
   ].join(" "),

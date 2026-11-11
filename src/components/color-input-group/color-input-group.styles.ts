@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, radius, shadow } from "../../tokens/geometry";
+
 /**
  * ColorInputGroup's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/color-input-group/color-input-group.styles.ts`
@@ -53,7 +55,7 @@ export const colorInputGroupVariants = tv({
      * R-008: `@apply motion-reduce:transition-none` →
      * `motion-reduce:transition-none`.
      */
-    base: "inline-flex flex-row h-9 items-center overflow-hidden rounded-field border-0 bg-field text-sm text-field-foreground shadow-field dark:shadow-field-dark outline-none transition duration-150 ease-smooth motion-reduce:transition-none",
+    base: `inline-flex flex-row h-9 items-center overflow-hidden ${radius.field} border-0 bg-field text-sm text-field-foreground ${shadow.field.both} outline-none transition duration-150 ${ease.smooth} motion-reduce:transition-none`,
     /*
      * R-015: `.color-input-group__input` → `flex h-full flex-1 cursor-text
      * items-center rounded-none border-0 bg-transparent px-3 py-2 text-base

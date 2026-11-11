@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { shadow } from "../../tokens/geometry";
+
 /**
  * Card's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/card/card.styles.ts` plus the declarations of
@@ -24,7 +26,7 @@ export const cardVariants = tv({
     // R-003: `.card` → `border-radius: min(32px, var(--radius-3xl))`. This
     // theme's `radius.3xl` is 24, so `min(32, 24)` is 24 and `rounded-3xl`
     // matches; a theme above 32 would exceed upstream's cap (port sheet §8).
-    base: "relative flex flex-col gap-3 overflow-visible rounded-3xl p-4 shadow-surface dark:shadow-surface-dark",
+    base: `relative flex flex-col gap-3 overflow-visible rounded-3xl p-4 ${shadow.surface.both}`,
     // R-004: `.card__header` → `@apply flex flex-col`.
     header: "flex flex-col",
     // R-005: `.card__title` → `@apply text-sm leading-6 font-medium

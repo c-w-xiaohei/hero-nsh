@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { shadow } from "../../tokens/geometry";
+
 /**
  * Radio's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/radio/radio.styles.ts` plus the declarations
@@ -50,7 +52,7 @@ export const radioVariants = tv({
     // §8).
     // R-012: `motion-reduce:transition-none`.
     control:
-      "relative inline-flex size-4 shrink-0 items-center justify-center rounded-lg border-0 border-field-border bg-field shadow-field dark:shadow-field-dark outline-none cursor-pointer transition duration-200 ease-out motion-reduce:transition-none",
+      `relative inline-flex size-4 shrink-0 items-center justify-center rounded-lg border-0 border-field-border bg-field ${shadow.field.both} outline-none cursor-pointer transition duration-200 ease-out motion-reduce:transition-none`,
     // R-021: `.radio__indicator` → `absolute inset-0 flex items-center
     // justify-center; pointer-events: none`.
     indicator: "absolute inset-0 flex items-center justify-center pointer-events-none",

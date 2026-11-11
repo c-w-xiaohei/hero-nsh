@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease } from "../../tokens/geometry";
+
 /**
  * The three ListBox variant tables of `@heroui/styles` 3.2.7
  * (`packages/styles/src/components/{list-box,list-box-item,list-box-section}/
@@ -55,7 +57,7 @@ export const listboxItemVariants = tv({
     // only the indicator (R-019 / R-020) shows it.
     item: [
       "relative flex min-h-9 w-full items-center justify-start gap-3 rounded-2xl px-2 py-1.5 outline-none select-none",
-      "transition duration-[250ms] ease-out-quart motion-reduce:transition-none cursor-pointer",
+      `transition duration-[250ms] ${ease.outQuart} motion-reduce:transition-none cursor-pointer`,
       "hover:bg-default",
     ].join(" "),
     // R-017: the indicator slot, pinned to the inline end and vertically

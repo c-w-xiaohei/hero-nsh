@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, shadow } from "../../tokens/geometry";
+
 /**
  * Popover's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/popover/popover.styles.ts` and the CSS block
@@ -19,7 +21,7 @@ export const popoverVariants = tv({
     // starting classes come off (a transition needs its duration at the
     // destination too); R-010's 100ms exit overrides the duration inline,
     // where the exit phase also owns `transitionProperty`.
-    base: "bg-overlay p-0 text-sm rounded-3xl shadow-overlay dark:shadow-overlay-dark duration-150 ease-smooth",
+    base: `bg-overlay p-0 text-sm rounded-3xl ${shadow.overlay.both} duration-150 ${ease.smooth}`,
     // R-015 `.popover__dialog` → `p-4 outline-none`.
     dialog: "p-4 outline-none",
     // R-016 `.popover__heading` → `font-medium`.
@@ -30,7 +32,7 @@ export const popoverVariants = tv({
     // (the property list is the inline `transitionProperty`, because colors and
     // box-shadow share one curve here); R-020 `cursor-interactive` → pointer.
     trigger:
-      "inline-block w-fit cursor-pointer duration-150 ease-smooth motion-reduce:transition-none",
+      `inline-block w-fit cursor-pointer duration-150 ${ease.smooth} motion-reduce:transition-none`,
   },
 });
 

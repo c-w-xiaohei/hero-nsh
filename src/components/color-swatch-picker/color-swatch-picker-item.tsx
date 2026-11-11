@@ -19,6 +19,7 @@ import {
   type SelectionMode,
   type SelectionModifiers,
 } from "../../primitives";
+import { shadow } from "../../tokens/geometry";
 import { joinClassNames } from "../color-picker/class-names";
 import type { AriaProps, DataProps, DomEventProps, GlobalDomProps } from "../color-picker/dom-props";
 import type { Color } from "../color-swatch";
@@ -487,7 +488,7 @@ export function ColorSwatchPickerItem(
           "opacity-50 cursor-not-allowed pointer-events-none": isDisabled(),
           // R-011: `box-shadow: var(--field-shadow)`, both appearances (a
           // shadow cannot switch with the theme).
-          "shadow-field dark:shadow-field-dark": isSelected(),
+          [shadow.field.both]: isSelected(),
         }}
         style={style()}
         onPress={handlePress}

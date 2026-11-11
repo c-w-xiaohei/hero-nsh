@@ -15,6 +15,7 @@ import {
   type InteractionModalityState,
 } from "../../primitives/create-interaction-modality";
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
+import { shadow } from "../../tokens/geometry";
 import { FieldContext } from "../label/context";
 import type { FieldState } from "../label/context";
 import { joinClassNames } from "./class-names";
@@ -136,7 +137,7 @@ export interface SliderThumbProps
  * R-031 / R-032: while dragging it scales to 0.9, cancelled by reduced motion.
  */
 const THUMB_VISUAL_CLASSES =
-  "relative z-10 rounded-lg bg-accent-foreground text-black shadow-field dark:shadow-field-dark origin-center transition-all motion-reduce:transition-none";
+  `relative z-10 rounded-lg bg-accent-foreground text-black ${shadow.field.both} origin-center transition-all motion-reduce:transition-none`;
 
 /**
  * Slider.Thumb / SliderThumb: one draggable value.

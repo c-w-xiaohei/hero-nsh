@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease } from "../../tokens/geometry";
+
 /**
  * Slider's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/slider/slider.styles.ts` plus the block
@@ -42,7 +44,7 @@ export const sliderVariants = tv({
     // R-019: `.slider__mark` → `justify-self: start`.
     // R-020: `.slider__mark` → `transition: color 200ms var(--ease-smooth)`.
     // R-021: `.slider__mark` → `@apply motion-reduce:transition-none`.
-    mark: "relative w-max text-xs text-muted tabular-nums justify-self-start transition-colors duration-200 ease-smooth motion-reduce:transition-none",
+    mark: `relative w-max text-xs text-muted tabular-nums justify-self-start transition-colors duration-200 ${ease.smooth} motion-reduce:transition-none`,
     // R-023: `.slider__thumb` → `@apply absolute z-2 flex cursor-grab
     // items-center justify-center rounded-xl bg-accent`. `no-highlight` (R-024)
     // is dropped: an NSH native view has no tap highlight.
@@ -52,7 +54,7 @@ export const sliderVariants = tv({
     // `duration-[250ms] ease-smooth` (port sheet section 8).
     // R-026: `.slider__thumb` → `@apply motion-reduce:transition-none`.
     thumb:
-      "absolute z-2 flex cursor-grab items-center justify-center rounded-xl bg-accent transition duration-[250ms] ease-smooth motion-reduce:transition-none",
+      `absolute z-2 flex cursor-grab items-center justify-center rounded-xl bg-accent transition duration-[250ms] ${ease.smooth} motion-reduce:transition-none`,
   },
 });
 

@@ -11,7 +11,7 @@
       "success-foreground": "var(--eclipse)",
       "field-border": "transparent",
       "radius": "0.5rem",
-      "field-radius": "0.75rem",
+      "radius-field": "0.75rem",
       "field": "var(--field-background, var(--default))",
       "font-sans": "Inter, system-ui, sans-serif"
     },

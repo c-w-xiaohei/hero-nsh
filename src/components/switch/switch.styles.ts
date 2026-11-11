@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, shadow } from "../../tokens/geometry";
+
 /**
  * Switch's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/switch/switch.styles.ts` plus the
@@ -38,17 +40,18 @@ export const switchVariants = tv({
     // shorthand is 250ms `ease-smooth` (port sheet §8, R-024).
     // R-025: `motion-reduce:transition-none`.
     control:
-      "relative flex shrink-0 items-center overflow-hidden rounded-xl bg-default transition duration-[250ms] ease-smooth motion-reduce:transition-none h-5 w-10",
+      `relative flex shrink-0 items-center overflow-hidden rounded-xl bg-default transition duration-[250ms] ${ease.smooth} motion-reduce:transition-none h-5 w-10`,
     // R-036: `.switch__thumb` → `relative ms-0.5 flex origin-center
     // transform-gpu rounded-lg bg-white text-black shadow-field`; `transform-gpu`
-    // does nothing in NSH, and the dark shadow variant follows the theme notes.
+    // does nothing in NSH, and both halves of the shadow come from
+    // `shadow.field` in `src/tokens/geometry.ts`.
     // R-039: `.switch__thumb`'s default dimensions → `h-4 w-[1.375rem]` (the
     // stylesheet's medium values live in the base block, not in `.switch--md`).
     // R-040: the property list is the inline `transitionProperty` in
     // `switch-thumb.tsx`; the class carries duration and curve (300ms,
     // `ease-out-fluid`). R-041: `motion-reduce:transition-none`.
     thumb:
-      "relative ms-0.5 flex origin-center rounded-lg bg-white text-black shadow-field dark:shadow-field-dark duration-300 ease-out-fluid motion-reduce:transition-none h-4 w-[1.375rem]",
+      `relative ms-0.5 flex origin-center rounded-lg bg-white text-black ${shadow.field.both} duration-300 ${ease.outFluid} motion-reduce:transition-none h-4 w-[1.375rem]`,
     // R-046: `.switch__thumb > *` → `flex size-full items-center justify-center`.
     icon: "flex h-full w-full items-center justify-center",
   },

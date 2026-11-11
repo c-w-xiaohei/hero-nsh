@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, radius, shadow } from "../../tokens/geometry";
+
 /**
  * InputGroup's variant table, mirroring `@heroui/styles` 3.2.7
  * (`packages/styles/src/components/input-group/input-group.styles.ts`) expanded
@@ -30,9 +32,9 @@ export const inputGroupVariants = tv({
     // R-009's property list is inline style in the root (one owner per
     // property), while `duration-150 ease-smooth` carry the timing here.
     base: [
-      "inline-flex min-h-9 items-center rounded-field border-0 bg-field",
-      "text-sm text-field-foreground shadow-field dark:shadow-field-dark outline-none",
-      "duration-150 ease-smooth motion-reduce:transition-none",
+      `inline-flex min-h-9 items-center ${radius.field} border-0 bg-field`,
+      `text-sm text-field-foreground ${shadow.field.both} outline-none`,
+      `duration-150 ${ease.smooth} motion-reduce:transition-none`,
     ].join(" "),
 
     // R-015: `.input-group__input` → the full upstream declaration list.
@@ -48,7 +50,7 @@ export const inputGroupVariants = tv({
     // `bg-transparent` is already part of this slot, so the variant needs no
     // declaration of its own.
     input: [
-      "flex-1 basis-auto rounded-field border-0 bg-transparent",
+      `flex-1 basis-auto ${radius.field} border-0 bg-transparent`,
       "px-3 py-2 text-base shadow-none outline-none placeholder:text-field-placeholder sm:text-sm",
     ].join(" "),
 
@@ -59,8 +61,8 @@ export const inputGroupVariants = tv({
     // R-026: `@apply motion-reduce:transition-none`.
     // R-025's property list is inline style in the part; the timing is here.
     prefix: [
-      "flex h-full items-center justify-center rounded-s-field rounded-e-none",
-      "bg-transparent px-3 text-field-placeholder duration-150 ease-smooth motion-reduce:transition-none",
+      `flex h-full items-center justify-center ${radius.fieldStart} rounded-e-none`,
+      `bg-transparent px-3 text-field-placeholder duration-150 ${ease.smooth} motion-reduce:transition-none`,
     ].join(" "),
 
     // R-027: `.input-group__suffix` → `flex h-full items-center justify-center
@@ -69,8 +71,8 @@ export const inputGroupVariants = tv({
     // R-031: `@apply motion-reduce:transition-none`.
     // R-030's property list is inline style in the part; the timing is here.
     suffix: [
-      "flex h-full items-center justify-center rounded-s-none rounded-e-field",
-      "bg-transparent px-3 text-field-placeholder duration-150 ease-smooth motion-reduce:transition-none",
+      `flex h-full items-center justify-center rounded-s-none ${radius.fieldEnd}`,
+      `bg-transparent px-3 text-field-placeholder duration-150 ${ease.smooth} motion-reduce:transition-none`,
     ].join(" "),
   },
   variants: {

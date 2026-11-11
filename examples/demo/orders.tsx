@@ -19,6 +19,7 @@ import {
   Separator,
   Tabs,
 } from "hero-nsh";
+import { shadow } from "../../src/tokens/geometry";
 import { Page } from "./ui";
 
 const ORDERS = [
@@ -88,7 +89,7 @@ function Filters() {
 
 function Summary() {
   return (
-    <View class="grid grid-cols-3 gap-4 rounded-3xl bg-surface p-4 shadow-surface dark:shadow-surface-dark">
+    <View class={`grid grid-cols-3 gap-4 rounded-3xl bg-surface p-4 ${shadow.surface.both}`}>
       <View class="gap-1">
         <Text class="text-xs text-muted">Orders</Text>
         <Text class="text-xl font-semibold text-foreground">4</Text>
@@ -222,7 +223,7 @@ function App() {
         <Tabs.Panel className="gap-4 pt-4" id="all">
           <Filters />
           <Summary />
-          <View class="rounded-3xl bg-surface shadow-surface dark:shadow-surface-dark">
+          <View class={`rounded-3xl bg-surface ${shadow.surface.both}`}>
             <View class="p-2">
               <OrderList />
             </View>

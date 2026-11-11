@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
+import { ease } from "../../tokens/geometry";
+
 /*
  * ButtonGroup variant table (HeroUI 3.2.7,
  * packages/styles/components/button-group.css).
@@ -15,7 +17,7 @@ export const buttonGroupVariants = tv({
     // orientation rule below: a border without a color is drawn in the
     // element's text color, which is what currentColor asked for.
     separator:
-      "absolute rounded-sm opacity-15 pointer-events-none transition-opacity duration-150 ease-smooth motion-reduce:transition-none",
+      `absolute rounded-sm opacity-15 pointer-events-none transition-opacity duration-150 ${ease.smooth} motion-reduce:transition-none`,
   },
   variants: {
     fullWidth: {

@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease } from "../../tokens/geometry";
+
 /**
  * The three Menu variant tables of `@heroui/styles` 3.2.7
  * (`packages/styles/src/components/{menu,menu-item,menu-section}/*.styles.ts`),
@@ -29,7 +31,7 @@ export const menuItemVariants = tv({
     // `@media (hover: hover)` wrapper has no counterpart).
     item: [
       "relative flex min-h-9 w-full items-center justify-start gap-3 rounded-2xl px-2 py-1.5 outline-none select-none",
-      "transition duration-[250ms] ease-out-quart motion-reduce:transition-none cursor-pointer",
+      `transition duration-[250ms] ${ease.outQuart} motion-reduce:transition-none cursor-pointer`,
       "hover:bg-default",
     ].join(" "),
     // R-019: the indicator slot, pinned to `start-2` and vertically centered.

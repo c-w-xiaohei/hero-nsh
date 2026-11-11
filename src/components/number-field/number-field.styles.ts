@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, radius, shadow } from "../../tokens/geometry";
+
 /**
  * NumberField's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/number-field/number-field.styles.ts`
@@ -37,8 +39,8 @@ export const numberFieldVariants = tv({
     /*
      * R-004: `.number-field__group` → `grid h-9 items-center overflow-hidden
      * rounded-field border bg-field text-sm text-field-foreground shadow-field
-     * outline-none`. `dark:shadow-field-dark` is the theme note's dark half of
-     * `shadow-field`.
+     * outline-none`. The dark half comes from `shadow.field` in
+     * `src/tokens/geometry.ts`.
      * R-005: `border-width: var(--border-width-field)` → `border-0`: the
      * default theme's field border width is 0, and NSH has no field border
      * width token (§8: a theme that changes it is not followed).
@@ -56,9 +58,9 @@ export const numberFieldVariants = tv({
      * R-040: `.number-field__group--full-width` → `@apply w-full`.
      */
     group: [
-      "grid grid-cols-1 h-9 items-center overflow-hidden rounded-field border-0 bg-field",
-      "text-sm text-field-foreground shadow-field dark:shadow-field-dark outline-none",
-      "duration-150 ease-smooth motion-reduce:transition-none",
+      `grid grid-cols-1 h-9 items-center overflow-hidden ${radius.field} border-0 bg-field`,
+      `text-sm text-field-foreground ${shadow.field.both} outline-none`,
+      `duration-150 ${ease.smooth} motion-reduce:transition-none`,
     ].join(" "),
 
     /*
@@ -101,16 +103,16 @@ export const numberFieldVariants = tv({
      */
     incrementButton: [
       "flex h-full w-10 items-center justify-center rounded-none bg-transparent",
-      "text-field-foreground outline-none duration-150 ease-smooth motion-reduce:transition-none",
+      `text-field-foreground outline-none duration-150 ${ease.smooth} motion-reduce:transition-none`,
       "cursor-pointer active:bg-field-foreground/10 active:scale-[0.97]",
-      "rounded-s-none rounded-e-field border-s border-field-placeholder/15",
+      `rounded-s-none ${radius.fieldEnd} border-s border-field-placeholder/15`,
     ].join(" "),
 
     decrementButton: [
       "flex h-full w-10 items-center justify-center rounded-none bg-transparent",
-      "text-field-foreground outline-none duration-150 ease-smooth motion-reduce:transition-none",
+      `text-field-foreground outline-none duration-150 ${ease.smooth} motion-reduce:transition-none`,
       "cursor-pointer active:bg-field-foreground/10 active:scale-[0.97]",
-      "rounded-s-field rounded-e-none border-e border-field-placeholder/15",
+      `${radius.fieldStart} rounded-e-none border-e border-field-placeholder/15`,
     ].join(" "),
   },
   variants: {
