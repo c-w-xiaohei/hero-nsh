@@ -29,6 +29,7 @@ app directory therefore holds the shared setup for every page:
 
 ## Coverage
 
-Between them the five pages use every component exported from `src/index.ts` except the
-four that are not merged yet: `table`, `toast`, `tooltip` and `combo-box`. They live in
-`tmp/worktrees/` and join these pages once they land.
+The five pages cover the components a product page normally composes. Four are not merged
+yet and live in `tmp/worktrees/`: `table`, `toast`, `tooltip` and `combo-box`. A few
+low-level parts (`ColorPicker`, `DateInputGroup`, `InputGroup`, `NumberField`) are exercised
+by the harness rather than these pages.
