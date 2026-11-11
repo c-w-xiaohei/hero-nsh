@@ -10,7 +10,10 @@
     ".": "./src/index.ts",
     "./theme.json": "./theme/hero-nsh.theme.json"
   },
-  "files": ["src", "theme"],
+  "bin": {
+    "hero-nsh": "./bin/hero-nsh.mjs"
+  },
+  "files": ["src", "theme", "bin", "NOTICE", "!**/.nsh"],
   "scripts": {
     "check": "nsh check harness",
     "test": "nsh test harness"

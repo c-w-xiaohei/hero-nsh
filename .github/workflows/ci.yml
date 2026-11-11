@@ -105,22 +105,36 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Pack and consume
         run: |
+          set -o pipefail
           pnpm pack --pack-destination "$RUNNER_TEMP"
           mkdir -p "$RUNNER_TEMP/consumer" && cd "$RUNNER_TEMP/consumer"
           printf '{"name":"consumer","version":"0.0.0","private":true}\n' > package.json
           pnpm add "$RUNNER_TEMP"/hero-nsh-*.tgz
-          printf '{"name":"consumer","id":"com.heronsh.consumer","version":"0.0.0","build":1}\n' > nsh.json
+          # The documented setup and nothing more: the theme file the package
+          # ships, and no "tailwind" block. Geometry (radius, shadows, easing)
+          # has to come from the package itself.
+          printf '{"name":"consumer","id":"com.heronsh.consumer","version":"0.0.0","build":1,"theme":"node_modules/hero-nsh/theme/hero-nsh.theme.json"}\n' > nsh.json
           printf '{"extends":"./.nsh/tsconfig.json","include":["**/*.ts","**/*.tsx"]}\n' > tsconfig.json
           cat > App.tsx <<'TSX'
           import { mount, Text } from "nsh";
-          import { Button, Card, HERO_NSH_VERSION } from "hero-nsh";
+          import { Button, Card, HERO_NSH_VERSION, Input, Label, TextField } from "hero-nsh";
 
           mount(() => (
             <Card className="p-4">
+              <TextField>
+                <Label>Email</Label>
+                <Input placeholder="you@example.com" />
+              </TextField>
               <Button>Save</Button>
               <Text>{HERO_NSH_VERSION}</Text>
             </Card>
           ));
           TSX
-          nsh check .
-          echo 'expect(app.texts()).toContain("0.0.0");' | nsh test App.tsx
+          nsh check . 2>&1 | tee "$RUNNER_TEMP/consumer-check.log"
+          echo 'expect(app.texts()).toContain("0.0.0");' | nsh test App.tsx 2>&1 | tee "$RUNNER_TEMP/consumer-test.log"
+          # An unknown class builds, passes and renders wrong, so the only signal
+          # is the warning: read the logs for it.
+          if grep -qE 'unknown class' "$RUNNER_TEMP"/consumer-*.log; then
+            echo "::error::A consumer with only the shipped theme file got an unknown class warning"
+            exit 1
+          fi
