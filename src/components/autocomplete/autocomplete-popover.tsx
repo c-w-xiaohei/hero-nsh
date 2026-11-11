@@ -17,6 +17,8 @@ import {
   ListBoxContainerContext,
   type ListBoxContainerContextValue,
 } from "../list-box/list-box-context";
+import type { PopoverPositionContextValue } from "../popover/popover-context";
+import { PopoverPositionContext } from "../popover/popover-context";
 import type {
   PopoverPlacement,
   PopoverSide,
@@ -291,6 +293,23 @@ export function AutocompletePopover(
     measureAnchor();
   };
 
+  // R-027 / R-028: autocomplete.css's last popover rules match an
+  // `[data-slot="popover-overlay-arrow"]` a caller nests in the content
+  // (`autocomplete.css:174-189`): the arrow takes the overlay's fill and turns
+  // with the side the layer landed on. NSH has no descendant styling, so the
+  // fill is the arrow's own `bg-overlay` and the rotation its own `rotate-*`
+  // classes, driven by the side handed down here — the same position context
+  // `Popover.Content` gives `Popover.Arrow` (`popover-content.tsx:399-404`,
+  // `popover-arrow.tsx:133-138`). Without it a nested arrow keeps the arrow
+  // part's `bottom` fallback and never turns for an overlay placed above the
+  // trigger.
+  const arrowPosition: PopoverPositionContextValue = {
+    anchorBounds,
+    overlayBounds,
+    side,
+    placement: () => positionedSide() ?? null,
+  };
+
   // R-021: `transform-origin: var(--trigger-anchor-point)`, computed from the
   // trigger's centre in the overlay's own frame (Popover.Content's algorithm).
   const transformOrigin = () => {
@@ -419,7 +438,9 @@ export function AutocompletePopover(
       onLayout={local.onLayout}
     >
       <ListBoxContainerContext.Provider value={containerValue}>
-        {renderChildren(local.children)}
+        <PopoverPositionContext.Provider value={arrowPosition}>
+          {renderChildren(local.children)}
+        </PopoverPositionContext.Provider>
       </ListBoxContainerContext.Provider>
     </Scroll>
   );
