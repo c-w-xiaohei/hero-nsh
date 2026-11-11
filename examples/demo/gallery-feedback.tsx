@@ -235,11 +235,10 @@ function Popovers() {
         <Popover>
           <Button variant="secondary">Open popover</Button>
           <Popover.Content>
-            <Popover.Arrow />
             <Popover.Dialog>
               <Popover.Heading>Workspace access</Popover.Heading>
               <Text class="text-sm text-muted">Editors can publish and invite viewers.</Text>
-              <Button size="sm" variant="tertiary">Manage access</Button>
+              <Link href="https://example.com/access">Manage access</Link>
             </Popover.Dialog>
           </Popover.Content>
         </Popover>

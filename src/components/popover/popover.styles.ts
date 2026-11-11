@@ -21,7 +21,7 @@ export const popoverVariants = tv({
     // starting classes come off (a transition needs its duration at the
     // destination too); R-010's 100ms exit overrides the duration inline,
     // where the exit phase also owns `transitionProperty`.
-    base: `bg-overlay p-0 text-sm rounded-3xl ${shadow.overlay.both} duration-150 ${ease.smooth}`,
+    base: `bg-overlay p-0 text-sm text-overlay-foreground rounded-3xl ${shadow.overlay.both} duration-150 ${ease.smooth}`,
     // R-015 `.popover__dialog` → `p-4 outline-none`.
     dialog: "p-4 outline-none",
     // R-016 `.popover__heading` → `font-medium`.

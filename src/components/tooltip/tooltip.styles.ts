@@ -24,7 +24,7 @@ export const tooltipVariants = tv({
     //
     // R-003 `break-all` is not written: NSH's text layout has no `word-break`,
     // so an unbreakable long word may overflow (registered in port sheet §8).
-    base: `max-w-xs bg-overlay p-2 text-xs rounded-xl ${shadow.overlay.both} ${ease.smooth}`,
+    base: `max-w-xs bg-overlay p-2 text-xs text-overlay-foreground rounded-xl ${shadow.overlay.both} ${ease.smooth}`,
     // R-016 `.tooltip__trigger` → `inline-block` (NSH resolves it to
     // `display: block`, the same computed result inside a flex parent); the
     // inline property list is the sole transition-property owner.

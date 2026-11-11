@@ -42,7 +42,7 @@ export const disclosureVariants = tv({
     // properties.
     content: "overflow-clip transition-opacity duration-200 ease-out motion-reduce:transition-none",
     // R-019: `.disclosure__body` → `@apply p-2`, on the outer View.
-    body: "p-2",
+    body: "p-2 text-foreground",
     // R-022: `.disclosure__body-inner` is a BEM hook only; the caller's
     // `className` reaches this inner View.
     bodyInner: "",

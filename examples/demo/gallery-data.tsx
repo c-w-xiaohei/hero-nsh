@@ -251,7 +251,7 @@ function AccordionSample() {
 
 function DisclosureSample() {
   return (
-    <Frame className="flex-col gap-2">
+    <View class="flex-col gap-2">
       <Disclosure defaultExpanded>
         <Disclosure.Heading>
           <Disclosure.Trigger>
@@ -263,7 +263,18 @@ function DisclosureSample() {
           <Disclosure.Body>Visa ending in 4242. Expires in March 2028.</Disclosure.Body>
         </Disclosure.Content>
       </Disclosure>
-    </Frame>
+      <Disclosure>
+        <Disclosure.Heading>
+          <Disclosure.Trigger>
+            Billing address
+            <Disclosure.Indicator />
+          </Disclosure.Trigger>
+        </Disclosure.Heading>
+        <Disclosure.Content>
+          <Disclosure.Body>Torstraße 12, 10119 Berlin.</Disclosure.Body>
+        </Disclosure.Content>
+      </Disclosure>
+    </View>
   );
 }
 
@@ -466,10 +477,12 @@ function BadgeSample() {
   return (
     <Frame className="flex-row flex-wrap items-center gap-8">
       <Badge.Anchor>
-        <Avatar>
+        <Avatar size="sm">
           <Avatar.Fallback>AL</Avatar.Fallback>
         </Avatar>
-        <Badge color="accent">3</Badge>
+        <Badge color="accent" size="sm">
+          3
+        </Badge>
       </Badge.Anchor>
 
       <Badge.Anchor>
@@ -482,12 +495,25 @@ function BadgeSample() {
       </Badge.Anchor>
 
       <Badge.Anchor>
-        <Surface className="size-10 rounded-full" />
+        <Avatar size="lg">
+          <Avatar.Fallback>KJ</Avatar.Fallback>
+        </Avatar>
+        <Badge color="success" size="lg">
+          5
+        </Badge>
+      </Badge.Anchor>
+
+      <Badge.Anchor>
+        <Avatar>
+          <Avatar.Fallback>AT</Avatar.Fallback>
+        </Avatar>
         <Badge color="success" placement="bottom-right" size="sm" />
       </Badge.Anchor>
 
       <Badge.Anchor>
-        <Surface className="size-10 rounded-full" />
+        <Avatar>
+          <Avatar.Fallback>LB</Avatar.Fallback>
+        </Avatar>
         <Badge color="warning" placement="bottom-left" size="sm" />
       </Badge.Anchor>
     </Frame>
