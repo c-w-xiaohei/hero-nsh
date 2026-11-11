@@ -201,20 +201,40 @@ export function AutocompleteFilter(
    * Virtual focus: opening the field moves the focus into the input, and a
    * filtered collection puts the highlight on its first option (React Aria's
    * `disableAutoFocusFirst` rule, port sheet §1).
+   *
+   * The placement outlives the commit that opened the field: the popover's
+   * subtree may be mounted by that same commit (a field that never opened
+   * mounts it now, so a hidden `SearchField` cannot take the Tab stop first),
+   * and the list registers only once it is mounted. `pending` keeps the
+   * strategy's option waiting for the collection instead of consuming it while
+   * the rows do not exist yet; the effect reruns when the list registers.
    * ----------------------------------------------------------------------------------------- */
   let previousText: string | undefined = text();
-  let focusWasOpen = isOpen();
+  let wasOpen = isOpen();
+  let pending = isOpen();
 
   effect(() => {
     const open = isOpen();
     const current = text();
-    const opened = open && !focusWasOpen;
+    const opened = open && !wasOpen;
     const textChanged = current !== previousText;
 
     previousText = current;
-    focusWasOpen = open;
+    wasOpen = open;
 
-    if (!open || disableAutoFocusFirst()) {
+    if (!open) {
+      pending = false;
+
+      return;
+    }
+
+    if (opened) {
+      pending = true;
+    }
+
+    if (disableAutoFocusFirst()) {
+      pending = false;
+
       return;
     }
 
@@ -228,14 +248,22 @@ export function AutocompleteFilter(
     // A text change re-places the highlight on the first surviving option; an
     // open keeps the strategy's option (`open("last")` must not jump to the
     // first one), and only fills an empty highlight.
-    if (!textChanged && !(opened && controls.focusedKey() == null)) {
+    const needsPlacement =
+      textChanged || (pending && controls.focusedKey() == null);
+
+    pending = false;
+
+    if (!needsPlacement || controls.focusedKey() != null) {
       return;
     }
 
-    const first = collection.getFirstKey();
+    const key =
+      autocomplete.openFocusStrategy() === "last"
+        ? collection.getLastKey()
+        : collection.getFirstKey();
 
-    if (first != null) {
-      controls.focusKey(first);
+    if (key != null) {
+      controls.focusKey(key);
     }
   });
 

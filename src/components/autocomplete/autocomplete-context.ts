@@ -241,6 +241,26 @@ export interface AutocompleteContextValue {
   /** Registers the `Filter`; returns its unregister. */
   registerFilter: (registration: AutocompleteFilterRegistration) => () => void;
 
+  /**
+   * The focus strategy of the open in progress (`"first"` / `"last"` from the
+   * trigger's arrows, `undefined` for a press). A lazily mounted list places
+   * the highlight once its rows exist.
+   */
+  openFocusStrategy: Accessor<FocusStrategy | undefined>;
+
+  /**
+   * Whether the popover's subtree belongs in the tree at all.
+   *
+   * Upstream (React Aria Components' `Popover`) mounts the content only while
+   * the popover is open: a closed field has no search input, so nothing inside
+   * it takes the keyboard focus. NSH builds a list's collection from mounted
+   * parts, so this port keeps the subtree after the first open (and while the
+   * field has a value to display); it only stays out of the tree before that,
+   * where a `SearchField`'s `autoFocus` would otherwise focus a hidden input at
+   * mount and take the field's Tab stop away from the trigger.
+   */
+  shouldMountPopover: Accessor<boolean>;
+
   /** The facade `Autocomplete.Value`'s render values carry as `state`. */
   state: AutocompleteStateFacade;
 }

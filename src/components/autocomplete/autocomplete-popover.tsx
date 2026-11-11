@@ -452,24 +452,34 @@ export function AutocompletePopover(
   // the web target). It exists only while something is shown: a closed field
   // keeps the content in the tree, but hidden, so the Filter and the list
   // survive (port sheet §5, third change).
+  //
+  // Before the first open the whole subtree stays out of the tree, as RAC's
+  // `Popover` does: a `SearchField` inside a closed field autofocuses at mount,
+  // and NSH would hand it the keyboard focus while it is hidden, taking the
+  // field's Tab stop away from the trigger (`_common`'s NSH input facts). The
+  // root's `shouldMountPopover` keeps it mounted from the first open on (the
+  // collection and the closed trigger's text live there) and right away when a
+  // `value` / `defaultValue` has to be shown.
   return (
     <SurfaceContext.Provider value={SURFACE_VALUE}>
-      <If when={!isNonModal()} else={contentOverlay}>
-        <Overlay
-          class="inset-0"
-          classList={{
-            hidden: !presence.isPresent(),
-            "pointer-events-none": !isOpen(),
-          }}
-          focusable={false}
-          onPress={() => {
-            if (isOpen()) {
-              close();
-            }
-          }}
-        >
-          {contentOverlay}
-        </Overlay>
+      <If when={autocomplete.shouldMountPopover()}>
+        <If when={!isNonModal()} else={contentOverlay}>
+          <Overlay
+            class="inset-0"
+            classList={{
+              hidden: !presence.isPresent(),
+              "pointer-events-none": !isOpen(),
+            }}
+            focusable={false}
+            onPress={() => {
+              if (isOpen()) {
+                close();
+              }
+            }}
+          >
+            {contentOverlay}
+          </Overlay>
+        </If>
       </If>
     </SurfaceContext.Provider>
   );

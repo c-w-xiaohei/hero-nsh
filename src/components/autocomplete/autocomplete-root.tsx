@@ -599,6 +599,32 @@ export function AutocompleteRoot<T>(props: AutocompleteRootProps<T>): JSX.Elemen
     overlay.triggerRef()?.focus();
   };
 
+  // The popover's subtree is mounted before the first open only when it has
+  // something to show. Upstream (RAC's `Popover`) has no subtree at all while
+  // closed, and this port must keep the list's collection once it built one;
+  // mounting it lazily keeps a hidden `SearchField` from taking the keyboard
+  // focus at mount, which would strip the trigger of the field's Tab stop.
+  const everOpened = signal(false);
+
+  effect(() => {
+    if (overlay.isOpen()) {
+      everOpened.set(true);
+    }
+  });
+
+  // A closed field still shows its selection (the trigger's Value reads the
+  // mounted rows' text), and a `defaultValue` / controlled `value` is known
+  // before the first open; either mounts the popover subtree at once.
+  const hasValueToShow = computed(() => {
+    const keys = controlledKeys() ?? defaultKeys();
+
+    return keys === "all" || (keys != null && keys.size > 0);
+  });
+
+  const shouldMountPopover = computed(
+    () => overlay.isOpen() || everOpened() || hasValueToShow(),
+  );
+
   // `autoFocus`: the trigger registers itself during the commit, so wait for
   // its ref instead of focusing in the render pass (research 4.6).
   let didAutoFocus = false;
@@ -787,6 +813,8 @@ export function AutocompleteRoot<T>(props: AutocompleteRootProps<T>): JSX.Elemen
     focusTrigger,
     filterSource,
     registerFilter,
+    shouldMountPopover,
+    openFocusStrategy: selectState.focusStrategy,
     state: stateFacade,
   };
 
