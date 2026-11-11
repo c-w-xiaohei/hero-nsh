@@ -78,3 +78,34 @@ test("T-003 supports closing via CloseTrigger", async () => {
   await app.waitFor(BODY, { state: "gone" });
   expect(app.shows(BODY)).toBe(false);
 });
+
+// X-001. Evidence: src/components/alert-dialog/alert-dialog-backdrop.tsx:67-68,165-174 —
+// the port accepts the public `isExiting` prop but its render values carry only
+// `presence.isExiting`, so the prop is silently dropped. HeroUI does the opposite:
+// heroui/packages/react/src/components/alert-dialog/alert-dialog.tsx:108-155
+// hands `isExiting={isExiting || isExitingProp}` to ModalOverlay, whose render
+// props (function children, className, style) therefore all see it.
+//
+// The scenario renders the overlay open (`defaultOpen`) with `isExiting` false,
+// so the false half is the default state, then flips the prop through a Footer
+// button. A render value that ignores the prop never leaves "backdrop-idle" /
+// [false]; one that tracks it reads [true] on both handlers.
+test("X-001 exposes the isExiting prop in the Backdrop render values", async () => {
+  const app = await openScenario("alert-dialog/backdrop-render-values", { clock: {} });
+
+  await app.clock!.runFor(20);
+
+  expect(app.shows(HEADING)).toBe(true);
+  expect(app.shows("text:backdrop-idle")).toBe(true);
+  expect(callsOf(app, "backdropClassName").at(-1)).toEqual([false]);
+  expect(callsOf(app, "backdropStyle").at(-1)).toEqual([false]);
+
+  await app.press("role:button[Toggle exiting]");
+  await app.waitFor("text:backdrop-exiting");
+  await app.clock!.runFor(20);
+
+  expect(app.shows("text:backdrop-exiting")).toBe(true);
+  expect(app.shows("text:backdrop-idle")).toBe(false);
+  expect(callsOf(app, "backdropClassName").at(-1)).toEqual([true]);
+  expect(callsOf(app, "backdropStyle").at(-1)).toEqual([true]);
+});

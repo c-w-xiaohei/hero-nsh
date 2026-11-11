@@ -1,4 +1,4 @@
-import { Text } from "nsh";
+import { signal, Text } from "nsh";
 import { AlertDialog, Button } from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
@@ -120,9 +120,69 @@ function Labelled() {
   );
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * Backdrop render values (regression X-001)
+ * -----------------------------------------------------------------------------------------------*/
+
+/*
+ * The Backdrop takes a public `isExiting`; HeroUI feeds it into the ModalOverlay
+ * render props as `isExiting || isExitingProp`, so a function child, a function
+ * className and a function style all see it. This entry renders the same part
+ * tree as `alert-dialog/basic` with the whole overlay opened through
+ * `defaultOpen`, seeds `isExiting` false and flips it with a Footer button: the
+ * inside text, the className handler and the style handler each report what the
+ * render values say, both before and after the flip.
+ */
+function BackdropRenderValues() {
+  const isExiting = signal(false);
+
+  return (
+    <Stage>
+      <AlertDialog defaultOpen>
+        <Button>Delete Project</Button>
+        <AlertDialog.Backdrop
+          isExiting={isExiting()}
+          className={(values) => {
+            probe("backdropClassName")(values.isExiting());
+
+            return "";
+          }}
+          style={(values) => {
+            probe("backdropStyle")(values.isExiting());
+
+            return {};
+          }}
+        >
+          {(values) => (
+            <AlertDialog.Container>
+              <AlertDialog.Dialog>
+                <AlertDialog.Header>
+                  <AlertDialog.Heading>Delete project permanently?</AlertDialog.Heading>
+                </AlertDialog.Header>
+                <AlertDialog.Body>
+                  <Text>{values.isExiting() ? "backdrop-exiting" : "backdrop-idle"}</Text>
+                </AlertDialog.Body>
+                <AlertDialog.Footer>
+                  <Button onPress={() => isExiting.update((value) => !value)}>
+                    Toggle exiting
+                  </Button>
+                  <Button slot="close" variant="tertiary">
+                    Cancel
+                  </Button>
+                </AlertDialog.Footer>
+              </AlertDialog.Dialog>
+            </AlertDialog.Container>
+          )}
+        </AlertDialog.Backdrop>
+      </AlertDialog>
+    </Stage>
+  );
+}
+
 export const alertDialogScenarios: Record<string, Component> = {
   "alert-dialog/basic": Basic,
   "alert-dialog/default-open": DefaultOpen,
   "alert-dialog/keyboard-dismiss": KeyboardDismiss,
   "alert-dialog/labelled": Labelled,
+  "alert-dialog/backdrop-render-values": BackdropRenderValues,
 };
