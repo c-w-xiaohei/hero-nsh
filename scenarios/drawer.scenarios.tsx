@@ -29,8 +29,9 @@ function EscapeDisabled() { return <Stage><DrawerFixture defaultOpen isKeyboardD
 function NotDismissable() { return <Stage><DrawerFixture defaultOpen isDismissable={false} /></Stage>; }
 function RightPlacement() { return <Stage><DrawerFixture defaultOpen placement="right" /></Stage>; }
 function Controlled() {
-  return <Stage><Drawer isOpen onOpenChange={probe("openChange")}>
-    <Button>Open Drawer</Button><Drawer.Backdrop><Drawer.Content><Drawer.Dialog><Drawer.Header><Drawer.Heading>Drawer Title</Drawer.Heading></Drawer.Header><Drawer.Body><Text>Drawer body content</Text></Drawer.Body></Drawer.Dialog></Drawer.Content></Drawer.Backdrop>
+  const open = signal(false);
+  return <Stage><Button onPress={() => open.set(true)}>Open Drawer</Button><Drawer isOpen={open()} onOpenChange={probe("openChange")}>
+    <Drawer.Backdrop><Drawer.Content><Drawer.Dialog><Drawer.Header><Drawer.Heading>Drawer Title</Drawer.Heading></Drawer.Header><Drawer.Body><Text>Drawer body content</Text></Drawer.Body></Drawer.Dialog></Drawer.Content></Drawer.Backdrop>
   </Drawer></Stage>;
 }
 function Stacked() {

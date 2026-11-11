@@ -53,9 +53,12 @@ test("T-005 exposes right placement behavior", async () => {
 });
 
 // heroui/packages/react/tests/components/drawer/drawer.test.tsx:126
-// Partial port: NSH scenarios cannot rerender a boolean prop; verify controlled Escape requests close while the fixed owner value keeps it open.
+// Rewritten: the scenario's owner signal drives the controlled closed-to-open transition.
 test("T-006 supports controlled isOpen", async () => {
   const app = await openScenario("drawer/controlled", { clock: {} });
+  expect(app.shows(CONTENT)).toBe(false);
+  await app.press("role:button[Open Drawer]");
+  await app.clock!.runFor(20);
   expect(app.shows(CONTENT)).toBe(true);
   await app.keyboard.press("escape");
   expect(callsOf(app, "openChange").filter((args) => args[0] === false)).toEqual([[false]]);
