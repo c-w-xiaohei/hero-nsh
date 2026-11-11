@@ -3,23 +3,27 @@ import type { VariantProps } from "tailwind-variants";
 import { tv } from "tailwind-variants";
 
 /**
- * CalendarYearPicker's slots mirror HeroUI 3.2.7's variant table, expanded
- * with the CSS declarations listed in the port sheet. Context-driven states
- * are applied by their owning parts.
+ * CalendarYearPicker's slots mirror HeroUI 3.2.7's variant table (same slot
+ * names, no variant axes) with `calendar-year-picker.css` expanded into NSH
+ * classes. Port-sheet §4.2 marks each rule at the slot it lands in.
  */
 export const calendarYearPickerVariants = tv({
+  defaultVariants: {},
   slots: {
-    // R-004: Trigger layout and shape; R-006's focus style belongs to the part.
-    trigger: "flex flex-1 items-center justify-start gap-1 rounded-lg outline-none",
-    // R-007: Heading typography; R-012's open color is context-driven.
+    // R-045: trigger layout; R-046: interactive cursor.
+    trigger: "flex flex-1 items-center justify-start gap-1 rounded-lg outline-none cursor-pointer",
+    // R-049: heading typography; R-054's open color is context-driven.
     triggerHeading: "text-sm font-medium",
-    // R-009: Indicator typography and RTL direction; R-011's open rotation is context-driven.
+    // R-051: indicator typography; the open rotation is context-driven (R-053).
     triggerIndicator: "text-xs text-accent-soft-foreground rtl:rotate-180",
-    // R-013: Overlay geometry and scroll structure; R-014: three equal columns.
-    yearGrid: "pointer-events-none absolute inset-x-0 opacity-0",
-    // R-016: A content-sized year button; w-fit preserves upstream inline-flex sizing in NSH.
-    yearCell: "relative inline-flex w-fit h-8 items-center justify-center rounded-3xl px-2.5 text-sm font-medium outline-none select-none",
+    // R-055: overlay box; opening/closing paint follows the open state.
+    yearGrid: "absolute inset-x-0 pointer-events-none opacity-0",
+    // R-061: a grid item is blockified and stretched to its column, so the
+    // button is `w-full` (not `w-fit`); R-063: interactive cursor.
+    yearCell:
+      "relative flex h-8 w-full items-center justify-center rounded-3xl px-2.5 text-sm font-medium outline-none select-none cursor-pointer",
   },
+  variants: {},
 });
 
 export type CalendarYearPickerVariants = VariantProps<typeof calendarYearPickerVariants>;

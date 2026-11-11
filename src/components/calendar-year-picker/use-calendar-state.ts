@@ -1,7 +1,6 @@
 /**
- * Calendar state bridge reserved for the Calendar / RangeCalendar integration.
- * The date components are not present in this worktree yet.
+ * The state bridge now returns the Calendar state directly. RangeCalendar will
+ * provide the same context from its own root, so the picker's parts do not
+ * change when it lands (port sheet §5).
  */
-export function useCalendarOrRangeState(): never {
-  throw new Error("useCalendarOrRangeState requires a <Calendar> or <RangeCalendar> implementation.");
-}
+export { useCalendarOrRangeState } from "../calendar/calendar-context";

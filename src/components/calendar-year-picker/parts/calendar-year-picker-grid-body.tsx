@@ -1,22 +1,32 @@
 import type { JSX } from "nsh";
-import { View } from "nsh";
-import { YearGridContext } from "./calendar-year-picker-grid";
+
 import { CalendarYearPickerCell } from "./calendar-year-picker-cell";
-import type { CalendarYearPickerCellRenderProps } from "./calendar-year-picker-cell";
+import type { CalendarYearPickerCellRenderProps } from "./calendar-year-picker-grid";
+import { useCalendarYearPickerGridContext } from "./calendar-year-picker-grid";
 
 export interface CalendarYearPickerGridBodyProps {
+  /** One element per year; the default is a `CalendarYearPickerCell`. */
   children?: (values: CalendarYearPickerCellRenderProps) => JSX.Element;
 }
 
+/** `Calendar.YearPickerGridBody`: every year of the window, in order. */
 export function CalendarYearPickerGridBody(props: CalendarYearPickerGridBodyProps): JSX.Element {
-  const grid = YearGridContext();
-  if (!grid) throw new Error("CalendarYearPickerGridBody must be used inside CalendarYearPickerGrid.");
+  const grid = useCalendarYearPickerGridContext();
+
   return (
-    <View>
-      {grid.years().map((year) => {
-        const values = grid.yearData(year);
-        return props.children ? props.children(values) : <CalendarYearPickerCell year={year} />;
-      })}
-    </View>
+    <Each of={grid.years()} key="index">
+      {(year) => {
+        const value = year();
+        const values: CalendarYearPickerCellRenderProps = {
+          year: () => value,
+          formattedYear: () => grid.formattedYear(value),
+          isSelected: () => grid.isSelected(value),
+          isCurrentYear: () => value === grid.currentYear(),
+          isOpen: grid.isOpen,
+          selectYear: () => grid.selectYear(value),
+        };
+        return props.children ? props.children(values) : <CalendarYearPickerCell year={value} />;
+      }}
+    </Each>
   );
 }
