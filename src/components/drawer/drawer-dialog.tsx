@@ -84,6 +84,7 @@ const fallbackContext: DrawerContextValue = {
   variant: () => "opaque",
   isDismissable: () => true,
   isOpen: () => false,
+  isEntering: () => false,
   open: () => {},
   close: () => {},
   toggle: () => {},

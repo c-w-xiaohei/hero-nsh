@@ -4,6 +4,7 @@ import type { DrawerContextValue } from "./drawer-context";
 import { DrawerContext } from "./drawer-context";
 import type { DrawerPlacement } from "./drawer.styles";
 import { drawerVariants } from "./drawer.styles";
+import { ease } from "../../tokens/geometry";
 
 interface DrawerRenderValues {
   isEntering: () => boolean;
@@ -53,7 +54,22 @@ export function DrawerContent(props: DrawerContentProps): JSX.Element {
     const alignment = placement() === "bottom" ? "items-end"
       : placement() === "top" ? "items-start"
         : placement() === "left" ? "justify-start" : "justify-end";
-    return [contextValue.slots().content(), alignment, custom].filter(Boolean).join(" ");
+    // The panel starts past the edge it comes from and slides to rest; the
+    // backdrop fades over the same 250ms in the backdrop's own classes.
+    const off = !base.isOpen() || base.isEntering();
+    const edge = placement() === "bottom" ? "translate-y-full"
+      : placement() === "top" ? "-translate-y-full"
+        : placement() === "left" ? "-translate-x-full" : "translate-x-full";
+    return [
+      contextValue.slots().content(),
+      alignment,
+      "transition duration-[250ms] motion-reduce:transition-none",
+      ease.outQuart,
+      off ? edge : "translate-x-0 translate-y-0",
+      custom,
+    ]
+      .filter(Boolean)
+      .join(" ");
   };
   const { children, className: _className, placement: _placement, isDismissable: _isDismissable,
     isKeyboardDismissDisabled: _keyboardDisabled, isOpen: _isOpen, defaultOpen: _defaultOpen,
@@ -80,6 +96,7 @@ const fallbackContext: DrawerContextValue = {
   variant: () => "opaque",
   isDismissable: () => true,
   isOpen: () => false,
+  isEntering: () => false,
   open: () => {},
   close: () => {},
   toggle: () => {},

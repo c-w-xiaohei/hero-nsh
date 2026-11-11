@@ -1,10 +1,13 @@
 import type { Accessor, JSX, PressEvent, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
-import { computed, View } from "nsh";
+import { computed, reduceMotion, View } from "nsh";
 import { Dialog } from "nsh/base";
+
+import { createOverlayPresence } from "../../primitives/create-overlay-presence";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { createDrawerState } from "./create-drawer-state";
 import { createDrawerContextValue, DrawerContext } from "./drawer-context";
 import { drawerVariants } from "./drawer.styles";
+import { ease } from "../../tokens/geometry";
 import type { DrawerContextValue } from "./drawer-context";
 import type { DrawerVariants } from "./drawer.styles";
 export interface DrawerBackdropProps extends Omit<ViewProps, "children" | "class" | "ref"> {
@@ -30,6 +33,7 @@ export interface DrawerBackdropProps extends Omit<ViewProps, "children" | "class
 /** What the layer below reads; kept as accessors so a signalled value stays live. */
 interface DrawerLayerProps {
   open: Accessor<boolean>;
+  present: Accessor<boolean>;
   backdropClass: Accessor<string>;
   backdropStyle: Accessor<StyleProp<ViewStyle> | undefined>;
   testID: Accessor<ViewProps["testID"]>;
@@ -59,12 +63,10 @@ interface DrawerLayerProps {
 function DrawerLayer(props: DrawerLayerProps): JSX.Element {
   return (
     <Dialog
-      open={props.open()}
-      // nsh's `Dialog` animates its own way: `"slide"` (its default) moves the
-      // popup in, `"fade"` only dissolves it. Upstream's drawer slides from its
-      // edge, so forcing `"fade"` here was the difference; NSH has no custom
-      // keyframes (style skill 6.3), so the native slide is the closest the
-      // host offers and the edge-specific version is registered as a gap.
+      open={props.present()}
+      // The backdrop fades and the panel slides here, so the layer itself is
+      // static: the host's own animation would move both together.
+      animation="none"
       // Every native close attempt is turned off and routed through the state
       // instead: a close the host performs itself ignores `open` (a dialog that
       // closed natively stays closed while `open` stays true), which in
@@ -112,6 +114,14 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
   // R-008, R-009: variant is resolved through the backdrop slot table.
   const variant = () => props.variant ?? parent?.variant() ?? "opaque";
   const slots = computed(() => drawerVariants({ placement: parent?.placement(), variant: variant() }));
+  // Upstream fades the backdrop and slides the panel; the host's own slide
+  // moves the whole layer, backdrop included, and has one direction. So the
+  // layer holds no animation of its own and the two halves animate here.
+  const presence = createOverlayPresence({
+    isOpen,
+    durationMs: () => 250,
+    skip: () => reduceMotion(),
+  });
   const isDismissable = () => props.isDismissable ?? true;
   const isKeyboardDismissDisabled = () => props.isKeyboardDismissDisabled === true;
   const contextValue: DrawerContextValue = {
@@ -120,16 +130,29 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
     variant,
     isDismissable,
     isOpen,
+    isEntering: presence.isEntering,
     open: () => setOpen(true),
     close: () => setOpen(false),
     toggle: () => setOpen(!isOpen()),
   };
   const ownsOpenState = props.isOpen !== undefined || props.defaultOpen !== undefined || !parent;
   const overlay = ownsOpenState ? local.context : parentOverlay ?? local.context;
-  const renderValues = { isOpen, isEntering: () => false, isExiting: () => false };
+  const renderValues = {
+    isOpen,
+    isEntering: presence.isEntering,
+    isExiting: presence.isExiting,
+  };
   const classes = () => {
     const value = props.className;
-    return [slots().backdrop(), typeof value === "function" ? value(renderValues) : value]
+    const fade = `duration-[250ms] ${ease.smooth} motion-reduce:transition-none`;
+    const off = !isOpen() || presence.isEntering();
+    return [
+      slots().backdrop(),
+      "transition-opacity",
+      fade,
+      off ? "opacity-0" : "opacity-100",
+      typeof value === "function" ? value(renderValues) : value,
+    ]
       .filter(Boolean)
       .join(" ");
   };
@@ -163,6 +186,7 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
       <OverlayTriggerContext.Provider value={overlay}>
         <DrawerLayer
           open={isOpen}
+          present={presence.isPresent}
           backdropClass={classes}
           backdropStyle={() => props.style}
           testID={() => props.testID}

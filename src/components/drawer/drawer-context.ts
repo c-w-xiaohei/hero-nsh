@@ -10,6 +10,8 @@ export interface DrawerContextValue {
   variant: Accessor<DrawerVariants["variant"]>;
   isDismissable: Accessor<boolean>;
   isOpen: Accessor<boolean>;
+  /** The first frame after opening: the panel and backdrop still hold their off state. */
+  isEntering: Accessor<boolean>;
   open: () => void;
   close: () => void;
   toggle: () => void;
@@ -32,6 +34,7 @@ export function createDrawerContextValue(options: {
     variant,
     isDismissable,
     isOpen: options.isOpen,
+    isEntering: () => false,
     open: () => options.setOpen(true),
     close: () => options.setOpen(false),
     toggle: () => options.setOpen((previous) => !previous),
