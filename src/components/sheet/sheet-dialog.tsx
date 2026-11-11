@@ -1,8 +1,9 @@
-import type { Bounds, JSX } from "nsh";
-import { computed, split, View } from "nsh";
+import type { Bounds, JSX, ViewStyle } from "nsh";
+import { computed, split, View, windowSize } from "nsh";
 
 import { SurfaceContext, type SurfaceContextValue } from "../surface";
 import { SheetDetentContext } from "./create-sheet-detent";
+import { sheetContentExtent } from "./sheet-content-box";
 import type { SheetPartDomProps } from "./sheet-dom-props";
 import { viewProps } from "./sheet-dom-props";
 import { SheetContext } from "./sheet-context";
@@ -98,6 +99,38 @@ export function SheetDialog(props: SheetDialogProps): JSX.Element {
     local.onLayout?.(event);
   };
 
+  /**
+   * R-023 has no height of its own: inside the clip box the panel is
+   * content-sized (G-002 wants a taller dialog at a partial detent, clipped by
+   * the box), but once the sheet reaches its full length the Body is the
+   * scroller (R-032) and needs a bounded column above it — otherwise the
+   * Footer sits below the clip and disappears. So the panel takes the box's
+   * length as a `max-height` in exactly that state: the detent's own length on
+   * a snap sheet, the edge cap on a content-sized one, and the box's height
+   * (the surface, `- 1rem` detached) on a left / right sheet, whose length
+   * runs across the panel.
+   *
+   * It is inline rather than a `max-h-full` class because a percentage of a
+   * content-sized parent is not the length the box actually got; the numbers
+   * come from the same `sheetContentExtent` `Sheet.Content` writes.
+   */
+  const expandedStyle = (): ViewStyle | undefined => {
+    if (detent === null || !detent.isExpanded()) {
+      return undefined;
+    }
+
+    const surface = windowSize();
+    const extent = sheetContentExtent({
+      placement: context?.placement() ?? "bottom",
+      isDetached: isDetached(),
+      detentLength: detent.hasPartialDetents() ? detent.length() : null,
+      surfaceWidth: surface.width,
+      surfaceHeight: surface.height,
+    });
+
+    return { maxHeight: extent.horizontal ? extent.cross : (extent.axial ?? extent.axialCap) };
+  };
+
   return (
     // The provider exception in the common rules: the parts below read
     // `SurfaceContext`, so `props.children` is read once, here at the placement
@@ -115,7 +148,7 @@ export function SheetDialog(props: SheetDialogProps): JSX.Element {
         role={local.role === "alertdialog" ? "alert" : "none"}
         accessibilityLabel={local["aria-label"]}
         class={classes()}
-        style={local.style}
+        style={[expandedStyle(), local.style]}
         onLayout={handleLayout}
       >
         {renderSheetPartChildren(local.children)}

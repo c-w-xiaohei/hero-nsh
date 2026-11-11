@@ -35,6 +35,16 @@ import { tv } from "tailwind-variants";
  *   the two do not fight (port sheet §4).
  * - R-042 (`prefers-reduced-motion` → 1ms animation) becomes the Backdrop's
  *   `animation={reduceMotion() ? "none" : "fade"}`, the same ruling as Modal.
+ *
+ * Four of the content rules are lengths no NSH class can spell: R-010 /
+ * R-016's `max-height: calc(100% - 2rem)` (`- 1rem` detached), R-013's
+ * `width: min(24rem, 96vw)`, R-017's `width: calc(100% - 1rem)` and R-018's
+ * `height: calc(100% - 1rem)`. Measured on NSH 0.4.0: an arbitrary value takes
+ * `px` / `pt` / `rem` / `%`, but `max-h-[calc(100%-2rem)]`,
+ * `w-[min(24rem,96vw)]` and `w-[calc(100%-2rem)]` are all unknown classes, and
+ * a `style` length is a number or a percentage, so `Sheet.Content` writes the
+ * numbers `sheet-content-box.ts` derives from `windowSize()` — the same surface
+ * size `createSheetDetent` takes `extent` from.
  */
 export const sheetVariants = tv({
   defaultVariants: {
@@ -111,30 +121,32 @@ export const sheetVariants = tv({
       },
     },
     placement: {
-      // R-010 `.sheet__content--bottom, --top` → `max-h-[calc(100%-2rem)]
-      // w-full`; R-011 `.sheet__content--bottom` → `rounded-t-2xl`; R-025
+      // R-010 `.sheet__content--bottom, --top` → `w-full`; the axial cap
+      // `max-h-[calc(100%-2rem)]` is the inline number `sheet-content-box.ts`
+      // derives. R-011 `.sheet__content--bottom` → `rounded-t-2xl`; R-025
       // `.sheet__dialog--bottom` → `rounded-t-2xl`.
       bottom: {
-        content: "w-full max-h-[calc(100%-2rem)] rounded-t-2xl",
+        content: "w-full rounded-t-2xl",
         dialog: "rounded-t-2xl",
       },
-      // R-013 `.sheet__content--left, --right` → `h-full max-h-none
-      // w-[min(24rem,96vw)]`; R-014 `.sheet__content--left` → `rounded-r-2xl`;
-      // R-027 `.sheet__dialog--left` → `rounded-r-2xl`.
+      // R-013 `.sheet__content--left, --right` → `h-full max-h-none`, with the
+      // `w-[min(24rem,96vw)]` inline (`sheet-content-box.ts`); R-014
+      // `.sheet__content--left` → `rounded-r-2xl`; R-027
+      // `.sheet__dialog--left` → `rounded-r-2xl`.
       left: {
-        content: "h-full max-h-none w-[min(24rem,96vw)] rounded-r-2xl",
+        content: "h-full max-h-none rounded-r-2xl",
         dialog: "rounded-r-2xl",
       },
       // R-013 again; R-015 `.sheet__content--right` → `rounded-l-2xl`; R-028
       // `.sheet__dialog--right` → `rounded-l-2xl`.
       right: {
-        content: "h-full max-h-none w-[min(24rem,96vw)] rounded-l-2xl",
+        content: "h-full max-h-none rounded-l-2xl",
         dialog: "rounded-l-2xl",
       },
-      // R-010 again; R-012 `.sheet__content--top` → `rounded-b-2xl`; R-026
-      // `.sheet__dialog--top` → `rounded-b-2xl`.
+      // R-010 again (the cap is inline); R-012 `.sheet__content--top` →
+      // `rounded-b-2xl`; R-026 `.sheet__dialog--top` → `rounded-b-2xl`.
       top: {
-        content: "w-full max-h-[calc(100%-2rem)] rounded-b-2xl",
+        content: "w-full rounded-b-2xl",
         dialog: "rounded-b-2xl",
       },
     },
@@ -160,23 +172,18 @@ export type SheetSwipeDirection = SheetPlacement | "horizontal" | "vertical";
 export const SHEET_BACKDROP_UNPAINTED = "bg-transparent";
 
 /**
- * R-016 `.sheet__content[data-detached]` → `m-2 rounded-2xl
- * max-h-[calc(100%-1rem)]`, R-017 (bottom / top) → `w-[calc(100%-1rem)]`,
- * R-018 (left / right) → `h-[calc(100%-1rem)]`, R-024
+ * R-016 `.sheet__content[data-detached]` → `m-2 rounded-2xl`; R-024
  * `.sheet__content[data-detached] .sheet__dialog` → `rounded-2xl` on the
- * dialog.
+ * dialog. The three lengths of R-016 / R-017 / R-018 (`max-h`, `w`, `h` of
+ * `calc(100% - 1rem)`) are inline numbers from `sheet-content-box.ts`, because
+ * 1rem of that 100% is the 8-point margin on each side.
  *
- * `isDetached` is a boolean prop, not an axis, so these live here rather than
- * in the table; the descendant selector of R-024 becomes the Dialog reading
- * the same prop from the context.
+ * `isDetached` is a boolean prop, not an axis, so the margin and the radius
+ * live here rather than in the table; the descendant selector of R-024 becomes
+ * the Dialog reading the same prop from the context.
  */
-export function sheetContentDetachedClasses(placement: SheetPlacement): string {
-  const cross =
-    placement === "bottom" || placement === "top"
-      ? "w-[calc(100%-1rem)]"
-      : "h-[calc(100%-1rem)]";
-
-  return `m-2 rounded-2xl max-h-[calc(100%-1rem)] ${cross}`;
+export function sheetContentDetachedClasses(): string {
+  return "m-2 rounded-2xl";
 }
 
 /** R-024: the detached dialog takes the generic radius instead of the edge one. */
@@ -187,9 +194,10 @@ export const SHEET_DIALOG_DETACHED_CLASS = "rounded-2xl";
  * R-019 / R-021 `.sheet__content--bottom[data-snap-points]` → `h-full max-h-none`
  * and R-020 / R-022 (`left` / `right`) → `w-full max-w-none`.
  *
- * The length itself is the inline `height` / `width` (a runtime detent), and
- * `max-h-none` / `max-w-none` has to beat the placement slot's `max-h`, which
- * is why it travels in `classList` (variants come after the base classes).
+ * The length itself is the inline `height` / `width` (a runtime detent). The
+ * cap is inline too (see the header), so `Sheet.Content` simply stops writing
+ * it when a partial detent exists; these two classes keep the table's own
+ * `h-full` / `max-h-none` honest for the same state, as upstream writes them.
  */
 export function sheetContentSnapClasses(placement: SheetPlacement): string {
   return placement === "bottom" || placement === "top" ? "max-h-none" : "max-w-none";

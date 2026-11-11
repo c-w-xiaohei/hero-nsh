@@ -1,5 +1,5 @@
 import type { JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
-import { split, View } from "nsh";
+import { split, View, windowSize } from "nsh";
 
 import { createSheetDetent, SheetDetentContext } from "./create-sheet-detent";
 import {
@@ -7,6 +7,7 @@ import {
   SheetPhaseContext,
   SheetSwipeDirectionContext,
 } from "./sheet-context";
+import { sheetContentExtent } from "./sheet-content-box";
 import { viewProps } from "./sheet-dom-props";
 import { renderSheetPartChildren } from "./sheet-part-children";
 import type { SheetRenderValues } from "./sheet-render-values";
@@ -45,11 +46,6 @@ export interface SheetContentProps
 
   /** Accepted, no effect: NSH has no DOM attribute channel. */
   [key: `data-${string}`]: unknown;
-}
-
-/** Both edges whose reveal length is a height. */
-function isHorizontalPlacement(placement: SheetPlacement): boolean {
-  return placement === "left" || placement === "right";
 }
 
 /**
@@ -138,7 +134,7 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
   const classes = () =>
     [
       slots().content(),
-      context?.isDetached() ? sheetContentDetachedClasses(placement()) : undefined,
+      context?.isDetached() ? sheetContentDetachedClasses() : undefined,
       local.className,
     ]
       .filter((part) => part !== undefined && part !== "")
@@ -153,28 +149,62 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
   });
 
   /**
-   * R-019 / R-020 / R-021 / R-022, as the inline axial length they have to be:
-   * the detent is a runtime value, so the box's height (top / bottom) or width
-   * (left / right) is written here rather than in a class. The axis is the placement's, not
-   * the drag axis: a horizontal `swipeDirection` on a bottom sheet still
-   * reveals a height, it only changes which pointer coordinate the Handle
-   * follows (`sheetDragLength` keeps the length on the panel's axis).
+   * R-010 / R-013 / R-016 / R-017 / R-018 / R-019 / R-020 / R-021 / R-022, as
+   * the inline lengths they have to be.
+   *
+   * The clip box's length along the placement's axis is the runtime detent, so
+   * with a partial detent it is a number here (`height` for top / bottom,
+   * `width` for left / right) rather than a class. The edge's own cap and the
+   * side panel's `min()` are lengths no class can spell either (see
+   * `sheetContentExtent`), so they are numbers read off `windowSize()`, the
+   * surface the carrier spans and the one `createSheetDetent` takes `extent`
+   * from. Without a partial detent (G-001) only the cap is written, so the box
+   * keeps its natural length.
    *
    * R-021 / R-022 need no `calc()`: `fullLength` already subtracts the detached
    * margins, so the detached full detent is a number too.
    *
-   * Without a partial detent (G-001) the panel keeps its natural height and the
-   * whole box is pushed out of the edge by `offset()` instead: that is how a
-   * dragged sheet disappears, since there is no scroll position to animate.
+   * Without a partial detent the whole box is pushed out of the edge by
+   * `offset()` instead: that is how a dragged sheet disappears, since there is
+   * no scroll position to animate.
+   *
+   * The axis is the placement's, not the drag axis: a horizontal
+   * `swipeDirection` on a bottom sheet still reveals a height, it only changes
+   * which pointer coordinate the Handle follows (`sheetDragLength` keeps the
+   * length on the panel's axis).
    */
   const style = (): ViewStyle => {
-    if (!detent.hasPartialDetents()) {
-      return { translate: edgeTranslate(placement(), detent.offset()) };
+    const surface = windowSize();
+    const isDetached = context?.isDetached() ?? false;
+    const extent = sheetContentExtent({
+      placement: placement(),
+      isDetached,
+      detentLength: detent.hasPartialDetents() ? detent.length() : null,
+      surfaceWidth: surface.width,
+      surfaceHeight: surface.height,
+    });
+    // R-019 … R-022: while no detent owns the axial length the box is pushed
+    // out of the edge instead of resized.
+    const drag =
+      extent.axial === null ? { translate: edgeTranslate(placement(), detent.offset()) } : {};
+
+    if (extent.horizontal) {
+      return {
+        // R-018: `height: calc(100% - 1rem)` detached, `h-full` otherwise.
+        ...(isDetached ? { height: extent.cross } : {}),
+        // R-013 / R-020 / R-022: `min(24rem, 96vw)`, or the detent's own width.
+        ...(extent.axial === null ? { width: extent.axialCap } : { width: extent.axial }),
+        ...drag,
+      };
     }
 
-    const length = detent.length();
-
-    return isHorizontalPlacement(placement()) ? { width: length } : { height: length };
+    return {
+      // R-017: `width: calc(100% - 1rem)` detached, `w-full` otherwise.
+      ...(isDetached ? { width: extent.cross } : {}),
+      // R-010 / R-019 / R-021: the cap, or the detent's own height.
+      ...(extent.axial === null ? { maxHeight: extent.axialCap } : { height: extent.axial }),
+      ...drag,
+    };
   };
 
   const content = () => {
