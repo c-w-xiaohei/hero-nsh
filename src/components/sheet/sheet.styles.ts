@@ -86,8 +86,9 @@ export const sheetVariants = tv({
     handleBar: "h-[0.3rem] w-8 rounded-full bg-default",
     // R-038 `.sheet__close-trigger` → `absolute top-3 right-3 z-10 cursor-pointer
     // text-muted outline-none select-none`: `cursor-(--cursor-interactive)` is
-    // the pointer, `no-highlight` is `select-none`. R-039's focus ring is the
-    // `classList` below, R-041's hover is the `hover:` class.
+    // the pointer, `no-highlight` is `select-none`. R-039's focus ring is
+    // `SHEET_CLOSE_TRIGGER_FOCUSED_CLASS` below, R-041's hover is the
+    // `hover:` class.
     closeTrigger:
       "absolute top-3 right-3 z-10 cursor-pointer text-muted outline-none select-none hover:text-foreground",
   },
@@ -197,5 +198,18 @@ export function sheetContentSnapClasses(placement: SheetPlacement): string {
 /** R-035 `.sheet__handle[data-dragging]` → `cursor-grabbing`. */
 export const SHEET_HANDLE_DRAGGING_CLASS = "cursor-grabbing";
 
-/** R-039 the focus-visible ring the CloseTrigger adds from its own focus state. */
-export const SHEET_CLOSE_TRIGGER_FOCUSED_CLASS = "status-focused";
+/**
+ * R-039 `&:focus-visible:not([data-focused]), &[data-focus-visible="true"]` →
+ * `status-focused`, which HeroUI expands to `focus-ring` (`ring-2 ring-focus
+ * ring-offset-* ring-offset-background outline-none`).
+ *
+ * The utilities are the ones `CloseButton` already paints from its own
+ * `isFocusVisible()`, which is why the offsets match exactly: upstream both
+ * `.sheet__close-trigger` and `.close-button` apply `status-focused` to the
+ * same element, and identical utilities on the same node give the same one
+ * ring. `Sheet.CloseTrigger` adds them from the condition R-039 names (focused
+ * and keyboard), so the rule stays realized on the Sheet side even though the
+ * button would already draw it.
+ */
+export const SHEET_CLOSE_TRIGGER_FOCUSED_CLASS =
+  "ring-2 ring-focus ring-offset-2 ring-offset-background";

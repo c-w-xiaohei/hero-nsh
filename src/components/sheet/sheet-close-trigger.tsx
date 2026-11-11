@@ -51,6 +51,11 @@ export function SheetCloseTrigger(props: SheetCloseTriggerProps): JSX.Element {
   // prop form — the button re-evaluates it inside its own tracked class
   // computation, so the ring follows focus without a second modality state that
   // could disagree with the button's.
+  //
+  // The ring utilities are the ones `CloseButton` adds from that same flag, on
+  // purpose: upstream puts `status-focused` on this element from both
+  // `.sheet__close-trigger` and `.close-button`, and the same utilities on the
+  // same node are still one ring.
   const resolvedClassName = (values: CloseButtonRenderProps) =>
     [
       slots().closeTrigger(),

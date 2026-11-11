@@ -2,7 +2,11 @@ import type { JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
 import { split, View } from "nsh";
 
 import { createSheetDetent, SheetDetentContext } from "./create-sheet-detent";
-import { SheetContext, SheetSwipeDirectionContext } from "./sheet-context";
+import {
+  SheetContext,
+  SheetPhaseContext,
+  SheetSwipeDirectionContext,
+} from "./sheet-context";
 import { viewProps } from "./sheet-dom-props";
 import { renderSheetPartChildren } from "./sheet-part-children";
 import type { SheetRenderValues } from "./sheet-render-values";
@@ -86,6 +90,9 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
   ]);
 
   const context = SheetContext();
+  // The Backdrop owns the dialog, so the enter / exit phase arrives through its
+  // own provider rather than through the Root's context.
+  const phase = SheetPhaseContext();
 
   // Outside a Root the clip box still renders with the table's defaults, the
   // way `Sheet.Dialog` does; there is simply no state to drive it.
@@ -111,14 +118,17 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
     position: placement,
     swipeDirection: () => detent.direction(),
     stackIndex: () => context?.stackIndex() ?? 0,
-    // Core gap (port sheet §8): nothing tells the Content that a nested sheet
-    // opened inside it — `Sheet.NestedRoot` announces itself to no part.
-    hasDescendants: () => false,
+    // React Aria's `sheetStack.slice(index + 1) > 0`: another sheet opened
+    // above this one. The Root's open-sheet registry already orders every open
+    // sheet, and `Sheet.NestedRoot` appends itself to it by opening through the
+    // same `createSheetState`, so no part has to announce anything (§2).
+    hasDescendants: () => context?.hasDescendants() ?? false,
     isExpanded: () => detent.isExpanded(),
-    // Core gap (port sheet §8): the entering / exiting phase belongs to the
-    // host dialog, which the Backdrop owns; there is no channel to read it.
-    isEntering: () => false,
-    isExiting: () => false,
+    // The host dialog's phase, published by `Sheet.Backdrop` (which owns the
+    // nsh/base `Dialog`); `false` outside a Backdrop, where upstream has no
+    // overlay to take the flags from either (§2).
+    isEntering: () => phase?.isEntering() ?? false,
+    isExiting: () => phase?.isExiting() ?? false,
   };
 
   // R-008 `z-1 box-content overflow-clip outline-none` is the slot; R-016 /

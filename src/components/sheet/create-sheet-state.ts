@@ -124,6 +124,20 @@ export function createSheetState(props: CreateSheetStateProps): CreateSheetState
     return index < 0 ? 0 : index;
   };
 
+  /**
+   * React Aria's `hasDescendants` is `sheetStack.slice(index + 1).length > 0`,
+   * i.e. any sheet that opened after this one — not only one nested inside it.
+   * The open-sheet stack above already carries exactly that order, so the
+   * check is the registry itself; `Sheet.NestedRoot` opening through its own
+   * `createSheetState` is what appends the entry, which is why the part needs
+   * no announcement of its own (port sheet §2).
+   */
+  const hasDescendants = (): boolean => {
+    const index = openSheets().indexOf(id);
+
+    return index >= 0 && index < openSheets().length - 1;
+  };
+
   const sheetContext = createSheetContextValue({
     isOpen: trigger.isOpen,
     setIsOpen: trigger.setIsOpen,
@@ -133,6 +147,7 @@ export function createSheetState(props: CreateSheetStateProps): CreateSheetState
     isNested: props.isNested,
     snapPoints,
     stackIndex,
+    hasDescendants,
     animationEnd: (open) => props.onAnimationEnd?.(open),
   });
 

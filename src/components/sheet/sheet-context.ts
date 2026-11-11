@@ -45,6 +45,15 @@ export interface SheetContextValue {
   /** The ceiling above it: 0 is the bottom-most open sheet, 1 the one over it. */
   stackIndex: Accessor<number>;
 
+  /**
+   * Whether another sheet opened above this one: React Aria's
+   * `sheetStack.slice(index + 1)`. A `Sheet.NestedRoot` opening inside this
+   * sheet registers itself in the same open-sheet stack, so that registration
+   * is the announcement (port sheet §2); `Sheet.Content`'s render props read
+   * this.
+   */
+  hasDescendants: Accessor<boolean>;
+
   /** The open state the Backdrop renders and every close channel writes. */
   isOpen: Accessor<boolean>;
 
@@ -75,6 +84,7 @@ export interface CreateSheetContextOptions {
   isNested?: Accessor<boolean | undefined>;
   snapPoints?: Accessor<Array<number | string> | undefined>;
   stackIndex?: Accessor<number>;
+  hasDescendants?: Accessor<boolean>;
   isOpen: Accessor<boolean>;
   setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
   animationEnd?: (open: boolean) => void;
@@ -92,6 +102,27 @@ export const SheetContext = context<SheetContextValue | null>(null);
  * it to choose its axis (port sheet §2).
  */
 export const SheetSwipeDirectionContext = context<SheetSwipeDirection | null>(null);
+
+/**
+ * The host dialog's enter / exit phase, provided by `Sheet.Backdrop` and read
+ * by `Sheet.Content`'s render props (`SheetRenderValues.isEntering` /
+ * `isExiting`).
+ *
+ * The phase belongs to the overlay, and the overlay is the Backdrop's nsh/base
+ * `Dialog`, not the Root's state: `SheetContext` is built above the dialog and
+ * cannot carry it. Upstream reads the same two flags from React Aria's
+ * `SheetOverlay` render props, so the provider sits where the overlay is.
+ * `null` outside a Backdrop, where upstream has no overlay either.
+ */
+export interface SheetPhase {
+  /** The dialog is playing its enter transition (R-042's frame boundary). */
+  isEntering: Accessor<boolean>;
+
+  /** The dialog is playing its exit transition, or was forced into it. */
+  isExiting: Accessor<boolean>;
+}
+
+export const SheetPhaseContext = context<SheetPhase | null>(null);
 
 /** Builds the value once, in the Root; the parts only read it. */
 export function createSheetContextValue(
@@ -111,6 +142,7 @@ export function createSheetContextValue(
     isNested,
     snapPoints: () => options.snapPoints?.(),
     stackIndex: () => options.stackIndex?.() ?? 0,
+    hasDescendants: () => options.hasDescendants?.() ?? false,
     isOpen,
     setIsOpen: (next) => options.setIsOpen(next),
     open: () => options.setIsOpen(true),

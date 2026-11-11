@@ -3,7 +3,12 @@ import { computed, reduceMotion, signal, split, View } from "nsh";
 import { Dialog } from "nsh/base";
 
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
-import { SheetContext, SheetSwipeDirectionContext } from "./sheet-context";
+import type { SheetPhase } from "./sheet-context";
+import {
+  SheetContext,
+  SheetPhaseContext,
+  SheetSwipeDirectionContext,
+} from "./sheet-context";
 import { viewProps } from "./sheet-dom-props";
 import { renderSheetPartChildren } from "./sheet-part-children";
 import type { SheetPlacement, SheetSwipeDirection, SheetVariants } from "./sheet.styles";
@@ -167,6 +172,15 @@ export function SheetBackdrop(props: SheetBackdropProps): JSX.Element {
   const hasExited = signal(false);
   const isMounted = () => presence.isPresent() || !hasExited();
 
+  // HeroUI's render props read `isEntering` / `isExiting` off React Aria's
+  // `SheetOverlay`, which is this dialog: the presence is the same phase the
+  // Backdrop mounts and retains by, so it is published here for `Sheet.Content`
+  // (port sheet §2). Built once — the accessors inside it are what updates.
+  const phase: SheetPhase = {
+    isEntering: presence.isEntering,
+    isExiting: presence.isExiting,
+  };
+
   const overlayClasses = computed(() =>
     // R-003: the overlay's `z-50` is not written; the Dialog is the window's
     // top modal layer, and the slot only carries a caller's composition.
@@ -235,19 +249,21 @@ export function SheetBackdrop(props: SheetBackdropProps): JSX.Element {
           }}
           class={overlayClasses()}
         >
-          <View class="relative flex-1">
-            <View
-              {...viewProps(rest)}
-              ref={(node) => local.ref?.(node)}
-              nativeID={local.id ?? local.nativeID}
-              focusable={false}
-              class={paintClasses()}
-              onPress={dismiss}
-            />
-            <View class={sheetCarrierClasses(ctx.placement())}>
-              {renderSheetPartChildren(local.children)}
+          <SheetPhaseContext.Provider value={phase}>
+            <View class="relative flex-1">
+              <View
+                {...viewProps(rest)}
+                ref={(node) => local.ref?.(node)}
+                nativeID={local.id ?? local.nativeID}
+                focusable={false}
+                class={paintClasses()}
+                onPress={dismiss}
+              />
+              <View class={sheetCarrierClasses(ctx.placement())}>
+                {renderSheetPartChildren(local.children)}
+              </View>
             </View>
-          </View>
+          </SheetPhaseContext.Provider>
         </Dialog>
       </SheetSwipeDirectionContext.Provider>
     </If>
