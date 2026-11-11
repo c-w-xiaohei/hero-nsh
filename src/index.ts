@@ -69,3 +69,4 @@ export * from "./components/color-picker";
 export * from "./components/table";
 export * from "./components/modal";
 export * from "./components/drawer";
+export * from "./components/autocomplete";

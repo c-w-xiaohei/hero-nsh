@@ -226,8 +226,62 @@ export interface SearchFieldGroupContextValue {
   registerClearButton: () => () => void;
 }
 
+/**
+ * What a composite field around the search field (Autocomplete's Filter) tells
+ * it (Autocomplete port sheet §5, the SearchField change): upstream React
+ * Aria's `Autocomplete` hands its `FieldInputContext` down to every `Input`
+ * below it, so the field is written by the filter and reports back to it. NSH
+ * has no DOM and no provider that reaches an unrelated component, so this is
+ * the one optional channel.
+ *
+ * Every member is optional: a `SearchField` with no such owner keeps its own
+ * value, its own callbacks and its own classes.
+ */
+export interface SearchFieldOwnerContextValue {
+  /** The text the owner holds; while present the field shows it and nothing else. */
+  value?: () => string | undefined;
+
+  /** The field's text changed (typing, the clear button, Escape). */
+  setValue?: (value: string) => void;
+
+  /** The input took the keyboard focus. */
+  onFocus?: () => void;
+
+  /** The input lost the keyboard focus. */
+  onBlur?: () => void;
+
+  /** Return was pressed in the input. */
+  onSubmit?: (value: string) => void;
+
+  /**
+   * Escape was pressed in the input. The owner decides what it means (an
+   * Autocomplete closes the field and resets the text) and the field skips its
+   * own clear when it is present, so the two cannot fight over the keystroke.
+   */
+  onEscape?: () => void;
+
+  /**
+   * Receives the field's `focus()`, so the owner can move the focus into the
+   * input when it opens (React Aria's popover focus management). Returns the
+   * unregister function.
+   */
+  registerFocus?: (focus: () => void) => () => void;
+
+  /**
+   * The owner's class for this field, appended after the field's own classes
+   * and before the caller's. It stands in for a descendant selector in the
+   * owner's stylesheet (`.autocomplete__popover [data-slot="search-field"]`).
+   */
+  partClass?: () => string | undefined;
+}
+
 /** Root → parts; `undefined` outside a `SearchField`. */
 export const SearchFieldContext = context<SearchFieldContextValue | undefined>(undefined);
+
+/** The composite field above this search field, if any. */
+export const SearchFieldOwnerContext = context<
+  SearchFieldOwnerContextValue | undefined
+>(undefined);
 
 /** Group → its children; `undefined` outside a `SearchField.Group`. */
 export const SearchFieldGroupContext = context<SearchFieldGroupContextValue | undefined>(

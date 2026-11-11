@@ -66,6 +66,7 @@ import { modalScenarios } from "./modal.scenarios";
 import { alertDialogScenarios } from "./alert-dialog.scenarios";
 import { drawerScenarios } from "./drawer.scenarios";
 import { tableScenarios } from "./table.scenarios";
+import { autocompleteScenarios } from "./autocomplete.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -135,4 +136,5 @@ export const scenarios: Record<string, Component> = {
   ...alertDialogScenarios,
   ...drawerScenarios,
   ...tableScenarios,
+  ...autocompleteScenarios,
 };
