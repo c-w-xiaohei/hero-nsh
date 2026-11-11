@@ -116,6 +116,41 @@ export interface CreateOverlayTriggerResult {
 export const OverlayTriggerContext = context<OverlayTriggerContextValue | null>(null);
 
 /**
+ * What a root that opens on hover or focus offers an actionable part (tooltip
+ * port sheet §5.3). It is a second, independent context on purpose: a Button
+ * can be the trigger of a Popover and a Tooltip at once, and folding hover into
+ * `OverlayTriggerContext` would make a press toggle the wrong layer.
+ *
+ * HeroUI reaches this contract through React Aria's `FocusableProvider`, which
+ * injects the handlers into any child element; NSH has no handler injection
+ * channel, so the part consumes the context itself.
+ */
+export interface HoverTriggerContextValue {
+  /** The pointer entered the trigger (ignored when the root opens on focus only). */
+  hoverStart: () => void;
+
+  /** The pointer left the trigger. */
+  hoverEnd: () => void;
+
+  /** The trigger took the keyboard focus. */
+  focusStart: () => void;
+
+  /** The trigger lost the keyboard focus. */
+  focusEnd: () => void;
+
+  /** A pointer went down (React Aria's `onPointerDown` closes the tooltip). */
+  pressStart: () => void;
+
+  /** A whole press finished; the keyboard's Return / Space also arrive here. */
+  press: () => void;
+
+  /** Registers the anchor; the returned function undoes only this registration. */
+  registerTrigger: (ref: ViewRef) => () => void;
+}
+
+export const HoverTriggerContext = context<HoverTriggerContextValue | null>(null);
+
+/**
  * The shared trigger state of an overlay root: the open state, the registered
  * trigger and the focus return. Popover, Tooltip, Dropdown, Select and the rest
  * of the overlay family call it once per root.
