@@ -34,7 +34,15 @@ export interface ButtonGroupContextValue {
   isFocusVisible: Accessor<boolean>;
   /** Registers a Button; the returned function unregisters it. */
   registerItem: (item: ButtonGroupItem) => () => void;
+  /**
+   * Where a registered Button sits in the group. Upstream reaches this with
+   * `:first-child` / `:last-child`; NSH cannot select by position, so the
+   * group answers from its own registration order.
+   */
+  positionOf: (item: ButtonGroupItem) => Accessor<ButtonGroupPosition>;
 }
+
+export type ButtonGroupPosition = "only" | "first" | "middle" | "last";
 
 /** Kept for API parity: HeroUI marks its direct children with this prop name. */
 export const BUTTON_GROUP_CHILD = "__button_group_child";

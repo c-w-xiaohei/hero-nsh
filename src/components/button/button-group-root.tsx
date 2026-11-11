@@ -14,6 +14,7 @@ import {
   ButtonGroupContext,
   type ButtonGroupContextValue,
   type ButtonGroupItem,
+  type ButtonGroupPosition,
 } from "./button-group-context";
 import {
   buttonGroupVariants,
@@ -106,6 +107,18 @@ export function ButtonGroupRoot(props: ButtonGroupRootProps) {
     };
   };
 
+  const positionOf = (item: ButtonGroupItem) =>
+    computed<ButtonGroupPosition>(() => {
+      const list = items();
+      const index = list.indexOf(item);
+
+      if (index < 0 || list.length === 1) return "only";
+      if (index === 0) return "first";
+      if (index === list.length - 1) return "last";
+
+      return "middle";
+    });
+
   const isFocusWithin = computed(() => items().some((item) => item.focused()));
   const isFocusVisible = computed(() => items().some((item) => item.focusVisible()));
 
@@ -178,6 +191,7 @@ export function ButtonGroupRoot(props: ButtonGroupRootProps) {
     isFocusWithin,
     isFocusVisible,
     registerItem,
+    positionOf,
   };
 
   return (

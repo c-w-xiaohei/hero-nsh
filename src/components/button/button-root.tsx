@@ -192,9 +192,15 @@ export function ButtonRoot(props: ButtonRootProps) {
     return typeof className === "function" ? className(renderProps) : className;
   };
 
-  // R-033 … R-052
+  // R-033 … R-052. The group answers where this button sits, since NSH has no
+  // `:first-child` / `:last-child`.
+  const groupItem = { focused: isFocused, focusVisible: isFocusVisible };
+  const groupPosition = computed(() => group?.positionOf(groupItem)() ?? "only");
+
   const groupClasses = computed(() =>
-    group ? buttonGroupItemClasses(group.orientation(), variant()) : "",
+    group
+      ? buttonGroupItemClasses(group.orientation(), variant(), groupPosition())
+      : "",
   );
 
   const classes = computed(() => {
@@ -379,7 +385,7 @@ export function ButtonRoot(props: ButtonRootProps) {
   });
 
   if (group) {
-    cleanup(group.registerItem({ focused: isFocused, focusVisible: isFocusVisible }));
+    cleanup(group.registerItem(groupItem));
   }
 
   // The toolbar walks its registered controls instead of enumerating the DOM
