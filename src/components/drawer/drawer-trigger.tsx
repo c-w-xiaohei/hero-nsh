@@ -27,6 +27,9 @@ export function DrawerTrigger(props: DrawerTriggerProps): JSX.Element {
   // R-001, R-002, R-035, R-004, R-005: use the context slot, with the default table outside Root.
   const classes = computed(() => [drawer?.slots().trigger() ?? drawerVariants().trigger(), local.className].filter(Boolean).join(" "));
   const isDisabled = () => local.disabled === true;
+  // R-003: `status-focused` (`ring-2 ring-focus`, offset from the background) on
+  // `[data-focus-visible="true"]`, i.e. keyboard focus only. Upstream's
+  // `:not([data-focused])` branch has no state channel here (port sheet).
   const classList = computed(() => ({ "ring-2 ring-focus ring-offset-2 ring-offset-background": focused() && modality.isKeyboard() }));
   const children = computed(() => {
     const child = local.children;
