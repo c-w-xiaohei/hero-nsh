@@ -18,7 +18,7 @@ import {
   ToggleButton,
   Toolbar,
 } from "hero-nsh";
-import { Page, Row, Section } from "./ui";
+import { Grid, Page, Section } from "./ui";
 
 const ACTIVITY = [
   { id: "1", who: "Grace", what: "shipped order #1041", when: "12 minutes ago" },
@@ -30,7 +30,7 @@ const ACTIVITY = [
 
 function Stat(props: { label: string; value: string; delta: string; note: string; up?: boolean }) {
   return (
-    <Card className="w-full sm:w-[240px]">
+    <Card>
       <Card.Header>
         <Card.Title>{props.label}</Card.Title>
         <Card.Description>{props.note}</Card.Description>
@@ -47,8 +47,8 @@ function Stat(props: { label: string; value: string; delta: string; note: string
 
 function Goals() {
   return (
-    <Row>
-      <Card className="w-full sm:w-[300px]">
+    <Grid>
+      <Card>
         <Card.Header>
           <Card.Title>Monthly goal</Card.Title>
           <Card.Description>$18,400 of $25,000</Card.Description>
@@ -63,7 +63,7 @@ function Goals() {
         </Card.Content>
       </Card>
 
-      <Card className="w-full sm:w-[300px]">
+      <Card>
         <Card.Header>
           <Card.Title>Storage</Card.Title>
           <Card.Description>68 GB of 100 GB</Card.Description>
@@ -78,7 +78,7 @@ function Goals() {
         </Card.Content>
       </Card>
 
-      <Card className="w-full sm:w-[300px]">
+      <Card>
         <Card.Header>
           <Card.Title>Uptime</Card.Title>
           <Card.Description>Last 30 days</Card.Description>
@@ -95,7 +95,7 @@ function Goals() {
           </View>
         </Card.Content>
       </Card>
-    </Row>
+    </Grid>
   );
 }
 
@@ -119,7 +119,7 @@ function Activity() {
         </View>
       </Card.Header>
       <Card.Content>
-        <ScrollShadow className="h-56 w-full">
+        <ScrollShadow className="h-80 w-full sm:h-72">
           <ListBox aria-label="Recent activity" className="w-full">
             {ACTIVITY.map((entry) => (
               <ListBox.Item id={entry.id} textValue={`${entry.who} ${entry.what}`}>
@@ -171,11 +171,11 @@ function App() {
       </Surface>
 
       <Section title="Numbers">
-        <Row>
+        <Grid>
           <Stat label="Active users" value="1,284" delta="+8%" note="Compared with last week" />
           <Stat label="Revenue" value="$24.6k" delta="+12%" note="Compared with last week" />
           <Stat label="Open tickets" value="12" delta="-3" note="Compared with last week" up={false} />
-        </Row>
+        </Grid>
       </Section>
 
       <Section title="This month">

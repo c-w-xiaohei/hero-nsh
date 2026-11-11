@@ -31,7 +31,7 @@ export const progressBarVariants = tv({
     // tabular-nums`.
     // R-008: `.progress-bar__output` → `grid-area: output`, written as
     // row 1 / column 2.
-    output: "text-sm font-medium tabular-nums col-start-2 row-start-1",
+    output: "text-sm font-medium text-foreground tabular-nums col-start-2 row-start-1",
     // R-009: `.progress-bar__track` → `@apply relative overflow-hidden
     // rounded-sm bg-default`. The clip is what makes the fill's overshoot in
     // the indeterminate animation look like the CSS keyframes.

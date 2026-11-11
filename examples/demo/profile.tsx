@@ -19,7 +19,7 @@ import {
   TagGroup,
   Typography,
 } from "hero-nsh";
-import { Page, Row, Section } from "./ui";
+import { Grid, Page, Section } from "./ui";
 
 const FAQ = [
   {
@@ -76,11 +76,13 @@ function About() {
         <Card.Description>Shown on your public profile.</Card.Description>
       </Card.Header>
       <Card.Content>
-        <Typography.Paragraph>
+        <Typography.Paragraph className="max-w-[600px]">
           Mathematician, occasional programmer, and the person who keeps the billing runbooks in
           order. Ask me about invoices, exports, or why the March report is late.
         </Typography.Paragraph>
-        <Typography.Code>timezone: Europe/Berlin</Typography.Code>
+        <View class="self-start rounded-md bg-default px-1.5 py-0.5">
+          <Text class="font-mono text-sm text-foreground">timezone: Europe/Berlin</Text>
+        </View>
       </Card.Content>
     </Card>
   );
@@ -88,9 +90,10 @@ function About() {
 
 function Details() {
   return (
-    <Card className="w-full sm:w-[300px]">
+    <Card>
       <Card.Header>
         <Card.Title>Details</Card.Title>
+        <Card.Description>Contact details and membership.</Card.Description>
       </Card.Header>
       <Card.Content>
         <DisclosureGroup>
@@ -124,7 +127,7 @@ function Details() {
 
 function Shortcuts() {
   return (
-    <Card className="w-full sm:w-[300px]">
+    <Card>
       <Card.Header>
         <Card.Title>Shortcuts</Card.Title>
         <Card.Description>Everywhere in Acme.</Card.Description>
@@ -157,7 +160,7 @@ function Shortcuts() {
 
 function QuickActions() {
   return (
-    <Card className="w-full sm:w-[300px]">
+    <Card>
       <Card.Header>
         <Card.Title>Quick actions</Card.Title>
       </Card.Header>
@@ -203,11 +206,11 @@ function App() {
         <About />
       </Section>
 
-      <Row>
+      <Grid>
         <Details />
         <Shortcuts />
         <QuickActions />
-      </Row>
+      </Grid>
 
       <Section title="FAQ">
         <Card>
