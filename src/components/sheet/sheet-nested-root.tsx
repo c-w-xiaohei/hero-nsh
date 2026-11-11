@@ -15,7 +15,14 @@ export type SheetNestedRootProps = SheetRootProps;
  * (R-005 / R-006 keep the backdrop on the bottom-most sheet only, port sheet §2).
  *
  * A nested root must have a parent; upstream throws
- * `Sheet.NestedRoot must be placed in another Sheet` and so does this.
+ * `Sheet.NestedRoot must be placed in another Sheet` and so does this. The
+ * check is a mount-time invariant, so it is a plain read in the body rather
+ * than a condition that has to stay reactive.
+ *
+ * `isNested` comes after the spread so it always wins over `props.isNested`,
+ * exactly as upstream's `<SheetRoot {...props} isNested />` does. Everything
+ * else — the state, both providers, the single children read — belongs to
+ * `SheetRoot`; this part adds no host and no context of its own.
  */
 export function SheetNestedRoot(props: SheetNestedRootProps): JSX.Element {
   const parent = SheetContext();
