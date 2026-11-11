@@ -64,7 +64,11 @@ export interface AlertDialogBackdropProps
   /** Forces the entering phase. */
   isEntering?: boolean;
 
-  /** Accepted, no effect: the host owns the overlay's animation. */
+  /**
+   * Forces the exiting phase and keeps the overlay mounted, as React Aria's
+   * `Overlay` does; HeroUI ORs it with its own exit hold
+   * (`alert-dialog.tsx:108-155`: `isExiting={isExiting || isExitingProp}`).
+   */
   isExiting?: boolean;
 
   /** Accepted, no effect: the host owns the overlay's animation. */
@@ -155,11 +159,14 @@ export function AlertDialogBackdrop(props: AlertDialogBackdropProps): JSX.Elemen
 
   // The entering and exiting phases the render values report, and the exit hold
   // below. HeroUI keeps the overlay mounted until the container's 100ms exit
-  // animation finishes (`useOverlayExitHold`); NSH has no animation event, so
-  // `createOverlayPresence` holds the same window with a timer (R-026).
+  // animation finishes (`useOverlayExitHold`) and ORs the caller's `isExiting`
+  // into that phase before handing it to the overlay (alert-dialog.tsx:108-155);
+  // NSH has no animation event, so `createOverlayPresence` holds the same window
+  // with a timer (R-026) and takes the caller's flag the same way.
   const presence = createOverlayPresence({
     isOpen,
     isEntering: () => props.isEntering,
+    isExiting: () => props.isExiting,
   });
 
   const values: AlertDialogRenderValues = {
