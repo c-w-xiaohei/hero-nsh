@@ -29,12 +29,12 @@ function SignIn() {
           <ErrorMessage>That email and password do not match.</ErrorMessage>
           <TextField isRequired name="email" type="email">
             <Label>Email</Label>
-            <Input placeholder="you@acme.com" />
+            <Input variant="secondary" placeholder="you@acme.com" />
             <FieldError />
           </TextField>
           <TextField isRequired name="password" type="password">
             <Label>Password</Label>
-            <Input placeholder="Enter your password" />
+            <Input variant="secondary" placeholder="Enter your password" />
             <FieldError />
           </TextField>
           <View class="flex-row items-center justify-between gap-4">

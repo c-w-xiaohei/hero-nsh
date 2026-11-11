@@ -56,23 +56,23 @@ function Profile() {
             <Fieldset.Group>
               <TextField isRequired defaultValue="Ada Lovelace" name="name">
                 <Label>Name</Label>
-                <Input />
+                <Input variant="secondary" />
               </TextField>
               <TextField defaultValue="ada@acme.com" name="email" type="email">
                 <Label>Email</Label>
-                <Input />
+                <Input variant="secondary" />
                 <Description>Only visible to workspace admins.</Description>
               </TextField>
               <DateField name="birthday">
                 <Label>Birthday</Label>
-                <DateField.Group>
+                <DateField.Group className="bg-default shadow-none">
                   <DateField.Input>
                     {(segment) => <DateField.Segment segment={segment} />}
                   </DateField.Input>
                 </DateField.Group>
                 <Description>Used for the birthday note on your profile.</Description>
               </DateField>
-              <Select className="w-[260px]" defaultSelectedKey="shanghai">
+              <Select className="w-[260px]" defaultSelectedKey="shanghai" variant="secondary">
                 <Label>Time zone</Label>
                 <Select.Trigger>
                   <Select.Value />
@@ -92,7 +92,7 @@ function Profile() {
               <View class="flex-row flex-wrap items-end gap-3">
                 <TimeField className="w-full sm:w-[180px]" name="quiet-from">
                   <Label>Quiet hours from</Label>
-                  <TimeField.Group>
+                  <TimeField.Group className="bg-default shadow-none">
                     <TimeField.Input>
                       {(segment) => <TimeField.Segment segment={segment} />}
                     </TimeField.Input>
@@ -100,7 +100,7 @@ function Profile() {
                 </TimeField>
                 <TimeField className="w-full sm:w-[180px]" name="quiet-to">
                   <Label>to</Label>
-                  <TimeField.Group>
+                  <TimeField.Group className="bg-default shadow-none">
                     <TimeField.Input>
                       {(segment) => <TimeField.Segment segment={segment} />}
                     </TimeField.Input>
@@ -208,15 +208,15 @@ function Security() {
         </Alert>
         <InputOTP maxLength={6}>
           <InputOTP.Group>
-            <InputOTP.Slot index={0} />
-            <InputOTP.Slot index={1} />
-            <InputOTP.Slot index={2} />
+            <InputOTP.Slot index={0} className="bg-default shadow-none" />
+            <InputOTP.Slot index={1} className="bg-default shadow-none" />
+            <InputOTP.Slot index={2} className="bg-default shadow-none" />
           </InputOTP.Group>
           <InputOTP.Separator />
           <InputOTP.Group>
-            <InputOTP.Slot index={3} />
-            <InputOTP.Slot index={4} />
-            <InputOTP.Slot index={5} />
+            <InputOTP.Slot index={3} className="bg-default shadow-none" />
+            <InputOTP.Slot index={4} className="bg-default shadow-none" />
+            <InputOTP.Slot index={5} className="bg-default shadow-none" />
           </InputOTP.Group>
         </InputOTP>
         <View class="flex-row items-center gap-3">
