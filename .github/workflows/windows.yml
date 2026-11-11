@@ -5,10 +5,10 @@ name: Windows
 # need the headless engine's drag/hold and key press) and the `.web.` ones
 # (which need Tab focus movement, which NSH 0.4.0 does not do on Windows).
 #
-# One file at a time: these open real windows and take the platform's input,
-# and two runs at once would fight over the focus the cases assert (NSH's own
-# Windows workflow does the same). A push is filtered to what the tests read,
-# and a newer push cancels the older run.
+# Two runners, one file at a time each: these open real windows and take the
+# platform's input, so two runs on one machine would fight over the focus the
+# cases assert (NSH's own Windows workflow runs them one at a time). A push is
+# filtered to what the tests read, and a newer push cancels the older run.
 
 on:
   push:
@@ -41,7 +41,11 @@ env:
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -55,10 +59,12 @@ jobs:
           irm https://nsh.dev/install.ps1 | iex
           "$env:LOCALAPPDATA\nsh\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - run: pnpm install --frozen-lockfile
-      - name: Windows tests
+      - name: Windows tests (shard ${{ matrix.shard }} of 2)
         shell: bash
         run: |
-          for file in $(find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \
-            ! -name '*.headless.test.*' ! -name '*.web.test.*' ! -name '*.browser.test.*'); do
-            nsh test "$file" --target windows
+          files=($(find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \
+            ! -name '*.headless.test.*' ! -name '*.web.test.*' ! -name '*.browser.test.*' \
+            | sort))
+          for ((i = ${{ matrix.shard }}; i < ${#files[@]}; i += 2)); do
+            nsh test "${files[$i]}" --target windows
           done

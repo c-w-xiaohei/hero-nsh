@@ -5,12 +5,11 @@ name: CI
 #
 #   check      the types (`nsh check`)
 #   headless   every test file, on the engine the default target runs
-#   web        the files named `.web.test.tsx`: what only a browser proves
+#   web        the files named `.web.test.tsx`, split over two runners
 #   packaging  the packed tarball, installed in a throwaway app
 #
 # A push is filtered to what these read, and a newer push cancels the run it
-# supersedes: a commit nobody will ship does not need to finish 30 minutes of
-# tests.
+# supersedes: a commit nobody will ship does not need to finish its tests.
 
 on:
   push:
@@ -76,13 +75,21 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
       # The directory, not a file at a time: `nsh test` walks it and opens each
-      # test on an engine of its own.
+      # test on an engine of its own. One path per run, so this job cannot be
+      # split further without an app directory per shard.
       - name: Headless tests
         run: nsh test harness
 
   web:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      # Two runners, two processes each. The headless job already ran the files
+      # every target shares; a browser adds something only for the files
+      # written against it.
+      matrix:
+        shard: [0, 1]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -95,13 +102,12 @@ jobs:
           curl -fsSL https://nsh.dev/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
-      # The headless job already ran the files every target shares; a browser
-      # adds something only for the files written against it. Two at a time:
-      # each process drives its own Chrome.
-      - name: Web tests
+      - name: Web tests (shard ${{ matrix.shard }} of 2)
         run: |
-          find harness/tests \( -name '*.web.test.tsx' -o -name '*.browser.test.tsx' \) -print0 \
-            | xargs -0 -n1 -P2 sh -c 'nsh test "$0" --target web'
+          find harness/tests \( -name '*.web.test.tsx' -o -name '*.browser.test.tsx' \) -print \
+            | sort \
+            | awk -v shard='${{ matrix.shard }}' 'NR % 2 == shard' \
+            | xargs -r -n1 -P2 sh -c 'nsh test "$0" --target web'
 
   packaging:
     runs-on: ubuntu-24.04
