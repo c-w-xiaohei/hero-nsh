@@ -582,6 +582,11 @@ function ControlledOpen() {
 function Outside() {
   return (
     <Stage>
+      {/* Upstream presses document.body, which no NSH step can reach. The
+          popover opens below the trigger (offset 8), so a target above the
+          field is guaranteed to sit outside its bounds on every host; a
+          sibling below the field would be covered by the open popover. */}
+      <Button>Outside</Button>
       <Autocomplete
         className="w-[256px]"
         placeholder="Select an animal"
@@ -606,7 +611,6 @@ function Outside() {
           </Autocomplete.Filter>
         </Autocomplete.Popover>
       </Autocomplete>
-      <Button>Outside</Button>
     </Stage>
   );
 }

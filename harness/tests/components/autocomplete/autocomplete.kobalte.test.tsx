@@ -225,7 +225,12 @@ test("T-028 can be closed by clicking on the button", async () => {
 
 // kobalte/packages/core/src/combobox/combobox.test.tsx:1423
 // Rewritten (port sheet T-029): a press on a view outside the popover closes it
-// through `onPressOutside`.
+// through `onPressOutside`. Upstream dispatches the pointer events on
+// document.body, which no NSH step can target; the fixture therefore puts the
+// "Outside" button above the field, where the popover that opens below the
+// trigger can never reach it. A target below the field is covered by the open
+// popover, so a host with hit-testing (`--target web`) sends the press into the
+// popover and keeps the list open.
 test("T-029 can be closed by clicking outside", async () => {
   const app = await openCase("autocomplete/outside");
 
