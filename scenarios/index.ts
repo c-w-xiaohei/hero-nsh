@@ -62,6 +62,7 @@ import { inputGroupScenarios } from "./input-group.scenarios";
 import { colorSwatchPickerScenarios } from "./color-swatch-picker.scenarios";
 import { colorPickerScenarios } from "./color-picker.scenarios";
 import { modalScenarios } from "./modal.scenarios";
+import { alertDialogScenarios } from "./alert-dialog.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -127,4 +128,5 @@ export const scenarios: Record<string, Component> = {
   ...colorSwatchPickerScenarios,
   ...colorPickerScenarios,
   ...modalScenarios,
+  ...alertDialogScenarios,
 };
