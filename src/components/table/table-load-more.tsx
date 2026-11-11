@@ -1,4 +1,4 @@
-import type { JSX } from "nsh";
+import type { JSX, StyleProp, ViewStyle } from "nsh";
 import { computed, effect, signal, split, View } from "nsh";
 
 import { renderChildren } from "./table-children";
@@ -148,7 +148,10 @@ export function TableLoadMore(props: TableLoadMoreProps) {
         <View
           role="row"
           class={classes()}
-          style={{ gridTemplateColumns: table?.layout.tracks() || "1fr" }}
+          style={[
+            { gridTemplateColumns: table?.layout.tracks() || "1fr" },
+            local.style as StyleProp<ViewStyle>,
+          ]}
         >
           <View
             role="cell"
