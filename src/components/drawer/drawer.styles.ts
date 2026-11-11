@@ -22,7 +22,7 @@ export const drawerVariants = tv({
      footer: "flex flex-row items-center justify-end gap-2 mt-5",
     // R-027, R-028, R-045
     handle: "flex items-center justify-center pb-2",
-    closeTrigger: "absolute end-4 top-4",
+    closeTrigger: "absolute z-10 end-4 top-4",
   },
   variants: {
     placement: {
