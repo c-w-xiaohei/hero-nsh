@@ -39,18 +39,23 @@ async function settle(app: App): Promise<void> {
 }
 
 // heroui/packages/react/tests/components/combo-box/combo-box.browser.test.tsx:73
-// Partial port (port sheet T-010): the whole handoff chain is kept — the first
-// field opens on focus, Tab records the first input blur and second input focus
-// callbacks (only one listbox remains once the first has exited), ArrowDown +
-// Enter select without a second-input blur callback, ArrowDown + Escape close,
-// and Tab records Submit focus. These callback probes do not query active DOM
-// focus. The
+// Partial port (port sheet T-010): the whole handoff chain is kept — upstream's
+// `first.click()` (a press on the field's input focuses it and opens the list),
+// Tab records the first input blur and second input focus callbacks (only one
+// listbox remains once the first has exited), ArrowDown + Enter select without
+// leaving the field, ArrowDown + Escape close, and Tab records Submit focus.
+// These callback probes do not query active DOM focus. The
 // `aria-expanded` / `aria-activedescendant` / `aria-hidden` assertions are
 // dropped: no attribute channel.
+//
+// The field starts from a press, as upstream does, not from a Tab: NSH's web
+// host consumes the first Tab that leaves a keyboard-entered Input (it blurs
+// and re-focuses it, measured on the plain-Input fixture too), so a Tab entry
+// would cost an extra keypress the browser never needs.
 test("T-010 preserves sibling Tab handoff, selection and Escape", async () => {
   const app = await openCase("tab-handoff");
 
-  await app.keyboard.press("tab");
+  await app.press("id:first-input");
   await app.waitFor(combo.COMBO_BOX_LISTBOX);
 
   expect(app.count(combo.COMBO_BOX_LISTBOX)).toBe(1);
@@ -68,7 +73,11 @@ test("T-010 preserves sibling Tab handoff, selection and Escape", async () => {
   await settle(app);
 
   expect(callsOf(app, "change")).toEqual([["cat"]]);
-  expect(callsOf(app, "secondInputBlur")).toHaveLength(0);
+  // Upstream's `expect(second).toHaveFocus()`: the field keeps the focus. The
+  // web host reports a blur/focus pair when the commit writes the input's text
+  // (X-013), so the last focus event, not the absence of a blur, is what says
+  // the focus stayed.
+  expect(combo.endsOn(app, "secondInputFocus")).toBe(true);
   expect(combo.getListbox(app)).toBe(false);
 
   await app.keyboard.press("arrowdown");

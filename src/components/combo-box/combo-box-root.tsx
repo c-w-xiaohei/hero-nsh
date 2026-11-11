@@ -872,11 +872,17 @@ export function ComboBoxRoot<
     // it never opens: NSH's web host can still deliver the focus of a Tab stop
     // to a disabled input, and the field would open a list it cannot use. A
     // read-only field opens no list either (`useComboBoxState.ts:598-603`).
+    //
+    // X-013: the platform reports a blur and a focus for an input whose value
+    // is written while it holds the focus (the Enter commit's text write). That
+    // focus is the same visit, not the user entering the field again; opening
+    // on it would reopen the list the commit just closed.
     if (
       !isDisabled() &&
       !isReadOnly() &&
       menuTrigger() === "focus" &&
-      !overlay.isOpen()
+      !overlay.isOpen() &&
+      !focusReturnPending
     ) {
       // A focus open of a `"focus"` field shows every option; the guard inside
       // `openList` keeps an empty collection closed.
@@ -893,13 +899,36 @@ export function ComboBoxRoot<
   // field's one keyboard exit — still finds it unfocused and open.
   let blurTimer: number | undefined;
 
+  // X-013: the partner of the guard in `handleInputFocus`. The platform's blur
+  // and the focus it pairs with it can straddle a task boundary (the host
+  // writes the value, then fires both events), so the flag outlives the turn by
+  // a readable margin: a person cannot leave the field and come back inside
+  // 250 ms, while the commit's own pair always lands inside it.
+  let focusReturnPending = false;
+  let focusReturnTimer: number | undefined;
+
   cleanup(() => {
     if (blurTimer !== undefined) {
       clearTimeout(blurTimer);
     }
+
+    if (focusReturnTimer !== undefined) {
+      clearTimeout(focusReturnTimer);
+    }
   });
 
   const handleInputBlur = () => {
+    focusReturnPending = true;
+
+    if (focusReturnTimer !== undefined) {
+      clearTimeout(focusReturnTimer);
+    }
+
+    focusReturnTimer = setTimeout(() => {
+      focusReturnTimer = undefined;
+      focusReturnPending = false;
+    }, 250);
+
     inputFocused.set(false);
     local.onFocusChange?.(false);
     local.onBlur?.();

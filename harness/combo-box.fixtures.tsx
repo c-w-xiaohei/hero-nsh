@@ -238,7 +238,7 @@ function TabHandoffCase() {
       <ComboBox className="w-[256px]">
         <Label>First Animal</Label>
         <ComboBox.InputGroup>
-          <Input placeholder="Search animals..." onBlur={probe("firstInputBlur")} />
+          <Input testID="first-input" placeholder="Search animals..." onBlur={probe("firstInputBlur")} />
           <ComboBox.Trigger />
         </ComboBox.InputGroup>
         <ComboBox.Popover>
@@ -254,6 +254,7 @@ function TabHandoffCase() {
         <Label>Second Animal</Label>
         <ComboBox.InputGroup>
           <Input
+            testID="second-input"
             placeholder="Search animals..."
             onFocus={probe("secondInputFocus")}
             onBlur={probe("secondInputBlur")}
