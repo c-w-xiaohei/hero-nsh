@@ -1450,14 +1450,59 @@ function IconsSample() {
  * (or RangeCalendar) provides, so the smallest honest example is a Calendar
  * whose header carries the trigger. It is shown with the year panel open.
  */
+function CalendarSample() {
+  return (
+    <Frame className="w-full flex-col gap-3">
+      <State label="default month with a selected day" className="w-full flex-col">
+        <View class="w-fit rounded-2xl bg-surface p-3">
+          <Calendar aria-label="Event date" defaultValue={parseDate("2026-08-15")}>
+            <Calendar.Header>
+              <Calendar.Heading />
+              <Calendar.NavButton slot="previous" />
+              <Calendar.NavButton slot="next" />
+            </Calendar.Header>
+            <Calendar.Grid>
+              <Calendar.GridHeader>
+                {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
+              </Calendar.GridHeader>
+              <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
+            </Calendar.Grid>
+          </Calendar>
+        </View>
+      </State>
+      <State label="min and max value: days outside them are disabled" className="w-full flex-col">
+        <View class="w-fit rounded-2xl bg-surface p-3">
+          <Calendar
+            aria-label="Billing period"
+            defaultValue={parseDate("2026-08-10")}
+            maxValue={parseDate("2026-08-20")}
+            minValue={parseDate("2026-08-05")}
+          >
+            <Calendar.Header>
+              <Calendar.Heading />
+              <Calendar.NavButton slot="previous" />
+              <Calendar.NavButton slot="next" />
+            </Calendar.Header>
+            <Calendar.Grid>
+              <Calendar.GridHeader>
+                {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
+              </Calendar.GridHeader>
+              <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
+            </Calendar.Grid>
+          </Calendar>
+        </View>
+      </State>
+    </Frame>
+  );
+}
+
 function CalendarYearPickerSample() {
   return (
     <Frame className="w-full flex-col gap-3">
-      <State label="Calendar.YearPickerTrigger, year panel open" className="w-full flex-col">
+      <State label="Calendar with the year picker trigger in its header" className="w-full flex-col">
         <View class="w-fit rounded-2xl bg-surface p-3">
           <Calendar
             aria-label="Event date"
-            defaultYearPickerOpen
             defaultValue={parseDate("2026-08-15")}
             maxValue={parseDate("2030-12-31")}
             minValue={parseDate("2020-01-01")}
@@ -1505,6 +1550,10 @@ export function DataSection() {
 
         <Section title="Table">
           <TableSample />
+        </Section>
+
+        <Section title="Calendar">
+          <CalendarSample />
         </Section>
 
         <Section title="Calendar Year Picker">
