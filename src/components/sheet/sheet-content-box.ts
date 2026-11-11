@@ -1,5 +1,3 @@
-import type { SheetPlacement } from "./sheet.styles";
-
 /**
  * The lengths of HeroUI's `.sheet__content` (R-010 … R-022), as numbers.
  *
@@ -13,15 +11,15 @@ import type { SheetPlacement } from "./sheet.styles";
  * surface size into the numbers the Content writes:
  *
  * - R-013 `width: min(24rem, 96vw)` → the smaller of 384 and 96% of the surface
- *   width, `axialCap` on a left / right sheet.
+ *   width, `axialCap` on a sheet that reveals along x.
  * - R-010 `max-height: calc(100% - 2rem)` (top / bottom) → the surface height
  *   minus 32: 1rem of breathing room per side.
  * - R-016 `max-height: calc(100% - 1rem)` and the detached R-017 / R-018 →
  *   minus 16, the other 8 points being the `m-2` margin's opposite side.
  *
- * The cross length is what the sheet fills instead: the surface width on a top
- * / bottom sheet (`w-full` / R-017's `calc(100% - 1rem)`), the surface height
- * on a left / right one (`h-full` / R-018's `calc(100% - 1rem)`).
+ * The cross length is what the sheet fills instead: the surface width while the
+ * reveal axis is y (`w-full` / R-017's `calc(100% - 1rem)`), the surface height
+ * while it is x (`h-full` / R-018's `calc(100% - 1rem)`).
  *
  * It lives in the component directory rather than in `src/primitives/`, as the
  * batch rule for new shared code requires (port sheet §5).
@@ -41,7 +39,14 @@ const EDGE_GAP = 16;
 
 /** What `sheetContentExtent` needs to know. */
 export interface SheetContentExtentInput {
-  placement: SheetPlacement;
+  /**
+   * The axis the sheet reveals along. It is the swipe direction's axis, not the
+   * placement's: React Aria derives the reveal axis from `swipeDirection` too
+   * (`react-spectrum/packages/react-aria-components/src/Sheet.tsx`,
+   * `getSwipeConfig`), so a bottom sheet swiped sideways snaps in width
+   * (T-027's `bottom` + `swipeDirection="left"`).
+   */
+  axis: "x" | "y";
 
   isDetached: boolean;
 
@@ -81,7 +86,7 @@ export interface SheetContentExtent {
  * produce a negative length.
  */
 export function sheetContentExtent(input: SheetContentExtentInput): SheetContentExtent {
-  const horizontal = input.placement === "left" || input.placement === "right";
+  const horizontal = input.axis === "x";
   const inset = input.isDetached ? DETACHED_MARGIN * 2 : 0;
 
   return {

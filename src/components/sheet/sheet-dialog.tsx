@@ -121,7 +121,7 @@ export function SheetDialog(props: SheetDialogProps): JSX.Element {
 
     const surface = windowSize();
     const extent = sheetContentExtent({
-      placement: context?.placement() ?? "bottom",
+      axis: detent.axis(),
       isDetached: isDetached(),
       detentLength: detent.hasPartialDetents() ? detent.length() : null,
       surfaceWidth: surface.width,

@@ -89,6 +89,12 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
   // The Backdrop owns the dialog, so the enter / exit phase arrives through its
   // own provider rather than through the Root's context.
   const phase = SheetPhaseContext();
+  // Read once, in the body: the accessor `context()` returns resolves only
+  // inside the owner's render scope — called later from the detent's callbacks
+  // it answered `null`, which silently fell back to the placement (measured:
+  // T-014's `swipeDirection="right"` drag read `bottom`). Everything below
+  // reads this captured value.
+  const swipeDirection = SheetSwipeDirectionContext();
 
   // Outside a Root the clip box still renders with the table's defaults, the
   // way `Sheet.Dialog` does; there is simply no state to drive it.
@@ -101,7 +107,7 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
     placement,
     // The Backdrop's `swipeDirection` decides the drag axis (T-014), not the
     // reveal axis; it reaches the Handle through this state.
-    swipeDirection: () => SheetSwipeDirectionContext() ?? undefined,
+    swipeDirection: () => swipeDirection ?? undefined,
     isDetached: () => context?.isDetached() ?? false,
     isDismissable: () => context?.isDismissable() ?? true,
     snapPoints: () => context?.snapPoints(),
@@ -145,7 +151,7 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
   // Only the class list sits after the variant classes, which is why these two
   // travel here (port sheet §4c).
   const classList = () => ({
-    [sheetContentSnapClasses(placement())]: detent.hasPartialDetents(),
+    [sheetContentSnapClasses(detent.axis())]: detent.hasPartialDetents(),
   });
 
   /**
@@ -175,9 +181,12 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
    */
   const style = (): ViewStyle => {
     const surface = windowSize();
+    // The reveal axis is the swipe direction's (`createSheetDetent` resolves
+    // it), not the placement's: a bottom sheet swiped sideways is a width
+    // detent (T-027, the same axis React Aria's `getSwipeConfig` derives).
     const isDetached = context?.isDetached() ?? false;
     const extent = sheetContentExtent({
-      placement: placement(),
+      axis: detent.axis(),
       isDetached,
       detentLength: detent.hasPartialDetents() ? detent.length() : null,
       surfaceWidth: surface.width,

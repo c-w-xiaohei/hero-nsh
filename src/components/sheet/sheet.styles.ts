@@ -199,8 +199,8 @@ export const SHEET_DIALOG_DETACHED_CLASS = "rounded-2xl";
  * it when a partial detent exists; these two classes keep the table's own
  * `h-full` / `max-h-none` honest for the same state, as upstream writes them.
  */
-export function sheetContentSnapClasses(placement: SheetPlacement): string {
-  return placement === "bottom" || placement === "top" ? "max-h-none" : "max-w-none";
+export function sheetContentSnapClasses(axis: "x" | "y"): string {
+  return axis === "y" ? "max-h-none" : "max-w-none";
 }
 
 /** R-035 `.sheet__handle[data-dragging]` → `cursor-grabbing`. */

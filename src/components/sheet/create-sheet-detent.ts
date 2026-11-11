@@ -288,10 +288,29 @@ export function createSheetDetent(props: CreateSheetDetentProps): SheetDetentSta
     // the resting length; `sheetDismissTarget` decides on the same two
     // thresholds (25% of the panel, 0.4 points/ms), in the scroll space its
     // signature speaks.
-    const restScroll = sheetScrollPosition(state.startLength, full, direction());
+    //
+    // A `horizontal` / `vertical` swipe has two closed ends — React Aria's
+    // scroller is two viewports long on that axis (`Sheet.tsx`, `getSwipeConfig`
+    // `containerOffset`) — so the side the pointer left through names the edge
+    // the scroll coordinate closes at. Without that, `sheetDismissTarget`
+    // answers `extent`, which is where the rest position already sits, and the
+    // drag would read as "back to rest" in half of the directions (T-014's
+    // leftward and upward cases).
+    const swipe = direction();
+    const scrollDirection: SheetSwipeDirection =
+      swipe === "horizontal"
+        ? travel >= 0
+          ? "bottom"
+          : "top"
+        : swipe === "vertical"
+          ? travel >= 0
+            ? "right"
+            : "left"
+          : swipe;
+    const restScroll = sheetScrollPosition(state.startLength, full, scrollDirection);
     const dismissed =
       sheetDismissTarget({
-        current: sheetScrollPosition(current, full, direction()),
+        current: sheetScrollPosition(current, full, scrollDirection),
         elapsed: timestamp - state.startedAt,
         extent: full,
         isDismissable: props.isDismissable(),
