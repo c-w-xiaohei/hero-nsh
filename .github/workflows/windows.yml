@@ -1,14 +1,11 @@
 name: Windows
 
-# Runs the tests in real Win32 windows, with the platform's own input, on the
-# files that can run there: every test file but the `.headless.` ones (which
-# need the headless engine's drag/hold and key press) and the `.web.` ones
-# (which need Tab focus movement, which NSH 0.4.0 does not do on Windows).
+# Every test file in Win32 windows with the platform's own input, but the
+# `.headless.` ones (the headless engine's drag/hold and key press) and the
+# `.web.` ones (Tab focus movement, which NSH 0.4.0 does not do on Windows).
 #
-# Two runners, one file at a time each: these open real windows and take the
-# platform's input, so two runs on one machine would fight over the focus the
-# cases assert (NSH's own Windows workflow runs them one at a time). A push is
-# filtered to what the tests read, and a newer push cancels the older run.
+# One file at a time: two runs on one machine would fight over the focus the
+# cases assert. Two runners, so the list splits in half instead.
 
 on:
   push:
@@ -18,13 +15,11 @@ on:
       - "theme/**"
       - "harness/**"
       - "scenarios/**"
-      - "examples/**"
       - "package.json"
       - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
       - "tsconfig.json"
       - ".nvmrc"
-      - ".github/workflows/**"
+      - ".github/**"
   pull_request:
   workflow_dispatch:
 
@@ -35,31 +30,17 @@ concurrency:
   group: windows-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  NSH_VERSION: v0.4.0
-
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
         shard: [0, 1]
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - name: Install nsh
-        shell: pwsh
-        run: |
-          irm https://nsh.dev/install.ps1 | iex
-          "$env:LOCALAPPDATA\nsh\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-      - run: pnpm install --frozen-lockfile
-      - name: Windows tests (shard ${{ matrix.shard }} of 2)
+      - uses: ./.github/actions/setup
+      - name: Tests
         shell: bash
         run: |
           files=($(find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \

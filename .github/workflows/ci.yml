@@ -1,15 +1,13 @@
 name: CI
 
-# One job per kind of check, so they run at the same time on their own
-# runners and a failure names the check it broke:
+# Types, the headless engine, a browser and the packed tarball, one job each.
+# The test jobs shard their file list in two and run four (headless) or two
+# (web) files at once: `nsh test` takes one path, so the list is the parallel
+# unit.
 #
-#   check      the types (`nsh check`)
-#   headless   every test file, on the engine the default target runs
-#   web        the files named `.web.test.tsx`, split over two runners
-#   packaging  the packed tarball, installed in a throwaway app
-#
-# A push is filtered to what these read, and a newer push cancels the run it
-# supersedes: a commit nobody will ship does not need to finish its tests.
+# What runs where is the file name: `.headless.` needs the headless engine,
+# `.web.` needs a browser, `.windows.` needs Win32, everything else runs on the
+# headless engine and on Windows.
 
 on:
   push:
@@ -19,15 +17,11 @@ on:
       - "theme/**"
       - "harness/**"
       - "scenarios/**"
-      - "examples/**"
       - "package.json"
       - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
       - "tsconfig.json"
       - ".nvmrc"
-      - ".github/workflows/**"
-  # A pull request always runs, whatever it changes: these job names are what
-  # a branch protection rule waits for.
+      - ".github/**"
   pull_request:
   workflow_dispatch:
 
@@ -38,98 +32,54 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  NSH_VERSION: v0.4.0
-
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - name: Install nsh
-        run: |
-          curl -fsSL https://nsh.dev/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
       - run: pnpm check
 
   headless:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - name: Install nsh
-        run: |
-          curl -fsSL https://nsh.dev/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - run: pnpm install --frozen-lockfile
-      # The directory, not a file at a time: `nsh test` walks it and opens each
-      # test on an engine of its own. One path per run, so this job cannot be
-      # split further without an app directory per shard.
-      - name: Headless tests
-        run: nsh test harness
-
-  web:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
     strategy:
       fail-fast: false
-      # Two runners, two processes each. The headless job already ran the files
-      # every target shares; a browser adds something only for the files
-      # written against it.
       matrix:
         shard: [0, 1]
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - name: Install nsh
+      - uses: ./.github/actions/setup
+      - name: Tests
         run: |
-          curl -fsSL https://nsh.dev/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - run: pnpm install --frozen-lockfile
-      - name: Web tests (shard ${{ matrix.shard }} of 2)
+          find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \
+            ! -name '*.web.test.*' ! -name '*.browser.test.*' ! -name '*.windows.test.*' \
+            | sort | awk -v s='${{ matrix.shard }}' 'NR % 2 == s' \
+            | xargs -r -n1 -P4 nsh test
+
+  web:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - name: Tests
         run: |
-          find harness/tests \( -name '*.web.test.tsx' -o -name '*.browser.test.tsx' \) -print \
-            | sort \
-            | awk -v shard='${{ matrix.shard }}' 'NR % 2 == shard' \
-            | xargs -r -n1 -P2 sh -c 'nsh test "$0" --target web'
+          find harness/tests -name '*.web.test.tsx' \
+            | sort | awk -v s='${{ matrix.shard }}' 'NR % 2 == s' \
+            | xargs -r -n1 -P2 nsh test --target web
 
   packaging:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - name: Install nsh
-        run: |
-          curl -fsSL https://nsh.dev/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - run: pnpm install --frozen-lockfile
-      - name: Distribution smoke test
+      - uses: ./.github/actions/setup
+      - name: Pack and consume
         run: |
           pnpm pack --pack-destination "$RUNNER_TEMP"
-          app="$RUNNER_TEMP/consumer"
-          mkdir -p "$app"
-          cd "$app"
+          mkdir -p "$RUNNER_TEMP/consumer" && cd "$RUNNER_TEMP/consumer"
           printf '{"name":"consumer","version":"0.0.0","private":true}\n' > package.json
           pnpm add "$RUNNER_TEMP"/hero-nsh-*.tgz
           printf '{"name":"consumer","id":"com.heronsh.consumer","version":"0.0.0","build":1}\n' > nsh.json

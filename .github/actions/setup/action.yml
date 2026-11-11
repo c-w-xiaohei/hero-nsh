@@ -1,0 +1,25 @@
+name: Setup
+description: pnpm, Node, the nsh command line and the dependencies
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v6
+    - uses: actions/setup-node@v7
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+    - name: Install nsh
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        curl -fsSL https://nsh.dev/install.sh | sh
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+    - name: Install nsh (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        irm https://nsh.dev/install.ps1 | iex
+        "$env:LOCALAPPDATA\nsh\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+    - run: pnpm install --frozen-lockfile
+      shell: bash
