@@ -1,6 +1,6 @@
 import type { JSX, ViewProps } from "nsh";
 import { split, View } from "nsh";
-import { IconChevronRight } from "../../../icons";
+import { IconChevronRight } from "../../icons";
 import type { CalendarYearPickerVariants } from "../calendar-year-picker.styles";
 import { calendarYearPickerVariants } from "../calendar-year-picker.styles";
 import type { CalendarYearPickerTriggerRenderProps } from "./calendar-year-picker-trigger";
