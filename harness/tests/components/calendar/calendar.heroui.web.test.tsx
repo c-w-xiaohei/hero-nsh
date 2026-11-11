@@ -107,10 +107,8 @@ test("T-016 should render the pt-PT weekday labels", async () => {
 
   await app.waitFor(`role:grid[/${EVENT_DATE}/]`, { timeout: 15_000 });
 
-  const formatter = new Intl.DateTimeFormat("pt-PT", { weekday: "short", timeZone: "UTC" });
-  const labels = [26, 27, 28, 29, 30, 31, 1].map((day) =>
-    formatter.format(new Date(Date.UTC(2026, day === 1 ? 7 : 6, day, 12))),
-  );
+  // The web target runs Chrome, whose pt-PT short weekdays are these full words.
+  const labels = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
   expect(labels.filter((label) => app.shows(`text:${label}`))).toHaveLength(7);
 });
