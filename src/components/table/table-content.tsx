@@ -1,5 +1,5 @@
 import type { AccessibilityRole, JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { computed, effect, platform, signal, split, View } from "nsh";
+import { computed, effect, platform, signal, split, untracked, View } from "nsh";
 
 import {
   createControllableSignal,
@@ -52,9 +52,6 @@ export interface TableContentProps extends TablePartProps {
   /** A row's action, reported when it cannot be selected (§1 events). */
   onRowAction?: (key: string) => void;
 
-  /** Every row's own press reports its action (§1 events). */
-  onRowActionChange?: unknown;
-
   showSelectionCheckboxes?: boolean;
   showDragButtons?: boolean;
 
@@ -93,8 +90,8 @@ const LETTERS = "abcdefghijklmnopqrstuvwxyz0123456789";
  * `Table.Content` / `TableContent`: the `role="grid"` view, the only part that
  * receives the table's behaviour props, and the owner of the state the other
  * parts read (port sheet §2). HeroUI hands these to React Aria's `Table`; here
- * `createTableState` is the owner and the two `createKeymapScope`s are the
- * keyboard, bound only while a cell (or the grid) has the focus.
+ * `createTableState` is the owner and the `createKeymapScope`s are the keyboard,
+ * bound only while a cell (or the grid) has the focus.
  */
 export function TableContent(props: TableContentProps) {
   const [local, rest] = split(props, [
@@ -119,7 +116,6 @@ export function TableContent(props: TableContentProps) {
     "onExpandedChange",
     "treeColumn",
     "onRowAction",
-    "onRowActionChange",
     "showSelectionCheckboxes",
     "showDragButtons",
     "dragAndDropHooks",
@@ -178,15 +174,37 @@ export function TableContent(props: TableContentProps) {
 
   const layout = createTableColumnLayout({ collection });
 
+  const bodyOffsetY = signal(0);
+
   // A resizable container hands its measured width to the layout; a plain
   // scroll container keeps the declared column bases (§8).
   effect(() => {
     layout.setContainerWidth(viewport?.resizable() ? viewport.width() : undefined);
   });
 
-  const modality = createInteractionModality();
+  // The page keys of the grid delegate step by whole viewports, so the state
+  // needs the height the scroll container measured (§2, `getContainerHeight`).
+  effect(() => {
+    state.setContainerHeight(viewport?.height());
+  });
 
-  const bodyOffsetY = signal(0);
+  // `Table.ResizableContainer` renders above this part (it wraps the content),
+  // so it cannot see the layout through `TableStateContext`; it hands its
+  // `onResize*` callbacks down through the viewport context and they land in
+  // the layout here (§1 events).
+  effect(() => {
+    const callbacks = viewport?.resizeCallbacks?.();
+
+    if (!callbacks) {
+      return;
+    }
+
+    // `untracked`: registering reads the layout's own callback list, and
+    // tracking that read would make this effect its own dependency.
+    return untracked(() => layout.registerResizeCallbacks(callbacks));
+  });
+
+  const modality = createInteractionModality();
 
   let gridNode: ViewRef | undefined;
 
@@ -329,7 +347,6 @@ export function TableContent(props: TableContentProps) {
     treeColumn: () => local.treeColumn,
     onRowAction: (rowKey) => local.onRowAction?.(rowKey),
     focusGrid,
-    gridRef: () => gridNode,
     bodyOffsetY,
     registerBodyLayout: (offsetY) => bodyOffsetY.set(offsetY),
   };

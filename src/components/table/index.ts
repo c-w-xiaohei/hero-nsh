@@ -118,3 +118,6 @@ export type {
   TableSortableColumnHeaderProps,
 };
 export type { TableSortDescriptor } from "./create-table-state";
+
+/** HeroUI's name for `TableLoadMore`'s props (the part is `TableLoadMoreItem`). */
+export type { TableLoadMoreProps as TableLoadMoreItemProps };

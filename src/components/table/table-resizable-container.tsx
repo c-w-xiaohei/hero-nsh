@@ -1,7 +1,8 @@
 import type { JSX, ScrollEvent } from "nsh";
-import { cleanup, computed, Scroll, signal, split } from "nsh";
+import { computed, Scroll, signal, split } from "nsh";
 
-import { TableStateContext, TableViewportContext } from "./table-context";
+import type { TableResizeCallbacks } from "./create-table-column-layout";
+import { TableViewportContext } from "./table-context";
 import { type TablePartProps } from "./table-props";
 import { useTableSlots } from "./table-slots";
 
@@ -44,21 +45,20 @@ export function TableResizableContainer(props: TableResizableContainerProps) {
   ] as const);
 
   const slots = useTableSlots();
-  const table = TableStateContext();
 
   const height = signal<number | undefined>(undefined);
   const width = signal<number | undefined>(undefined);
   const offsetY = signal(0);
 
-  if (table) {
-    cleanup(
-      table.layout.registerResizeCallbacks({
-        onResizeStart: (widths) => local.onResizeStart?.(widths),
-        onResize: (widths) => local.onResize?.(widths),
-        onResizeEnd: (widths) => local.onResizeEnd?.(widths),
-      }),
-    );
-  }
+  // The callbacks travel down through the viewport context: `Table.Content`,
+  // the state owner, renders inside this container and registers them with the
+  // column layout. Each callback reads its prop when the drag reports, so a
+  // caller may swap them without re-registering.
+  const resizeCallbacks: TableResizeCallbacks = {
+    onResizeStart: (widths) => local.onResizeStart?.(widths),
+    onResize: (widths) => local.onResize?.(widths),
+    onResizeEnd: (widths) => local.onResizeEnd?.(widths),
+  };
 
   const classes = computed(() =>
     [slots().resizableContainer(), local.className as string | undefined]
@@ -68,7 +68,13 @@ export function TableResizableContainer(props: TableResizableContainerProps) {
 
   return (
     <TableViewportContext.Provider
-      value={{ height, width, offsetY, resizable: () => true }}
+      value={{
+        height,
+        width,
+        offsetY,
+        resizable: () => true,
+        resizeCallbacks: () => resizeCallbacks,
+      }}
     >
       <Scroll
         {...(rest as any)}

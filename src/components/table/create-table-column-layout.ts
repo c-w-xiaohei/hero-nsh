@@ -94,6 +94,18 @@ export function createTableColumnLayout(props: {
     const result = new Map<string, number>();
 
     if (available == null) {
+      // No container measured the table (a plain `Table.ScrollContainer`, or no
+      // container at all). The declared tracks stand, but a width a resizer
+      // already wrote still applies: §8 lets the width props work outside a
+      // resizable container, so its drag must be able to write one too.
+      for (const column of columns) {
+        const override = resized.get(column.key);
+
+        if (override != null) {
+          result.set(column.key, clampWidth(column, override));
+        }
+      }
+
       return result;
     }
 

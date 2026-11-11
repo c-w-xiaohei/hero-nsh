@@ -1,8 +1,8 @@
-import type { Accessor, JSX, PressEvent, ViewRef } from "nsh";
+import type { Accessor, JSX, PressEvent } from "nsh";
 import { context } from "nsh";
 
 import type { InteractionModalityState } from "../../primitives";
-import type { TableColumnLayoutState } from "./create-table-column-layout";
+import type { TableColumnLayoutState, TableResizeCallbacks } from "./create-table-column-layout";
 import type { TableRegistry } from "./create-table-collection";
 import type { TableState } from "./create-table-state";
 import type { tableVariants } from "./table.styles";
@@ -29,6 +29,14 @@ export interface TableViewportContextValue {
   offsetY: Accessor<number>;
   /** `Table.ResizableContainer`: its width drives the column layout. */
   resizable: Accessor<boolean>;
+
+  /**
+   * `Table.ResizableContainer`'s `onResize*` callbacks. The container renders
+   * above `Table.Content` (the state owner), so it cannot reach the layout from
+   * the state context; it hands the callbacks down here and Content registers
+   * them with `layout` (§1 events, `onResizeStart` / `onResize` / `onResizeEnd`).
+   */
+  resizeCallbacks?: Accessor<TableResizeCallbacks | undefined>;
 }
 
 export const TableViewportContext = context<TableViewportContextValue | undefined>(
@@ -56,7 +64,6 @@ export interface TableStateContextValue {
 
   /** Focuses the grid view itself (`keyboardNavigationBehavior: "arrow"`). */
   focusGrid: () => void;
-  gridRef: () => ViewRef | undefined;
 
   /** The body's offset inside the content, for the load-more sentinel. */
   bodyOffsetY: Accessor<number>;
