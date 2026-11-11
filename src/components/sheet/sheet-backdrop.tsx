@@ -388,12 +388,12 @@ export function SheetBackdrop(props: SheetBackdropProps): JSX.Element {
             // them (`isKeyboardDismissDisabled`) or the sheet is not dismissable
             // at all; port sheet §1.1, T-007 / T-021.
             closeOnEscape={closesOnEscape()}
-            // The handle drag is the sheet's swipe here, and it settles through
-            // `sheetDismissTarget` before closing; the host's own gesture cannot
-            // tell the panel from the Body inside it, so a drag in the Body (a
-            // scroll area, T-020) would dismiss the sheet. Off, with the drag
-            // channel the only swipe (port sheet §8).
-            closeOnSwipe={false}
+            // The native swipe keeps working and is gated by `isDismissable`, as
+            // upstream's `preventDismissal` does. On the web target the mouse
+            // drag reaches the host's pan but not the responder channel, so this
+            // is what dismisses there; on touch platforms both fire and the
+            // drag settles through `sheetDismissTarget` first (port sheet §8).
+            closeOnSwipe={isDismissable()}
             // A reopen clears `hasExited`, as upstream does during render; the
             // report itself is the effect's enter.
             onOpen={() => {
