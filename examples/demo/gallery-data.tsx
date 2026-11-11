@@ -28,6 +28,7 @@ import {
   IconSearch,
   InfoIcon,
   Label,
+  Link,
   ListBox,
   Meter,
   Pagination,
@@ -230,7 +231,7 @@ function ListBoxSample() {
 function AccordionSample() {
   return (
     <Frame className="flex-col">
-      <Accordion allowsMultipleExpanded defaultExpandedKeys={["shipping"]} variant="surface">
+      <Accordion defaultExpandedKeys={["shipping"]} variant="surface">
         {FAQ.map((item) => (
           <Accordion.Item id={item.id}>
             <Accordion.Heading>
@@ -260,20 +261,29 @@ function DisclosureSample() {
           </Disclosure.Trigger>
         </Disclosure.Heading>
         <Disclosure.Content>
-          <Disclosure.Body>Visa ending in 4242. Expires in March 2028.</Disclosure.Body>
+          <Disclosure.Body>
+            <View class="flex-col gap-3 rounded-xl bg-surface-secondary p-3">
+              <View class="flex-row items-center justify-between gap-3">
+                <View class="gap-0.5">
+                  <Text class="text-sm font-medium text-foreground">Visa ending in 4242</Text>
+                  <Text class="text-xs text-muted">Expires March 2028</Text>
+                </View>
+                <Chip color="success" size="sm" variant="soft">
+                  Default
+                </Chip>
+              </View>
+              <Text class="text-xs text-muted">
+                Charged on the 1st. Card details are held by the processor, not by this
+                workspace.
+              </Text>
+            </View>
+          </Disclosure.Body>
         </Disclosure.Content>
       </Disclosure>
-      <Disclosure>
-        <Disclosure.Heading>
-          <Disclosure.Trigger>
-            Billing address
-            <Disclosure.Indicator />
-          </Disclosure.Trigger>
-        </Disclosure.Heading>
-        <Disclosure.Content>
-          <Disclosure.Body>Torstraße 12, 10119 Berlin.</Disclosure.Body>
-        </Disclosure.Content>
-      </Disclosure>
+      <Text class="text-xs text-muted">
+        One section on its own: nothing else opens or closes with it. For that,
+        hand several of them to a DisclosureGroup.
+      </Text>
     </View>
   );
 }
@@ -281,7 +291,7 @@ function DisclosureSample() {
 function DisclosureGroupSample() {
   return (
     <Frame className="flex-col gap-2">
-      <DisclosureGroup allowsMultipleExpanded defaultExpandedKeys={["contact"]}>
+      <DisclosureGroup defaultExpandedKeys={["contact"]}>
         <Disclosure id="contact">
           <Disclosure.Heading>
             <Disclosure.Trigger>
@@ -304,7 +314,22 @@ function DisclosureGroupSample() {
             <Disclosure.Body>Admin since March 2023. Two workspaces.</Disclosure.Body>
           </Disclosure.Content>
         </Disclosure>
+        <Disclosure id="security">
+          <Disclosure.Heading>
+            <Disclosure.Trigger>
+              Security
+              <Disclosure.Indicator />
+            </Disclosure.Trigger>
+          </Disclosure.Heading>
+          <Disclosure.Content>
+            <Disclosure.Body>Two-factor authentication is on since June 2024.</Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure>
       </DisclosureGroup>
+      <Text class="text-xs text-muted">
+        One open at a time: expanding Security collapses Contact. The items share
+        one expanded set, the same one Accordion reads.
+      </Text>
     </Frame>
   );
 }
