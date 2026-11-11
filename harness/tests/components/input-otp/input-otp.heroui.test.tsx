@@ -10,10 +10,12 @@ import { openScenario } from "../../helpers/open-scenario";
  *
  * Every case runs headless on the default desktop platform
  * (`platform: "windows"`). InputOTP's keyboard interaction is a native text
- * input (`app.type` / `app.paste` focus it on every platform) and X-003 presses
- * Return inside that input, where the focused input takes the return key; no
- * case moves focus with Tab or activates a view with Return / Space, so no
- * `.web.` or `.windows.` file is needed (port sheet 4b, closing note).
+ * input (`app.type` focuses it on every platform) and X-003 presses Return
+ * inside that input, where the focused input takes the return key; no case
+ * moves focus with Tab or activates a view with Return / Space, so no `.web.`
+ * or `.windows.` file is needed (port sheet 4b, closing note). T-007 and X-002,
+ * the two cases that paste, cannot run on the Windows target and live in
+ * input-otp.heroui.headless.test.tsx.
  *
  * The `S-` cases at the end are this unit's supplement for the core behaviour
  * HeroUI's own seven cases do not cover (port sheet 4b, closing note). They
@@ -88,19 +90,6 @@ test("T-006 should support invalid state with FieldError", async () => {
   const app = await openScenario("input-otp/invalid");
 
   expect(app.shows("text:Invalid code")).toBe(true);
-});
-
-// heroui/packages/react/tests/components/input-otp/input-otp.test.tsx:121
-// Port (port sheet T-007): upstream's six `data-filled` slots become six
-// visible characters, the structure the attribute stood for.
-test("T-007 should fill slots from paste", async () => {
-  const app = await openScenario("input-otp/paste");
-
-  await app.paste("id:input-otp-input", { text: "654321" });
-
-  expect(callsOf(app, "onChange").length).toBeGreaterThan(0);
-  expect(callsOf(app, "onChange").at(-1)?.[0]).toBe("654321");
-  expect(app.count("id:input-otp-slot-value")).toBe(6);
 });
 
 /*
@@ -220,35 +209,6 @@ test("X-001 should block edits and keep focus under readOnly", async () => {
   await app.press("id:input-otp-input");
 
   expect(app.count("id:input-otp-caret")).toBe(1);
-});
-
-/*
- * Regression (review): input-otp@1.4.2 normalizes the caret on every sync. A
- * caret at `maxLength` selects the last cell, so the next digit replaces it
- * instead of being dropped; a paste selects min(length, maxLength - 1) …
- * length. The port kept the raw host caret in all three places.
- * src/components/input-otp/input-otp-root.tsx:583-585,612-619,622-627
- */
-test("X-002 should replace the last cell after a full code is typed or pasted", async () => {
-  const typed = await openScenario("input-otp/typing");
-
-  await typed.type("id:input-otp-input", "123456");
-  expect(callsOf(typed, "onChange").at(-1)?.[0]).toBe("123456");
-
-  await typed.type("id:input-otp-input", "7");
-
-  expect(typed.count("id:input-otp-slot-value")).toBe(6);
-  expect(callsOf(typed, "onChange").at(-1)?.[0]).toBe("123457");
-
-  const pasted = await openScenario("input-otp/paste");
-
-  await pasted.paste("id:input-otp-input", { text: "654321" });
-  expect(callsOf(pasted, "onChange").at(-1)?.[0]).toBe("654321");
-
-  await pasted.type("id:input-otp-input", "7");
-
-  expect(pasted.count("id:input-otp-slot-value")).toBe(6);
-  expect(callsOf(pasted, "onChange").at(-1)?.[0]).toBe("654327");
 });
 
 /*
