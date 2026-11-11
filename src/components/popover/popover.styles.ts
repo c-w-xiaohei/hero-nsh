@@ -24,11 +24,13 @@ export const popoverVariants = tv({
     dialog: "p-4 outline-none",
     // R-016 `.popover__heading` → `font-medium`.
     heading: "font-medium",
-    // R-017 `.popover__trigger` → `inline-block`; R-018 / R-019 the transition
+    // R-017 `.popover__trigger` → `inline-block`; `w-fit` restores the
+    // shrink-to-content box of the inline element, which NSH would otherwise
+    // stretch in a column parent (skill §4.2). R-018 / R-019 the transition
     // (the property list is the inline `transitionProperty`, because colors and
     // box-shadow share one curve here); R-020 `cursor-interactive` → pointer.
     trigger:
-      "inline-block cursor-pointer duration-150 ease-smooth motion-reduce:transition-none",
+      "inline-block w-fit cursor-pointer duration-150 ease-smooth motion-reduce:transition-none",
   },
 });
 

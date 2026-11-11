@@ -16,7 +16,7 @@ import {
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
-import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { HoverTriggerContext, OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { FormContext } from "../form/context";
 import { FieldsetContext } from "../fieldset/context";
 import { ToolbarContext } from "../toolbar/context";
@@ -119,6 +119,10 @@ export function ButtonRoot(props: ButtonRootProps) {
   // trigger. NSH has no handler injection channel, so the Button consumes the
   // trigger context itself; outside one it is `null` and nothing changes.
   const overlayTrigger = OverlayTriggerContext();
+  // Tooltip port sheet §5.3: a Button inside a Tooltip root is its trigger too.
+  // This is the hover / focus channel, beside the press channel above: both can
+  // be present, so a Tooltip inside a Popover trigger still presses correctly.
+  const hoverTrigger = HoverTriggerContext();
   // Form sheet §5.2: `<Button type="submit">` is how HeroUI submits the form
   // around it. NSH has no native submit event, so the Button asks the enclosing
   // Form through its context; outside a Form this is `undefined` and nothing
@@ -252,6 +256,9 @@ export function ButtonRoot(props: ButtonRootProps) {
     } else {
       overlayTrigger?.toggle();
     }
+    // Tooltip port sheet §5.3: a keyboard Return / Space on the Tooltip trigger
+    // closes the tip; a pointer press already went through `pressStart`.
+    hoverTrigger?.press();
     // Form sheet §5.2: a submit Button asks the enclosing Form; `button` (the
     // default) and `reset` do nothing, NSH having no native form.
     if (props.type === "submit") {
@@ -267,6 +274,9 @@ export function ButtonRoot(props: ButtonRootProps) {
 
     notePress(event);
     isPressed.set(true);
+    // Tooltip port sheet §5.3: React Aria closes on pointerdown, so a held
+    // press hides the tip at once instead of waiting for the release.
+    hoverTrigger?.pressStart();
     props.onPressStart?.(event);
     props.onPressDown?.(event);
     props.onPressChange?.(true);
@@ -300,6 +310,10 @@ export function ButtonRoot(props: ButtonRootProps) {
   };
 
   const handleMouseEnter = (event: NshMouseEvent) => {
+    // Tooltip port sheet §5.3: before the disabled early return, as React Aria's
+    // injected hover handler does not look at the Button's look either: a
+    // disabled Button's tip explains why it is disabled.
+    hoverTrigger?.hoverStart();
     props.onMouseEnter?.(event);
 
     // RAC's useHover is off while disabled or pending.
@@ -313,6 +327,7 @@ export function ButtonRoot(props: ButtonRootProps) {
   };
 
   const handleMouseLeave = (event: NshMouseEvent) => {
+    hoverTrigger?.hoverEnd();
     props.onMouseLeave?.(event);
 
     if (!isHovered()) {
@@ -329,11 +344,15 @@ export function ButtonRoot(props: ButtonRootProps) {
     // V4: a view is focused by Tab on macOS and the web; a pointer press does
     // not focus it, so this is the keyboard modality arriving.
     modality.onFocus();
+    // Tooltip port sheet §5.3: a view's focus only comes from Tab / `focus()`,
+    // which is React Aria's `isFocusVisible()` for a tooltip trigger.
+    hoverTrigger?.focusStart();
     props.onFocus?.();
   };
 
   const handleBlur = () => {
     isFocused.set(false);
+    hoverTrigger?.focusEnd();
     props.onBlur?.();
   };
 
@@ -344,6 +363,11 @@ export function ButtonRoot(props: ButtonRootProps) {
     // hands back its cleanup, held by the same owner as ButtonGroup's.
     if (overlayTrigger) {
       cleanup(overlayTrigger.registerTrigger(next));
+    }
+    // Tooltip port sheet §5.3: the same Button can be both anchors at once; the
+    // two registrations clean up independently.
+    if (hoverTrigger) {
+      cleanup(hoverTrigger.registerTrigger(next));
     }
     props.ref?.(next);
   };

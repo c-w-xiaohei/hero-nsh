@@ -16,14 +16,17 @@ export const dropdownVariants = tv({
     // upstream's `MenuTrigger` renders no element, and neither does our Root;
     // the slot stays so `dropdownVariants()` keeps its upstream shape.
     root: "flex flex-col gap-1",
-    // R-002 `.dropdown__trigger` → `inline-block outline-none`.
+    // R-002 `.dropdown__trigger` → `inline-block outline-none`. `w-fit` keeps
+    // the shrink-to-content box the inline element had: a blockified
+    // `inline-block` in a column parent would otherwise stretch and make the
+    // empty space beside the trigger pressable (skill §4.2).
     // R-003 the transition: NSH takes one duration and one curve, so the
     // class owns them and the property list is inline in the trigger; the
     // colour / shadow properties therefore run at 250ms instead of 150ms.
     // `transform-gpu` is a no-op on NSH and is left out.
     // R-004 `cursor: var(--cursor-interactive)` → `cursor-pointer`.
     trigger:
-      "inline-block outline-none cursor-pointer duration-[250ms] ease-out-quart motion-reduce:transition-none",
+      "inline-block w-fit outline-none cursor-pointer duration-[250ms] ease-out-quart motion-reduce:transition-none",
     // R-014 `.dropdown__popover` → `bg-overlay p-0 text-sm`.
     // R-017 `border-radius: min(32px, calc(var(--radius-2xl) + 1.5 * spacing))`
     // → this theme's radius-2xl (16) + 6 = 22, written as a literal because
