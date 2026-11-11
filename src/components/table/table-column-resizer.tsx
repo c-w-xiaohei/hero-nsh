@@ -1,15 +1,45 @@
-import type { JSX, MouseEvent, PanEvent, PressEvent, ViewRef } from "nsh";
+import type {
+  Accessor,
+  JSX,
+  MouseEvent,
+  PanEvent,
+  PressEvent,
+  StyleProp,
+  ViewRef,
+  ViewStyle,
+} from "nsh";
 import { cleanup, computed, signal, split, View } from "nsh";
 
 import { createKeymapScope, isKeyboardPress } from "../../primitives";
-import { TableColumnContext, TableStateContext } from "./table-context";
+import { renderPartChildren } from "./table-children";
+import { TableColumnContext, TableStateContext, claimPress } from "./table-context";
 import { type TablePartProps } from "./table-props";
 import { useTableSlots } from "./table-slots";
+
+/** The render values `Table.ColumnResizer`'s children / className / style receive (§1, §3). */
+export interface TableColumnResizerRenderProps {
+  isHovered: Accessor<boolean>;
+  isFocused: Accessor<boolean>;
+  isFocusVisible: Accessor<boolean>;
+  isResizing: Accessor<boolean>;
+  /** The edge the hit area sits on: `"right"` in LTR, `"left"` in RTL (§3). */
+  resizableDirection: Accessor<"right" | "left" | "both">;
+}
 
 export interface TableColumnResizerProps extends TablePartProps {
   "aria-label"?: string;
 
-  children?: JSX.Element;
+  children?:
+    | JSX.Element
+    | ((values: TableColumnResizerRenderProps) => JSX.Element);
+
+  className?:
+    | string
+    | ((values: TableColumnResizerRenderProps) => string | undefined);
+
+  style?:
+    | StyleProp<ViewStyle>
+    | ((values: TableColumnResizerRenderProps) => StyleProp<ViewStyle>);
 }
 
 /** One keyboard step, in points (the port sheet's 10px step, §2). */
@@ -97,10 +127,52 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
 
   const active = computed(() => hovered() || isResizing() || isFocusVisible());
 
+  // React Aria reads the locale's direction; NSH inherits the view's own
+  // `direction` and has no global one, so the caller's value is the source and
+  // LTR is the default (§3, §8).
+  const resizableDirection = (): "right" | "left" | "both" =>
+    props.direction === "rtl" ? "left" : "right";
+
+  const renderProps: TableColumnResizerRenderProps = {
+    isHovered: hovered,
+    isFocused: focused,
+    isFocusVisible,
+    isResizing,
+    resizableDirection,
+  };
+
+  const resolvedClassName = () => {
+    const className = local.className;
+
+    return typeof className === "function"
+      ? (className as (values: TableColumnResizerRenderProps) => string | undefined)(
+          renderProps,
+        )
+      : className;
+  };
+
+  const resolvedStyle = () => {
+    const style = local.style;
+
+    return typeof style === "function"
+      ? (style as (values: TableColumnResizerRenderProps) => StyleProp<ViewStyle>)(
+          renderProps,
+        )
+      : style;
+  };
+
   const beginDrag = (event: PressEvent) => {
+    // The press belongs to the resizer, not to the column that would sort.
+    claimPress(event);
+
     if (isKeyboardPress(event)) {
       // Return / Space on the focused hit area starts the keyboard resize,
-      // React Aria's `setKeyboardNavigationDisabled(true)`.
+      // React Aria's `setKeyboardNavigationDisabled(true)`. A second Return is
+      // the keymap's stop binding, not a restart.
+      if (keyboardResizing()) {
+        return;
+      }
+
       modality.setKeyboardModality();
       keyboardResizing.set(true);
       layout.beginResize(column.columnKey);
@@ -108,6 +180,10 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
     }
 
     modality.setPointerModality();
+    // A pointer press focuses a view only when it is an Input in NSH; the
+    // resizer takes the focus itself, as the hidden input does upstream. The
+    // modality is the pointer's, so no focus ring appears (R-056).
+    node?.focus();
     dragStartX = event.pagePosition.x;
     dragStartWidth = currentWidth();
     layout.beginResize(column.columnKey);
@@ -170,7 +246,7 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
       "absolute end-0 top-1/2 flex h-4 w-[17px] -translate-y-1/2 translate-x-1/2 flex-col items-center justify-center cursor-col-resize outline-none",
       // R-054 / R-055 / R-056: the hit area grows to the column's height.
       active() ? "h-full" : "",
-      local.className as string | undefined,
+      resolvedClassName(),
     ]
       .filter(Boolean)
       .join(" "),
@@ -233,13 +309,18 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
         local.onPressDown?.(event);
       }}
       onPressUp={(event) => {
+        claimPress(event);
+
         if (!keyboardResizing()) {
           endDrag();
         }
 
         local.onPressUp?.(event);
       }}
-      onPress={(event) => local.onPress?.(event)}
+      onPress={(event) => {
+        claimPress(event);
+        local.onPress?.(event);
+      }}
       onPanStart={(event) => {
         dragStartX = dragStartX ?? 0;
         dragStartWidth = currentWidth();
@@ -248,9 +329,9 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
       }}
       onPanEnd={handlePanEnd}
       class={classes()}
-      style={local.style as any}
+      style={resolvedStyle()}
     >
-      {local.children as JSX.Element}
+      {renderPartChildren(local.children as JSX.Element, renderProps)}
       <View accessibilityElementsHidden class={barClasses()} />
     </View>
   );

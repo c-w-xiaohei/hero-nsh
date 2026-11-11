@@ -6,6 +6,7 @@ import { renderPartChildren, textOf } from "./table-children";
 import {
   TableColumnContext,
   TableStateContext,
+  claimPress,
   type TableColumnContextValue,
   type TableColumnRenderProps,
 } from "./table-context";
@@ -214,12 +215,33 @@ export function TableColumn(props: TableColumnProps) {
     local.onPressUp?.(event);
   };
 
+  // React Aria focuses the header cell on a press (the grid's focused key
+  // moves), which is what makes the arrows navigate from there afterwards. In
+  // "arrow" mode the grid is the only focus stop, so the key moves without a
+  // view focusing (§2, "focusedKey").
+  const focusColumn = () => {
+    state.focusColumn(columnKey);
+
+    if (!state.isCellFocusable()) {
+      table.focusGrid();
+    }
+  };
+
   const handlePress = (event: PressEvent) => {
     isPressed.set(false);
 
     if (!isKeyboardPress(event)) {
       modality.setPointerModality();
     }
+
+    // A press on the resizer inside the column is a resize, not a sort: the
+    // resizer claims it first as it bubbles out.
+    if (!claimPress(event)) {
+      local.onPress?.(event);
+      return;
+    }
+
+    focusColumn();
 
     if (local.allowsSorting === true) {
       state.toggleSort(columnKey);
@@ -263,12 +285,19 @@ export function TableColumn(props: TableColumnProps) {
         onFocus={() => {
           state.noteFocus();
           state.focusColumn(columnKey);
+          local.onFocus?.();
         }}
         onBlur={() => {
+          // RAC's press state ends with the focus (§2, press state row).
+          isPressed.set(false);
           state.noteBlur();
+          local.onBlur?.();
         }}
         onMouseEnter={(event) => {
-          isHovered.set(true);
+          // RAC enables hover on a column only while it can sort (§2, hover).
+          if (local.allowsSorting === true) {
+            isHovered.set(true);
+          }
           local.onMouseEnter?.(event);
         }}
         onMouseLeave={(event) => {
