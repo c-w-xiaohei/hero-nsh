@@ -65,6 +65,30 @@ function GeometryRight() {
   </Drawer.Dialog></Drawer.Content></Drawer.Backdrop></Drawer></Stage>;
 }
 
+function SpacingSections() {
+  return <Stage><Drawer defaultOpen><Button>Open Drawer</Button><Drawer.Backdrop><Drawer.Content><Drawer.Dialog onLayout={layout("dialog")}>
+    <Drawer.Header onLayout={layout("header")}><Drawer.Heading>Drawer Title</Drawer.Heading></Drawer.Header>
+    <Drawer.Body onLayout={layout("body")}><Text>Drawer body content</Text></Drawer.Body>
+    <Drawer.Footer onLayout={layout("footer")}><Button>Confirm</Button></Drawer.Footer>
+  </Drawer.Dialog></Drawer.Content></Drawer.Backdrop></Drawer></Stage>;
+}
+function SpacingHeaderFooter() {
+  return <Stage><Drawer defaultOpen><Button>Open Drawer</Button><Drawer.Backdrop><Drawer.Content><Drawer.Dialog onLayout={layout("dialog")}>
+    <Drawer.Header onLayout={layout("header")}><Drawer.Heading>Drawer Title</Drawer.Heading></Drawer.Header>
+    <Drawer.Footer onLayout={layout("footer")}><Button>Confirm</Button></Drawer.Footer>
+  </Drawer.Dialog></Drawer.Content></Drawer.Backdrop></Drawer></Stage>;
+}
+function SpacingFooterOnly() {
+  return <Stage><Drawer defaultOpen><Button>Open Drawer</Button><Drawer.Backdrop><Drawer.Content><Drawer.Dialog onLayout={layout("dialog")}>
+    <Drawer.Footer onLayout={layout("footer")}><Button>Confirm</Button></Drawer.Footer>
+  </Drawer.Dialog></Drawer.Content></Drawer.Backdrop></Drawer></Stage>;
+}
+function SpacingHeaderOnly() {
+  return <Stage><Drawer defaultOpen><Button>Open Drawer</Button><Drawer.Backdrop><Drawer.Content><Drawer.Dialog onLayout={layout("dialog")}>
+    <Drawer.Header onLayout={layout("header")}><Drawer.Heading>Drawer Title</Drawer.Heading></Drawer.Header>
+  </Drawer.Dialog></Drawer.Content></Drawer.Backdrop></Drawer></Stage>;
+}
+
 export const drawerScenarios: Record<string, Component> = {
   "drawer/basic": Basic,
   "drawer/default-open": DefaultOpen,
@@ -76,4 +100,8 @@ export const drawerScenarios: Record<string, Component> = {
   "drawer/labelled": Labelled,
   "drawer/geometry-bottom": GeometryBottom,
   "drawer/geometry-right": GeometryRight,
+  "drawer/spacing-sections": SpacingSections,
+  "drawer/spacing-header-footer": SpacingHeaderFooter,
+  "drawer/spacing-footer-only": SpacingFooterOnly,
+  "drawer/spacing-header-only": SpacingHeaderOnly,
 };
