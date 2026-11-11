@@ -323,7 +323,7 @@ export function createSheetDetent(props: CreateSheetDetentProps): SheetDetentSta
 
     if (dismissed) {
       // The panel slides out over the release curve, then the sheet closes; the
-      // host dialog's own exit follows (port sheet §2).
+      // layer's own exit follows (port sheet §2).
       animate(0, () => props.close());
 
       return;

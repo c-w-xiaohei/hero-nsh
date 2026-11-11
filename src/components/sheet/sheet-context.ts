@@ -70,8 +70,8 @@ export interface SheetContextValue {
   toggle: () => void;
 
   /**
-   * HeroUI's `onAnimationEnd`, driven here by the host dialog's open / close
-   * callbacks (port sheet §2).
+   * HeroUI's `onAnimationEnd`, driven here by the Backdrop's own enter / exit
+   * completion (port sheet §2).
    */
   animationEnd: (open: boolean) => void;
 }
@@ -104,13 +104,12 @@ export const SheetContext = context<SheetContextValue | null>(null);
 export const SheetSwipeDirectionContext = context<SheetSwipeDirection | null>(null);
 
 /**
- * The host dialog's enter / exit phase, provided by `Sheet.Backdrop` and read
+ * The overlay's enter / exit phase, provided by `Sheet.Backdrop` and read
  * by `Sheet.Content`'s render props (`SheetRenderValues.isEntering` /
  * `isExiting`).
  *
- * The phase belongs to the overlay, and the overlay is the Backdrop's nsh/base
- * `Dialog`, not the Root's state: `SheetContext` is built above the dialog and
- * cannot carry it. Upstream reads the same two flags from React Aria's
+ * The phase belongs to the overlay, and the overlay is the Backdrop's, not the
+ * Root's state: `SheetContext` is built above the layer and cannot carry it. Upstream reads the same two flags from React Aria's
  * `SheetOverlay` render props, so the provider sits where the overlay is.
  * `null` outside a Backdrop, where upstream has no overlay either.
  */

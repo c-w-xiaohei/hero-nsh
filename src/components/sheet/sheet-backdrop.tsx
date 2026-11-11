@@ -1,6 +1,5 @@
 import type { JSX, PressEvent, ViewProps, ViewRef } from "nsh";
-import { computed, effect, reduceMotion, signal, split, View } from "nsh";
-import { Dialog } from "nsh/base";
+import { computed, effect, Overlay, signal, split, View } from "nsh";
 
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
 import type { SheetPhase } from "./sheet-context";
@@ -98,7 +97,7 @@ export interface SheetBackdropProps
 }
 
 /**
- * The carrier's alignment inside the dialog layer (port sheet §3): the panel
+ * The carrier's alignment inside the overlay layer (port sheet §3): the panel
  * hugs the edge it came from, so each placement is one axis plus one alignment.
  * `pointer-events-none` lets a press in the empty area fall through to the paint
  * layer below, while the panel itself (`Sheet.Content`'s `pointer-events-auto`)
@@ -118,16 +117,16 @@ function sheetCarrierClasses(placement: SheetPlacement): string {
 }
 
 /**
- * Sheet.Backdrop / SheetBackdrop: the modal layer and the backdrop paint
+ * Sheet.Backdrop / SheetBackdrop: the overlay layer and the backdrop paint
  * (R-001 … R-007, R-042).
  *
- * nsh/base `Dialog` is the window's single modal layer (port sheet §3, B1–B4);
- * inside it the paint layer and the carrier are siblings, so a press on the
- * panel cannot reach the paint layer that dismisses. The paint layer decides
- * between the variant class and `SHEET_BACKDROP_UNPAINTED` from the stack index
- * (R-005 / R-006), the `isDismissable` gate is ours rather than the native one,
- * and the dialog's open / close callbacks are HeroUI's `onAnimationEnd`
- * (port sheet §2).
+ * The layer is an `Overlay` (nsh's own Sheet is built the same way,
+ * `nsh_el_overlay.md`), not nsh/base `Dialog`: see the note at the return. In
+ * it the paint layer and the carrier are siblings, so a press on the panel
+ * cannot reach the paint layer that dismisses. The paint layer decides between
+ * the variant class and `SHEET_BACKDROP_UNPAINTED` from the stack index (R-005 /
+ * R-006), the `isDismissable` gate is ours rather than the native one, and the
+ * enter / exit completions are HeroUI's `onAnimationEnd` (port sheet §2).
  */
 export function SheetBackdrop(props: SheetBackdropProps): JSX.Element {
   const [local, rest] = split(props, [
@@ -155,7 +154,7 @@ export function SheetBackdrop(props: SheetBackdropProps): JSX.Element {
 
   // A Backdrop has no state of its own to reach without a Root above it
   // (upstream reads `useSheetContext()` unconditionally). Rendering nothing
-  // keeps a misplaced part harmless instead of mounting a second modal layer.
+  // keeps a misplaced part harmless instead of mounting a second layer.
   if (ctx === null) {
     return null;
   }
@@ -182,18 +181,27 @@ export function SheetBackdrop(props: SheetBackdropProps): JSX.Element {
   // a whole axis), falling back to the placement (port sheet §2).
   const swipeDirection = (): SheetSwipeDirection => local.swipeDirection ?? ctx.placement();
 
-  // The upstream `hasOpened` / `hasExited` pair: the dialog stays mounted
+  // The upstream `hasOpened` / `hasExited` pair: the layer stays mounted
   // through its exit and, with `isExiting`, after it. Without `isExiting` a
   // closed sheet drops its subtree, as upstream's `return null` does.
+  //
+  // `hasOpened` also gates the retention, as upstream's `retentionProps`
+  // (`{isExiting: hasOpened && isExiting}`) does: a sheet that was never opened
+  // has nothing to retain, and retaining it would keep a hidden layer in the
+  // host's overlay order — measured on the web target, where a second,
+  // never-opened `isExiting` sheet swallowed every press meant for the open
+  // sheet below it.
+  let opened = ctx.isOpen();
+
   const presence = createOverlayPresence({
     durationMs: () => SHEET_EXIT_HOLD_MS,
     isOpen: ctx.isOpen,
     isEntering: () => local.isEntering,
-    isExiting: () => local.isExiting,
+    isExiting: () => local.isExiting === true && opened,
   });
 
   // HeroUI's `hasExited`, set when the exit finished. `presence.isPresent()`
-  // owns the retention: with `isExiting` the dialog outlives its exit, and
+  // owns the retention: with `isExiting` the layer outlives its exit, and
   // dropping the prop releases it.
   const hasExited = signal(false);
   const isMounted = () => presence.isPresent() || !hasExited();
@@ -201,13 +209,8 @@ export function SheetBackdrop(props: SheetBackdropProps): JSX.Element {
   /**
    * HeroUI's `onAnimationEnd`, in two halves.
    *
-   * The native layer reports its enter through `onOpen` (`Dialog`'s "it
-   * finished appearing"), but an app-driven `open={false}` reaches it as a
-   * state change rather than as a dismissal, and the host reports no `onClose`
-   * for it (measured on the headless engine: a sheet closed through `isOpen`
-   * stayed at `[true]` for T-024, while T-011's Escape — a native dismissal —
-   * did report `false`). React Aria's enter / exit animations have no NSH
-   * counterpart either, so each transition is completed here instead: the
+   * React Aria's enter / exit animations have no NSH counterpart (`Overlay`
+   * has no animation of its own), so each transition is completed here: the
    * enter after its starting classes come off, the exit when its hold releases,
    * and an unmount in the middle of an exit completes it too, as upstream's
    * `SheetLifecycle` does when the tree goes away (T-028). A reopen cancels the
@@ -217,7 +220,6 @@ export function SheetBackdrop(props: SheetBackdropProps): JSX.Element {
    * The presence's own phase is not the clock for this: a retained sheet keeps
    * `isExiting` forced while it is closed, so the phase never ends.
    */
-  let opened = ctx.isOpen();
   let enterReported = false;
   let exitReported = false;
   let enterFrame: number | undefined;
@@ -309,10 +311,31 @@ export function SheetBackdrop(props: SheetBackdropProps): JSX.Element {
     isExiting: presence.isExiting,
   };
 
+  /**
+   * A closed layer is mounted while the presence retains it, but it must not be
+   * on screen and must not take presses: upstream does exactly that, hiding the
+   * overlay with `inert` / `aria-hidden` and suspending it while `isExiting`
+   * keeps it (`heroui/packages/react/src/components/sheet/sheet.tsx:229-271`).
+   * `hidden` is `display: none`: the consumer's subtree and its state stay
+   * mounted (a view keeps its component tree), and nothing there is laid out,
+   * painted or hit-tested, so the page underneath stays reachable — which is
+   * upstream's `inert` and the whole point of "modal behavior ends with
+   * `isOpen`". A retained close therefore keeps the typed value and the "Open
+   * sheet" button behind the closed sheet still presses.
+   */
+  const isHiddenLayer = () => !ctx.isOpen();
+
   const overlayClasses = computed(() =>
-    // R-003: the overlay's `z-50` is not written; the Dialog is the window's
-    // top modal layer, and the slot only carries a caller's composition.
-    ["flex-1", slots().overlay()].filter((part) => part !== "").join(" "),
+    // R-003: the overlay's `z-50` is not written; an overlay is drawn above the
+    // views around it, and the slot only carries a caller's composition.
+    // `inset-0` makes it the window-sized layer the paint and the carrier fill.
+    [
+      "inset-0 flex flex-col",
+      slots().overlay(),
+      isHiddenLayer() ? "hidden pointer-events-none" : "",
+    ]
+      .filter((part) => part !== "")
+      .join(" "),
   );
 
   // R-004 the slot's `bg-transparent`, R-005 `bg-backdrop` and R-006 the blur
@@ -336,8 +359,20 @@ export function SheetBackdrop(props: SheetBackdropProps): JSX.Element {
     local.onPress?.(event);
 
     if (ctx.isOpen() && isDismissable()) {
-      ctx.close();
+      closeByUser();
     }
+  };
+
+  /**
+   * A dismissal (a press on the paint layer, Escape, the back button) completes
+   * the exit at once: there is no scroll timeline to run, and the close the app
+   * sees is the same change, so leaving it to the hold timer would report the
+   * exit a frame late. An app-driven close still waits for the hold (the effect
+   * above).
+   */
+  const closeByUser = () => {
+    ctx.close();
+    reportExit();
   };
 
   /**
@@ -362,58 +397,50 @@ export function SheetBackdrop(props: SheetBackdropProps): JSX.Element {
     </SheetPhaseContext.Provider>
   );
 
+  /**
+   * Escape and the back button come from the overlay, not from a native
+   * dialog: `onCancel` is the top overlay listening, which is exactly the stack
+   * order a sheet needs, and it takes the key from the pages below. Gated the
+   * same way the native flags were (T-007 / T-021).
+   */
+  const cancel = () => {
+    if (ctx.isOpen() && closesOnEscape()) {
+      closeByUser();
+    }
+  };
+
   return (
     <If when={isMounted()}>
       <SheetSwipeDirectionContext.Provider value={swipeDirection()}>
         {/*
-          A sheet opened from inside another one is not a second native Dialog:
-          the host presents one modal layer per window, and a nested one opened
-          its state without ever showing a panel (measured on T-010 / T-023 —
-          the trigger toggled, the mounted layer never saw it). It draws as the
-          parent dialog's own overlay layer instead, which is what a sheet
-          inside a sheet looks like anyway.
+          A sheet is an overlay, not a modal window: nsh's own `Sheet` is an
+          `Overlay` plus a screen-blocking paint layer too (`nsh_el_overlay.md`,
+          "to block the screen behind a popup, put a second overlay under it …
+          that is how Sheet … work"), and nsh/base `Dialog` cannot carry the
+          retention contract: it releases its presented children as soon as
+          `open` turns false (measured), and while presented it makes the whole
+          window modal, so the page behind a *retained* sheet could not be
+          pressed any more — upstream ends modal behavior with `isOpen`
+          (`sheet.tsx`: "Modal behavior still ends with `isOpen`"). The overlay
+          changes nothing about the visible contract: the paint layer below
+          still dims and dismisses, `Sheet.Content` still sits on its edge, and
+          the panel is still above the page for presses and layout.
         */}
         <If when={ctx.isNested()}>
-          <View class="absolute inset-0">{layer()}</View>
-        </If>
-        <If when={!ctx.isNested()}>
-          <Dialog
-            open={ctx.isOpen()}
-            // R-042: `prefers-reduced-motion` → no animation at all, the same
-            // ruling as Modal. R-001's swipe-progress fade has no timeline here;
-            // the native fade is what the backdrop gets.
-            animation={reduceMotion() ? "none" : "fade"}
-            closeOnBackdropPress={false}
-            // Escape and the Android back button, unless the caller disabled
-            // them (`isKeyboardDismissDisabled`) or the sheet is not dismissable
-            // at all; port sheet §1.1, T-007 / T-021.
-            closeOnEscape={closesOnEscape()}
-            // The native swipe keeps working and is gated by `isDismissable`, as
-            // upstream's `preventDismissal` does. On the web target the mouse
-            // drag reaches the host's pan but not the responder channel, so this
-            // is what dismisses there; on touch platforms both fire and the
-            // drag settles through `sheetDismissTarget` first (port sheet §8).
-            closeOnSwipe={isDismissable()}
-            // A reopen clears `hasExited`, as upstream does during render; the
-            // report itself is the effect's enter.
-            onOpen={() => {
-              hasExited.set(false);
-            }}
-            // HeroUI's `onAnimationEnd(false)` through a native dismissal (Escape,
-            // the back button, a swipe the host played): it arrives at once, so
-            // the exit is complete. An app-driven close is the effect's exit.
-            onClose={() => {
-              reportExit();
-            }}
-            onOpenChange={(event) => {
-              if (!event.open) {
-                ctx.close();
-              }
-            }}
-            class={overlayClasses()}
+          <View
+            class={
+              isHiddenLayer()
+                ? "absolute inset-0 hidden pointer-events-none"
+                : "absolute inset-0"
+            }
           >
             {layer()}
-          </Dialog>
+          </View>
+        </If>
+        <If when={!ctx.isNested()}>
+          <Overlay class={overlayClasses()} onCancel={cancel}>
+            {layer()}
+          </Overlay>
         </If>
       </SheetSwipeDirectionContext.Provider>
     </If>

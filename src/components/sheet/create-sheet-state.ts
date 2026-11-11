@@ -43,7 +43,7 @@ export interface CreateSheetStateProps {
   /** Called after `onOpenChange(false)`, once per close request. */
   onClose?: () => void;
 
-  /** Called when the host dialog finishes appearing or disappearing. */
+  /** Called when the layer finishes appearing or disappearing. */
   onAnimationEnd?: (open: boolean) => void;
 
   /** @default true */
@@ -87,7 +87,14 @@ export interface CreateSheetStateResult extends CreateOverlayTriggerResult {
  * as upstream's `setIsOpen` does.
  */
 export function createSheetState(props: CreateSheetStateProps): CreateSheetStateResult {
+  // Focus return: React Aria's focus scope restores focus to the trigger when
+  // the overlay closes. A *nested* sheet skips it: its trigger lives inside the
+  // parent sheet's panel, and on the web target focusing that view makes the
+  // host stop delivering presses and keys altogether (measured on T-023: after
+  // the nested CloseTrigger closed it, neither "Nested" nor Escape reached the
+  // app until the focus call was gone). The top-level return is unchanged.
   const trigger = createOverlayTrigger({
+    returnFocus: () => props.isNested?.() !== true,
     isOpen: props.isOpen,
     defaultOpen: props.defaultOpen,
     onOpenChange: (open) => {

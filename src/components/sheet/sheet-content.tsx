@@ -86,8 +86,8 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
   ]);
 
   const context = SheetContext();
-  // The Backdrop owns the dialog, so the enter / exit phase arrives through its
-  // own provider rather than through the Root's context.
+  // The Backdrop owns the overlay, so the enter / exit phase arrives through
+  // its own provider rather than through the Root's context.
   const phase = SheetPhaseContext();
   // Read once, in the body: the accessor `context()` returns resolves only
   // inside the owner's render scope — called later from the detent's callbacks
@@ -126,8 +126,8 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
     // same `createSheetState`, so no part has to announce anything (§2).
     hasDescendants: () => context?.hasDescendants() ?? false,
     isExpanded: () => detent.isExpanded(),
-    // The host dialog's phase, published by `Sheet.Backdrop` (which owns the
-    // nsh/base `Dialog`); `false` outside a Backdrop, where upstream has no
+    // The overlay's phase, published by `Sheet.Backdrop` (which owns the
+    // layer); `false` outside a Backdrop, where upstream has no
     // overlay to take the flags from either (§2).
     isEntering: () => phase?.isEntering() ?? false,
     isExiting: () => phase?.isExiting() ?? false,

@@ -25,7 +25,8 @@ import { tv } from "tailwind-variants";
  * Rules that are not a class at all, with the part that carries them out:
  * - R-001 (`@keyframes heroui-sheet-backdrop`, the backdrop fading in while the
  *   drag progresses) is deleted: NSH has no scroll-progress timeline. The
- *   Backdrop's own enter / exit fade is the host dialog's `animation="fade"`.
+ *   Backdrop's enter / exit completion is its own timer; there is no fade to
+ *   reproduce.
  * - R-002 (`@keyframes heroui-sheet-scale-back`, a parent sheet pushed back
  *   120px in 3D) is deleted: no 3D transform and no swipe progress here.
  * - R-036 (`[data-sheet-scroll][data-handle-dragging]` → `snap-none!`) is
@@ -53,8 +54,8 @@ export const sheetVariants = tv({
   },
   slots: {
     // R-003 `.sheet__overlay` → `z-50` and its closed `pointer-events-none`:
-    // deleted as a class. nsh/base `Dialog` is the window's top modal layer and
-    // unmounts (or stops taking presses) when closed, so the component writes
+    // deleted as a class. An `Overlay` is drawn above the views around it and
+    // the layer is hidden while the sheet is closed, so the component writes
     // neither. The slot exists so a caller's className has a place to compose.
     overlay: "",
     // R-004 `.sheet__backdrop` → `bg-transparent`. R-005 / R-006 paint the
@@ -66,7 +67,15 @@ export const sheetVariants = tv({
     // R-009 (`[transform:perspective(1000px)] will-change-transform`) is
     // deleted: it only promoted stacked sheets for browser sub-pixel snapping,
     // which the clip box does not do.
-    content: "z-1 box-content overflow-clip outline-none",
+    // `pointer-events-auto` is NSH-only: the carrier that aligns the panel
+    // inside the overlay layer is `pointer-events-none`, so a press in the empty
+    // area falls through to the paint layer that dismisses. On a real DOM that
+    // none inherits, so the clip box restores the target for itself and every
+    // part inside it (measured on the web target: without it every press in the
+    // panel — Done, the close trigger, a plain Button — landed on the backdrop
+    // and closed the sheet). Upstream needs no such class: its overlay is not
+    // pointer-transparent while open.
+    content: "z-1 box-content overflow-clip outline-none pointer-events-auto",
     // R-023 `.sheet__dialog` → `relative flex min-h-0 flex-col overflow-hidden
     // bg-overlay text-overlay-foreground shadow-overlay outline-none`, the
     // shadow written as the light / dark pair the theme needs.
