@@ -1,0 +1,249 @@
+import type { JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
+import { split, View, windowSize } from "nsh";
+
+import { createSheetDetent, SheetDetentContext } from "./create-sheet-detent";
+import {
+  SheetContext,
+  SheetPhaseContext,
+  SheetSwipeDirectionContext,
+} from "./sheet-context";
+import { sheetContentExtent } from "./sheet-content-box";
+import { viewProps } from "./sheet-dom-props";
+import { renderSheetPartChildren } from "./sheet-part-children";
+import type { SheetRenderValues } from "./sheet-render-values";
+import type { SheetPlacement } from "./sheet.styles";
+import {
+  sheetContentDetachedClasses,
+  sheetContentSnapClasses,
+  sheetVariants,
+} from "./sheet.styles";
+
+/**
+ * The props of `Sheet.Content`: HeroUI's `SheetContentProps`, which is React
+ * Aria's `Sheet` props minus `children` / `className`, plus the render-prop
+ * form of `children` and a `style`.
+ */
+export interface SheetContentProps
+  extends Omit<ViewProps, "children" | "class" | "ref" | "style"> {
+  children?: JSX.Element | ((values: SheetRenderValues) => JSX.Element);
+
+  /** Appended after the slot classes; later classes win. */
+  className?: string;
+
+  style?: StyleProp<ViewStyle>;
+
+  /** Forwarded as a callback to the view. */
+  ref?: (node: ViewRef) => void;
+
+  /** Accepted, no effect: NSH has no DOM element to replace. */
+  render?: unknown;
+
+  /** Accepted, no effect: NSH has no slot collection. */
+  slot?: string;
+
+  /** A DOM id upstream; maps to `nativeID`. */
+  id?: string;
+
+  /** Accepted, no effect: NSH has no DOM attribute channel. */
+  [key: `data-${string}`]: unknown;
+}
+
+/**
+ * How far the panel is pushed toward its edge, as CSS `translate` x / y. A
+ * bottom sheet leaves downward, a top one upward, and so on: the cover slides
+ * out of the edge it came from.
+ */
+function edgeTranslate(placement: SheetPlacement, offset: number): [number, number] {
+  if (placement === "bottom") return [0, offset];
+  if (placement === "top") return [0, -offset];
+  if (placement === "left") return [-offset, 0];
+
+  return [offset, 0];
+}
+
+/**
+ * Sheet.Content / SheetContent: the clip box whose axial length is the current
+ * detent (R-008 / R-019 / R-020 / R-021 / R-022, port sheet §4c).
+ *
+ * Upstream this is React Aria's scroll-snap sheet: the panel is laid out at full
+ * height inside a scroller and the scroll offset decides how much of it shows.
+ * NSH has neither scroll-snap nor a scroll-progress timeline, so the same state
+ * is `createSheetDetent`'s reveal length, owned here and handed to the parts
+ * below through `SheetDetentContext` (port sheet §5): the Dialog reports its
+ * natural length, the Handle drags it, the Body scrolls only once it is
+ * expanded.
+ */
+export function SheetContent(props: SheetContentProps): JSX.Element {
+  const [local, rest] = split(props, [
+    "children",
+    "className",
+    "style",
+    "ref",
+    "id",
+    "nativeID",
+    "render",
+    "slot",
+  ]);
+
+  const context = SheetContext();
+  // The Backdrop owns the overlay, so the enter / exit phase arrives through
+  // its own provider rather than through the Root's context.
+  const phase = SheetPhaseContext();
+  // Read once, in the body: the accessor `context()` returns resolves only
+  // inside the owner's render scope — called later from the detent's callbacks
+  // it answered `null`, which silently fell back to the placement (measured:
+  // T-014's `swipeDirection="right"` drag read `bottom`). Everything below
+  // reads this captured value.
+  const swipeDirection = SheetSwipeDirectionContext();
+
+  // Outside a Root the clip box still renders with the table's defaults, the
+  // way `Sheet.Dialog` does; there is simply no state to drive it.
+  const placement = (): SheetPlacement => context?.placement() ?? "bottom";
+  const slots = () => context?.slots() ?? sheetVariants();
+
+  // The detent state belongs to this part: it is what the clip box's length and
+  // the Handle's responder channel are (port sheet §4c handoff).
+  const detent = createSheetDetent({
+    placement,
+    // The Backdrop's `swipeDirection` decides the drag axis (T-014), not the
+    // reveal axis; it reaches the Handle through this state.
+    swipeDirection: () => swipeDirection ?? undefined,
+    isDetached: () => context?.isDetached() ?? false,
+    isDismissable: () => context?.isDismissable() ?? true,
+    snapPoints: () => context?.snapPoints(),
+    isOpen: () => context?.isOpen() ?? false,
+    close: () => context?.close(),
+  });
+
+  const values: SheetRenderValues = {
+    // `position` is HeroUI's name for the placement in the render props.
+    position: placement,
+    swipeDirection: () => detent.direction(),
+    stackIndex: () => context?.stackIndex() ?? 0,
+    // React Aria's `sheetStack.slice(index + 1) > 0`: another sheet opened
+    // above this one. The Root's open-sheet registry already orders every open
+    // sheet, and `Sheet.NestedRoot` appends itself to it by opening through the
+    // same `createSheetState`, so no part has to announce anything (§2).
+    hasDescendants: () => context?.hasDescendants() ?? false,
+    isExpanded: () => detent.isExpanded(),
+    // The overlay's phase, published by `Sheet.Backdrop` (which owns the
+    // layer); `false` outside a Backdrop, where upstream has no
+    // overlay to take the flags from either (§2).
+    isEntering: () => phase?.isEntering() ?? false,
+    isExiting: () => phase?.isExiting() ?? false,
+  };
+
+  // R-008 `z-1 box-content overflow-clip outline-none` is the slot; R-016 /
+  // R-017 / R-018 are the detached pair, appended after it so they beat the
+  // placement's radius and max size; R-009 (`perspective` / `will-change`) is
+  // deleted.
+  const classes = () =>
+    [
+      slots().content(),
+      context?.isDetached() ? sheetContentDetachedClasses() : undefined,
+      local.className,
+    ]
+      .filter((part) => part !== undefined && part !== "")
+      .join(" ");
+
+  // R-019 / R-020: the placement slot caps the axial size with `max-h` /
+  // `max-w`; a snap point owns that length instead, so the cap has to come off.
+  // Only the class list sits after the variant classes, which is why these two
+  // travel here (port sheet §4c).
+  const classList = () => ({
+    [sheetContentSnapClasses(detent.axis())]: detent.hasPartialDetents(),
+  });
+
+  /**
+   * R-010 / R-013 / R-016 / R-017 / R-018 / R-019 / R-020 / R-021 / R-022, as
+   * the inline lengths they have to be.
+   *
+   * The clip box's length along the placement's axis is the runtime detent, so
+   * with a partial detent it is a number here (`height` for top / bottom,
+   * `width` for left / right) rather than a class. The edge's own cap and the
+   * side panel's `min()` are lengths no class can spell either (see
+   * `sheetContentExtent`), so they are numbers read off `windowSize()`, the
+   * surface the carrier spans and the one `createSheetDetent` takes `extent`
+   * from. Without a partial detent (G-001) only the cap is written, so the box
+   * keeps its natural length.
+   *
+   * R-021 / R-022 need no `calc()`: `fullLength` already subtracts the detached
+   * margins, so the detached full detent is a number too.
+   *
+   * Without a partial detent the whole box is pushed out of the edge by
+   * `offset()` instead: that is how a dragged sheet disappears, since there is
+   * no scroll position to animate.
+   *
+   * The axis is the placement's, not the drag axis: a horizontal
+   * `swipeDirection` on a bottom sheet still reveals a height, it only changes
+   * which pointer coordinate the Handle follows (`sheetDragLength` keeps the
+   * length on the panel's axis).
+   */
+  const style = (): ViewStyle => {
+    const surface = windowSize();
+    // The reveal axis is the swipe direction's (`createSheetDetent` resolves
+    // it), not the placement's: a bottom sheet swiped sideways is a width
+    // detent (T-027, the same axis React Aria's `getSwipeConfig` derives).
+    const isDetached = context?.isDetached() ?? false;
+    const extent = sheetContentExtent({
+      axis: detent.axis(),
+      isDetached,
+      detentLength: detent.hasPartialDetents() ? detent.length() : null,
+      surfaceWidth: surface.width,
+      surfaceHeight: surface.height,
+    });
+    // R-019 … R-022: while no detent owns the axial length the box is pushed
+    // out of the edge instead of resized.
+    const drag =
+      extent.axial === null ? { translate: edgeTranslate(placement(), detent.offset()) } : {};
+
+    if (extent.horizontal) {
+      return {
+        // R-018: `height: calc(100% - 1rem)` detached, `h-full` otherwise.
+        ...(isDetached ? { height: extent.cross } : {}),
+        // R-013 / R-020 / R-022: `min(24rem, 96vw)`, or the detent's own width.
+        ...(extent.axial === null ? { width: extent.axialCap } : { width: extent.axial }),
+        ...drag,
+      };
+    }
+
+    return {
+      // R-017: `width: calc(100% - 1rem)` detached, `w-full` otherwise.
+      ...(isDetached ? { width: extent.cross } : {}),
+      // R-010 / R-019 / R-021: the cap, or the detent's own height.
+      ...(extent.axial === null ? { maxHeight: extent.axialCap } : { height: extent.axial }),
+      ...drag,
+    };
+  };
+
+  const content = () => {
+    const node = local.children;
+
+    // A function with an argument is HeroUI's render prop; a zero-argument one
+    // is NSH's reactive child and belongs to `renderSheetPartChildren`.
+    if (typeof node === "function" && node.length >= 1) {
+      return (node as (values: SheetRenderValues) => JSX.Element)(values);
+    }
+
+    return renderSheetPartChildren(node as JSX.Element);
+  };
+
+  return (
+    <View
+      {...viewProps(rest)}
+      ref={(node) => local.ref?.(node)}
+      nativeID={local.id ?? local.nativeID}
+      class={classes()}
+      classList={classList()}
+      // The caller's style comes last, so it can restate a length (D13).
+      style={[style(), local.style]}
+    >
+      {/*
+        The provider exception in the common rules: the parts inside read
+        `SheetDetentContext`, so `props.children` is read once, here at the
+        placement, inside the provider.
+      */}
+      <SheetDetentContext.Provider value={detent}>{content()}</SheetDetentContext.Provider>
+    </View>
+  );
+}
