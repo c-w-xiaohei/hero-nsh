@@ -62,6 +62,8 @@ import { inputGroupScenarios } from "./input-group.scenarios";
 import { colorSwatchPickerScenarios } from "./color-swatch-picker.scenarios";
 import { colorPickerScenarios } from "./color-picker.scenarios";
 import { modalScenarios } from "./modal.scenarios";
+import { calendarScenarios } from "./calendar.scenarios";
+import { calendarYearPickerScenarios } from "./calendar-year-picker.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -127,4 +129,6 @@ export const scenarios: Record<string, Component> = {
   ...colorSwatchPickerScenarios,
   ...colorPickerScenarios,
   ...modalScenarios,
+  ...calendarScenarios,
+  ...calendarYearPickerScenarios,
 };
