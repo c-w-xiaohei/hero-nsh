@@ -374,7 +374,7 @@ export function TableRow(props: TableRowProps) {
             node = view;
             local.ref?.(view);
           }}
-          nativeID={local.id}
+          nativeID={local.id ?? (rest as any).nativeID}
           role="row"
           focusable={state.isCellFocusable()}
           disabled={isDisabled()}

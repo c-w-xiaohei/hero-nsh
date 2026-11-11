@@ -80,7 +80,7 @@ export function TableResizableContainer(props: TableResizableContainerProps) {
         {...(rest as any)}
         horizontal
         ref={(node) => local.ref?.(node)}
-        nativeID={local.id}
+        nativeID={local.id ?? (rest as any).nativeID}
         class={classes()}
         style={local.style as any}
         onLayout={(event) => {

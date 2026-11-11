@@ -359,7 +359,7 @@ export function TableContent(props: TableContentProps) {
           gridNode = node;
           local.ref?.(node);
         }}
-        nativeID={local.id}
+        nativeID={local.id ?? (rest as any).nativeID}
         role={"grid" as AccessibilityRole}
         focusable
         accessibilityLabel={local["aria-label"]}

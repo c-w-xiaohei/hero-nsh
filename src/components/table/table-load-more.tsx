@@ -131,7 +131,7 @@ export function TableLoadMore(props: TableLoadMoreProps) {
       <View
         {...(rest as any)}
         ref={(node) => local.ref?.(node)}
-        nativeID={local.id}
+        nativeID={local.id ?? (rest as any).nativeID}
         role="none"
         accessibilityElementsHidden
         onLayout={(event) => {
@@ -198,7 +198,7 @@ export function TableLoadMoreContent(props: TableLoadMoreContentProps) {
     <View
       {...(rest as any)}
       ref={(node) => local.ref?.(node)}
-      nativeID={local.id}
+      nativeID={local.id ?? (rest as any).nativeID}
       onLayout={local.onLayout}
       class={classes()}
       style={local.style as any}

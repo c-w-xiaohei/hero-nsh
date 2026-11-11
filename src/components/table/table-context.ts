@@ -1,4 +1,4 @@
-import type { Accessor, JSX, PressEvent } from "nsh";
+import type { Accessor, PressEvent } from "nsh";
 import { context } from "nsh";
 
 import type { InteractionModalityState } from "../../primitives";
@@ -193,10 +193,4 @@ export function claimPress(event: PressEvent): boolean {
   return true;
 }
 
-/** A press payload a part may receive, for the handlers that forward one. */
-export type TablePressHandler = (event: PressEvent) => void;
 
-/** The children value of a part: an element tree or a render function (§1). */
-export type TableChildren<Values = unknown> =
-  | JSX.Element
-  | ((values: Values) => JSX.Element);

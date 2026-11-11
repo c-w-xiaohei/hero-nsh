@@ -59,7 +59,7 @@ export function TableRoot(props: TableRootProps) {
       <View
         {...(rest as any)}
         ref={(node) => local.ref?.(node)}
-        nativeID={local.id}
+        nativeID={local.id ?? (rest as any).nativeID}
         onLayout={local.onLayout}
         class={[slots().base(), local.className].filter(Boolean).join(" ")}
         style={[direction() ? { direction: direction() } : undefined, local.style]}

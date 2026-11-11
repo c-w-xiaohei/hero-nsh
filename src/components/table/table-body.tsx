@@ -98,7 +98,7 @@ export function TableBody(props: TableBodyProps) {
     <View
       {...(rest as any)}
       ref={(node) => local.ref?.(node)}
-      nativeID={local.id}
+      nativeID={local.id ?? (rest as any).nativeID}
       role="rowgroup"
       onLayout={(event) => {
         // The sentinel's absolute position in the content is this offset plus

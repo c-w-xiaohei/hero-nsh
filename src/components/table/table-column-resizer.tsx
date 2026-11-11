@@ -293,7 +293,7 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
         node = view;
         local.ref?.(view);
       }}
-      nativeID={local.id}
+      nativeID={local.id ?? (rest as any).nativeID}
       focusable
       accessibilityLabel={local["aria-label"]}
       role="adjustable"

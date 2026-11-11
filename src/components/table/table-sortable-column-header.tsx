@@ -88,7 +88,7 @@ export function TableSortableColumnHeader(props: TableSortableColumnHeaderProps)
     <View
       {...(rest as any)}
       ref={(node) => local.ref?.(node)}
-      nativeID={local.id}
+      nativeID={local.id ?? (rest as any).nativeID}
       onLayout={local.onLayout}
       class={classes()}
       style={local.style as any}

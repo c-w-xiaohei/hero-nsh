@@ -106,7 +106,7 @@ export function TableHeader(props: TableHeaderProps) {
       <View
         {...(rest as any)}
         ref={(node) => local.ref?.(node)}
-        nativeID={local.id}
+        nativeID={local.id ?? (rest as any).nativeID}
         role="rowgroup"
         onLayout={local.onLayout}
         onMouseEnter={(event) => {

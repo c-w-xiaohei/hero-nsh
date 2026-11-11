@@ -278,7 +278,7 @@ export function TableColumn(props: TableColumnProps) {
           node = view;
           local.ref?.(view);
         }}
-        nativeID={local.id}
+        nativeID={local.id ?? (rest as any).nativeID}
         role="columnheader"
         focusable={state.isCellFocusable()}
         onLayout={handleLayout}

@@ -279,7 +279,7 @@ export function TableCell(props: TableCellProps) {
         node = view;
         local.ref?.(view);
       }}
-      nativeID={local.id}
+      nativeID={local.id ?? (rest as any).nativeID}
       role="cell"
       focusable={state.isCellFocusable()}
       accessibilityState={{ selected: isSelected(), disabled: isDisabled() }}
