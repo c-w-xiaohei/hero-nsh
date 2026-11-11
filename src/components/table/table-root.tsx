@@ -29,6 +29,7 @@ export function TableRoot(props: TableRootProps) {
       <View
         {...rest}
         ref={(node) => ref?.(node)}
+        onLayout={props.onLayout}
         nativeID={id}
         class={[slots.base(), className].filter(Boolean).join(" ")}
         style={style}
