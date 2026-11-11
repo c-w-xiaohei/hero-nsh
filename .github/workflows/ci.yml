@@ -1,15 +1,51 @@
 name: CI
 
+# One job per kind of check, so they run at the same time on their own
+# runners and a failure names the check it broke:
+#
+#   check      the types (`nsh check`)
+#   headless   every test file, on the engine the default target runs
+#   web        the files named `.web.test.tsx`: what only a browser proves
+#   packaging  the packed tarball, installed in a throwaway app
+#
+# A push is filtered to what these read, and a newer push cancels the run it
+# supersedes: a commit nobody will ship does not need to finish 30 minutes of
+# tests.
+
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "theme/**"
+      - "harness/**"
+      - "scenarios/**"
+      - "examples/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.json"
+      - ".nvmrc"
+      - ".github/workflows/**"
+  # A pull request always runs, whatever it changes: these job names are what
+  # a branch protection rule waits for.
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NSH_VERSION: v0.4.0
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-24.04
-    env:
-      NSH_VERSION: v0.4.0
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -23,10 +59,65 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+
+  headless:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install nsh
+        run: |
+          curl -fsSL https://nsh.dev/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      # The directory, not a file at a time: `nsh test` walks it and opens each
+      # test on an engine of its own.
       - name: Headless tests
-        run: node scripts/run-tests.mjs headless --junit-dir junit
+        run: nsh test harness
+
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install nsh
+        run: |
+          curl -fsSL https://nsh.dev/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      # The headless job already ran the files every target shares; a browser
+      # adds something only for the files written against it. Two at a time:
+      # each process drives its own Chrome.
       - name: Web tests
-        run: node scripts/run-tests.mjs web --junit-dir junit-web
+        run: |
+          find harness/tests \( -name '*.web.test.tsx' -o -name '*.browser.test.tsx' \) -print0 \
+            | xargs -0 -n1 -P2 sh -c 'nsh test "$0" --target web'
+
+  packaging:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install nsh
+        run: |
+          curl -fsSL https://nsh.dev/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
       - name: Distribution smoke test
         run: |
           pnpm pack --pack-destination "$RUNNER_TEMP"
@@ -39,23 +130,14 @@ jobs:
           printf '{"extends":"./.nsh/tsconfig.json","include":["**/*.ts","**/*.tsx"]}\n' > tsconfig.json
           cat > App.tsx <<'TSX'
           import { mount, Text } from "nsh";
-          import { HERO_NSH_VERSION } from "hero-nsh";
+          import { Button, Card, HERO_NSH_VERSION } from "hero-nsh";
 
-          mount(() => <Text>{HERO_NSH_VERSION}</Text>);
+          mount(() => (
+            <Card className="p-4">
+              <Button>Save</Button>
+              <Text>{HERO_NSH_VERSION}</Text>
+            </Card>
+          ));
           TSX
           nsh check .
           echo 'expect(app.texts()).toContain("0.0.0");' | nsh test App.tsx
-      - name: Upload headless JUnit
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: junit-ubuntu-headless
-          path: junit
-          if-no-files-found: ignore
-      - name: Upload web JUnit
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: junit-ubuntu-web
-          path: junit-web
-          if-no-files-found: ignore

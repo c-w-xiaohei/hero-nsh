@@ -1,18 +1,47 @@
 name: Windows
 
+# Runs the tests in real Win32 windows, with the platform's own input, on the
+# files that can run there: every test file but the `.headless.` ones (which
+# need the headless engine's drag/hold and key press) and the `.web.` ones
+# (which need Tab focus movement, which NSH 0.4.0 does not do on Windows).
+#
+# One file at a time: these open real windows and take the platform's input,
+# and two runs at once would fight over the focus the cases assert (NSH's own
+# Windows workflow does the same). A push is filtered to what the tests read,
+# and a newer push cancels the older run.
+
 on:
   push:
     branches: [main]
-  workflow_dispatch:
+    paths:
+      - "src/**"
+      - "theme/**"
+      - "harness/**"
+      - "scenarios/**"
+      - "examples/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.json"
+      - ".nvmrc"
+      - ".github/workflows/**"
   pull_request:
-    types: [labeled, opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NSH_VERSION: v0.4.0
 
 jobs:
   test:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'windows')
     runs-on: windows-latest
-    env:
-      NSH_VERSION: v0.4.0
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -27,10 +56,9 @@ jobs:
           "$env:LOCALAPPDATA\nsh\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - run: pnpm install --frozen-lockfile
       - name: Windows tests
-        run: node scripts/run-tests.mjs windows --junit-dir junit
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: junit-windows
-          path: junit
-          if-no-files-found: ignore
+        shell: bash
+        run: |
+          for file in $(find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \
+            ! -name '*.headless.test.*' ! -name '*.web.test.*' ! -name '*.browser.test.*'); do
+            nsh test "$file" --target windows
+          done
