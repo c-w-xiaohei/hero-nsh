@@ -16,7 +16,7 @@ export const calendarYearPickerVariants = tv({
     // R-009: Indicator typography and RTL direction; R-011's open rotation is context-driven.
     triggerIndicator: "text-xs text-accent-soft-foreground rtl:rotate-180",
     // R-013: Overlay geometry and scroll structure; R-014: three equal columns.
-    yearGrid: "pointer-events-none absolute inset-x-0 grid grid-cols-3 content-start gap-1 overflow-y-auto p-1 opacity-0",
+    yearGrid: "pointer-events-none absolute inset-x-0 opacity-0",
     // R-016: A content-sized year button; w-fit preserves upstream inline-flex sizing in NSH.
     yearCell: "relative inline-flex w-fit h-8 items-center justify-center rounded-3xl px-2.5 text-sm font-medium outline-none select-none",
   },

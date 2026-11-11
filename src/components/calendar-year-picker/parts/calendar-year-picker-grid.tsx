@@ -1,5 +1,5 @@
 import type { Accessor, JSX, ViewProps } from "nsh";
-import { computed, context, split, View } from "nsh";
+import { computed, context, Scroll, split } from "nsh";
 import type { ViewRef } from "nsh";
 import type { CalendarYearPickerVariants } from "../calendar-year-picker.styles";
 import { calendarYearPickerVariants } from "../calendar-year-picker.styles";
@@ -55,17 +55,19 @@ export function CalendarYearPickerGrid(props: CalendarYearPickerGridProps): JSX.
   const classes = calendarYearPickerVariants();
   return (
     <YearGridContext.Provider value={values}>
-      <View
+      <Scroll
         {...rest}
         ref={(node) => local.ref?.(node)}
         role="listbox"
         accessibilityLabel="Choose year"
+        scrollbar={true}
         // R-013: opacity and pointer behavior follow the parent open state.
         // R-014: preserve the upstream three-column year collection.
         class={`${classes.yearGrid()} ${parent.isYearPickerOpen() ? "pointer-events-auto opacity-100" : "opacity-0"} ${local.className ?? ""}`}
+        contentClass="grid grid-cols-3 content-start gap-1 p-1"
       >
         {local.children}
-      </View>
+      </Scroll>
     </YearGridContext.Provider>
   );
 }
