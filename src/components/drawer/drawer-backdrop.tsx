@@ -60,7 +60,11 @@ function DrawerLayer(props: DrawerLayerProps): JSX.Element {
   return (
     <Dialog
       open={props.open()}
-      animation="fade"
+      // nsh's `Dialog` animates its own way: `"slide"` (its default) moves the
+      // popup in, `"fade"` only dissolves it. Upstream's drawer slides from its
+      // edge, so forcing `"fade"` here was the difference; NSH has no custom
+      // keyframes (style skill 6.3), so the native slide is the closest the
+      // host offers and the edge-specific version is registered as a gap.
       // Every native close attempt is turned off and routed through the state
       // instead: a close the host performs itself ignores `open` (a dialog that
       // closed natively stays closed while `open` stays true), which in
