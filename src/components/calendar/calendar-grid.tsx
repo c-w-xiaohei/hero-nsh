@@ -206,10 +206,17 @@ export function CalendarGrid(props: CalendarGridProps): JSX.Element {
         accessibilityLabel={gridLabel()}
         accessibilityState={{ disabled: state.isDisabled }}
         onLayout={handleLayout}
+        accessibilityElementsHidden={yearPicker.isYearPickerOpen()}
         class={`${slots.grid()} ${
-          // R-044: while the year panel is open the date grid is hidden but
-          // keeps its space.
-          yearPicker.isYearPickerOpen() ? "invisible opacity-0 pointer-events-none" : ""
+          // R-043/R-044: upstream fades the day grid out over 150ms, then
+          // switches `visibility: hidden` 150ms later. NSH has no delayed
+          // visibility, so the grid stays mounted at opacity 0 (removed from
+          // the accessibility tree above, and its cells leave the Tab order in
+          // CalendarCell) and only opacity transitions. The year panel is
+          // painted after this view, so the two fade without ghosting.
+          "transition-opacity duration-150 ease-out motion-reduce:transition-none"
+        } ${
+          yearPicker.isYearPickerOpen() ? "opacity-0 pointer-events-none" : ""
         } ${local.className ?? ""}`}
       >
         {typeof local.children === "function"

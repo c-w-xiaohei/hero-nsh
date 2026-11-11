@@ -78,8 +78,9 @@ export function CalendarNavButton(props: CalendarNavButtonProps): JSX.Element {
         // R-017: disabled look.
         disabled() ? "opacity-50 cursor-not-allowed pointer-events-none" : ""
       } ${
-        // R-016: focus ring only for keyboard focus.
-        focused() && modality.isKeyboard() ? "ring-2 ring-focus" : ""
+        // R-016: focus ring only for keyboard focus; `status-focused` is a
+        // 2pt ring with a 2pt page-coloured offset.
+        focused() && modality.isKeyboard() ? "ring-2 ring-focus ring-offset-2 ring-offset-background" : ""
       } ${local.className ?? ""}`}
       onFocus={() => {
         focused.set(true);
@@ -92,9 +93,11 @@ export function CalendarNavButton(props: CalendarNavButtonProps): JSX.Element {
     >
       {local.children ??
         (local.slot === "previous" ? (
-          <IconChevronLeft className={slots.navButtonIcon()} />
+          // A Canvas icon cannot read the ancestor's `text-*`, so the nav
+          // color is passed as a token.
+          <IconChevronLeft className={slots.navButtonIcon()} color="accent-soft-foreground" />
         ) : (
-          <IconChevronRight className={slots.navButtonIcon()} />
+          <IconChevronRight className={slots.navButtonIcon()} color="accent-soft-foreground" />
         ))}
     </View>
   );

@@ -78,8 +78,11 @@ export function CalendarYearPickerTrigger(props: CalendarYearPickerTriggerProps)
         accessibilityLabel={label()}
         accessibilityState={{ expanded: isOpen(), disabled: local.isDisabled === true }}
         class={`${slots.trigger()} ${
-          // R-048: focus ring only for keyboard focus.
-          focused() && modality.isKeyboard() ? "ring-2 ring-focus" : ""
+          // R-048: focus ring only for keyboard focus; `status-focused` is a
+          // 2pt ring with a 2pt page-coloured offset.
+          focused() && modality.isKeyboard()
+            ? "ring-2 ring-focus ring-offset-2 ring-offset-background"
+            : ""
         } ${
           local.isDisabled === true
             ? "opacity-50 cursor-not-allowed pointer-events-none"

@@ -186,9 +186,12 @@ export function CalendarYearPickerGrid(props: CalendarYearPickerGridProps): JSX.
     const item = built().items.find((entry) => entry.date.year === year);
     if (!item) return;
     // Upstream closes first, then moves the focused date; the selected value is
-    // untouched (port sheet §2.1).
+    // untouched (port sheet §2.1). `setFocused(true)` hands the keyboard back to
+    // the day grid: the cell for the new focused date takes focus once the
+    // panel has closed.
     parent.setIsYearPickerOpen(false);
     state.setFocusedDate(item.date);
+    state.setFocused(true);
   };
 
   const registerCell = (year: number, node: ViewRef) => {
@@ -332,8 +335,15 @@ export function CalendarYearPickerGrid(props: CalendarYearPickerGridProps): JSX.
         scrollbar
         style={[positionStyle(), local.style]}
         class={`${slots.yearGrid()} ${
-          // R-059: open paint and pointer behavior.
-          isOpen() ? "visible opacity-100 pointer-events-auto" : "invisible opacity-0 pointer-events-none"
+          // R-059/R-060: `[data-open="true"]` lifts the panel above the day
+          // grid and fades it in over 200ms after 50ms. NSH takes one
+          // duration/curve per view; the delay lives on the open class only,
+          // while the base's `transition-none` keeps closing instant, as
+          // upstream's closed state has no transition. `:has()` is replaced by
+          // the parent's open accessor.
+          isOpen()
+            ? "visible pointer-events-auto opacity-100 transition-opacity duration-200 ease-out delay-50 motion-reduce:transition-none"
+            : ""
         } ${local.className ?? ""}`}
       >
         {/* R-058: three equal year columns. */}
@@ -341,7 +351,7 @@ export function CalendarYearPickerGrid(props: CalendarYearPickerGridProps): JSX.
           role="listbox"
           accessibilityLabel={ariaLabel()}
           accessibilityElementsHidden={!isOpen()}
-          class="grid grid-cols-3 content-start gap-1 p-1"
+          class="grid w-full grid-cols-3 content-start gap-1 p-1"
         >
           {local.children}
         </View>

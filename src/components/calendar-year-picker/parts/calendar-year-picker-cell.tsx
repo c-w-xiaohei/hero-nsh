@@ -81,8 +81,11 @@ export function CalendarYearPickerCell(props: CalendarYearPickerCellProps): JSX.
       accessibilityLabel={formattedYear()}
       accessibilityState={{ selected: isSelected() }}
       class={`${slots.yearCell()} ${
-        // R-068: focus ring only for keyboard focus.
-        grid.isOpen() && isActive() && modality.isKeyboard() ? "ring-2 ring-focus" : ""
+        // R-068: focus ring only for keyboard focus; `status-focused` is a 2pt
+        // ring with a 2pt page-coloured offset.
+        grid.isOpen() && isActive() && modality.isKeyboard()
+          ? "ring-2 ring-focus ring-offset-2 ring-offset-background"
+          : ""
       } ${
         // R-066: selected year paint.
         isSelected() ? "bg-accent text-accent-foreground" : ""

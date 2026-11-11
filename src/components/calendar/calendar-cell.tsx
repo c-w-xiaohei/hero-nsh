@@ -41,7 +41,7 @@ function eraFormat(date: CalendarDate): "short" | undefined {
  * and state class (R-025…R-038).
  */
 export function CalendarCell(props: CalendarCellProps): JSX.Element {
-  const { state, slots } = useCalendarContext();
+  const { state, slots, isYearPickerOpen } = useCalendarContext();
   const grid = useCalendarGridContext();
   const [local, rest] = split(props, [
     "date",
@@ -63,15 +63,14 @@ export function CalendarCell(props: CalendarCellProps): JSX.Element {
 
   let node: ViewRef | undefined;
 
-  const outsideMonth = computed(
-    () => state.visibleDuration.days == null && state.visibleDuration.weeks == null
-      ? !isSameMonth(grid.startDate(), date)
-      : false,
-  );
-  const disabled = computed(() => state.isCellDisabled(date) || outsideMonth());
+  // RAC sets `data-outside-month` from the visible range's start month in
+  // every view, not only the month view; the week/day sizing rules do not
+  // override the dimming.
+  const outsideMonth = computed(() => !isSameMonth(grid.startDate(), date));
+  const disabled = computed(() => state.isCellDisabled(date));
   const unavailable = computed(() => state.isCellUnavailable(date));
   const selected = computed(() => state.isSelected(date));
-  const focused = computed(() => state.isCellFocused(date) && !outsideMonth());
+  const focused = computed(() => state.isCellFocused(date));
   const focusVisible = computed(() => focused() && modality.isKeyboard());
   const today = computed(() => isToday(date, state.timeZone));
   const outsideVisibleRange = computed(() => {
@@ -138,8 +137,9 @@ export function CalendarCell(props: CalendarCellProps): JSX.Element {
     // R-003 / R-004: week and day views use the same `aspect-square w-full`
     // cell as the month view; no per-view rule is needed.
     `${slots.cell()} ${
-      // R-028: focus ring only for keyboard focus.
-      focusVisible() ? "ring-2 ring-focus" : ""
+      // R-028: focus ring only for keyboard focus. `status-focused` is a 2pt
+      // ring with a 2pt page-coloured offset.
+      focusVisible() ? "ring-2 ring-focus ring-offset-2 ring-offset-background" : ""
     } ${
       // R-029: today paint.
       today() ? "bg-accent-soft text-accent-soft-foreground" : ""
@@ -147,11 +147,15 @@ export function CalendarCell(props: CalendarCellProps): JSX.Element {
       // R-031: selected paint.
       selected() ? "bg-accent text-accent-foreground" : ""
     } ${
-      // R-030: today's hover, for a non-selected today.
-      today() && !selected() ? "hover:bg-accent-soft-hover" : ""
+      // R-030/R-034: today's hover and the generic hover are mutually
+      // exclusive upstream; emitting only one also keeps them from
+      // overwriting each other at the same class layer. Upstream gates these
+      // behind `(hover: hover)`; NSH has no hover media query, so pointer
+      // hover also applies on touch hosts (registered difference).
+      !selected() && today() ? "hover:bg-accent-soft-hover" : ""
     } ${
-      // R-034: generic hover for a non-selected cell.
-      !selected() ? "hover:bg-default" : ""
+      // R-034: generic hover for a non-selected, non-today cell.
+      !selected() && !today() ? "hover:bg-default" : ""
     } ${
       // R-035: outside-month dimming.
       outsideMonth() ? "text-muted opacity-50" : ""
@@ -180,7 +184,18 @@ export function CalendarCell(props: CalendarCellProps): JSX.Element {
   const child =
     typeof local.children === "function"
       ? renderChildren(local.children(values))
-      : renderChildren(local.children ?? <Text>{formattedDate}</Text>);
+      : renderChildren(
+          local.children ?? (
+            <Text
+              // The cell's `line-through` lives on the View for custom
+              // children; NSH does not propagate text decoration to nested
+              // Text, so the default label repeats it.
+              class={disabled() && !outsideMonth() ? "line-through" : ""}
+            >
+              {formattedDate}
+            </Text>
+          ),
+        );
 
   return (
     <CalendarCellContext.Provider value={{ isSelected: selected }}>
@@ -196,7 +211,7 @@ export function CalendarCell(props: CalendarCellProps): JSX.Element {
             local.ref?.(next);
           }}
           role="button"
-          focusable={isTabStop()}
+          focusable={isTabStop() && !isYearPickerOpen()}
           disabled={disabled()}
           accessibilityLabel={accessibilityLabel()}
           accessibilityState={{

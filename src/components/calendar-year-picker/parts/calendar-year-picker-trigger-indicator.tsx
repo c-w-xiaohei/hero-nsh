@@ -26,7 +26,9 @@ export function CalendarYearPickerTriggerIndicator(
   const child =
     typeof local.children === "function"
       ? local.children(values)
-      : renderChildren(local.children ?? <IconChevronRight />);
+      : renderChildren(
+          local.children ?? <IconChevronRight color="accent-soft-foreground" />,
+        );
 
   return (
     <View
