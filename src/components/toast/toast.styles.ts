@@ -57,7 +57,7 @@ export const toastVariants = tv({
     // duration, so the 150ms opacity half is registered in §8.
     // R-033: `.toast:focus-visible` → `outline-2 outline-offset-2 outline-focus`.
     toast:
-      `group absolute start-0 end-0 rounded-3xl pointer-events-auto grid grid-cols-[auto_minmax(0,1fr)] items-start justify-start gap-x-1.5 gap-y-2 bg-surface px-4 py-3 ${shadow.overlay.both} sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-y-0 ${ease.outFluid} focus:outline-2 focus:outline-offset-2 focus:outline-focus`,
+      `group absolute start-0 end-0 flex flex-row items-start justify-start gap-x-1.5 rounded-3xl pointer-events-auto bg-surface px-4 py-3 ${shadow.overlay.both} ${ease.outFluid} focus:outline-2 focus:outline-offset-2 focus:outline-focus`,
 
     // R-023: `.toast > :not([data-slot="toast-close"])` → `transition: opacity
     // 200ms`; the descendant selector becomes the same three classes on the
@@ -65,7 +65,7 @@ export const toastVariants = tv({
     // R-034: `.toast__content` → `col-start-2 row-start-1 flex min-w-0
     // flex-col items-start self-center`.
     content:
-      `col-start-2 row-start-1 flex min-w-0 flex-col items-start self-center transition-opacity duration-200 ${ease.outFluid} motion-reduce:transition-none`,
+      `flex-auto flex min-w-0 flex-col items-start gap-y-2 self-center transition-opacity duration-200 ${ease.outFluid} motion-reduce:transition-none`,
 
     // R-035: `.toast__indicator` → `col-start-1 row-start-1 flex shrink-0
     // items-center justify-center p-1 text-overlay-foreground select-none`.
@@ -73,7 +73,7 @@ export const toastVariants = tv({
     // R-039: the swapped-icon keyframes become a transition pair on the
     // indicator's child; the class pair is applied by the indicator itself.
     indicator:
-      `col-start-1 row-start-1 flex shrink-0 items-center justify-center p-1 text-overlay-foreground select-none transition-opacity duration-200 ${ease.outFluid} motion-reduce:transition-none`,
+      `flex shrink-0 items-center justify-center p-1 text-overlay-foreground select-none transition-opacity duration-200 ${ease.outFluid} motion-reduce:transition-none`,
 
     // R-040: `.toast__title` → `text-sm leading-5 font-medium
     // text-overlay-foreground`.
@@ -86,7 +86,7 @@ export const toastVariants = tv({
     // sm:col-start-3 sm:row-start-1`.
     // R-023 again for the action slot.
     action:
-      `col-start-2 row-start-2 justify-self-start sm:col-start-3 sm:row-start-1 transition-opacity duration-200 ${ease.outFluid} motion-reduce:transition-none`,
+      `transition-opacity duration-200 ${ease.outFluid} motion-reduce:transition-none`,
 
     // R-042: `.toast__close-button` → `pointer-events-none absolute -end-1
     // -top-1 size-5 border-border bg-default opacity-0 sm:border sm:bg-overlay`;

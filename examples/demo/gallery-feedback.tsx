@@ -134,12 +134,14 @@ function Modals() {
                   <Modal.Heading>Invite teammates</Modal.Heading>
                 </Modal.Header>
                 <Modal.Body>
-                  <Text class="text-sm text-foreground">
+                  <View class="flex-col gap-3">
+                  <Text class="text-sm">
                     Anyone with this link joins Acme as a viewer. You can change their role later.
                   </Text>
                   <View class="flex-row items-center justify-between gap-3 rounded-2xl bg-default px-3 py-2">
                     <Text class="text-sm text-default-foreground">acme.app/join/4F2K</Text>
                     <Button size="sm" variant="tertiary">Copy link</Button>
+                  </View>
                   </View>
                 </Modal.Body>
                 <Modal.Footer>
