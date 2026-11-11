@@ -119,7 +119,8 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
   // layer holds no animation of its own and the two halves animate here.
   const presence = createOverlayPresence({
     isOpen,
-    durationMs: () => 250,
+    // Upstream's exit duration; the enter is 250ms and runs on the content.
+    durationMs: () => 200,
     skip: () => reduceMotion(),
   });
   const isDismissable = () => props.isDismissable ?? true;
@@ -144,7 +145,8 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
   };
   const classes = () => {
     const value = props.className;
-    const fade = `duration-[250ms] ${ease.smooth} motion-reduce:transition-none`;
+    // `.drawer__scrim`: opacity 250ms cubic-bezier(0.32, 0.72, 0, 1).
+    const fade = `duration-[250ms] ${ease.outFluid} motion-reduce:transition-none`;
     const off = !isOpen() || presence.isEntering();
     return [
       slots().backdrop(),
