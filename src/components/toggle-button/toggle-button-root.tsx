@@ -210,8 +210,8 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
   const isFocused = signal(false);
   const modality = createInteractionModality();
 
-  // R-008: NSH's `focus:` equals `focus-visible:`, so the ring only shows when
-  // the focus arrived from the keyboard.
+  // R-008: since nsh 0.5 `focus-visible:` follows the keyboard only, so the
+  // ring shows only when the focus arrived from the keyboard.
   const isFocusVisible = computed(() => isFocused() && modality.isKeyboard());
 
   // --- Selection state --------------------------------------------------------

@@ -63,7 +63,9 @@ test("X-001 applies sibling-order spacing between Header, Body and Footer", asyn
   if (!headerOnlyDialog || !headerOnlyHeader || !footerOnlyDialog || !footerOnlyFooter) {
     throw new Error("Dialog/part layout was not reported");
   }
-  expect(Math.abs((footerOnlyFooter.y - footerOnlyDialog.y) - (headerOnlyHeader.y - headerOnlyDialog.y))).toBeLessThanOrEqual(1);
+  // Part layouts are in their parent's coordinates, so both `y`s already measure the
+  // offset from the dialog's content box; the dialog's own `y` is in window coordinates.
+  expect(Math.abs(footerOnlyFooter.y - headerOnlyHeader.y)).toBeLessThanOrEqual(1);
 });
 
 // heroui/packages/react/src/components/drawer/drawer.stories.tsx:52-91; port sheet G-002

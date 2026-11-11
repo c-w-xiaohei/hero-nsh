@@ -15,7 +15,7 @@
 9. 有没有 `overflow-x` / `overflow-y` 单独裁？→ 两轴都裁，滚动换 `Scroll`。
 10. 有没有布局 transition（宽/高）？→ `LayoutAnimation` / `reveal`，或登记差异。
 11. 有没有每个属性不同时长的 transition？→ 选一个，登记其余。
-12. 有没有 `focus-visible` / `outline`？→ ring + modality。
+12. 有没有 `focus-visible` / `outline`？→ ring + `focus:` / `focus-visible:`；自绘 ring 时才用 modality。
 13. 有没有图标依赖 `currentColor`？→ 显式 color。
 14. 有没有 `text-wrap` / `overflow-wrap` / list marker？→ 登记或接受。
 15. 有没有 `@media (hover: none)` / `@container` / `forced-colors`？→ 没有对应物，登记。

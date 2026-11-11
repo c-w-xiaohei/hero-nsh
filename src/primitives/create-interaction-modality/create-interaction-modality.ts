@@ -11,7 +11,8 @@
  * - a view has no `keydown` listener at all; keys reach TypeScript through an
  *   input's `onKeyPress` or a `keymap.bind` command;
  * - focus on a view only arrives from the keyboard (Tab), because a click
- *   presses without focusing, and `focus-visible:` is the same as `focus:`.
+ *   presses without focusing; since nsh 0.5 `focus-visible:` follows the
+ *   keyboard only and no longer applies after a press or tap.
  *   A text input is the exception: clicking it focuses it, so an input's
  *   `onFocus` does not prove the keyboard; wire its `onKeyPress` instead and
  *   leave `onFocus` to view focus stops, which a pointer press cannot focus.

@@ -31,7 +31,7 @@ import { renderRenderPropChildren } from "./render-children";
  * forwarded too (additive, port sheet §1).
  */
 export interface ColorSliderThumbProps
-  extends Omit<ViewProps, "children" | "class" | "style" | "role">,
+  extends Omit<ViewProps, "children" | "class" | "style" | "role" | keyof DomEventProps>,
     AriaProps,
     DataProps,
     GlobalDomProps,

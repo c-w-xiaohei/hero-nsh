@@ -34,7 +34,7 @@ permissions:
 # defaults to the latest release, whose generated `nsh` declarations change
 # between versions.
 env:
-  NSH_VERSION: v0.4.0
+  NSH_VERSION: v0.5.0
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -81,6 +81,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
+      # 0.5 ships only the host's runtime; the browser host is a component.
+      - name: Web runtime
+        run: nsh component add web
       - name: Tests
         run: |
           find harness/tests -name '*.web.test.tsx' \

@@ -29,7 +29,7 @@ import { renderRenderPropChildren } from "./render-children";
  * `className`, `style`), expressed with NSH's view host props.
  */
 export interface ColorSliderTrackProps
-  extends Omit<ViewProps, "children" | "class" | "style" | "role">,
+  extends Omit<ViewProps, "children" | "class" | "style" | "role" | keyof DomEventProps>,
     AriaProps,
     DataProps,
     GlobalDomProps,

@@ -9,7 +9,7 @@ import type { JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
  * typing without a cast.
  */
 export interface TablePartProps
-  extends Omit<ViewProps, "children" | "class" | "style" | "ref"> {
+  extends Omit<ViewProps, "children" | "class" | "style" | "ref" | "onSelectionChange"> {
   children?: JSX.Element | ((...args: any[]) => JSX.Element);
 
   /** Appended after the slot classes; later classes win. */

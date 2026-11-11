@@ -34,7 +34,7 @@ export interface DisclosureGroupRenderProps {
  */
 export interface DisclosureGroupRootProps
   extends
-    Omit<ViewProps, "children" | "class" | "style">,
+    Omit<ViewProps, "children" | "class" | "style" | keyof GlobalDomEvents>,
     AriaProps,
     DataProps,
     GlobalDomProps,

@@ -32,7 +32,7 @@ import { renderColorSwatchChildren } from "./render-color-swatch-children";
  * cannot do here.
  */
 export interface ColorSwatchRootProps
-  extends Omit<ViewProps, "children" | "class" | "ref" | "style">,
+  extends Omit<ViewProps, "children" | "class" | "ref" | "style" | keyof DomEventProps>,
     AriaProps,
     DataProps,
     GlobalDomProps,

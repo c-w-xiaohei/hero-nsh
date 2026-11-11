@@ -76,7 +76,7 @@ import { renderColorAreaChildren } from "./render-color-area-children";
  * compiling; port sheet §1 and §8 say what each can and cannot do.
  */
 export interface ColorAreaRootProps
-  extends Omit<ViewProps, "children" | "class" | "ref" | "style">,
+  extends Omit<ViewProps, "children" | "class" | "ref" | "style" | keyof DomEventProps>,
     AriaProps,
     DataProps,
     GlobalDomProps,

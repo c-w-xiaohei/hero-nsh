@@ -1,10 +1,10 @@
 # NSH 样式系统与 CSS 行为差异清单
 
-版本锚点：NSH 0.4.0（本机 CLI 与 `tmp/vendor/nsh-src` 的 tag 一致）、Taffy 0.15.0、Tailwind 4 / HeroUI 3.2.7 作为对照。
+版本锚点：NSH 0.5.0（本机 CLI 实测）；`tmp/vendor/nsh-src` 仍是 0.4.0 的证据快照，下文 `文档路径:行号` 指向它，0.5 的行为变化已在对应条目标注。Taffy 0.15.0、Tailwind 4 / HeroUI 3.2.7 作为对照。
 适用范围：只讲**样式规则**——布局、尺寸、类解析、绘制、动效、文字、单位与主题。不列具体组件的修法，也不重复 API、DOM 属性、无障碍语义的差异。
 证据约定：`文档路径:行号` 指 vendored 的 `tmp/vendor/nsh-src`；实测数字来自 `tmp/issue-minh`（纯盒模型）与 `tmp/repro-app/flexlab.tsx`（样式矩阵）；CSS 基线用同一个 Chrome 打开纯 HTML。
 
-路径约定：`tmp/vendor/nsh-src/...` 是本仓库的 NSH 0.4.0 快照；在其他 NSH checkout 里，同样的内容位于仓库根的 `website/docs/...`、`crates/...` 与 `docs/dev/...`。`tmp/issue-minh`、`tmp/repro-app` 是本仓库的复现产物；换仓库时按同样的纯盒模型重建即可，规则不依赖这些路径。
+路径约定：`tmp/vendor/nsh-src/...` 是本仓库的 NSH 0.4.0 证据快照；在其他 NSH checkout 里，同样的内容位于仓库根的 `website/docs/...`、`crates/...` 与 `docs/dev/...`。`tmp/issue-minh`、`tmp/repro-app` 是本仓库的复现产物；换仓库时按同样的纯盒模型重建即可，规则不依赖这些路径。
 
 ---
 
@@ -145,7 +145,7 @@ NSH 的 `flex-1` 展开成 `flexGrow: 1, flexShrink: 1, flexBasis: 0`（零**长
 
 它能让子项自己拿到内容高度，但父级的交叉轴 intrinsic size 计算没有把这份最小尺寸算进去。Taffy 0.15.0 的 `determine_hypothetical_cross_size` → `determine_container_main_size` 走"可用空间确定"分支，按 `flex_basis.max(style min)` 求和，不使用上一步已经算好的 `hypothetical_inner_size`。
 
-上游跟踪：`DioxusLabs/taffy#351` §9.9.2（Intrinsic Cross Sizes 未完成）、`#1182`、`#1165`、`#1299` case 1/2。NSH 0.4.0 锁的是 taffy 0.15.0；0.15.1 未修这个问题；nightly 的垂直分支仍需确认。
+上游跟踪：`DioxusLabs/taffy#351` §9.9.2（Intrinsic Cross Sizes 未完成）、`#1182`、`#1165`、`#1299` case 1/2。NSH 0.4.0 / 0.5.0 锁的都是 taffy 0.15.0；0.15.1 未修这个问题；nightly 的垂直分支仍需确认。
 
 ### 2.5 规避规则
 
@@ -242,7 +242,7 @@ NSH 支持的类集合是 Tailwind 4 中有原生含义的那部分；`peer-*`�
 | CSS / Tailwind | NSH |
 |---|---|
 | `hover:` / `active:` / `focus:` / `focus-within:` / `disabled:` / `enabled:` | 有 |
-| `focus-visible:` | 等于 `focus:`；键盘模态要靠 `modality` 自己追踪 |
+| `focus-visible:` | 0.5 起只随键盘焦点（按下/点击后不生效）；任意焦点用 `focus:`。View 点击不聚焦，视图上两者仍重合；自绘 ring 时保留 `modality` |
 | `selected:` / `checked:` / `indeterminate:` / `aria-expanded:` / `aria-pressed:` / `aria-busy:` / `aria-checked:` / `aria-selected:` | 有（映射 `accessibilityState`） |
 | `data-<name>:`（布尔形式） | 有；`data-[state=open]:` 这种值形式没有 |
 | `group-*` / `group-<name>-*` | 有 |
@@ -252,9 +252,10 @@ NSH 支持的类集合是 Tailwind 4 中有原生含义的那部分；`peer-*`�
 | `before:` / `after:` | 没有（伪元素不存在） |
 | `dark:` | 有（系统外观）；子树 `data-theme` 没有 |
 | `sm:` … `2xl:` / `max-*:` / `min-[..]:` | 有（窗口宽度） |
-| `portrait:` / `landscape:` / `ios:` / `android:` / `web:` / `rtl:` / `ltr:` | 有（NSH 扩展） |
+| `portrait:` / `landscape:` / `ios:` / `android:` / `web:` / `rtl:` / `ltr:` / `terminal:` | 有（NSH 扩展） |
 | `motion-safe:` / `motion-reduce:` | 有 |
-| `@media (hover: none)` / `(pointer: coarse)` / `print` / `prefers-contrast` / `forced-colors` | 没有 |
+| `(pointer: coarse)` / `(pointer: fine)` | `pointer-coarse:` / `pointer-fine:`（0.5 扩展） |
+| `@media (hover: none)` / `print` / `prefers-contrast` / `forced-colors` | 没有 |
 | `@container` | 没有 |
 
 ### 3.8 值与函数
@@ -266,6 +267,15 @@ NSH 支持的类集合是 Tailwind 4 中有原生含义的那部分；`peer-*`�
 - **动态类**：`class` 可以是运行时拼接的字符串（`bg-${color()}-500`），在核心里解析并缓存；构建期的 unknown-class 检查只看字面量，`tv()` 产物要靠全变体挂载测试兜底。
 - **`classList`**：在 `class` 之后应用，值为真时生效；同层冲突仍然是后写者赢。
 - **`style`**：一个对象或数组，按顺序合并成一个；更具体的键（`paddingLeft` > `padding`）优先，与书写顺序无关。
+
+### 3.9 0.5 修正的行为（不必再登记为差异）
+
+- **`focus-within` 更稳**：焦点在控件内部移动时的短暂 blur 不再立刻丢掉 `focus-within`。
+- **`scrollbar={false}`**：桌面同时隐藏横向指示器。
+- **收缩尺寸的 flex 行/列**把内容算进尺寸，含 slot holder 占位。
+- **非法动画参数 settle**，不再产出 `NaN`；布局 spring 改为物理曲线。
+- **`Link` 默认手型光标**；任意值与 token 的文本色支持透明度修饰符（`text-black/40` 等）。
+- **类集合新增** `pointer-fine:` / `pointer-coarse:` / `terminal:`（见 §3.7）。
 
 ---
 
@@ -563,7 +573,7 @@ Web 目标用 Rust 排版，字宽用浏览器 `measureText`；换行是 UAX #14
 | 每属性 transition | 一组时长/曲线 | 合并 / 登记 |
 | 布局 transition | 不参与 | LayoutAnimation / reveal |
 | 自定义 keyframes | 只有四个预设 | 原生动画 + `reduceMotion()` |
-| `focus-visible` | 等于 `focus` | modality 追踪 |
+| `focus-visible` | 0.5 起只随键盘；任意焦点用 `focus` | 自绘 ring 时保留 modality |
 | `outline` | 有；焦点环常用 ring | ring + modality |
 | `currentColor` 图标 | IconCanvas 不继承 | 显式 color |
 | `text-wrap: balance` | 接受无效果 | 登记 |
@@ -572,6 +582,7 @@ Web 目标用 Rust 排版，字宽用浏览器 `measureText`；换行是 UAX #14
 | CSS 变量级联 | 无，token 展开 | tv compound |
 | 子树 `data-theme` | 无 | 全局主题 |
 | container query | 无 | 窗口断点 |
+| `(pointer: coarse)` / `(pointer: fine)` | pointer-coarse: / pointer-fine: | 0.5 扩展 |
 | `(hover: none)` / `print` / `forced-colors` | 无 | 登记 |
 
 ---
@@ -591,7 +602,7 @@ Web 目标用 Rust 排版，字宽用浏览器 `measureText`；换行是 UAX #14
 9. 有没有 `overflow-x` / `overflow-y` 单独裁？→ 两轴都裁，滚动换 Scroll。
 10. 有没有布局 transition（宽/高）？→ LayoutAnimation / reveal，或登记差异。
 11. 有没有每个属性不同时长的 transition？→ 选一个，登记其余。
-12. 有没有 `focus-visible` / `outline`？→ ring + modality。
+12. 有没有 `focus-visible` / `outline`？→ ring + `focus:` / `focus-visible:`；自绘 ring 时才用 modality。
 13. 有没有图标依赖 `currentColor`？→ 显式 color。
 14. 有没有 `text-wrap` / `overflow-wrap` / list marker？→ 登记或接受。
 15. 有没有 `@media (hover: none)` / `@container` / `forced-colors`？→ 没有对应物，登记。

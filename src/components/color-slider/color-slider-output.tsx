@@ -22,7 +22,7 @@ import { renderChildren } from "./render-children";
  * counterpart.
  */
 export interface ColorSliderOutputProps
-  extends Omit<ViewProps, "children" | "class" | "style">,
+  extends Omit<ViewProps, "children" | "class" | "style" | keyof DomEventProps>,
     AriaProps,
     DataProps,
     GlobalDomProps,

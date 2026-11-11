@@ -22,7 +22,8 @@ test("T-002 supports Escape dismiss when dismissable", async () => {
   expect(app.shows(CONTENT)).toBe(true);
   await app.keyboard.press("escape");
   expect(callsOf(app, "openChange").filter((args) => args[0] === false)).toEqual([[false]]);
-  expect(app.shows(CONTENT)).toBe(false);
+  // The exit transition runs on the manual clock, so the content goes only once a wait advances it.
+  await app.waitFor(CONTENT, { state: "gone" });
 });
 
 // heroui/packages/react/tests/components/drawer/drawer.test.tsx:88

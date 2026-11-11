@@ -8,5 +8,6 @@
     "alias": {
       "hero-nsh": "../../src/index.ts"
     }
-  }
+  },
+  "appearance": "dark"
 }

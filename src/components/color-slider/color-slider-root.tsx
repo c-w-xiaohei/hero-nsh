@@ -78,7 +78,7 @@ export type ColorSliderChannelProps =
  * plus `ColorSliderVariants`, expressed with NSH's view host props.
  */
 export interface ColorSliderRootBaseProps
-  extends Omit<ViewProps, "children" | "class" | "style">,
+  extends Omit<ViewProps, "children" | "class" | "style" | keyof DomEventProps>,
     AriaProps,
     DataProps,
     GlobalDomProps,

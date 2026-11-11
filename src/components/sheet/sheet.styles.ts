@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { shadow } from "../../tokens/geometry";
+
 /**
  * Sheet's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/sheet/sheet.styles.ts` and the CSS block
@@ -80,7 +82,7 @@ export const sheetVariants = tv({
     // bg-overlay text-overlay-foreground shadow-overlay outline-none`, the
     // shadow written as the light / dark pair the theme needs.
     dialog:
-      "relative flex min-h-0 flex-col overflow-hidden bg-overlay text-overlay-foreground shadow-overlay dark:shadow-overlay-dark outline-none",
+      `relative flex min-h-0 flex-col overflow-hidden bg-overlay text-overlay-foreground ${shadow.overlay.both} outline-none`,
     // R-029 `.sheet__header` → `flex shrink-0 flex-col gap-1 px-5 pt-4 pb-2`.
     header: "flex shrink-0 flex-col gap-1 px-5 pt-4 pb-2",
     // R-030 `.sheet__heading` → `text-lg font-semibold`.

@@ -5,7 +5,7 @@ description: 'Use when porting CSS or Tailwind UI (including HeroUI) to NSH, rev
 
 # NSH Style Porting
 
-版本锚点：NSH 0.4.0、Taffy 0.15.0。规则来自 0.4.0 的文档、源码与实测；升级 NSH 后先重跑 `references/style-deltas.md` §11 的复现，确认差异是否变化。
+版本锚点：NSH 0.5.0、Taffy 0.15.0。规则来自 0.5.0 的文档、源码与实测；升级 NSH 后先重跑 `references/style-deltas.md` §11 的复现，确认差异是否变化。
 
 这份 skill 只讲**样式规则**：布局、尺寸、类解析、绘制、动效、文字、单位与主题。API、DOM 属性、无障碍语义的差异不在这里，也不按具体组件名硬编码修法。
 
@@ -56,7 +56,7 @@ description: 'Use when porting CSS or Tailwind UI (including HeroUI) to NSH, rev
 | 每属性不同 transition | 合并成一组时长/曲线，登记其余 |
 | 宽/高 transition | 不参与；`LayoutAnimation` / `reveal` |
 | 自定义 keyframes | 只有 spin/ping/pulse/bounce；其余原生动画 + `reduceMotion()` |
-| `focus-visible` | 等于 `focus`；用 modality 追踪键盘来源 |
+| `focus-visible` | 0.5 起只随键盘焦点，按下/点击后不生效；任意焦点用 `focus:`。View 点击不聚焦，视图上两者仍重合；自绘 ring 时保留 modality |
 | `lineHeight: 1.5` | 1.5 点；倍数写 `"150%"` / `"1.5"` |
 | `grid-template-areas` / `grid-area` | 没有；显式 `col-start` / `row-start` / `col-span` |
 | 不带 inset 的 `absolute` | 落在包含块起点；显式 `top` / `left` / `translate` |

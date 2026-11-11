@@ -6,7 +6,8 @@ The package ships TSX source. Only the `nsh` toolchain builds it; it is not mean
 
 ## Requirements
 
-- `nsh` 0.4.0 or later. (The `nsh` package on npm is an unrelated placeholder, so it is not a peer dependency.)
+- `nsh` 0.5.0 or later. (The `nsh` package on npm is an unrelated placeholder, so it is not a peer dependency.) A
+  release ships only its host's runtime: run `nsh component add web` before `nsh run --target web` or a web test.
 - `pnpm add hero-nsh` (or npm, yarn) in the app directory.
 
 ## Setup
@@ -37,6 +38,13 @@ mount(() => (
 
 Nothing else needs configuring. In particular the app's `nsh.json` needs no `"tailwind"` block: the radius,
 shadows and easing curves are written into the components' classes (see `src/tokens/geometry.ts`).
+
+nsh 0.5 bundles only English formatting data unless the app names its languages, so a non-English app lists them
+in `nsh.json`. Without this, `NumberField`, `DateField` and the other locale-driven parts format in English:
+
+```json
+{ "locales": ["de", "ja"] }
+```
 
 ## Changing the theme
 

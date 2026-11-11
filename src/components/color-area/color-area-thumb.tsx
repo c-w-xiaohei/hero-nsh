@@ -53,7 +53,7 @@ import { renderColorAreaChildren } from "./render-color-area-children";
  * `ColorArea`; only its look, its hover callbacks and its children are props.
  */
 export interface ColorAreaThumbProps
-  extends Omit<ViewProps, "children" | "class" | "ref" | "style">,
+  extends Omit<ViewProps, "children" | "class" | "ref" | "style" | keyof DomEventProps>,
     AriaProps,
     DataProps,
     GlobalDomProps,

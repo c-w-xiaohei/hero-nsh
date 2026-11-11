@@ -5,6 +5,8 @@ page mounts itself, keeps its own state, and has no navigation around it: open i
 what you need. `gallery.tsx` is the other way round: every export on one scrolling page, grouped
 by what it is for, which is the fastest way to see what the package draws.
 
+A release installs only its host's runtime; run `nsh component add web` once before the commands below.
+
 | Page | Run it |
 |---|---|
 | `demo/gallery/index.tsx` | `nsh run examples/demo/gallery.tsx --target web` |

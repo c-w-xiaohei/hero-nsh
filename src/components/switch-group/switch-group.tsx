@@ -26,7 +26,7 @@ import { switchGroupVariants, type SwitchGroupVariants } from "./switch-group.st
  */
 export interface SwitchGroupRootProps
   extends
-    Omit<ViewProps, "children" | "class" | "style">,
+    Omit<ViewProps, "children" | "class" | "style" | keyof GlobalDomEvents>,
     AriaProps,
     DataProps,
     GlobalDomProps,

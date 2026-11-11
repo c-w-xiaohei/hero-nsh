@@ -58,7 +58,7 @@ export interface FormSubmitEvent {
  * root `View`.
  */
 export interface FormRootProps
-  extends Omit<ViewProps, "children" | "class" | "style" | "role">,
+  extends Omit<ViewProps, "children" | "class" | "style" | "role" | keyof GlobalDomEvents>,
     AriaProps,
     DataProps,
     GlobalDomProps,
