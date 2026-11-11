@@ -63,7 +63,7 @@ export const inputOTPVariants = tv({
     // R-010: `transition: … 150ms var(--ease-smooth)` → `transition
     // duration-150 ease-smooth motion-reduce:transition-none`; R-011 writes the
     // three transitioned properties inline.
-    slot: "relative flex h-10 w-[2.375rem] min-w-0 flex-1 items-center justify-center border-0 rounded-field bg-field text-field-foreground text-sm font-semibold shadow-field dark:shadow-field-dark outline-none transition duration-150 ease-smooth motion-reduce:transition-none",
+    slot: "relative flex h-10 w-[2.375rem] min-w-0 flex-1 items-center justify-center border-0 rounded-field bg-field dark:bg-default text-field-foreground text-sm font-semibold shadow-field dark:shadow-field-dark outline-none transition duration-150 ease-smooth motion-reduce:transition-none",
 
     // R-017: `.input-otp__slot-value` → `text-lg leading-6
     // tracking-[-0.27px]`.

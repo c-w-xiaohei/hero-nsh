@@ -24,7 +24,7 @@ export const sliderVariants = tv({
     // vertical root replaces the columns in `slider-root.tsx` (R-054 / R-056).
     base: "grid w-full gap-1 grid-cols-[1fr_auto]",
     // R-006: `.slider__output` → `@apply text-sm font-medium tabular-nums`.
-    output: "text-sm font-medium tabular-nums",
+    output: "text-sm font-medium text-foreground tabular-nums",
     // R-008: `.slider__track` → `@apply relative rounded-xl bg-default`.
     track: "relative rounded-xl bg-default",
     // R-010: `.slider__fill` → `@apply pointer-events-none absolute bg-accent`.
