@@ -42,6 +42,7 @@ test("T-004 supports closing via CloseTrigger when outside dismiss is disabled",
   await app.press("role:button[Close]");
   expect(callsOf(app, "openChange").filter((args) => args[0] === false)).toEqual([[false]]);
   await app.waitFor(CONTENT, { state: "gone" });
+  expect(app.shows(CONTENT)).toBe(false);
 });
 
 // heroui/packages/react/tests/components/drawer/drawer.test.tsx:116
