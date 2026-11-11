@@ -23,6 +23,8 @@ export function toggleButtonGroupItemClasses(
     // first/last corner rules upstream writes cannot be expressed here (a
     // button is the only child of its own parent, so both match).
     classes.push("rounded-none");
+
+    if (orientation === "vertical") classes.push("w-full");
   }
 
   // R-038: `transform: none` while pressed, after the size variant's
