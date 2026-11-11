@@ -135,6 +135,8 @@ export function CalendarCell(props: CalendarCellProps): JSX.Element {
   };
 
   const classes = () =>
+    // R-003 / R-004: week and day views use the same `aspect-square w-full`
+    // cell as the month view; no per-view rule is needed.
     `${slots.cell()} ${
       // R-028: focus ring only for keyboard focus.
       focusVisible() ? "ring-2 ring-focus" : ""

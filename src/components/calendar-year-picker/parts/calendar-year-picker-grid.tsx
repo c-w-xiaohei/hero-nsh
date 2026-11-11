@@ -299,6 +299,8 @@ export function CalendarYearPickerGrid(props: CalendarYearPickerGridProps): JSX.
     }
   };
 
+  // R-069: the panel covers the date grid's exact frame, reported by the grid
+  // through `onLayout` instead of a DOM query.
   const positionStyle = () => {
     const bounds = layout?.bounds();
     if (!bounds) return {};
@@ -334,6 +336,7 @@ export function CalendarYearPickerGrid(props: CalendarYearPickerGridProps): JSX.
           isOpen() ? "visible opacity-100 pointer-events-auto" : "invisible opacity-0 pointer-events-none"
         } ${local.className ?? ""}`}
       >
+        {/* R-058: three equal year columns. */}
         <View
           role="listbox"
           accessibilityLabel={ariaLabel()}

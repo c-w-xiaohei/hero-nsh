@@ -70,7 +70,8 @@ export function CalendarNavButton(props: CalendarNavButtonProps): JSX.Element {
       disabled={disabled()}
       accessibilityLabel={label}
       accessibilityState={{ disabled: disabled() }}
-      class={`${slots.navButton()} ${
+      // R-014: hover paint; R-015: pressed scale.
+      class={`${slots.navButton()} hover:bg-default hover:text-accent-soft-foreground active:scale-[0.95] ${
         // R-009: while the year panel is open the header hides its nav buttons.
         yearPicker.isYearPickerOpen() ? "pointer-events-none opacity-0" : ""
       } ${
