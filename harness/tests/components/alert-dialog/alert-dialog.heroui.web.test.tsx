@@ -77,10 +77,12 @@ test("T-006 supports blocked Escape and CloseTrigger with focus restore", async 
 
 // heroui/packages/react/tests/components/alert-dialog/alert-dialog.browser.test.tsx:69
 // Partial port (port sheet T-008): `data-exiting`, `animationFillMode` and the
-// keyframe properties are DOM / computed-style reads and are deleted. Kept: the
-// dialog is still on screen while it closes, and gone once the exit has run —
-// presence read with the manual clock, which is the observable the exit hold
-// carries.
+// keyframe properties are DOM / computed-style reads and are deleted. Kept, as
+// the sheet asks: the dialog is still on screen while it closes, and gone once
+// the exit has run — presence read with the manual clock, which is the
+// observable an exit hold carries. Read against the parts as they stand, the
+// layer leaves within a frame of the close (measured on the web target), so the
+// holding half is the component side of this row, not the test's.
 test("T-008 keeps the backdrop mounted until the container finishes closing", async () => {
   const app = await openScenario("alert-dialog/default-open", {
     platform: "web",
