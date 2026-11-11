@@ -253,7 +253,10 @@ function AccordionSample() {
 function DisclosureSample() {
   return (
     <View class="flex-col gap-2">
-      <Disclosure defaultExpanded>
+      <Disclosure
+        className="rounded-xl border border-border bg-surface px-3 py-2"
+        defaultExpanded
+      >
         <Disclosure.Heading>
           <Disclosure.Trigger>
             Payment method
@@ -292,7 +295,7 @@ function DisclosureGroupSample() {
   return (
     <Frame className="flex-col gap-2">
       <DisclosureGroup defaultExpandedKeys={["contact"]}>
-        <Disclosure id="contact">
+        <Disclosure className="rounded-xl border border-border bg-surface px-3 py-2" id="contact">
           <Disclosure.Heading>
             <Disclosure.Trigger>
               Contact
@@ -303,7 +306,7 @@ function DisclosureGroupSample() {
             <Disclosure.Body>ada@acme.com · +49 30 1234 5678</Disclosure.Body>
           </Disclosure.Content>
         </Disclosure>
-        <Disclosure id="membership">
+        <Disclosure className="rounded-xl border border-border bg-surface px-3 py-2" id="membership">
           <Disclosure.Heading>
             <Disclosure.Trigger>
               Membership
@@ -314,7 +317,7 @@ function DisclosureGroupSample() {
             <Disclosure.Body>Admin since March 2023. Two workspaces.</Disclosure.Body>
           </Disclosure.Content>
         </Disclosure>
-        <Disclosure id="security">
+        <Disclosure className="rounded-xl border border-border bg-surface px-3 py-2" id="security">
           <Disclosure.Heading>
             <Disclosure.Trigger>
               Security
