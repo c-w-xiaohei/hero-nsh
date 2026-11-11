@@ -31,6 +31,7 @@ import {
 } from "./checkbox-context";
 import { checkboxVariants, type CheckboxVariant } from "./checkbox.styles";
 import { renderChildren } from "./render-children";
+import { TableSelectionCheckboxContext } from "./table-selection-context";
 
 /* -------------------------------------------------------------------------------------------------
  * Render props
@@ -306,6 +307,13 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
   // keeps this one value; membership is fixed for the instance's life.
   const group = CheckboxGroupContext();
 
+  // The table's selection slot (port sheet table §5): a `slot="selection"`
+  // checkbox takes its checked, indeterminate and disabled state from the
+  // table, and its press selects or deselects the row (or every row). Outside
+  // a table the context is absent and the checkbox keeps its own state.
+  const tableSelection = TableSelectionCheckboxContext();
+  const slottedSelection = () => (local.slot === "selection" ? tableSelection?.() : undefined);
+
   // --- The value / variant ---------------------------------------------------
   // The item's identity inside a group (React Aria's `value`, `"on"` by
   // default, `react-aria/src/checkbox/useCheckbox.ts`). Inside a group it also
@@ -329,11 +337,14 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
     () =>
       fieldset?.isDisabled() === true ||
       group?.isDisabled() === true ||
-      local.isDisabled === true,
+      local.isDisabled === true ||
+      slottedSelection()?.isDisabled === true,
   );
   const isReadOnly = computed(() => group?.isReadOnly() === true || local.isReadOnly === true);
   const isRequired = computed(() => local.isRequired === true);
-  const isIndeterminate = computed(() => local.isIndeterminate === true);
+  const isIndeterminate = computed(
+    () => slottedSelection()?.isIndeterminate ?? local.isIndeterminate === true,
+  );
 
   const focusable = computed(() => local.excludeFromTabOrder !== true);
 
@@ -352,9 +363,15 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
     onSelectedChange: (next) => local.onChange?.(next),
   });
 
-  const isSelected = computed(() =>
-    group ? group.state.isSelected(value()) : toggleState.isSelected(),
-  );
+  const isSelected = computed(() => {
+    const slotted = slottedSelection();
+
+    if (slotted) {
+      return slotted.isSelected;
+    }
+
+    return group ? group.state.isSelected(value()) : toggleState.isSelected();
+  });
 
   // --- Validation ------------------------------------------------------------
   // React Aria commits validation on the input's change event, so the message
@@ -405,6 +422,16 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
   };
 
   const setSelected = (next: boolean) => {
+    const slotted = slottedSelection();
+
+    if (slotted) {
+      if (!slotted.isDisabled) {
+        slotted.onChange(next);
+      }
+
+      return;
+    }
+
     if (group) {
       const current = group.state.isSelected(value());
 
@@ -437,6 +464,14 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
   // `useCheckboxGroupItem.ts:45-58` does.
   const toggle = () => {
     if (isDisabled() || isReadOnly()) {
+      return;
+    }
+
+    const slotted = slottedSelection();
+
+    if (slotted) {
+      slotted.onChange(!slotted.isSelected);
+
       return;
     }
 
@@ -741,7 +776,8 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
     focusable,
     // `aria-label` is the HeroUI name; `accessibilityLabel` is its NSH alias,
     // and both name the clickable face rather than the role-less field root.
-    ariaLabel: () => local["aria-label"] ?? local.accessibilityLabel,
+    ariaLabel: () =>
+      local["aria-label"] ?? local.accessibilityLabel ?? slottedSelection()?.accessibilityLabel,
     labelText,
     descriptionText,
     errorText,

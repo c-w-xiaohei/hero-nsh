@@ -1,4 +1,4 @@
-import { Table } from "@heroui/react";
+import { Checkbox, Table } from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 import type { Component } from "./types";
@@ -72,7 +72,7 @@ function ContentRows() {
   );
 }
 
-function FooterOrder({ rows }: { rows: boolean }) {
+function FooterOrder(props: { rows: boolean }) {
   return (
     <Stage>
       <Table className="w-[420px]">
@@ -81,7 +81,7 @@ function FooterOrder({ rows }: { rows: boolean }) {
             <Table.Column>Member</Table.Column>
           </Table.Header>
           <Table.Body onLayout={layout("body")}>
-            {rows && (
+            {props.rows && (
               <>
                 <Table.Row id="one"><Table.Cell>Ada</Table.Cell></Table.Row>
                 <Table.Row id="two"><Table.Cell>Grace</Table.Cell></Table.Row>
@@ -102,3 +102,90 @@ export const tableScenarios: Record<string, Component> = {
   "table/layout-footer-empty": () => <FooterOrder rows={false} />,
   "table/layout-footer-rows": () => <FooterOrder rows />,
 };
+
+
+function SelectionTable() {
+  return (
+    <Stage>
+      <Table className="w-[420px]">
+        <Table.Content
+          aria-label="Selection"
+          selectionMode="multiple"
+          onSelectionChange={(keys) => probe("selection")(keys === "all" ? "all" : [...keys])}
+        >
+          <Table.Header>
+            <Table.Column>
+              <Checkbox aria-label="Select all" slot="selection">
+                <Checkbox.Content>
+                  <Checkbox.Control>
+                    <Checkbox.Indicator />
+                  </Checkbox.Control>
+                </Checkbox.Content>
+              </Checkbox>
+            </Table.Column>
+            <Table.Column>Member</Table.Column>
+          </Table.Header>
+          <Table.Body>
+            <Table.Row id="one">
+              <Table.Cell>
+                <Checkbox aria-label="Select Ada" slot="selection">
+                  <Checkbox.Content>
+                    <Checkbox.Control>
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                  </Checkbox.Content>
+                </Checkbox>
+              </Table.Cell>
+              <Table.Cell>Ada</Table.Cell>
+            </Table.Row>
+            <Table.Row id="two">
+              <Table.Cell>
+                <Checkbox aria-label="Select Grace" slot="selection">
+                  <Checkbox.Content>
+                    <Checkbox.Control>
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                  </Checkbox.Content>
+                </Checkbox>
+              </Table.Cell>
+              <Table.Cell>Grace</Table.Cell>
+            </Table.Row>
+          </Table.Body>
+        </Table.Content>
+      </Table>
+    </Stage>
+  );
+}
+
+function ResizableTable() {
+  return (
+    <Stage>
+      <Table className="w-[420px]">
+        <Table.ResizableContainer
+          onResizeStart={() => probe("resize")("start")}
+          onResize={() => probe("resize")("move")}
+          onResizeEnd={() => probe("resize")("end")}
+        >
+          <Table.Content aria-label="Resizable">
+            <Table.Header>
+              <Table.Column id="name" width={120}>
+                Member
+                <Table.ColumnResizer aria-label="Resize member" />
+              </Table.Column>
+              <Table.Column id="role">Role</Table.Column>
+            </Table.Header>
+            <Table.Body>
+              <Table.Row id="one">
+                <Table.Cell>Ada</Table.Cell>
+                <Table.Cell>Engineer</Table.Cell>
+              </Table.Row>
+            </Table.Body>
+          </Table.Content>
+        </Table.ResizableContainer>
+      </Table>
+    </Stage>
+  );
+}
+
+tableScenarios["table/selection"] = SelectionTable;
+tableScenarios["table/resizable"] = ResizableTable;

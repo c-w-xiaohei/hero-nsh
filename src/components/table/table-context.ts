@@ -14,6 +14,12 @@ import type { tableVariants } from "./table.styles";
 export interface TableSlotContextValue {
   variant: Accessor<"primary" | "secondary">;
   slots: Accessor<ReturnType<typeof tableVariants>>;
+
+  /**
+   * `Table.Root`'s `dir`, the only layout-direction channel NSH offers a part:
+   * `ColumnResizer`'s `resizableDirection` reads it (§1, §8).
+   */
+  direction: Accessor<"ltr" | "rtl" | undefined>;
 }
 
 export const TableContext = context<TableSlotContextValue | undefined>(undefined);

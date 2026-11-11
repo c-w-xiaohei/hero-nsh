@@ -1,6 +1,7 @@
 import type { JSX, StyleProp, ViewStyle } from "nsh";
 import { computed, split, signal, View } from "nsh";
 
+import { TableSelectionCheckboxContext } from "../checkbox/table-selection-context";
 import { renderPartChildren } from "./table-children";
 import { TableStateContext, type TableHeaderRenderProps } from "./table-context";
 import { type TablePartProps } from "./table-props";
@@ -76,34 +77,60 @@ export function TableHeader(props: TableHeaderProps) {
 
   const hasColumns = computed(() => columnList() != null);
 
+  // The header row's `Checkbox slot="selection"` (port sheet table §5): the
+  // select-all state. Outside a table the context is absent and the checkbox
+  // keeps its own state.
+  const selectionCheckbox = () => {
+    if (!table) {
+      return undefined;
+    }
+
+    const state = table.state;
+
+    return {
+      isSelected: state.isSelectAll(),
+      isIndeterminate: state.isIndeterminate(),
+      isDisabled: state.selectionMode() === "none" || state.collection().isEmpty,
+      onChange: (isSelected: boolean) => {
+        if (isSelected) {
+          state.selectAll();
+        } else {
+          state.clearSelection();
+        }
+      },
+    };
+  };
+
   return (
-    <View
-      {...(rest as any)}
-      ref={(node) => local.ref?.(node)}
-      nativeID={local.id}
-      role="rowgroup"
-      onLayout={local.onLayout}
-      onMouseEnter={(event) => {
-        isHovered.set(true);
-        local.onMouseEnter?.(event);
-      }}
-      onMouseLeave={(event) => {
-        isHovered.set(false);
-        local.onMouseLeave?.(event);
-      }}
-      class={[slots().header(), resolvedClassName()].filter(Boolean).join(" ")}
-      style={resolvedStyle()}
-    >
-      <View role="row" class="grid" style={{ gridTemplateColumns: tracks() }}>
-        <If when={hasColumns()}>
-          <Each of={columnList()}>
-            {(column, index) => renderColumn(column(), index())}
-          </Each>
-        </If>
-        <If when={!hasColumns()}>
-          {renderPartChildren(local.children as JSX.Element, renderProps)}
-        </If>
+    <TableSelectionCheckboxContext.Provider value={selectionCheckbox}>
+      <View
+        {...(rest as any)}
+        ref={(node) => local.ref?.(node)}
+        nativeID={local.id}
+        role="rowgroup"
+        onLayout={local.onLayout}
+        onMouseEnter={(event) => {
+          isHovered.set(true);
+          local.onMouseEnter?.(event);
+        }}
+        onMouseLeave={(event) => {
+          isHovered.set(false);
+          local.onMouseLeave?.(event);
+        }}
+        class={[slots().header(), resolvedClassName()].filter(Boolean).join(" ")}
+        style={resolvedStyle()}
+      >
+        <View role="row" class="grid" style={{ gridTemplateColumns: tracks() }}>
+          <If when={hasColumns()}>
+            <Each of={columnList()}>
+              {(column, index) => renderColumn(column(), index())}
+            </Each>
+          </If>
+          <If when={!hasColumns()}>
+            {renderPartChildren(local.children as JSX.Element, renderProps)}
+          </If>
+        </View>
       </View>
-    </View>
+    </TableSelectionCheckboxContext.Provider>
   );
 }

@@ -13,6 +13,13 @@ export interface TableRootProps
   /** `"primary"` (the default) or `"secondary"` (§1, one dimension only). */
   variant?: TableVariants["variant"];
 
+  /**
+   * The table's layout direction, HeroUI's `dir`. NSH inherits `direction` from
+   * the root view, and the same value reaches `ColumnResizer`'s
+   * `resizableDirection` render value through `TableContext`.
+   */
+  dir?: "ltr" | "rtl";
+
   /** Only the callback form: an undefined ref is a ref store (§_common). */
   ref?: (node: ViewRef) => void;
 
@@ -38,22 +45,24 @@ export function TableRoot(props: TableRootProps) {
     "ref",
     "id",
     "variant",
+    "dir",
     "render",
     "onLayout",
   ] as const);
 
   const variant = computed<"primary" | "secondary">(() => local.variant ?? "primary");
   const slots = computed(() => tableVariants({ variant: variant() }));
+  const direction = computed(() => local.dir);
 
   return (
-    <TableContext.Provider value={{ variant, slots }}>
+    <TableContext.Provider value={{ variant, slots, direction }}>
       <View
         {...(rest as any)}
         ref={(node) => local.ref?.(node)}
         nativeID={local.id}
         onLayout={local.onLayout}
         class={[slots().base(), local.className].filter(Boolean).join(" ")}
-        style={local.style}
+        style={[direction() ? { direction: direction() } : undefined, local.style]}
       >
         {local.children}
       </View>

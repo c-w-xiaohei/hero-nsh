@@ -2,6 +2,7 @@ import type { JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh";
 import { cleanup, computed, openUrl, signal, split, untracked, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives";
+import { TableSelectionCheckboxContext } from "../checkbox/table-selection-context";
 import { renderChildren } from "./table-children";
 import {
   TableRowContext,
@@ -340,6 +341,19 @@ export function TableRow(props: TableRowProps) {
     nextCellIndex,
   };
 
+  // This row's `Checkbox slot="selection"` (port sheet table §5): its checked
+  // state follows the row's selection, and a press toggles exactly this row.
+  const selectionCheckbox = () => ({
+    isSelected: state.isSelected(key),
+    isIndeterminate: false,
+    isDisabled: isDisabled(),
+    onChange: (next: boolean) => {
+      if (next !== state.isSelected(key)) {
+        state.toggleRowSelection(key);
+      }
+    },
+  });
+
   // A tree row renders inside its parent row (port sheet §3): it has to span
   // every column of the parent's grid, so it sits on a line of its own with
   // the same tracks, exactly where the collection puts it below the parent.
@@ -352,68 +366,70 @@ export function TableRow(props: TableRowProps) {
   });
 
   return (
-    <TableRowContext.Provider value={contextValue}>
-      <View
-        {...(rest as any)}
-        ref={(view) => {
-          node = view;
-          local.ref?.(view);
-        }}
-        nativeID={local.id}
-        role="row"
-        focusable={state.isCellFocusable()}
-        disabled={isDisabled()}
-        accessibilityState={{
-          selected: isSelected(),
-          disabled: isDisabled(),
-          expanded: hasChildItems() ? isExpanded() : undefined,
-        }}
-        onLayout={(event) => {
-          state.registerRowLayout(key, event.bounds);
-          local.onLayout?.(event);
-        }}
-        onFocus={() => {
-          state.noteFocus();
-          isRowFocused.set(true);
-        }}
-        onBlur={() => {
-          state.noteBlur();
-          isRowFocused.set(false);
-        }}
-        onMouseEnter={(event) => {
-          isHovered.set(true);
-          local.onHoverChange?.(true);
-          local.onHoverStart?.(event);
-          local.onMouseEnter?.(event);
-        }}
-        onMouseLeave={(event) => {
-          isHovered.set(false);
-          local.onHoverChange?.(false);
-          local.onHoverEnd?.(event);
-          local.onMouseLeave?.(event);
-        }}
-        onPressDown={handlePressDown}
-        onPressUp={handlePressUp}
-        onPress={handlePress}
-        class={[slots().row(), "group grid", stateClasses(), resolvedClassName()]
-          .filter(Boolean)
-          .join(" ")}
-        style={[rowStyle(), resolvedStyle()]}
-      >
-        {/* A function child draws one cell per column; a plain tree is the
-            static form (port sheet §1, Row's children). */}
-        <Each of={columnList()}>
-          {(column) => renderColumnCell(column())}
-        </Each>
-        <If when={!hasColumns()}>{staticChildren()}</If>
-        {/* R-045–R-048: one inset ring for the whole row while a cell of it
-            has the keyboard focus. R-046 is the left segment, R-047 the right
-            one and R-048 the middle cells' top and bottom edges; the single
-            ring covers all three segments at once. */}
-        <If when={isFocusVisible()}>
-          <View class="pointer-events-none absolute inset-0 rounded-lg inset-ring-2 inset-ring-focus" />
-        </If>
-      </View>
-    </TableRowContext.Provider>
+    <TableSelectionCheckboxContext.Provider value={selectionCheckbox}>
+      <TableRowContext.Provider value={contextValue}>
+        <View
+          {...(rest as any)}
+          ref={(view) => {
+            node = view;
+            local.ref?.(view);
+          }}
+          nativeID={local.id}
+          role="row"
+          focusable={state.isCellFocusable()}
+          disabled={isDisabled()}
+          accessibilityState={{
+            selected: isSelected(),
+            disabled: isDisabled(),
+            expanded: hasChildItems() ? isExpanded() : undefined,
+          }}
+          onLayout={(event) => {
+            state.registerRowLayout(key, event.bounds);
+            local.onLayout?.(event);
+          }}
+          onFocus={() => {
+            state.noteFocus();
+            isRowFocused.set(true);
+          }}
+          onBlur={() => {
+            state.noteBlur();
+            isRowFocused.set(false);
+          }}
+          onMouseEnter={(event) => {
+            isHovered.set(true);
+            local.onHoverChange?.(true);
+            local.onHoverStart?.(event);
+            local.onMouseEnter?.(event);
+          }}
+          onMouseLeave={(event) => {
+            isHovered.set(false);
+            local.onHoverChange?.(false);
+            local.onHoverEnd?.(event);
+            local.onMouseLeave?.(event);
+          }}
+          onPressDown={handlePressDown}
+          onPressUp={handlePressUp}
+          onPress={handlePress}
+          class={[slots().row(), "group grid", stateClasses(), resolvedClassName()]
+            .filter(Boolean)
+            .join(" ")}
+          style={[rowStyle(), resolvedStyle()]}
+        >
+          {/* A function child draws one cell per column; a plain tree is the
+              static form (port sheet §1, Row's children). */}
+          <Each of={columnList()}>
+            {(column) => renderColumnCell(column())}
+          </Each>
+          <If when={!hasColumns()}>{staticChildren()}</If>
+          {/* R-045–R-048: one inset ring for the whole row while a cell of it
+              has the keyboard focus. R-046 is the left segment, R-047 the right
+              one and R-048 the middle cells' top and bottom edges; the single
+              ring covers all three segments at once. */}
+          <If when={isFocusVisible()}>
+            <View class="pointer-events-none absolute inset-0 rounded-lg inset-ring-2 inset-ring-focus" />
+          </If>
+        </View>
+      </TableRowContext.Provider>
+    </TableSelectionCheckboxContext.Provider>
   );
 }

@@ -12,7 +12,12 @@ import { cleanup, computed, signal, split, View } from "nsh";
 
 import { createKeymapScope, isKeyboardPress } from "../../primitives";
 import { renderPartChildren } from "./table-children";
-import { TableColumnContext, TableStateContext, claimPress } from "./table-context";
+import {
+  TableColumnContext,
+  TableContext,
+  TableStateContext,
+  claimPress,
+} from "./table-context";
 import { type TablePartProps } from "./table-props";
 import { useTableSlots } from "./table-slots";
 
@@ -84,6 +89,7 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
 
   const table = TableStateContext();
   const column = TableColumnContext();
+  const slotContext = TableContext();
   const slots = useTableSlots();
 
   if (!table || !column) {
@@ -102,6 +108,13 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
 
   let dragStartX: number | undefined;
   let dragStartWidth = 0;
+  /**
+   * A pan owns the current press: `onPressUp` fires before `onPanEnd` (the
+   * measured order is press-up, then pan-end), so ending the drag there would
+   * clear the start before the pan reports its translation. The press-up ends
+   * the drag only when no pan followed it.
+   */
+  let panActive = false;
 
   const columnModel = computed(() => state.collection().columnByKey.get(column.columnKey));
 
@@ -127,11 +140,12 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
 
   const active = computed(() => hovered() || isResizing() || isFocusVisible());
 
-  // React Aria reads the locale's direction; NSH inherits the view's own
-  // `direction` and has no global one, so the caller's value is the source and
-  // LTR is the default (§3, §8).
+  // React Aria reads the locale's direction. NSH has no global one, so
+  // `Table.Root`'s `dir` reaches this part through `TableContext`; the
+  // resizer's own `direction` prop stays the fallback, and LTR is the default
+  // (§3, §8).
   const resizableDirection = (): "right" | "left" | "both" =>
-    props.direction === "rtl" ? "left" : "right";
+    (slotContext?.direction() ?? props.direction) === "rtl" ? "left" : "right";
 
   const renderProps: TableColumnResizerRenderProps = {
     isHovered: hovered,
@@ -195,6 +209,7 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
     }
 
     dragStartX = undefined;
+    panActive = false;
   };
 
   const handleMouseMove = (event: MouseEvent) => {
@@ -311,7 +326,9 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
       onPressUp={(event) => {
         claimPress(event);
 
-        if (!keyboardResizing()) {
+        // A pan reports its own end after this event; only a press without a
+        // pan is finished here (see `panActive`).
+        if (!keyboardResizing() && !panActive) {
           endDrag();
         }
 
@@ -322,9 +339,16 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
         local.onPress?.(event);
       }}
       onPanStart={(event) => {
+        panActive = true;
         dragStartX = dragStartX ?? 0;
         dragStartWidth = currentWidth();
-        layout.beginResize(column.columnKey);
+
+        // The press already began the resize; the pan is the same gesture and
+        // must not report a second `onResizeStart`.
+        if (layout.resizingColumn() !== column.columnKey) {
+          layout.beginResize(column.columnKey);
+        }
+
         local.onPanStart?.(event);
       }}
       onPanEnd={handlePanEnd}
