@@ -31,6 +31,8 @@ export function openToast(caseName: string, options: ScenarioOptions = {}): Prom
     width: 1024,
     height: 768,
     clock: {},
+    // The exit-hold cases measure the 300ms window, not the host's motion setting.
+    reducedMotion: false,
     ...rest,
     host: { params: { case: caseName, ...params } },
   });
@@ -42,8 +44,10 @@ export function showToast(app: App, name: string): Promise<void> {
 }
 
 /** Presses the toast's own close button, or another named close control. */
-export function closeToast(app: App, name = "Close"): Promise<void> {
-  return app.press(`role:button[${name}]`);
+export async function closeToast(app: App, name = "Close"): Promise<void> {
+  // The close button is pointer-events-none until its toast is hovered.
+  await app.hover("role:alert");
+  await app.press(`role:button[${name}]`);
 }
 
 /** Moves the manual clock, running timers, frames and animations as they come due. */

@@ -57,6 +57,13 @@ async function closeSheet(app: App) {
   await app.clock!.runFor(20);
 }
 
+/** The main window's content size: the platform may clamp it below the requested size. */
+function viewport(app: App): { width: number; height: number } {
+  const state = app.window("main").state();
+  if (!state) throw new Error("the main window is not open");
+  return { width: state.contentBounds.size.width, height: state.contentBounds.size.height };
+}
+
 /**
  * The panel's resting edge. `onLayout` reports bounds in the parent, and the
  * Dialog's parent is the edge-positioned Content box, so the Dialog's frame is
@@ -64,11 +71,12 @@ async function closeSheet(app: App) {
  */
 function expectEdge(app: App, placement: "bottom" | "top" | "left" | "right") {
   const content = layout(app, "content");
+  const { width, height } = viewport(app);
 
-  if (placement === "bottom") expect(Math.abs(content.y + content.height - HEIGHT)).toBeLessThan(2);
+  if (placement === "bottom") expect(Math.abs(content.y + content.height - height)).toBeLessThan(2);
   if (placement === "top") expect(Math.abs(content.y)).toBeLessThan(2);
   if (placement === "left") expect(Math.abs(content.x)).toBeLessThan(2);
-  if (placement === "right") expect(Math.abs(content.x + content.width - WIDTH)).toBeLessThan(2);
+  if (placement === "right") expect(Math.abs(content.x + content.width - width)).toBeLessThan(2);
 }
 
 function dragVector(placement: "bottom" | "top" | "left" | "right", distance = 260) {
@@ -386,10 +394,11 @@ test("T-015 supports pixel snap points, legacy full-height sentinel, and body sc
 
   await expect(app.scroll("id:body", 80)).rejects.toThrow();
 
-  await app.drag("id:handle", { x: 0, y: -(HEIGHT - 240) });
+  const { height } = viewport(app);
+  await app.drag("id:handle", { x: 0, y: -(height - 240) });
   await app.clock!.runFor(20);
 
-  expect(Math.round(layout(app, "content").height)).toBe(HEIGHT);
+  expect(Math.round(layout(app, "content").height)).toBe(Math.round(height));
   await app.scroll("id:body", 80);
   expect(app.shows("role:button[Done]")).toBe(true);
 });
@@ -418,13 +427,14 @@ for (const snaps of [false, true]) {
       });
 
       await openSheet(app);
+      const viewportHeight = viewport(app).height;
       if (snaps) {
         await expect(app.scroll("id:body", 80)).rejects.toThrow();
-        await app.drag("id:handle", { x: 0, y: -(height - 240) });
+        await app.drag("id:handle", { x: 0, y: -(viewportHeight - 240) });
         await app.clock!.runFor(20);
       }
 
-      expect(Math.abs(layout(app, "content").height - height * 0.95)).toBeLessThan(8);
+      expect(Math.abs(layout(app, "content").height - viewportHeight * 0.95)).toBeLessThan(8);
 
       // A step that resolves is a step the user could take: `app.scroll` rejects
       // on a body whose content fits (T-015), so this is `scrollHeight >
@@ -484,7 +494,7 @@ test("T-018 supports percentage snap points", async () => {
 
   await app.clock!.runFor(20);
 
-  expect(Math.abs(layout(app, "content").height - HEIGHT * 0.4)).toBeLessThan(3);
+  expect(Math.abs(layout(app, "content").height - viewport(app).height * 0.4)).toBeLessThan(3);
 });
 
 // heroui/packages/react/tests/components/sheet/sheet.browser.test.tsx:458

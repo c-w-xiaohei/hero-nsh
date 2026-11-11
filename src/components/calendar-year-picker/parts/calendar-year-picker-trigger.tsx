@@ -103,14 +103,14 @@ export function CalendarYearPickerTrigger(props: CalendarYearPickerTriggerProps)
   );
 }
 
-/** Escape closes an open panel while the trigger itself has the focus. */
+/** Escape closes an open panel, whether or not the trigger kept the focus. */
 function useYearPickerEscape(
   focused: Accessor<boolean>,
   isOpen: Accessor<boolean>,
   setIsYearPickerOpen: (open: boolean) => void,
 ) {
   createKeymapScope({
-    isActive: focused,
+    isActive: () => focused() || isOpen(),
     bindings: {
       escape: () => {
         if (isOpen()) setIsYearPickerOpen(false);
