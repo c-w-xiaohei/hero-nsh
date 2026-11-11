@@ -39,7 +39,10 @@ export const buttonGroupVariants = tv({
       // base slot's `items-center`; the group keeps the width of its widest
       // button upstream, so both are restated here.
       vertical: {
-        base: "flex-col items-center w-fit self-start",
+        // Stretch, not centre: a column of buttons that size to their own labels
+        // leaves each row a different width, and the clipped outer corners then
+        // read as notches. Stretched, every row takes the widest one.
+        base: "flex-col items-stretch w-fit self-start",
         separator: "start-1/4 -top-px w-1/2 h-px border-t",
       },
     },

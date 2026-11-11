@@ -43,7 +43,7 @@ export const toggleButtonGroupVariants = tv({
         separator: "-start-px top-1/4 w-px h-1/2 border-s",
       },
       vertical: {
-        base: "flex-col",
+        base: "flex-col items-stretch",
         separator: "start-1/4 -top-px w-1/2 h-px border-t",
       },
     },
