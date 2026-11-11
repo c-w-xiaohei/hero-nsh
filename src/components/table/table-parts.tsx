@@ -39,7 +39,7 @@ function makeTracks(columns: readonly ColumnTrack[]) {
 
 function contentView(props: TablePartProps, className: string, role?: AccessibilityRole, style?: StyleProp<ViewStyle>, extra?: Record<string, unknown>) {
   const { children, className: extraClass, style: ownStyle, ref, id, render: _render, items: _items, dependencies: _dependencies, ...rest } = props;
-  return <View {...rest} {...extra as any} ref={(node) => ref?.(node)} nativeID={id} role={role} class={[className, extraClass].filter(Boolean).join(" ")} style={[style, ownStyle]}>{children}</View>;
+  return <View {...rest} {...extra as any} ref={(node) => ref?.(node)} onLayout={props.onLayout} nativeID={id} role={role} class={[className, extraClass].filter(Boolean).join(" ")} style={[style, ownStyle]}>{children}</View>;
 }
 
 export function TableContent(props: TablePartProps & { "aria-label"?: string; columns?: Iterable<ColumnTrack> }) {
@@ -48,7 +48,7 @@ export function TableContent(props: TablePartProps & { "aria-label"?: string; co
   const layout: TableLayout = { columns, tracks };
   const { children, className, style, ref, id, render: _render, items: _items, dependencies: _dependencies, columns: columnSource, ...rest } = props;
   // R-015/R-016: one shared track string drives header and every body row.
-  return <TableLayoutContext.Provider value={layout}><View {...rest as any} ref={(node) => ref?.(node)} nativeID={id} accessibilityLabel={props["aria-label"]} role="grid" focusable class={["w-full text-sm overflow-hidden", className].filter(Boolean).join(" ")} style={style}>{children}</View></TableLayoutContext.Provider>;
+  return <TableLayoutContext.Provider value={layout}><View {...rest as any} ref={(node) => ref?.(node)} onLayout={props.onLayout} nativeID={id} accessibilityLabel={props["aria-label"]} role="grid" focusable class={["w-full text-sm overflow-hidden", className].filter(Boolean).join(" ")} style={style}>{children}</View></TableLayoutContext.Provider>;
 }
 
 export function TableHeader(props: TablePartProps & { columns?: Iterable<ColumnTrack> }) {
@@ -57,7 +57,7 @@ export function TableHeader(props: TablePartProps & { columns?: Iterable<ColumnT
   if (layout && declared) layout.columns.set([...declared]);
   const tracks = computed(() => makeTracks(declared ? [...declared] : layout?.columns() ?? []));
   const { children, className, style, ref, id, render: _render, columns: _columns, ...rest } = props;
-  return <View {...rest as any} ref={(node) => ref?.(node)} nativeID={id} role="rowgroup" class={["border-b border-separator/50 bg-surface-secondary", className].filter(Boolean).join(" ")} style={style}>
+  return <View {...rest as any} ref={(node) => ref?.(node)} onLayout={props.onLayout} nativeID={id} role="rowgroup" class={["border-b border-separator/50 bg-surface-secondary", className].filter(Boolean).join(" ")} style={style}>
      <View role="row" class="grid" style={{ gridTemplateColumns: tracks() }}>{children}</View>
   </View>;
 }
@@ -78,7 +78,7 @@ export function TableColumn(props: TablePartProps & ColumnTrack & { width?: numb
   const count = currentColumns.length;
   // R-008/R-009: secondary column endcaps follow registered column order.
   const positionClasses = table?.variant === "secondary" ? [index === 0 ? "rounded-ss-2xl rounded-es-2xl" : "", index === count - 1 ? "rounded-se-2xl rounded-ee-2xl" : ""] : [];
-  return <View {...rest as any} ref={(node) => props.ref?.(node)} nativeID={props.id} role="columnheader" class={[slot, "min-w-0", ...positionClasses, className].filter(Boolean).join(" ")} style={style}>{children}</View>;
+  return <View {...rest as any} ref={(node) => props.ref?.(node)} onLayout={props.onLayout} nativeID={props.id} role="columnheader" class={[slot, "min-w-0", ...positionClasses, className].filter(Boolean).join(" ")} style={style}>{children}</View>;
 }
 export function TableBody(props: TablePartProps & { renderEmptyState?: (values: { isEmpty: () => boolean; isDropTarget: () => boolean }) => JSX.Element }) {
   const { children, renderEmptyState, ...rest } = props;
@@ -89,7 +89,7 @@ export function TableRow(props: TablePartProps) {
   const table = TableContext();
   const rowCells: RowCells = { nextColumn: 0 };
   const { children, className, style, ...rest } = props;
-  return <View {...rest as any} ref={(node) => props.ref?.(node)} nativeID={props.id} role="row" class={[table?.slots.row() ?? "relative border-b border-separator/50", "grid group", className].filter(Boolean).join(" ")} style={[{ gridTemplateColumns: layout?.tracks() || "1fr" }, style]}>
+  return <View {...rest as any} ref={(node) => props.ref?.(node)} onLayout={props.onLayout} nativeID={props.id} role="row" class={[table?.slots.row() ?? "relative border-b border-separator/50", "grid group", className].filter(Boolean).join(" ")} style={[{ gridTemplateColumns: layout?.tracks() || "1fr" }, style]}>
     <RowCellsContext.Provider value={rowCells}>{children}</RowCellsContext.Provider>
   </View>;
 }

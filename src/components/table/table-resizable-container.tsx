@@ -17,5 +17,5 @@ export interface TableResizableContainerProps {
 // R-051: Scroll provides the bidirectional scrolling viewport.
 export function TableResizableContainer(props: TableResizableContainerProps) {
   const { children, className, style, ref, id, render: _render, onResizeStart: _onResizeStart, onResize: _onResize, onResizeEnd: _onResizeEnd, ...rest } = props;
-  return <Scroll {...rest as any} ref={(node) => ref?.(node)} nativeID={id} class={className} style={style}>{children}</Scroll>;
+  return <Scroll {...rest as any} ref={(node) => ref?.(node)} onLayout={props.onLayout as any} nativeID={id} class={className} style={style}>{children}</Scroll>;
 }
