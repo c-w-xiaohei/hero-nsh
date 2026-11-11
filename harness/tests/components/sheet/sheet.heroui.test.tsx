@@ -57,13 +57,18 @@ async function closeSheet(app: App) {
   await app.clock!.runFor(20);
 }
 
+/**
+ * The panel's resting edge. `onLayout` reports bounds in the parent, and the
+ * Dialog's parent is the edge-positioned Content box, so the Dialog's frame is
+ * `{0, 0}` for every placement; the Content is the box that sits on the edge.
+ */
 function expectEdge(app: App, placement: "bottom" | "top" | "left" | "right") {
-  const dialog = layout(app, "dialog");
+  const content = layout(app, "content");
 
-  if (placement === "bottom") expect(Math.abs(dialog.y + dialog.height - HEIGHT)).toBeLessThan(2);
-  if (placement === "top") expect(Math.abs(dialog.y)).toBeLessThan(2);
-  if (placement === "left") expect(Math.abs(dialog.x)).toBeLessThan(2);
-  if (placement === "right") expect(Math.abs(dialog.x + dialog.width - WIDTH)).toBeLessThan(2);
+  if (placement === "bottom") expect(Math.abs(content.y + content.height - HEIGHT)).toBeLessThan(2);
+  if (placement === "top") expect(Math.abs(content.y)).toBeLessThan(2);
+  if (placement === "left") expect(Math.abs(content.x)).toBeLessThan(2);
+  if (placement === "right") expect(Math.abs(content.x + content.width - WIDTH)).toBeLessThan(2);
 }
 
 function dragVector(placement: "bottom" | "top" | "left" | "right", distance = 260) {
@@ -210,10 +215,11 @@ test("T-007 supports explicit closing when dismissal is disabled", async () => {
 });
 
 // heroui/packages/react/tests/components/sheet/sheet.test.tsx:147
-// Ported (port sheet T-008): the CloseTrigger's own `onPress` runs once and the
-// sheet closes.
+// Ported (port sheet T-008): upstream mounts a bare sheet whose CloseTrigger
+// sets no `aria-label`, so CloseButton's default name "Close" is the button the
+// test presses; that button's own `onPress` runs once and the sheet closes.
 test("T-008 calls a close-trigger consumer handler", async () => {
-  const app = await openScenario("sheet/open", { clock: {} });
+  const app = await openScenario("sheet/close-trigger", { clock: {} });
 
   await app.press("role:button[Close]");
   await app.waitFor(CONTENT, { state: "gone" });
@@ -224,8 +230,11 @@ test("T-008 calls a close-trigger consumer handler", async () => {
 // heroui/packages/react/tests/components/sheet/sheet.test.tsx:165
 // Partial port (port sheet T-009): the three DOM pointer callbacks are
 // responder callbacks here; the five pointer callbacks and the `data-dragging`
-// lookups have no NSH channel (§8). Kept: custom handle text, a zero-travel
-// press that neither drags nor closes, and grant/move/release once per drag.
+// lookups have no NSH channel (§8). Kept: custom handle text, a one-point
+// travel (upstream's `pointerMove` carries no movement; `app.drag` is the only
+// step that reaches the responder channel and a zero delta never ends on the
+// web host) that neither drags nor closes, and grant/move/release once per
+// gesture.
 test("T-009 calls consumer handle events and allows preventing a drag", async () => {
   const app = await openScenario("sheet/custom-handle", { clock: {} });
 
@@ -233,17 +242,17 @@ test("T-009 calls consumer handle events and allows preventing a drag", async ()
 
   expect(app.shows("text:Custom grip")).toBe(true);
 
-  await app.press("id:handle");
+  await app.drag("id:handle", { x: 0, y: 1 });
   expect(callsOf(app, "grant").length).toBe(1);
+  expect(callsOf(app, "move").length).toBe(1);
   expect(callsOf(app, "release").length).toBe(1);
-  expect(callsOf(app, "move").length).toBe(0);
   expect(app.shows(CONTENT)).toBe(true);
 
   await app.drag("id:handle", { x: 0, y: 10 });
   await app.clock!.runFor(20);
 
   expect(callsOf(app, "grant").length).toBe(2);
-  expect(callsOf(app, "move").length).toBe(1);
+  expect(callsOf(app, "move").length).toBe(2);
   expect(callsOf(app, "release").length).toBe(2);
   expect(app.shows(CONTENT)).toBe(true);
 });
@@ -285,13 +294,14 @@ const PLACEMENTS = ["bottom", "top", "left", "right"] as const;
 
 // heroui/packages/react/tests/components/sheet/sheet.browser.test.tsx:183
 // Rewritten (port sheet T-012): the `data-position` attribute becomes the
-// resting edge read from `onLayout`; the handle drag closes, the reopened panel
-// closes again through the CloseTrigger.
+// resting edge of the Content box (the edge-positioned parent of the Dialog,
+// whose own `onLayout` frame is always `{0, 0}`); the handle drag closes, the
+// reopened panel closes again through the CloseTrigger.
 for (const placement of PLACEMENTS) {
   test(`T-012 supports ${placement} placement, explicit closing, and handle dismissal`, async () => {
     const app = await openScenario(`sheet/placement-${placement}`, { clock: {} });
 
-    await app.clock!.runFor(20);
+    await openSheet(app);
     expectEdge(app, placement);
 
     await app.drag("id:handle", dragVector(placement));
@@ -308,14 +318,14 @@ for (const placement of PLACEMENTS) {
 // heroui/packages/react/tests/components/sheet/sheet.browser.test.tsx:221
 // Rewritten (port sheet T-013): CPU throttling has no counterpart, so the three
 // open → drag close → reopen cycles run on the manual clock; the reopened panel
-// still rests on its edge and the callback sequence stays open/close.
+// still rests on its edge (the Content box, as in T-012) and the callback
+// sequence stays open/close.
 for (const placement of ["top", "left"] as const) {
   test(`T-013 supports settled ${placement} reopening after handle dismissal under CPU throttling`, async () => {
     const app = await openScenario(`sheet/placement-${placement}`, { clock: {} });
 
-    await app.clock!.runFor(20);
-
     for (let cycle = 1; cycle <= 3; cycle++) {
+      await openSheet(app);
       expectEdge(app, placement);
 
       await app.drag("id:handle", dragVector(placement));
@@ -387,7 +397,10 @@ const VIEWPORTS: Array<[number, number]> = [
 
 // heroui/packages/react/tests/components/sheet/sheet.browser.test.tsx:306
 // Rewritten (port sheet T-016): `getComputedStyle(maxHeight)` becomes the
-// measured 0.95 × viewport height after expansion, the wheel becomes
+// measured 0.95 × viewport height after expansion — the fixture states the cap
+// as an inline `maxHeight: "95%"` (NSH's style channel takes a number or a
+// percentage, and `max-h-[95vh]` is an unknown class) and carries 50 rows so the
+// Body overflows the cap the way HeroUI's 40 paragraphs do — the wheel becomes
 // `app.scroll`, and the panel stays visible.
 for (const snaps of [false, true]) {
   for (const [width, height] of VIEWPORTS) {
@@ -467,7 +480,8 @@ test("T-018 supports percentage snap points", async () => {
 // Partial port (port sheet T-020): the native touch dismissal outside the
 // handle is left to the host's `closeOnSwipe` and checked by hand; the
 // observable reverse behavior is kept — dragging on the Body scroll area does
-// not dismiss the sheet.
+// not dismiss the sheet, so the dialog is still in the tree (upstream's
+// non-dismissable half, sheet.browser.test.tsx:465-470).
 test("T-020 supports native touch dismissal outside the handle", async () => {
   const app = await openScenario("sheet/body-drag", { clock: {} });
 
@@ -475,7 +489,7 @@ test("T-020 supports native touch dismissal outside the handle", async () => {
   await app.drag("id:body", { x: 0, y: 60 });
   await app.clock!.runFor(20);
 
-  expect(app.shows("text:Sheet content")).toBe(true);
+  expect(app.shows("id:dialog")).toBe(true);
   expect(app.shows("role:button[Done]")).toBe(true);
 });
 
@@ -563,8 +577,10 @@ test("T-024 supports retaining closed content without keeping the modal active",
 // heroui/packages/react/tests/components/sheet/sheet.browser.test.tsx:581
 // Partial port (port sheet T-025): `data-stack-index` and the backdrop's
 // computed background are dropped (no attribute/computed-style channel, §8).
-// Kept: after the retained sheet closes a second sheet opens and closes, and
-// reopening the first one still has its value.
+// Kept: after the retained sheet closes a second sheet opens and closes (the
+// stage's own "Show second" / "Hide second" controls stand in for the
+// `rerender` calls, so they carry no name the panels also use), and reopening
+// the first one still has its value.
 test("T-025 supports a new sheet backdrop after a retained sheet closes", async () => {
   const app = await openScenario("sheet/stacked", { clock: {} });
 
@@ -575,11 +591,11 @@ test("T-025 supports a new sheet backdrop after a retained sheet closes", async 
   await closeSheet(app);
   expect(calls(app, "firstAnimationEnd")).toEqual([true, false]);
 
-  await app.press("role:button[Open second]");
+  await app.press("role:button[Show second]");
   await app.clock!.runFor(20);
   expect(app.shows("text:Second sheet")).toBe(true);
 
-  await app.press("role:button[Close second]");
+  await app.press("role:button[Hide second]");
   await app.clock!.runFor(20);
   expect(app.shows("text:Second sheet")).toBe(false);
 
@@ -609,11 +625,11 @@ for (const reduce of [false, true]) {
     await app.clock!.runFor(20);
     expect(callsOf(app, "cleanup").length).toBe(1);
 
-    await app.press("role:button[Open second]");
+    await app.press("role:button[Show second]");
     await app.clock!.runFor(20);
     expect(app.shows("text:Second sheet")).toBe(true);
 
-    await app.press("role:button[Close second]");
+    await app.press("role:button[Hide second]");
     await app.press("role:button[Open sheet]");
     await app.clock!.runFor(20);
 
@@ -699,12 +715,16 @@ test("T-028 supports unmount during a retained partial-snap exit", async () => {
 });
 
 // heroui/packages/react/tests/components/sheet/sheet.browser.test.tsx:770
-// Rewritten (port sheet T-029): an interrupted opening — Blink opens and closes
-// on the next turn, so the exit completion is the only animation event. The
-// non-retained sheet unmounts; the retained one reopens with its content.
+// Rewritten (port sheet T-029): upstream mounts the sheet open and interrupts
+// that first enter before it completes, so `onAnimationEnd` has not been called
+// when the close arrives. The harness settles a mount's enter before a test can
+// act (T-024 relies on that same enter), so the fixture starts closed and
+// "Blink open" performs the identical interrupted opening one step later: it
+// opens, then closes on the next turn, and only the exit completion arrives.
+// The non-retained sheet unmounts; the retained one reopens with its content.
 for (const retain of [false, true]) {
   test(`T-029 calls exit completion when opening is interrupted (retained: ${retain})`, async () => {
-    const app = await openScenario(retain ? "sheet/retained" : "sheet/retained-reset", { clock: {} });
+    const app = await openScenario(retain ? "sheet/retained-closed" : "sheet/retained-reset", { clock: {} });
 
     await app.press("role:button[Blink open]");
     await app.clock!.runFor(40);
@@ -723,10 +743,11 @@ for (const retain of [false, true]) {
 }
 
 // heroui/packages/react/tests/components/sheet/sheet.browser.test.tsx:793
-// Rewritten (port sheet T-030): three rapid interrupted retained openings; the
-// enter completion only arrives on the last, settled one.
+// Rewritten (port sheet T-030): three rapid interrupted retained openings from
+// a closed fixture (as in T-029, the mount's own enter is settled by the
+// harness); the enter completion only arrives on the last, settled one.
 test("T-030 calls exit completion for consecutive interrupted retained openings", async () => {
-  const app = await openScenario("sheet/retained", { clock: {} });
+  const app = await openScenario("sheet/retained-closed", { clock: {} });
 
   await app.press("role:button[Blink open]");
   await app.clock!.runFor(40);

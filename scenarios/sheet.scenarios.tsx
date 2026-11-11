@@ -33,6 +33,7 @@ import type { Component } from "./types";
  * subtree is observable.
  *
  * Naming of the story/geometry entries:
+ *   sheet/close-trigger T-008
  *   sheet/placement-*   T-012, T-013, T-017
  *   sheet/swipe-*       T-014
  *   sheet/snap-*        T-005, T-006
@@ -40,6 +41,8 @@ import type { Component } from "./types";
  *   sheet/expansion*    T-016
  *   sheet/detached*     T-017, T-022
  *   sheet/percentage-snap  T-018
+ *   sheet/retained-closed  T-029, T-030 (mounts closed, so the harness does not
+ *                          settle an enter before the interrupted opening)
  */
 
 type LayoutEvent = {
@@ -75,9 +78,8 @@ type FixtureProps = {
   isDismissable?: boolean;
   swipeDirection?: Swipe;
   contentClassName?: string;
-  contentStyle?: { width?: number; height?: number };
+  contentStyle?: { width?: number; height?: number; maxHeight?: `${number}%` };
   customHandle?: boolean;
-  closeLabel?: string;
   rows?: number;
   heading?: string;
   bodyText?: string;
@@ -109,7 +111,7 @@ function SheetFixture(props: FixtureProps) {
           >
             <Sheet.Dialog testID="dialog" aria-label="Details" onLayout={layout("dialog")}>
               <Sheet.CloseTrigger
-                aria-label={props.closeLabel ?? "Dismiss sheet"}
+                aria-label="Dismiss sheet"
                 onPress={probe("closeTriggerPress")}
               />
               {props.customHandle ? (
@@ -153,6 +155,30 @@ function Open() {
   return <SheetFixture defaultOpen />;
 }
 
+/**
+ * Upstream's close-trigger case (sheet.test.tsx:147): a bare sheet whose
+ * CloseTrigger sets no `aria-label`, so CloseButton's default name "Close"
+ * stands. The Body text gives the test the same sentinel as the other cases.
+ */
+function CloseTriggerScenario() {
+  return (
+    <Stage>
+      <Sheet defaultOpen>
+        <Sheet.Backdrop>
+          <Sheet.Content>
+            <Sheet.Dialog aria-label="Close">
+              <Sheet.CloseTrigger onPress={probe("closeTriggerPress")} />
+              <Sheet.Body>
+                <Text>Sheet content</Text>
+              </Sheet.Body>
+            </Sheet.Dialog>
+          </Sheet.Content>
+        </Sheet.Backdrop>
+      </Sheet>
+    </Stage>
+  );
+}
+
 function CustomHandle() {
   return <SheetFixture defaultOpen customHandle />;
 }
@@ -160,7 +186,7 @@ function CustomHandle() {
 const PLACEMENTS: Placement[] = ["bottom", "top", "left", "right"];
 
 function placementScenario(placement: Placement) {
-  return () => <SheetFixture defaultOpen placement={placement} />;
+  return () => <SheetFixture placement={placement} />;
 }
 
 function swipeScenario(swipeDirection: Swipe) {
@@ -188,11 +214,18 @@ function PercentageSnap() {
   return <SheetFixture defaultOpen rows={50} snapPoints={["40%", "100%"]} />;
 }
 
+/**
+ * T-016's viewport-capped sheet: the consumer cap is `max-h-[95vh]` upstream;
+ * NSH's style channel has no viewport unit, so the same 95% of the viewport is
+ * an inline `maxHeight: "95%"`. 50 rows keep the Body taller than the cap (as
+ * HeroUI's 40 paragraphs are) so the cap is what the panel's height shows.
+ */
 function Expansion(props: { snapPoints?: Array<number | string> }) {
   return (
     <SheetFixture
-      contentClassName="mx-auto max-h-[95vh] max-w-[420px]"
-      rows={40}
+      contentClassName="mx-auto max-w-[420px]"
+      contentStyle={{ maxHeight: "95%" }}
+      rows={50}
       snapPoints={props.snapPoints}
     />
   );
@@ -375,8 +408,8 @@ function RetainedSheet(props: RetainedProps) {
       <Button onPress={blinkOpen}>Blink open</Button>
       <Button onPress={() => retain.set(false)}>Release content</Button>
       <Button onPress={() => mounted.set(false)}>Unmount</Button>
-      <Button onPress={() => second.set(true)}>Open second</Button>
-      <Button onPress={() => second.set(false)}>Close second</Button>
+      <Button onPress={() => second.set(true)}>Show second</Button>
+      <Button onPress={() => second.set(false)}>Hide second</Button>
       <Button onPress={probe("ping")}>Ping</Button>
       {mounted() && (
         <Sheet
@@ -462,8 +495,8 @@ function StackedSheets() {
     <Stage>
       <Button onPress={() => first.set(true)}>Open first</Button>
       <Button onPress={() => first.set(false)}>Close first</Button>
-      <Button onPress={() => second.set(true)}>Open second</Button>
-      <Button onPress={() => second.set(false)}>Close second</Button>
+      <Button onPress={() => second.set(true)}>Show second</Button>
+      <Button onPress={() => second.set(false)}>Hide second</Button>
       <Sheet
         isOpen={first()}
         onAnimationEnd={probe("firstAnimationEnd")}
@@ -518,6 +551,7 @@ function StackedSheets() {
 export const sheetScenarios: Record<string, Component> = {
   "sheet/basic": Basic,
   "sheet/open": Open,
+  "sheet/close-trigger": CloseTriggerScenario,
   "sheet/custom-handle": CustomHandle,
   "sheet/placement-bottom": placementScenario("bottom"),
   "sheet/placement-top": placementScenario("top"),
@@ -553,7 +587,8 @@ export const sheetScenarios: Record<string, Component> = {
   "sheet/controlled": Controlled,
   "sheet/nested": Nested,
   "sheet/retained": retainedScenario({}),
-  "sheet/retained-reset": retainedScenario({ retain: false }),
+  "sheet/retained-closed": retainedScenario({ startOpen: false }),
+  "sheet/retained-reset": retainedScenario({ retain: false, startOpen: false }),
   "sheet/retained-snap-bottom": retainedScenario({ placement: "bottom", snapPoints: [100, 1] }),
   "sheet/retained-snap-top": retainedScenario({ placement: "top", snapPoints: [100, 1] }),
   "sheet/retained-snap-left": retainedScenario({ placement: "left", snapPoints: [100, 1] }),

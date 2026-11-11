@@ -6,11 +6,12 @@ import { openScenario } from "../../helpers/open-scenario";
 /*
  * Headless-only Sheet cases (port sheet 4b): T-019, T-032, T-033, T-034.
  *
- * T-019/T-033/T-034 need `dragAndHold` for the mid-drag frame, which headless
- * and Linux run but the web target does not. T-032 presses the backdrop paint
- * layer: on the web target the hit test stops at the layout carrier that covers
- * it (measured for Modal's X-004), so the dismissal only reaches the layer on
- * the headless engine.
+ * T-019/T-033/T-034 need `dragAndHold`: a `drag` release carries the flick
+ * velocity that dismisses the sheet, while `drop()` lifts the finger where it
+ * is. It runs headless and on Linux, not on the web target. T-032 presses the
+ * backdrop paint layer: on the web target the hit test stops at the layout
+ * carrier that covers it (measured for Modal's X-004), so the dismissal only
+ * reaches the layer on the headless engine.
  *
  * The port sheet drops the pointer-cancel / lost-pointer-capture half of T-019
  * (§8: `onResponderTerminate` has no app step) and the pointer-capture, cursor
@@ -37,22 +38,32 @@ function calls(app: App, name: string): unknown[] {
 }
 
 // heroui/packages/react/tests/components/sheet/sheet.browser.test.tsx:426
-// Partial port (port sheet T-019): a 45-point mid-drag moves the panel, the
-// release snaps it back to rest, and Done still closes. The `pointercancel` /
-// `lostpointercapture` variants cannot be driven by an app step (§8).
+// Partial port (port sheet T-019): the mid-drag translation is a transform, and
+// `onLayout` reports the layout frame (bounds in the parent), which does not
+// move with a drag — the frame is `{0, 0}` for the Dialog on every placement and
+// unchanged for the Content — so the “panel moved by 45 points” reading of
+// `getBoundingClientRect` has no channel and is dropped (§8). Kept: a held drag
+// released below the dismiss threshold (upstream's 45 points stay under it on a
+// tall sheet; this content-sized panel dismisses past ~42, so 20 points) leaves
+// the panel at its resting frame and the app is not stuck mid-drag (Done still
+// closes). The two `pointercancel` / `lostpointercapture` variants stay dropped
+// (no app step drives either).
 test("T-019 supports recovery after a cancelled handle drag", async () => {
   const app = await openScenario("sheet/open", { clock: {} });
 
   await app.clock!.runFor(20);
-  const initial = layout(app, "dialog");
+  const rest = layout(app, "content");
 
-  await app.dragAndHold("id:handle", { x: 0, y: 45 });
+  await app.dragAndHold("id:handle", { x: 0, y: 20 });
   await app.clock!.runFor(20);
-  expect(layout(app, "dialog").y).toBeGreaterThan(initial.y + 20);
-
   await app.drop();
   await app.clock!.runFor(20);
-  expect(Math.abs(layout(app, "dialog").y - initial.y)).toBeLessThan(2);
+
+  const settled = layout(app, "content");
+
+  expect(Math.abs(settled.y - rest.y)).toBeLessThan(2);
+  expect(Math.abs(settled.height - rest.height)).toBeLessThan(2);
+  expect(app.shows(CONTENT)).toBe(true);
 
   await app.press("role:button[Done]");
   await app.waitFor(CONTENT, { state: "gone" });
