@@ -2,6 +2,8 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
+import { ease, radius, shadow } from "../../tokens/geometry";
+
 /**
  * Autocomplete's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/autocomplete/autocomplete.styles.ts` and the
@@ -42,8 +44,8 @@ export const autocompleteVariants = tv({
     // `transition-all` adds radius and border width.
     // R-036: `.autocomplete__trigger--full-width` → `w-full`.
     trigger: [
-      "relative flex min-h-9 items-center rounded-field border-0 border-field-border bg-field px-3 py-2 text-sm text-field-foreground shadow-field dark:shadow-field-dark select-none cursor-pointer",
-      "duration-150 ease-smooth motion-reduce:transition-none",
+      `relative flex min-h-9 items-center ${radius.field} border-0 border-field-border bg-field px-3 py-2 text-sm text-field-foreground ${shadow.field.both} select-none cursor-pointer`,
+      `duration-150 ${ease.smooth} motion-reduce:transition-none`,
     ].join(" "),
     // R-012: `.autocomplete__value` → `flex-1 text-start text-base
     // wrap-break-word text-current sm:text-sm`. `wrap-break-word` is dropped:
@@ -70,8 +72,8 @@ export const autocompleteVariants = tv({
     // R-021 … R-026: the enter / exit transitions of `createOverlayPresence`;
     // upstream's custom keyframes are registered (§8).
     popover: [
-      "flex flex-col bg-overlay p-0 pt-2 text-sm rounded-[22px] shadow-overlay dark:shadow-overlay-dark overflow-hidden",
-      "duration-150 ease-smooth",
+      `flex flex-col bg-overlay p-0 pt-2 text-sm rounded-[22px] ${shadow.overlay.both} overflow-hidden`,
+      `duration-150 ${ease.smooth}`,
     ].join(" "),
     // R-037: `.autocomplete__clear-button` → the small cross inside the
     // trigger; `isolate`, `no-highlight` and `transform-gpu` have no
@@ -87,7 +89,7 @@ export const autocompleteVariants = tv({
       "relative flex size-5 shrink-0 origin-center items-center justify-center self-center rounded-xl bg-transparent p-1 text-muted select-none cursor-pointer",
       "hover:bg-default-hover",
       "active:scale-[0.93]",
-      "transition-opacity duration-150 ease-smooth motion-reduce:transition-none",
+      `transition-opacity duration-150 ${ease.smooth} motion-reduce:transition-none`,
     ].join(" "),
     // Upstream's `filter` slot carries a BEM class with no declarations: the
     // React Aria `Autocomplete` primitive renders no element of its own, so

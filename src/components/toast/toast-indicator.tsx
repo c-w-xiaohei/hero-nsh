@@ -10,6 +10,7 @@ import { viewProps } from "./toast-dom-props";
 import { DangerIcon, InfoIcon, SuccessIcon, WarningIcon } from "../icons";
 import { Spinner } from "../spinner";
 import type { ThemeColorToken } from "../../theme";
+import { ease } from "../../tokens/geometry";
 
 /* -------------------------------------------------------------------------------------------------
  * Default icon
@@ -271,7 +272,7 @@ export function ToastIndicator<E extends string = "div">(
           // with the fluid curve; the lost 150ms opacity half is registered in
           // §8. It is absent on the start frame so the reset cannot animate
           // out of the old value.
-          "transition duration-200 ease-out-fluid motion-reduce:transition-none":
+          [`transition duration-200 ${ease.outFluid} motion-reduce:transition-none`]:
             !swapping(),
         }}
       >
