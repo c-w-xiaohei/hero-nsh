@@ -13,7 +13,7 @@ export const drawerVariants = tv({
     // R-011, R-039, R-040, R-012, R-013, R-014
     content: "flex flex-col flex-1 w-full min-w-0 pointer-events-none",
     // R-015, R-041, R-016, R-017, R-042, R-018, R-019, R-020, R-021, R-022
-    dialog: `relative flex flex-col bg-overlay ${shadow.overlay.both} outline-none p-6 pointer-events-auto transition duration-[250ms] ${ease.outQuart} motion-reduce:transition-none`,
+    dialog: `relative flex flex-col bg-overlay text-overlay-foreground ${shadow.overlay.both} outline-none p-6 pointer-events-auto transition duration-[250ms] ${ease.outQuart} motion-reduce:transition-none`,
     // R-023
     header: "flex flex-col gap-3 mb-0",
     // R-024

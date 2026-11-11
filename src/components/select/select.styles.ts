@@ -75,7 +75,7 @@ export const selectVariants = tv({
     // R-036 / R-037: the duration and curve of the enter and exit transitions
     // (the property list and the shorter exit are inline).
     popover: [
-      `bg-overlay p-0 text-sm rounded-[22px] ${shadow.overlay.both} overflow-hidden`,
+      `bg-overlay p-0 text-sm text-overlay-foreground rounded-[22px] ${shadow.overlay.both} overflow-hidden`,
       `duration-150 ${ease.smooth}`,
     ].join(" "),
   },

@@ -45,7 +45,7 @@ export const colorPickerVariants = tv({
     // R-112 (`scrollbar-none` — not a class in NSH) and R-113 (`overflow-*` /
     // `overscroll-*` — no channel; port sheet §8) are deleted.
     popover:
-      `min-w-[248px] bg-overlay px-2 pt-2 pb-3 ${shadow.overlay.both} rounded-[20px] flex flex-col gap-3 outline-none`,
+      `min-w-[248px] bg-overlay text-overlay-foreground px-2 pt-2 pb-3 ${shadow.overlay.both} rounded-[20px] flex flex-col gap-3 outline-none`,
   },
 });
 

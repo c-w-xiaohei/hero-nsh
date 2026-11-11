@@ -38,7 +38,7 @@ export const dropdownVariants = tv({
     // starting classes can come off while the transition still has its
     // duration at the destination.
     popover:
-      `bg-overlay p-0 text-sm rounded-[22px] ${shadow.overlay.both} duration-150 ${ease.smooth}`,
+      `bg-overlay p-0 text-sm text-overlay-foreground rounded-[22px] ${shadow.overlay.both} duration-150 ${ease.smooth}`,
     // R-031 `.dropdown__popover [data-slot="dropdown-menu"]` → `p-1.5
     // outline-none`, written by `Dropdown.Menu` after Menu's own base classes
     // (later wins, so it overrides `.menu`'s `p-1`).

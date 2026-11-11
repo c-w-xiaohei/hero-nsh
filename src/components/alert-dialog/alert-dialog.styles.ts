@@ -71,7 +71,7 @@ export const alertDialogVariants = tv({
     // --radius-3xl)` → `rounded-3xl` (24 in this theme); R-032 → `p-6`;
     // R-033 → `overflow-hidden`; R-034 → `pointer-events-auto`.
     dialog:
-      `relative flex min-h-0 w-full flex-col max-h-full bg-overlay ${shadow.overlay.both} outline-none rounded-3xl p-6 overflow-hidden pointer-events-auto`,
+      `relative flex min-h-0 w-full flex-col max-h-full bg-overlay text-overlay-foreground ${shadow.overlay.both} outline-none rounded-3xl p-6 overflow-hidden pointer-events-auto`,
     // R-061 `.alert-dialog__footer` → `flex flex-row items-center justify-end
     // gap-2`; R-062 → `mt-0`. R-065 / R-066 (the margin a preceding part adds)
     // are read from the Dialog's part order, see `alert-dialog-footer.tsx`.

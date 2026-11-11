@@ -70,7 +70,7 @@ export const modalVariants = tv({
     // --radius-3xl)` → `rounded-3xl` (24px in this theme); R-035 → `p-6
     // pointer-events-auto`.
     dialog:
-      `relative flex w-full flex-col bg-overlay ${shadow.overlay.both} outline-none rounded-3xl p-6 pointer-events-auto`,
+      `relative flex w-full flex-col bg-overlay text-overlay-foreground ${shadow.overlay.both} outline-none rounded-3xl p-6 pointer-events-auto`,
     // R-056 `.modal__footer` → `flex flex-row items-center justify-end gap-2
     // mt-0`.
     footer: "flex flex-row items-center justify-end gap-2 mt-0",
