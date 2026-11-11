@@ -59,10 +59,18 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Tests
         run: |
+          set -o pipefail
           find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \
             ! -name '*.web.test.*' ! -name '*.browser.test.*' ! -name '*.windows.test.*' \
             | sort | awk -v s='${{ matrix.shard }}' 'NR % 3 == s' \
-            | xargs -r -n1 -P4 nsh test
+            | xargs -r -n1 -P4 nsh test 2>&1 | tee "$RUNNER_TEMP/tests.log"
+          # An unknown class builds, passes and renders wrong; the warning is
+          # the only signal. The tests run with no "tailwind" block in
+          # harness/nsh.json, so a class that needs one shows up here.
+          if grep -q 'unknown class' "$RUNNER_TEMP/tests.log"; then
+            echo "::error::A test run logged an unknown class warning"
+            exit 1
+          fi
 
   web:
     runs-on: ubuntu-24.04
