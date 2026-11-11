@@ -7,7 +7,7 @@ import type {
   CloseButtonRootProps,
 } from "../close-button/close-button-root";
 import { joinClassNames } from "./class-names";
-import { ToastContext, ToastItemContext } from "./toast-context";
+import { isToastControlReachable, ToastContext, ToastItemContext } from "./toast-context";
 import { toastVariants } from "./toast.styles";
 
 /**
@@ -76,7 +76,16 @@ export function ToastCloseButton(props: ToastCloseButtonProps): JSX.Element {
   };
 
   return (
-    <CloseButtonRoot {...props} className={className} onPress={handlePress}>
+    <CloseButtonRoot
+      {...props}
+      // Only the frontmost toast's controls are Tab stops, as the same rule
+      // gives the root (`toast.tsx:240`); a hidden toast is `inert` and an
+      // exiting one's buttons get `tabIndex = -1` (`:250-258`). The caller may
+      // still force the choice.
+      excludeFromTabOrder={props.excludeFromTabOrder ?? !isToastControlReachable(item)}
+      className={className}
+      onPress={handlePress}
+    >
       {props.children}
     </CloseButtonRoot>
   );

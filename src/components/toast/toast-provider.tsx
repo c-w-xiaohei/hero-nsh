@@ -561,24 +561,40 @@ export function ToastProvider<T extends object = ToastContentValue>(
   /**
    * Upstream reads `document.activeElement` and moves the focus to the nearest
    * remaining toast: newer first (earlier in the newest-first list), then
-   * older. NSH has neither `activeElement` nor sibling queries, so the region
-   * keeps the registered refs and the focus key the toast roots report.
+   * older (`toast.tsx:79-135`, which walks the DOM siblings). NSH has neither
+   * `activeElement` nor sibling queries, so the region keeps the registered
+   * refs and the focus key the toast roots report. The list still holds the
+   * exiting toast — that is where the walk starts — and every exiting toast is
+   * skipped as a target, which is upstream's `:not([data-exiting="true"])`.
+   * The same walk skips hidden toasts (`:not([data-hidden="true"])`); a toast
+   * is hidden past `maxVisibleToasts`, counted over the toasts that stay.
    */
   const moveFocusFrom = (key: string) => {
-    const layout = visibleToasts().filter((candidate) => !exitingKeys().has(candidate.key));
+    const layout = visibleToasts();
+    const staying = layout.filter((candidate) => !exitingKeys().has(candidate.key));
     const position = layout.findIndex((candidate) => candidate.key === key);
     const candidates: string[] = [];
 
-    if (position > 0) {
-      candidates.push(layout[position - 1]!.key);
-    }
+    if (position >= 0) {
+      for (let cursor = position - 1; cursor >= 0; cursor--) {
+        const candidate = layout[cursor]!;
 
-    if (position >= 0 && position + 1 < layout.length) {
-      candidates.push(layout[position + 1]!.key);
+        if (!exitingKeys().has(candidate.key)) {
+          candidates.push(candidate.key);
+        }
+      }
+
+      for (let cursor = position + 1; cursor < layout.length; cursor++) {
+        const candidate = layout[cursor]!;
+
+        if (!exitingKeys().has(candidate.key)) {
+          candidates.push(candidate.key);
+        }
+      }
     }
 
     for (const candidate of candidates) {
-      const index = layout.findIndex((item) => item.key === candidate);
+      const index = staying.findIndex((item) => item.key === candidate);
 
       if (index < 0 || index >= maxVisibleToasts()) {
         continue;

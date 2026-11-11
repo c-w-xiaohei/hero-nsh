@@ -467,11 +467,19 @@ export function ToastRoot<T extends object = ToastContentValue>(
       return;
     }
 
-    if (region.moveFocusFrom) {
-      region.moveFocusFrom(key);
-    } else {
-      node?.blur();
-    }
+    // The target toast has just become frontmost, and NSH's real hosts apply a
+    // prop change (`focusable`) on a frame; focusing before it lands is a no-op
+    // on the web. HeroUI moves the focus from a layout effect, after the DOM has
+    // the new `tabIndex` (`toast.tsx:242-247`).
+    const frame = requestAnimationFrame(() => {
+      if (region.moveFocusFrom) {
+        region.moveFocusFrom(key);
+      } else {
+        node?.blur();
+      }
+    });
+
+    return () => cancelAnimationFrame(frame);
   });
 
   /* -------------------------------------------------------------------------------------------
@@ -542,10 +550,18 @@ export function ToastRoot<T extends object = ToastContentValue>(
         accessibilityLabel={
           local["aria-label"] ?? local.accessibilityLabel ?? accessibilityLabel()
         }
-        focusable={
-          local.focusable ??
-          (isFrontmost() || (isExpanded() && !isHidden() && !isExiting()))
-        }
+        // Upstream writes `tabIndex = isFrontmost || (isExpanded && !isHidden &&
+        // !isExiting) ? 0 : -1` (`toast.tsx:240`), so an expanded stack makes
+        // every row a Tab stop. NSH's web host walks the view tree in paint
+        // order, where the older, lower-`zIndex` row comes first, so the
+        // expanded clause would put the older toast between the region and the
+        // frontmost one — T-020 … T-022 read the focus probe of the frontmost
+        // toast on the tab right after the region. Only the frontmost toast is
+        // a Tab stop here; its close button is the next one. The region itself
+        // is a Tab stop too (HeroUI's is `tabIndex=-1`), the two registered
+        // differences in port sheet §8 ("区域进入 Tab 顺序", "没有 aria-hidden /
+        // inert").
+        focusable={local.focusable ?? (isFrontmost() && !isHidden() && !isExiting())}
         class={classes()}
         classList={classList()}
         // R-015: the caller's style wins over the stacking values, as upstream's

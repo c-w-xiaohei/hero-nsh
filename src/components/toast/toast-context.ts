@@ -143,3 +143,24 @@ export interface ToastItemContextValue {
 export const ToastContext = context<ToastContextValue>({});
 
 export const ToastItemContext = context<ToastItemContextValue>({});
+
+/**
+ * Whether one toast's controls (its close and action buttons) are Tab stops.
+ *
+ * HeroUI takes a toast out of the tab order unless it is the frontmost one:
+ * `toast.tsx:240` writes `tabIndex = -1` on every other root, `:250-258` drops
+ * an exiting toast's controls and makes a hidden toast `inert`, which takes the
+ * whole subtree with it. NSH's web host walks the view tree in paint order,
+ * where a lower `zIndex` row comes first, so a reachable close button on a
+ * toast behind the front one takes the Tab that belongs to the frontmost root
+ * (T-020 … T-022). Its controls therefore leave the tab order too; a keyboard
+ * user reaches the frontmost toast and then its controls, which is the order
+ * HeroUI's `tabIndex` gives in a browser.
+ */
+export function isToastControlReachable(item: ToastItemContextValue): boolean {
+  return (
+    item.isFrontmost?.() === true &&
+    item.isHidden?.() !== true &&
+    item.isExiting?.() !== true
+  );
+}

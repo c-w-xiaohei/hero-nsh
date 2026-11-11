@@ -3,7 +3,7 @@ import type { JSX } from "nsh";
 import { ButtonRoot } from "../button/button-root";
 import type { ButtonRenderProps, ButtonRootProps } from "../button/button-root";
 import { joinClassNames } from "./class-names";
-import { ToastContext, ToastItemContext } from "./toast-context";
+import { isToastControlReachable, ToastContext, ToastItemContext } from "./toast-context";
 import { toastVariants } from "./toast.styles";
 
 /**
@@ -47,7 +47,13 @@ export function ToastActionButton(props: ToastActionButtonProps): JSX.Element {
   };
 
   return (
-    <ButtonRoot {...props} className={className}>
+    <ButtonRoot
+      {...props}
+      // The same tab-order rule as the close button: only the frontmost toast's
+      // controls are Tab stops (`toast.tsx:240`, `:250-258`).
+      excludeFromTabOrder={props.excludeFromTabOrder ?? !isToastControlReachable(item)}
+      className={className}
+    >
       {props.children}
     </ButtonRoot>
   );
