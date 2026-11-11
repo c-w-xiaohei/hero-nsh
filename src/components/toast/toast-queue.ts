@@ -365,8 +365,13 @@ export class ToastQueue<T extends object = ToastContentValue> {
     const canAnimate = this.exitDuration > 0 && !reduceMotion();
 
     if (!canAnimate) {
+      // Every close path fires the callback, as upstream's `super.close(key)`
+      // does for the same branch (`toast-queue.ts:283-285`): no exit window
+      // means the removal and the dismissal land in the same tick, not that the
+      // callback is dropped.
       this.remove(key);
       this.flushExiting();
+      onClose?.();
 
       return;
     }

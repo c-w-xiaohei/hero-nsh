@@ -1,5 +1,5 @@
 import * as nshRuntime from "nsh";
-import { computed, cleanup, effect, keymap, signal, split, untracked, View, windowSize } from "nsh";
+import { computed, cleanup, effect, keymap, signal, split, View, windowSize } from "nsh";
 import { createKeymapScope as createKeymapScopePrimitive } from "../../primitives";
 import { Spinner } from "../spinner";
 import { renderChildren, type ToastRenderValues } from "./children";
@@ -35,9 +35,9 @@ import type { Accessor, Bounds, JSX, StyleProp, ViewProps, ViewRef, ViewStyle } 
 /**
  * What the children function receives per toast: the row's entry and its
  * loading state. Both are the row's current values, as upstream's React render
- * props are plain objects; the row itself is kept by `Each`, so a custom layout
- * that reads `item.content.title` keeps the value it was built with (the
- * default layout reads the entry through bindings and does follow updates).
+ * props are plain objects; the row itself is kept by `Each` by key, so an
+ * `update()` of that entry calls the function again with the new values and
+ * the row keeps its identity.
  */
 export interface ToastRegionRenderValues<T extends object = ToastContentValue> {
   /** The entry of this row. */
@@ -59,9 +59,10 @@ export interface ToastProviderProps<T extends object = ToastContentValue>
     GlobalDomProps {
   /**
    * The region's content: nothing (the default layout), a static element, or a
-   * function called once per toast with that toast's entry. Upstream's render
-   * props are plain values; per D17 ours are accessors, so `toast()` is the
-   * entry and is re-read as the queue updates it.
+   * function called per toast with that toast's current entry, again whenever
+   * the queue updates it, as upstream's React render props are re-created per
+   * render. Upstream's render props are plain values, so the function receives
+   * a plain object, not accessors.
    */
   children?: JSX.Element | ((values: ToastRegionRenderValues<T>) => JSX.Element);
 
@@ -766,15 +767,25 @@ export function ToastProvider<T extends object = ToastContentValue>(
     const children = local.children;
 
     if (typeof children === "function" && children.length >= 1) {
-      const entry = item();
-      const values: ToastRegionRenderValues<T> = {
-        isLoading: contentOf(entry).isLoading === true,
-        toast: entry,
-      };
+      const render = children as (values: ToastRegionRenderValues<T>) => JSX.Element;
 
-      return renderChildren(
-        untracked(() => (children as (values: ToastRegionRenderValues<T>) => JSX.Element)(values)),
-      );
+      // Upstream re-renders its region on every queue change, so the function
+      // child always receives the row's current Toast props (`toast.tsx:926-939`).
+      // NSH's `Each` keeps a row by its key and only updates that row's
+      // `item()`, so a read here would freeze the entry at row creation and an
+      // `update()` would never reach a custom layout (X-003). A zero-argument
+      // function is NSH's reactive child: the insert re-runs it when the entry
+      // changes, while `Each` keeps the row identity.
+      return (() => {
+        const entry = item();
+
+        return renderChildren(
+          render({
+            isLoading: contentOf(entry).isLoading === true,
+            toast: entry,
+          }),
+        );
+      }) as unknown as JSX.Element;
     }
 
     if (children === undefined) {
