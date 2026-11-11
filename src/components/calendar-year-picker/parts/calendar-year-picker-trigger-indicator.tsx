@@ -1,6 +1,8 @@
 import type { JSX, ViewProps, ViewRef } from "nsh";
 import { split, View } from "nsh";
 
+import { renderChildren } from "../../calendar/children";
+
 import { IconChevronRight } from "../../icons";
 import { calendarYearPickerVariants } from "../calendar-year-picker.styles";
 import type { CalendarYearPickerTriggerRenderProps } from "./calendar-year-picker-trigger";
@@ -24,7 +26,7 @@ export function CalendarYearPickerTriggerIndicator(
   const child =
     typeof local.children === "function"
       ? local.children(values)
-      : (local.children ?? <IconChevronRight />);
+      : renderChildren(local.children ?? <IconChevronRight />);
 
   return (
     <View

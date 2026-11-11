@@ -2,6 +2,7 @@ import type { JSX, ViewProps, ViewRef } from "nsh";
 import { split, Text } from "nsh";
 import type { DateDuration } from "@internationalized/date";
 
+import { renderChildren } from "./children";
 import { useCalendarContext } from "./calendar-context";
 import type { CalendarHeadingFormatOptions } from "./date-utils";
 import { formatCalendarHeading } from "./date-utils";
@@ -37,7 +38,7 @@ export function CalendarHeading(props: CalendarHeadingProps): JSX.Element {
       accessibilityLevel={2}
       class={`${slots.heading()} ${local.className ?? ""}`}
     >
-      {local.children ?? heading()}
+      {local.children != null ? renderChildren(local.children) : heading()}
     </Text>
   );
 }

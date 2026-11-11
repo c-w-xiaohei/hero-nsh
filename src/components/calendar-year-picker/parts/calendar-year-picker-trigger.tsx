@@ -1,8 +1,13 @@
 import type { Accessor, JSX, PressEvent, ViewProps, ViewRef } from "nsh";
 import { signal, split, View } from "nsh";
 
+import { renderChildren } from "../../calendar/children";
+
 import { useCalendarOrRangeState } from "../../calendar/calendar-context";
-import { createInteractionModality } from "../../../primitives/create-interaction-modality";
+import {
+  createInteractionModality,
+  isKeyboardPress,
+} from "../../../primitives/create-interaction-modality";
 import { createKeymapScope } from "../../../primitives/create-keymap-scope";
 import { formatCalendarHeading } from "../../calendar/date-utils";
 import { useYearPicker } from "../../calendar/year-picker-context";
@@ -87,15 +92,12 @@ export function CalendarYearPickerTrigger(props: CalendarYearPickerTriggerProps)
         onBlur={() => focused.set(false)}
         onPress={(event: PressEvent) => {
           local.onPress?.(event);
-          if (event.pagePosition.x === 0 && event.pagePosition.y === 0) {
-            modality.setKeyboardModality();
-          } else {
-            modality.setPointerModality();
-          }
+          if (isKeyboardPress(event)) modality.setKeyboardModality();
+          else modality.setPointerModality();
           toggle();
         }}
       >
-        {typeof local.children === "function" ? local.children(values) : local.children}
+        {renderChildren(typeof local.children === "function" ? local.children(values) : local.children)}
       </View>
     </CalendarYearPickerTriggerContext.Provider>
   );

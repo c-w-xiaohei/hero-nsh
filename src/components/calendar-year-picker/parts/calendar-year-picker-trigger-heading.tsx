@@ -1,5 +1,7 @@
 import type { JSX, ViewProps, ViewRef } from "nsh";
 import { split, Text } from "nsh";
+
+import { renderChildren } from "../../calendar/children";
 import type { DateDuration } from "@internationalized/date";
 
 import { useCalendarOrRangeState } from "../../calendar/calendar-context";
@@ -33,7 +35,7 @@ export function CalendarYearPickerTriggerHeading(
   const child =
     typeof local.children === "function"
       ? local.children(values)
-      : (local.children ?? heading());
+      : renderChildren(local.children ?? heading());
 
   return (
     <Text

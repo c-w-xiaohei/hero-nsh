@@ -1,6 +1,7 @@
 import type { JSX, ViewProps, ViewRef } from "nsh";
 import { split, View } from "nsh";
 
+import { renderChildren } from "./children";
 import { useCalendarContext, useCalendarGridContext } from "./calendar-context";
 
 export interface CalendarGridHeaderProps extends Omit<ViewProps, "children" | "class" | "ref"> {
@@ -29,7 +30,7 @@ export function CalendarGridHeader(props: CalendarGridHeaderProps): JSX.Element 
       class={`${slots.gridHeader()} ${local.className ?? ""}`}
     >
       <Each of={grid.weekDays()} key="index">
-        {(day) => local.children(day())}
+        {(day) => renderChildren(local.children(day()))}
       </Each>
     </View>
   );

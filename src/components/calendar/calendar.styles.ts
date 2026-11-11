@@ -27,8 +27,10 @@ export const calendarVariants = tv({
     grid: "flex w-full flex-col",
     // R-006/R-021: header row is a real seven-column grid.
     gridHeader: "grid w-full grid-cols-7",
-    // R-007/R-022: body is a column of row views.
-    gridBody: "flex w-full flex-col",
+    // R-007/R-022: body is a column of row views; the first row's 4px top
+    // spacing (month view's `tr:first-child > td { mt-1 }`, day view's body
+    // `mt-1`) is one gap above the whole body.
+    gridBody: "mt-1 flex w-full flex-col",
     // R-023: every row is a real seven-column grid.
     gridRow: "grid w-full grid-cols-7",
     // R-024: header cell; `min-w-0` plus `truncate` keep long labels inside

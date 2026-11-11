@@ -1,6 +1,7 @@
 import type { JSX, ViewProps, ViewRef } from "nsh";
 import { split, Text } from "nsh";
 
+import { renderChildren } from "./children";
 import { useCalendarContext } from "./calendar-context";
 
 export interface CalendarHeaderCellProps extends Omit<ViewProps, "children" | "class" | "ref"> {
@@ -21,7 +22,7 @@ export function CalendarHeaderCell(props: CalendarHeaderCellProps): JSX.Element 
       role="columnheader"
       class={`${slots.headerCell()} ${local.className ?? ""}`}
     >
-      {local.children}
+      {renderChildren(local.children)}
     </Text>
   );
 }

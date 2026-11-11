@@ -7,6 +7,7 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { renderChildren } from "./children";
 import { CalendarCellContext, useCalendarContext, useCalendarGridContext } from "./calendar-context";
 import type { CalendarCellRenderProps } from "./calendar-context";
 
@@ -176,8 +177,8 @@ export function CalendarCell(props: CalendarCellProps): JSX.Element {
 
   const child =
     typeof local.children === "function"
-      ? local.children(values)
-      : (local.children ?? <Text>{formattedDate}</Text>);
+      ? renderChildren(local.children(values))
+      : renderChildren(local.children ?? <Text>{formattedDate}</Text>);
 
   return (
     <CalendarCellContext.Provider value={{ isSelected: selected }}>

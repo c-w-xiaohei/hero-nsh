@@ -18,8 +18,8 @@ export function CalendarYearPickerGridBody(props: CalendarYearPickerGridBodyProp
       {(year) => {
         const value = year();
         const values: CalendarYearPickerCellRenderProps = {
-          year: () => value,
-          formattedYear: () => grid.formattedYear(value),
+          year: value,
+          formattedYear: grid.formattedYear(value),
           isSelected: () => grid.isSelected(value),
           isCurrentYear: () => value === grid.currentYear(),
           isOpen: grid.isOpen,

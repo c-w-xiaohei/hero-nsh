@@ -17,8 +17,8 @@ export interface CalendarYearPickerFormatOptions {
 }
 
 export interface CalendarYearPickerCellRenderProps {
-  year: Accessor<number>;
-  formattedYear: Accessor<string>;
+  year: number;
+  formattedYear: string;
   isSelected: Accessor<boolean>;
   isCurrentYear: Accessor<boolean>;
   isOpen: Accessor<boolean>;

@@ -2,6 +2,7 @@ import type { JSX, ViewProps, ViewRef } from "nsh";
 import { split, View } from "nsh";
 import type { CalendarDate } from "@internationalized/date";
 
+import { renderChildren } from "./children";
 import { useCalendarContext, useCalendarGridContext } from "./calendar-context";
 
 export interface CalendarGridBodyProps extends Omit<ViewProps, "children" | "class" | "ref"> {
@@ -30,7 +31,7 @@ export function CalendarGridBody(props: CalendarGridBodyProps): JSX.Element {
         {(row) => (
           <View role="row" class={slots.gridRow()}>
             <Each of={row()} key="index">
-              {(date) => (date() ? local.children(date()!) : <View />)}
+              {(date) => (date() ? renderChildren(local.children(date()!)) : <View />)}
             </Each>
           </View>
         )}

@@ -1,7 +1,12 @@
 import type { JSX, PressEvent, ViewProps, ViewRef } from "nsh";
 import { cleanup, split, Text, View } from "nsh";
 
-import { createInteractionModality } from "../../../primitives/create-interaction-modality";
+import { renderChildren } from "../../calendar/children";
+
+import {
+  createInteractionModality,
+  isKeyboardPress,
+} from "../../../primitives/create-interaction-modality";
 import type { CalendarYearPickerCellRenderProps } from "./calendar-year-picker-grid";
 import { useCalendarYearPickerGridContext } from "./calendar-year-picker-grid";
 import { calendarYearPickerVariants } from "../calendar-year-picker.styles";
@@ -49,9 +54,10 @@ export function CalendarYearPickerCell(props: CalendarYearPickerCellProps): JSX.
 
   cleanup(() => grid.unregisterCell(year));
 
+  const label = formattedYear();
   const values: CalendarYearPickerCellRenderProps = {
-    year: () => year,
-    formattedYear,
+    year,
+    formattedYear: label,
     isSelected,
     isCurrentYear: () => year === grid.currentYear(),
     isOpen: grid.isOpen,
@@ -60,8 +66,8 @@ export function CalendarYearPickerCell(props: CalendarYearPickerCellProps): JSX.
 
   const child =
     typeof local.children === "function"
-      ? local.children(values)
-      : (local.children ?? <Text>{formattedYear()}</Text>);
+      ? renderChildren(local.children(values))
+      : renderChildren(local.children ?? <Text>{label}</Text>);
 
   return (
     <View
@@ -95,11 +101,8 @@ export function CalendarYearPickerCell(props: CalendarYearPickerCellProps): JSX.
       onBlur={() => grid.onCellBlur()}
       onPress={(event: PressEvent) => {
         local.onPress?.(event);
-        if (event.pagePosition.x === 0 && event.pagePosition.y === 0) {
-          modality.setKeyboardModality();
-        } else {
-          modality.setPointerModality();
-        }
+        if (isKeyboardPress(event)) modality.setKeyboardModality();
+        else modality.setPointerModality();
         grid.selectYear(year);
       }}
     >
