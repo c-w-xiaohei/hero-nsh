@@ -799,7 +799,7 @@ export function ListBoxItemIndicator(
   // substitute for the stroke drawing.
   const checkmark = () => (
     <View
-      class="size-2.5 border-b-2 border-s-2 -rotate-45 transition-all duration-[250ms] ease-linear motion-reduce:transition-none"
+      class="h-2.5 w-1.5 border-b-2 border-e-2 rotate-45 transition-all duration-[250ms] ease-linear motion-reduce:transition-none"
       classList={{
         "opacity-100 scale-100": isSelected(),
         "opacity-0 scale-75": !isSelected(),

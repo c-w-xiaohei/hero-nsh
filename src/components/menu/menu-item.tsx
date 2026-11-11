@@ -940,7 +940,7 @@ export function MenuItemIndicator(
     <View
       // `border-l-2` is physical, as HeroUI's SVG polyline is: a logical
       // `border-s-2` would mirror the tick into an inverted V in RTL.
-      class="size-2.5 border-b-2 border-l-2 -rotate-45"
+      class="h-2.5 w-1.5 border-b-2 border-r-2 rotate-45"
       classList={{
         "opacity-100 scale-100": isSelected(),
         "opacity-0": !isSelected(),

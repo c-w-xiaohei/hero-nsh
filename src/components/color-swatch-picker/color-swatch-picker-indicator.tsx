@@ -78,7 +78,7 @@ function getColorLuminance(color: Color): number {
  * R-019 (the slot) lives in the styles file. R-020 is the structural rewrite of
  * the default child: upstream draws a 12×12 `svg` polyline with `currentColor`
  * and a 1.5pt round stroke; NSH has no inline SVG and no checkmark in `icons`,
- * so the default is a `size-1/3`, `rotate-45` view whose `border-b` / `border-r`
+ * so the default is a `h-1/3 w-1/5`, `rotate-45` view whose `border-b` / `border-r`
  * draw the two strokes (1pt, no round caps; port sheet §8). R-021 / R-022 /
  * R-024 are the `scale-0` start, the 150ms transition and the `scale-100`
  * selected state of the indicator's direct child — the default checkmark, and
@@ -176,7 +176,7 @@ export function ColorSwatchPickerIndicator(
     // R-020 / R-021 / R-022 / R-024: the default checkmark.
     return (
       <View
-        class="size-1/3 rotate-45 border-b border-r transition-transform duration-150 ease-out motion-reduce:transition-none"
+        class="h-1/3 w-1/5 rotate-45 border-b border-r transition-transform duration-150 ease-out motion-reduce:transition-none"
         classList={{
           "scale-0": !isSelected(),
           "scale-100": isSelected(),
