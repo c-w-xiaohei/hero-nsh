@@ -22,8 +22,9 @@ import type { Component } from "./types";
  * `position()`.
  *
  * `sheet/controlled` keeps the panel open when a close is requested, which is
- * what the upstream controlled case observes; the “Set closed” button is the
- * `rerender(isOpen={false})` of the browser tests.
+ * what the upstream controlled case observes; the in-panel “Set closed” button
+ * is the `rerender(isOpen={false})` of the browser tests (it cannot sit on the
+ * stage: the modal layer blocks those presses).
  *
  * `sheet/retained` is the retained-content family (T-024 … T-034): controlled
  * `isOpen`, `isExiting` driven by the same signal, a second sheet, and the
@@ -306,7 +307,6 @@ function Controlled() {
 
   return (
     <Stage>
-      <Button onPress={() => open.set(false)}>Set closed</Button>
       <Sheet isOpen={open()} onOpenChange={probe("openChange")}>
         <Sheet.Backdrop>
           <Sheet.Content>
@@ -314,6 +314,9 @@ function Controlled() {
               <Sheet.CloseTrigger />
               <Sheet.Body>
                 <Text>Controlled content</Text>
+                {/* The panel starts open, so the owner's `isOpen` can only be
+                    changed by a control the open modal layer does not block. */}
+                <Button onPress={() => open.set(false)}>Set closed</Button>
               </Sheet.Body>
             </Sheet.Dialog>
           </Sheet.Content>
@@ -432,10 +435,13 @@ function RetainedSheet(props: RetainedProps) {
                 <Sheet.Handle testID="handle" />
                 <Sheet.Header>
                   <Sheet.Heading>Details</Sheet.Heading>
+                  {/* A 200-point snap shows the handle, the heading and three
+                      header rows, so the controls the web cases press come
+                      first; “Close and unmount” must stay inside that reach. */}
                   <Button onPress={close}>Close sheet</Button>
                   <Button onPress={blink}>Blink</Button>
-                  <Button onPress={() => mounted.set(false)}>Unmount now</Button>
                   <Button onPress={closeAndUnmount}>Close and unmount</Button>
+                  <Button onPress={() => mounted.set(false)}>Unmount now</Button>
                 </Sheet.Header>
                 <Sheet.Body>
                   <Text>Retained body</Text>

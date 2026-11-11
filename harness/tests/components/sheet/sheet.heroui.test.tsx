@@ -124,8 +124,10 @@ test("T-002 supports trigger opening and explicit close with consumer callbacks"
 
 // heroui/packages/react/tests/components/sheet/sheet.test.tsx:56
 // Rewritten (port sheet T-003): the controlled root starts open, a close
-// request is reported but the panel stays, and the owner's “Set closed” signal
-// is the `rerender(isOpen={false})` that finally hides it.
+// request is reported but the panel stays, and the owner's in-panel “Set
+// closed” control is the `rerender(isOpen={false})` that finally hides it. The
+// control sits inside the panel because the open sheet's modal layer blocks
+// every stage control, exactly as it does upstream.
 test("T-003 supports controlled state without a trigger", async () => {
   const app = await openScenario("sheet/controlled", { clock: {} });
 
