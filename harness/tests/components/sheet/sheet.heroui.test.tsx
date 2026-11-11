@@ -214,6 +214,7 @@ test("T-007 supports explicit closing when dismissal is disabled", async () => {
 
   await app.press("role:button[Dismiss sheet]");
   await app.waitFor(CONTENT, { state: "gone" });
+  expect(app.shows(CONTENT)).toBe(false);
 });
 
 // heroui/packages/react/tests/components/sheet/sheet.test.tsx:147
@@ -358,8 +359,8 @@ const SWIPES: Array<{ scenario: string; label: string; dx: number; dy: number }>
 
 // heroui/packages/react/tests/components/sheet/sheet.browser.test.tsx:256
 // Rewritten (port sheet T-014): the `swipeDirection` override decides the drag
-// axis; the seven combinations all close and report `[true], [false]`. The
-// scroll-lock assertion is dropped (§8).
+// axis; the seven combinations all close (the panel text is gone) and report
+// `[true], [false]`. The scroll-lock assertion is dropped (§8).
 for (const swipe of SWIPES) {
   test(`T-014 supports overridden ${swipe.label} handle dismissal`, async () => {
     const app = await openScenario(swipe.scenario, { clock: {} });
@@ -367,6 +368,7 @@ for (const swipe of SWIPES) {
     await openSheet(app);
     await app.drag("id:handle", { x: swipe.dx, y: swipe.dy });
     await app.waitFor(CONTENT, { state: "gone" });
+    expect(app.shows(CONTENT)).toBe(false);
 
     expect(calls(app, "openChange")).toEqual([true, false]);
   });
@@ -402,8 +404,10 @@ const VIEWPORTS: Array<[number, number]> = [
 // measured 0.95 × viewport height after expansion — the fixture states the cap
 // as an inline `maxHeight: "95%"` (NSH's style channel takes a number or a
 // percentage, and `max-h-[95vh]` is an unknown class) and carries 50 rows so the
-// Body overflows the cap the way HeroUI's 40 paragraphs do — the wheel becomes
-// `app.scroll`, and the panel stays visible.
+// Body overflows the cap the way HeroUI's 40 paragraphs do. The wheel becomes
+// `app.scroll`; a body that rejects a scroll while clipped and accepts one
+// after expansion is upstream's `scrollHeight > clientHeight` (a resolving step
+// is a step the user could take), and the panel stays visible.
 for (const snaps of [false, true]) {
   for (const [width, height] of VIEWPORTS) {
     test(`T-016 supports wheel scrolling at ${width} × ${height} after full expansion (${snaps ? "with" : "without"} snap points)`, async () => {
@@ -415,13 +419,18 @@ for (const snaps of [false, true]) {
 
       await openSheet(app);
       if (snaps) {
+        await expect(app.scroll("id:body", 80)).rejects.toThrow();
         await app.drag("id:handle", { x: 0, y: -(height - 240) });
         await app.clock!.runFor(20);
       }
 
       expect(Math.abs(layout(app, "content").height - height * 0.95)).toBeLessThan(8);
 
-      await app.scroll("id:body", 250);
+      // A step that resolves is a step the user could take: `app.scroll` rejects
+      // on a body whose content fits (T-015), so this is `scrollHeight >
+      // clientHeight`. The resulting offset has no read channel, and upstream's
+      // own check of it is an `expect.poll` outside the sheet's count.
+      await expect(app.scroll("id:body", 250)).resolves.toBe(undefined);
       expect(app.shows("role:button[Done]")).toBe(true);
     });
   }
