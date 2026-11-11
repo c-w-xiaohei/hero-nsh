@@ -8,9 +8,11 @@ import * as autocomplete from "../../testers/autocomplete";
 /*
  * Kobalte 0.13.14 combobox regressions for Autocomplete that need a browser
  * keyboard, per port sheet 4b (T-023 … T-025, T-030, T-034, T-035, T-039 …
- * T-042, T-045). They run on `--target web` only: NSH 0.4.0's Win32 host gives keyboard
- * focus only to an Input and does not deliver keymap keys to a view (approved
- * difference, port sheet section 8).
+ * T-046, T-055). They run on `--target web` only: NSH 0.4.0's Win32 host gives
+ * keyboard focus only to an Input and does not deliver keymap keys to a view
+ * (approved difference, port sheet section 8). Rows the port sheet lists as
+ * `无头 windows` but that walk the list with arrows or Enter (T-043, T-044,
+ * T-046, T-055) live here for the same reason.
  *
  * Kobalte drives a permanent combobox input; HeroUI's input lives in the
  * popover, so "ArrowDown opens the list" becomes "the press opens it and the
@@ -32,6 +34,11 @@ function openCase(name: string, options: ScenarioOptions = {}): Promise<App> {
 /** Runs past the 100 ms exit hold. */
 function settle(app: App): Promise<void> {
   return app.clock!.runFor(120);
+}
+
+/** The `open` boolean payloads the fixture recorded. */
+function openChanges(app: App): unknown[] {
+  return callsOf(app, "openChange").map((args) => args[0]);
 }
 
 // kobalte/packages/core/src/combobox/combobox.test.tsx:1052
@@ -297,3 +304,100 @@ test("T-045 skips disabled items", async () => {
   expect(autocomplete.getListbox(app)).toBe(false);
   expect(autocomplete.triggerShows(app, "Panda")).toBe(true);
 });
+
+// kobalte/packages/core/src/combobox/combobox.test.tsx:2403
+// Ported (port sheet T-043): a controlled `value` shows Dog, focuses it when the
+// list opens, and ignores the selection the arrow key and Enter report.
+test("T-043 supports controlled selection", async () => {
+  const app = await openCase("autocomplete/markers-controlled.split");
+
+  expect(autocomplete.triggerShows(app, "Dog")).toBe(true);
+
+  await autocomplete.open(app, "Dog");
+
+  expect(autocomplete.getOptions(app)).toBe(3);
+  expect(autocomplete.isFocusedOption(app, "Dog")).toBe(true);
+  expect(app.shows("role:option[Dog] >> text:✓")).toBe(true);
+
+  await app.keyboard.press("arrowup");
+
+  expect(autocomplete.isFocusedOption(app, "Cat")).toBe(true);
+
+  await app.keyboard.press("enter");
+  await settle(app);
+
+  const changes = callsOf(app, "change");
+
+  expect(changes).toHaveLength(1);
+  expect(changes[0][0]).toBe("cat");
+  expect(autocomplete.getListbox(app)).toBe(false);
+  expect(autocomplete.triggerShows(app, "Dog")).toBe(true);
+});
+
+// kobalte/packages/core/src/combobox/combobox.test.tsx:2485
+// Ported (port sheet T-044): the default selection shows Dog, focuses it on open
+// and is replaced by the keyboard walk.
+test("T-044 supports default selection", async () => {
+  const app = await openCase("autocomplete/markers-selected.split");
+
+  expect(autocomplete.triggerShows(app, "Dog")).toBe(true);
+
+  await autocomplete.open(app, "Dog");
+
+  expect(autocomplete.getOptions(app)).toBe(3);
+  expect(autocomplete.isFocusedOption(app, "Dog")).toBe(true);
+  expect(app.shows("role:option[Dog] >> text:✓")).toBe(true);
+
+  await app.keyboard.press("arrowup");
+
+  expect(autocomplete.isFocusedOption(app, "Cat")).toBe(true);
+
+  await app.keyboard.press("enter");
+  await settle(app);
+
+  const changes = callsOf(app, "change");
+
+  expect(changes).toHaveLength(1);
+  expect(changes[0][0]).toBe("cat");
+  expect(autocomplete.getListbox(app)).toBe(false);
+  expect(autocomplete.triggerShows(app, "Cat")).toBe(true);
+});
+
+// kobalte/packages/core/src/combobox/combobox.test.tsx:2659
+// Rewritten (port sheet T-046): pressing the already-selected item reports that
+// same key instead of an empty selection (HeroUI's single-select policy keeps a
+// selection; `disallowEmptySelection` is the list's default).
+test("T-046 does not deselect when pressing an already selected item", async () => {
+  const app = await openCase("autocomplete/markers-selected.split");
+
+  await autocomplete.open(app, "Dog");
+
+  expect(autocomplete.isFocusedOption(app, "Dog")).toBe(true);
+
+  await app.keyboard.press("enter");
+  await settle(app);
+
+  const changes = callsOf(app, "change");
+
+  expect(changes).toHaveLength(1);
+  expect(changes[0][0]).toBe("dog");
+  expect(autocomplete.getListbox(app)).toBe(false);
+  expect(autocomplete.triggerShows(app, "Dog")).toBe(true);
+});
+
+// kobalte/packages/core/src/combobox/combobox.test.tsx:3337
+// Rewritten (port sheet T-055): Space cannot activate a disabled field. The
+// trigger's own focus is a Windows host gap (never focusable) and the assertion
+// that it is not focused has no query; what stays is that nothing opens.
+test("T-055 does not open on Space key press when disabled is true", async () => {
+  const app = await openCase("autocomplete/disabled");
+
+  expect(autocomplete.getListbox(app)).toBe(false);
+
+  await app.keyboard.press("space");
+  await settle(app);
+
+  expect(autocomplete.getListbox(app)).toBe(false);
+  expect(openChanges(app)).toHaveLength(0);
+});
+
