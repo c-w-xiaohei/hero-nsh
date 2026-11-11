@@ -651,7 +651,11 @@ export function AutocompleteRoot<T>(props: AutocompleteRootProps<T>): JSX.Elemen
     onSelectionChange: emitSelection,
     // A repeated selection still reports a change (Kobalte's Select suite).
     allowDuplicateSelectionEvents: () => true,
-    disallowEmptySelection: () => local.disallowEmptySelection ?? false,
+    // React Stately's `SelectState` hard-codes `disallowEmptySelection: true`
+    // for its single selection, so pressing the selected row reports that key
+    // instead of clearing the field (port sheet T-046). A multiple selection
+    // allows the empty set: that is how a tag is dropped (T-050).
+    disallowEmptySelection: () => local.disallowEmptySelection ?? !isMultiple(),
     disabledKeys: () => local.disabledKeys,
     shouldFocusOnHover: () => true,
     shouldSelectOnPressUp: () => true,
@@ -773,6 +777,7 @@ export function AutocompleteRoot<T>(props: AutocompleteRootProps<T>): JSX.Elemen
     descriptionText,
     errorText,
     triggerFocused,
+    setTriggerFocused,
     inputFocused,
     setInputFocused,
     isKeyboard: modality.isKeyboard,

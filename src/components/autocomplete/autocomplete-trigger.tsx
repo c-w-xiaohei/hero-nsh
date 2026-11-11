@@ -13,6 +13,7 @@ import {
   cleanup,
   computed,
   effect,
+  keymap,
   reduceMotion,
   signal,
   split,
@@ -395,15 +396,14 @@ export function AutocompleteTrigger(
   };
 
   /* -------------------------------------------------------------------------------------------
-   * Focus: the field's own focus state lives in the root; the trigger reports
-   * its half of it (`triggerFocused` drives the root's `isFocused`).
+   * Focus: the trigger reports its half of the field's focus, and the root
+   * joins it with the search input's. The ring (R-007) and the invalid
+   * outline (R-008) stay on this part's own focus, as `:focus-visible` applies
+   * to the element that was focused.
    * ----------------------------------------------------------------------------------------- */
-  // The root's `isFocused` joins the trigger's and the input's focus, but the
-  // context exposes `triggerFocused` only as a reader (core gap, parts notes):
-  // the trigger reports its local focus and the ring, while the field-level
-  // state follows the search input.
   const handleFocus = () => {
     focused.set(true);
+    autocomplete.setTriggerFocused(true);
     autocomplete.noteFocus();
     local.onFocusChange?.(true);
     local.onFocus?.();
@@ -411,9 +411,33 @@ export function AutocompleteTrigger(
 
   const handleBlur = () => {
     focused.set(false);
+    autocomplete.setTriggerFocused(false);
     local.onFocusChange?.(false);
     local.onBlur?.();
   };
+
+  // A trigger that unmounts while focused must not leave the field focused.
+  cleanup(() => autocomplete.setTriggerFocused(false));
+
+  // The trigger is React Aria's `Select` button, and that button opens the list
+  // from the keyboard: ArrowDown on the first option, ArrowUp on the last
+  // (`useSelect`'s key handler, the same half `useMenuTrigger` gives a menu
+  // button). Return and Space arrive as a native press instead. The binding
+  // lives only while the trigger holds the focus and the field is closed, so
+  // the search input keeps the arrows once the popover is open.
+  effect(() => {
+    if (!focused() || isDisabled() || isOpen()) {
+      return;
+    }
+
+    return keymap.bind(
+      {
+        down: () => autocomplete.open("first"),
+        up: () => autocomplete.open("last"),
+      },
+      { when: "always" },
+    );
+  });
 
   /* -------------------------------------------------------------------------------------------
    * Registration: the overlay's anchor / focus-return target, and the context

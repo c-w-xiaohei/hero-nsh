@@ -210,6 +210,15 @@ export interface AutocompleteContextValue {
   /** The trigger holds the keyboard focus. */
   triggerFocused: Accessor<boolean>;
 
+  /**
+   * Records the trigger's focus changes. The trigger is the field's Tab stop
+   * while the popover is closed and the search input while it is open, so the
+   * root's `isFocused` / `onFocus` / `onBlur` join both halves; reporting the
+   * input's focus here instead would mark the whole field blurred whenever the
+   * input is left while the trigger still holds it.
+   */
+  setTriggerFocused: (focused: boolean) => void;
+
   /** The search input holds the keyboard focus. */
   inputFocused: Accessor<boolean>;
 

@@ -64,22 +64,23 @@ test("T-023 opens and virtual focuses the first item", async () => {
 });
 
 // kobalte/packages/core/src/combobox/combobox.test.tsx:1113
-// Rewritten (port sheet T-024): ArrowUp walks back to the last option.
-test("T-024 virtual focuses the last item on ArrowUp", async () => {
+// Rewritten (port sheet T-024): ArrowUp on the closed field's trigger opens the
+// list on its last option (React Aria's `Select` button). Kobalte's case opens
+// from its permanent input; HeroUI has no input while the field is closed, so
+// the trigger carries the key.
+test("T-024 opens on ArrowUp and virtual focuses the last item", async () => {
   const app = await openCase("autocomplete/markers.split");
 
   expect(autocomplete.getListbox(app)).toBe(false);
 
-  await autocomplete.open(app, "Select an animal");
+  await app.keyboard.press("tab");
+  await app.keyboard.press("arrowup");
+  await app.waitFor(autocomplete.LISTBOX);
 
-  expect(autocomplete.getListbox(app)).toBe(true);
   expect(autocomplete.getOptions(app)).toBe(3);
   expect(app.shows("role:option[Cat]")).toBe(true);
   expect(app.shows("role:option[Dog]")).toBe(true);
   expect(app.shows("role:option[Panda]")).toBe(true);
-
-  await app.keyboard.press("arrowup");
-
   expect(autocomplete.isFocusedOption(app, "Cat")).toBe(false);
   expect(autocomplete.isFocusedOption(app, "Panda")).toBe(true);
 });
@@ -159,8 +160,8 @@ test("T-035 supports labeling via aria-label and aria-labelledby", async () => {
 });
 
 // kobalte/packages/core/src/combobox/combobox.test.tsx:2007
-// Rewritten (port sheet T-039): ArrowUp twice from the first option lands on Dog
-// and Enter selects it; the trigger then shows it.
+// Rewritten (port sheet T-039): ArrowDown from the first option lands on Dog and
+// Enter selects it; the trigger then shows it.
 test("T-039 can select items with the Enter key", async () => {
   const app = await openCase("autocomplete/markers.split");
 
@@ -171,11 +172,7 @@ test("T-039 can select items with the Enter key", async () => {
   expect(app.shows("role:option[Dog]")).toBe(true);
   expect(app.shows("role:option[Panda]")).toBe(true);
 
-  await app.keyboard.press("arrowup");
-
-  expect(autocomplete.isFocusedOption(app, "Panda")).toBe(true);
-
-  await app.keyboard.press("arrowup");
+  await app.keyboard.press("arrowdown");
 
   expect(autocomplete.isFocusedOption(app, "Dog")).toBe(true);
 

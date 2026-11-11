@@ -732,7 +732,7 @@ function Multiple(props: MultipleProps) {
         onChange={record}
       >
         <Label>Favorite Animals</Label>
-        <Autocomplete.Trigger>
+        <Autocomplete.Trigger testID="autocomplete-trigger">
           <Autocomplete.Value className="flex flex-wrap gap-2">
             {({ defaultChildren, isPlaceholder, selectedItems }) => (
               <If

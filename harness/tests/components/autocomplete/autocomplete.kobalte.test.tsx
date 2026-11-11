@@ -369,7 +369,7 @@ test("T-047 supports selecting multiple options", async () => {
 test("T-048 supports multiple defaultValue", async () => {
   const app = await openCase("autocomplete/multiple-default");
 
-  await autocomplete.open(app, "Select animals");
+  await autocomplete.openTrigger(app);
 
   expect(app.shows("role:option[Cat] >> text:✓")).toBe(true);
   expect(app.shows("role:option[Dog] >> text:✓")).toBe(true);
@@ -391,7 +391,7 @@ test("T-048 supports multiple defaultValue", async () => {
 test("T-049 supports multiple value (controlled)", async () => {
   const app = await openCase("autocomplete/multiple-controlled");
 
-  await autocomplete.open(app, "Select animals");
+  await autocomplete.openTrigger(app);
 
   expect(app.shows("role:option[Cat] >> text:✓")).toBe(true);
   expect(app.shows("role:option[Dog] >> text:✓")).toBe(true);
@@ -411,7 +411,7 @@ test("T-049 supports multiple value (controlled)", async () => {
 test("T-050 supports deselection", async () => {
   const app = await openCase("autocomplete/multiple-default");
 
-  await autocomplete.open(app, "Select animals");
+  await autocomplete.openTrigger(app);
 
   expect(app.shows("role:option[Cat] >> text:✓")).toBe(true);
   expect(app.shows("role:option[Dog] >> text:✓")).toBe(true);

@@ -8,7 +8,7 @@ import type { App } from "nsh/test";
  * Markers, following the port sheet's contract:
  *   - the `markers*` scenes suffix the row that holds the list's virtual focus
  *     with `*` and keep each row's accessible name on `aria-label`, so
- *     `role:option[Dog] >> text:/*$/` identifies the highlighted row without
+ *     `role:option[Dog] >> text:/[*]$/` identifies the highlighted row without
  *     an `aria-activedescendant` query (NSH has no DOM attribute channel);
  *   - `ListBox.ItemIndicator` renders `✓` for a selected row, so
  *     `role:option >> text:✓` counts the selection.
@@ -42,6 +42,16 @@ export async function open(app: App, triggerText: string): Promise<void> {
   await app.waitFor(LISTBOX);
 }
 
+/**
+ * Presses the trigger by test id and waits for the listbox: a trigger that
+ * shows tags instead of its placeholder (a multiple selection with values)
+ * has no placeholder text to press.
+ */
+export async function openTrigger(app: App): Promise<void> {
+  await app.press("id:autocomplete-trigger");
+  await app.waitFor(LISTBOX);
+}
+
 /** Presses the option the accessible name picks out and waits for the press. */
 export function toggleOptionSelection(app: App, name: string): Promise<void> {
   return app.press(option(name));
@@ -49,7 +59,7 @@ export function toggleOptionSelection(app: App, name: string): Promise<void> {
 
 /** Whether the row `name` carries the focus marker. */
 export function isFocusedOption(app: App, name: string): boolean {
-  return app.shows(`${option(name)} >> text:/*$/`);
+  return app.shows(`${option(name)} >> text:/[*]$/`);
 }
 
 /** How many rows show the selected marker. */
