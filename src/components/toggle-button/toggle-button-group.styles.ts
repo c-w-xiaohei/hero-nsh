@@ -14,7 +14,10 @@ export const toggleButtonGroupVariants = tv({
   slots: {
     // R-027: `.toggle-button-group` base box. `w-fit` writes out the
     // shrink-to-content width of an inline-flex box on the web.
-    base: "inline-flex h-auto w-fit items-center justify-center gap-0",
+    // The group rounds and clips its own box, so the members can stay square
+    // and still show one joined shape. `first:` / `last:` cannot do that here:
+    // each button is its own parent, so both match everywhere.
+    base: "inline-flex h-auto w-fit items-center justify-center gap-0 rounded-3xl overflow-clip",
     // R-041, R-043. R-042 (`bg-current`) becomes a colorless border in the
     // orientation rules below: a border without a color is drawn in the
     // element's text color, which is what currentColor asked for.
@@ -30,7 +33,7 @@ export const toggleButtonGroupVariants = tv({
     // R-046, R-048: detached mode opens the gap and hides the separators.
     isDetached: {
       false: {},
-      true: { base: "gap-1", separator: "hidden" },
+      true: { base: "gap-1 rounded-none overflow-visible", separator: "hidden" },
     },
     // R-028, R-029 (NSH views default to a column, so the direction is
     // explicit); R-044, R-045 for the separator's geometry.

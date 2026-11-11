@@ -19,13 +19,10 @@ export function toggleButtonGroupItemClasses(
   // classes only exist when the group is not detached, so a detached group's
   // member keeps the base `rounded-3xl`.
   if (!isDetached) {
+    // The group clips its own rounded box, so every member is square; the
+    // first/last corner rules upstream writes cannot be expressed here (a
+    // button is the only child of its own parent, so both match).
     classes.push("rounded-none");
-
-    if (orientation === "horizontal") {
-      classes.push("first:rounded-s-3xl", "last:rounded-e-3xl");
-    } else {
-      classes.push("first:rounded-t-3xl", "last:rounded-b-3xl");
-    }
   }
 
   // R-038: `transform: none` while pressed, after the size variant's
