@@ -127,8 +127,8 @@ jobs:
           printf '{"name":"consumer","id":"com.heronsh.consumer","version":"0.0.0","build":1,"theme":"node_modules/hero-nsh/theme/hero-nsh.theme.json"}\n' > nsh.json
           printf '{"extends":"./.nsh/tsconfig.json","include":["**/*.ts","**/*.tsx"]}\n' > tsconfig.json
           cat > App.tsx <<'TSX'
-          import { mount, Text } from "nsh";
-          import { Button, Card, HERO_NSH_VERSION, Input, Label, TextField } from "hero-nsh";
+          import { mount } from "nsh";
+          import { Button, Card, Input, Label, TextField } from "hero-nsh";
 
           mount(() => (
             <Card className="p-4">
@@ -137,12 +137,11 @@ jobs:
                 <Input placeholder="you@example.com" />
               </TextField>
               <Button>Save</Button>
-              <Text>{HERO_NSH_VERSION}</Text>
             </Card>
           ));
           TSX
           nsh check . 2>&1 | tee "$RUNNER_TEMP/consumer-check.log"
-          echo 'expect(app.texts()).toContain("0.0.0");' | nsh test App.tsx 2>&1 | tee "$RUNNER_TEMP/consumer-test.log"
+          echo 'expect(app.texts()).toContain("Save");' | nsh test App.tsx 2>&1 | tee "$RUNNER_TEMP/consumer-test.log"
           # An unknown class builds, passes and renders wrong, so the only signal
           # is the warning: read the logs for it.
           if grep -qE 'unknown class' "$RUNNER_TEMP"/consumer-*.log; then

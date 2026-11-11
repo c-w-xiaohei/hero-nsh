@@ -5,7 +5,7 @@ import { callsOf } from "../../helpers/calls";
 for (const platform of ["windows", "web"] as const) {
   test(`smoke renders through the @heroui/react alias on ${platform}`, async () => {
     const app = await openScenario("smoke/basic", { platform });
-    expect(app.texts()).toContain("hero-nsh 0.0.0");
+    expect(app.texts()).toContain("hero-nsh");
   });
 
   test(`smoke reads probe calls back on ${platform}`, async () => {
