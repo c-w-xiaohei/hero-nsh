@@ -32,8 +32,11 @@ export const buttonGroupVariants = tv({
         separator: "-start-px top-1/4 w-px h-1/2 border-s",
       },
       // R-032, R-046
+      // `flex-col` brings the column's own cross-axis default, which drops the
+      // base slot's `items-center`; the group keeps the width of its widest
+      // button upstream, so both are restated here.
       vertical: {
-        base: "flex-col",
+        base: "flex-col items-center w-fit self-start",
         separator: "start-1/4 -top-px w-1/2 h-px border-t",
       },
     },
