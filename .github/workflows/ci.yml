@@ -30,6 +30,12 @@ on:
 permissions:
   contents: read
 
+# The toolchain the library is written against; `install.sh` reads it and
+# defaults to the latest release, whose generated `nsh` declarations change
+# between versions.
+env:
+  NSH_VERSION: v0.4.0
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
