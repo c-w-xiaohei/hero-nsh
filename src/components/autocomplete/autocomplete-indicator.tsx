@@ -5,10 +5,10 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { computed, split, View } from "nsh";
+import { cleanup, computed, split, View } from "nsh";
 
 import { renderChildren } from "../list-box/children";
-import { AutocompleteContext } from "./autocomplete-context";
+import { AutocompleteContext, AutocompleteTriggerContext } from "./autocomplete-context";
 
 /**
  * The props of `Autocomplete.Indicator`: HeroUI's `DOMRenderProps` over the
@@ -44,11 +44,13 @@ export interface AutocompleteIndicatorProps {
 }
 
 /**
- * Autocomplete.Indicator / AutocompleteIndicator.
+ * Autocomplete.Indicator / AutocompleteIndicator: the chevron at the trigger's
+ * inline end, rotated while the field is open.
  *
- * Stub: the real part registers itself with the trigger (its `pe-7` padding),
- * draws the default chevron at `size-4`, and rotates with the open state. This
- * body only fixes the file and the public surface.
+ * HeroUI renders an SVG and clones a custom child to inject the slot classes;
+ * NSH has no SVG and cannot rewrite the caller's element, so a custom child
+ * sits inside a container carrying the slot classes instead (registered
+ * difference, the same as `Select.Indicator`, port sheet §8).
  */
 export function AutocompleteIndicator(
   props: AutocompleteIndicatorProps,
@@ -69,9 +71,19 @@ export function AutocompleteIndicator(
   ] as const);
 
   const autocomplete = AutocompleteContext();
+  const trigger = AutocompleteTriggerContext();
 
   if (!autocomplete) {
     return null;
+  }
+
+  // R-005: `.autocomplete__trigger:has(.autocomplete__indicator)` pads the
+  // trigger's inline end. NSH has no `:has`, so the trigger reserves the room
+  // while an indicator is mounted.
+  if (trigger) {
+    // Registered on mount, released on unmount: the trigger's `pe-7` follows
+    // the indicator's presence, not its first render.
+    cleanup(trigger.registerIndicator());
   }
 
   const classes = computed(() =>
@@ -79,6 +91,25 @@ export function AutocompleteIndicator(
       .filter((part): part is string => typeof part === "string" && part.length > 0)
       .join(" "),
   );
+
+  // R-018: `[data-slot="autocomplete-default-indicator"]` → `size-4`, which is
+  // the built-in chevron's own box; a custom child is not sized by the slot,
+  // as upstream only targets the native SVG.
+  const chevron = () => (
+    <View class="flex size-4 items-center justify-center">
+      <View class="size-2 border-b-2 border-e-2 rotate-45" />
+    </View>
+  );
+
+  const content = () => {
+    const children = local.children;
+
+    if (children === undefined || children === null || children === false) {
+      return chevron();
+    }
+
+    return renderChildren(children);
+  };
 
   return (
     <View
@@ -89,11 +120,17 @@ export function AutocompleteIndicator(
       accessibilityElementsHidden={
         local["aria-hidden"] ?? local.accessibilityElementsHidden ?? true
       }
+      // R-015: `.autocomplete__indicator` → the `indicator` slot classes
+      // (absolute, inline end, centred, placeholder colour).
+      // R-016: the interactive cursor lives in the same slot string.
       class={classes()}
+      // R-017: `[data-open="true"]` → `rotate-180`, so the default chevron
+      // turns with the field.
+      classList={{ "rotate-180": autocomplete.isOpen() }}
       style={local.style}
       onLayout={local.onLayout}
     >
-      {renderChildren(local.children as JSX.Element)}
+      {content()}
     </View>
   );
 }
