@@ -1,8 +1,9 @@
 import type { JSX, ScrollProps, ScrollRef } from "nsh";
 import { computed, Scroll, split, Text } from "nsh";
 
+import { DrawerDialogContext } from "./create-drawer-part-order";
 import { DrawerContext } from "./drawer-context";
-import { drawerVariants } from "./drawer.styles";
+import { drawerBodyAfterHeaderClasses, drawerVariants } from "./drawer.styles";
 
 export interface DrawerBodyProps extends Omit<ScrollProps, "children" | "class" | "ref"> {
   children?: JSX.Element;
@@ -16,8 +17,15 @@ export function DrawerBody(props: DrawerBodyProps): JSX.Element {
   const [local, rest] = split(props, ["children", "className", "render", "ref"] as const);
   const context = DrawerContext();
   const slots = () => context?.slots() ?? drawerVariants();
+
+  // R-030: `.drawer__header + .drawer__body` -> `mt-2`, read once at
+  // registration. A body written first, after a footer, or outside a Dialog
+  // gets the slot's own zero vertical margin.
+  const previous = DrawerDialogContext()?.register("body");
+  const gap = previous === "header" ? drawerBodyAfterHeaderClasses : undefined;
+
   const classes = computed(() =>
-    [slots().body(), local.className].filter((part) => part !== undefined && part !== "").join(" "),
+    [slots().body(), local.className, gap].filter((part) => part !== undefined && part !== "").join(" "),
   );
 
   return (

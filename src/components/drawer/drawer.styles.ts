@@ -18,8 +18,9 @@ export const drawerVariants = tv({
     heading: "text-base font-medium text-foreground",
     // R-025, R-043, R-044
     body: "min-h-0 flex-auto basis-auto text-sm leading-[1.43] text-muted -m-[3px] my-0 p-[3px]",
-    // R-026
-     footer: "flex flex-row items-center justify-end gap-2 mt-5",
+    // R-026: `.drawer__footer` has `mt-0`; the gap belongs to the adjacency
+    // rules below, not to the slot.
+    footer: "flex flex-row items-center justify-end gap-2 mt-0",
     // R-027, R-028, R-045
     handle: "flex items-center justify-center pb-2",
     closeTrigger: "absolute z-10 end-4 top-4",
@@ -39,6 +40,22 @@ export const drawerVariants = tv({
   },
   defaultVariants: { placement: "bottom", variant: "opaque" },
 });
+
+/**
+ * R-030 `.drawer__header + .drawer__body` → `mt-2`. NSH has no adjacent
+ * sibling selector, so `Drawer.Body` asks `Drawer.Dialog` which part was
+ * written before it (create-drawer-part-order.ts).
+ */
+export const drawerBodyAfterHeaderClasses = "mt-2";
+
+/**
+ * R-031 `.drawer__header + .drawer__footer` → `mt-5` and R-032
+ * `.drawer__body + .drawer__footer` → `mt-5`: the footer's gap depends on
+ * which part precedes it. Both rules land on `mt-5` but stay separate
+ * constants because they are separate rules upstream.
+ */
+export const drawerFooterAfterHeaderClasses = "mt-5";
+export const drawerFooterAfterBodyClasses = "mt-5";
 
 export type DrawerVariants = VariantProps<typeof drawerVariants>;
 export type DrawerSlots = ReturnType<typeof drawerVariants>;
