@@ -30,7 +30,7 @@ export const disclosureVariants = tv({
     // `status-disabled` (0.5 opacity, `not-allowed`, no pointer events). The
     // opacity is a literal because the theme has no disabled token.
     trigger:
-      "flex flex-row items-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none",
+      "flex flex-row items-center text-foreground cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none",
     // R-013: `.disclosure__content` → `overflow: clip` (twref maps it to
     // `overflow: hidden`), the mechanism that keeps the collapsed panel
     // mounted and invisible.

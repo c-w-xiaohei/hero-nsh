@@ -74,7 +74,7 @@ export const accordionVariants = tv({
     // R-034 / R-035: the surface first / last trigger radii are computed there,
     // from the Item's registered position.
     trigger:
-      "flex flex-1 items-center justify-between px-4 py-4 text-start text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+      "flex flex-1 items-center justify-between px-4 py-4 text-start text-sm font-medium text-foreground cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
   },
   variants: {
     variant: {

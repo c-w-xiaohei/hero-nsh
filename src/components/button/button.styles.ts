@@ -32,8 +32,9 @@ export const buttonVariants = tv({
       // R-019
       secondary:
         "bg-default text-accent-soft-foreground hover:bg-default-hover active:bg-default-hover",
-      // R-020: no foreground class, so the text stays the inherited currentColor.
-      tertiary: "bg-default hover:bg-default-hover active:bg-default-hover",
+      // R-020: upstream keeps the inherited currentColor; an NSH Text defaults to
+      // black, so the foreground is written out to match the document colour.
+      tertiary: "bg-default text-foreground hover:bg-default-hover active:bg-default-hover",
       // R-021
       ghost: "bg-transparent text-default-foreground hover:bg-default active:bg-default",
       // R-021 background / foreground; R-022 borders are written per logical

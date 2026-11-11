@@ -16,7 +16,7 @@ import {
   Pagination,
   SearchField,
   Select,
-  Skeleton,
+  Separator,
   Tabs,
 } from "hero-nsh";
 import { Page } from "./ui";
@@ -37,7 +37,7 @@ const SORTS = [
 function Filters() {
   return (
     <View class="flex-row flex-wrap items-end gap-3">
-      <SearchField className="w-[240px]" name="search">
+      <SearchField className="w-full sm:w-[260px]" name="search">
         <Label>Search orders</Label>
         <SearchField.Group>
           <SearchField.SearchIcon />
@@ -46,7 +46,7 @@ function Filters() {
         </SearchField.Group>
       </SearchField>
 
-      <Select className="w-[180px]" defaultSelectedKey="newest">
+      <Select className="w-full sm:w-[180px]" defaultSelectedKey="newest">
         <Label>Sort by</Label>
         <Select.Trigger>
           <Select.Value />
@@ -86,23 +86,44 @@ function Filters() {
   );
 }
 
+function Summary() {
+  return (
+    <View class="grid grid-cols-3 gap-4 rounded-3xl bg-surface p-4 shadow-surface dark:shadow-surface-dark">
+      <View class="gap-1">
+        <Text class="text-xs text-muted">Orders</Text>
+        <Text class="text-xl font-semibold text-foreground">4</Text>
+      </View>
+      <View class="gap-1">
+        <Text class="text-xs text-muted">Open</Text>
+        <Text class="text-xl font-semibold text-foreground">2</Text>
+      </View>
+      <View class="gap-1">
+        <Text class="text-xs text-muted">Revenue</Text>
+        <Text class="text-xl font-semibold text-foreground">$1,664</Text>
+      </View>
+    </View>
+  );
+}
+
 function OrderList() {
   return (
     <ListBox aria-label="Orders" className="w-full" selectionMode="single">
       {ORDERS.map((order) => (
-        <ListBox.Item className="flex-wrap gap-y-1" id={order.id} textValue={`#${order.id} ${order.name}`}>
+        <ListBox.Item id={order.id} textValue={`#${order.id} ${order.name}`}>
           <Badge.Anchor>
             <Avatar>
               <Avatar.Fallback>{order.name.charAt(0)}</Avatar.Fallback>
             </Avatar>
             {order.urgent ? <Badge>!</Badge> : null}
           </Badge.Anchor>
-          <View class="flex-auto min-w-[140px] flex-col">
-            <Label>{order.name}</Label>
+          <View class="flex-auto min-w-[120px] flex-col gap-1">
+            <View class="flex-row flex-wrap items-center gap-2">
+              <Label>{order.name}</Label>
+              {order.urgent ? <Chip color="danger">Urgent</Chip> : null}
+              <Chip color={order.state === "Open" ? "accent" : "default"}>{order.state}</Chip>
+            </View>
             <Description>{order.detail}</Description>
           </View>
-          {order.urgent ? <Chip color="danger">Urgent</Chip> : null}
-          <Chip color={order.state === "Open" ? "accent" : "default"}>{order.state}</Chip>
           <Text class="text-sm text-foreground">{order.amount}</Text>
           <ListBox.ItemIndicator />
         </ListBox.Item>
@@ -111,9 +132,38 @@ function OrderList() {
   );
 }
 
+function PaginationRow() {
+  return (
+    <Pagination>
+      <Pagination.Content>
+        <Pagination.Item>
+          <Pagination.Previous aria-label="Previous page">
+            <Pagination.PreviousIcon />
+          </Pagination.Previous>
+        </Pagination.Item>
+        <Pagination.Item>
+          <Pagination.Link isActive>1</Pagination.Link>
+        </Pagination.Item>
+        <Pagination.Item>
+          <Pagination.Link>2</Pagination.Link>
+        </Pagination.Item>
+        <Pagination.Item>
+          <Pagination.Link>3</Pagination.Link>
+        </Pagination.Item>
+        <Pagination.Item>
+          <Pagination.Next aria-label="Next page">
+            <Pagination.NextIcon />
+          </Pagination.Next>
+        </Pagination.Item>
+      </Pagination.Content>
+    </Pagination>
+  );
+}
+
 function App() {
   return (
     <Page
+      maxWidth="max-w-[1000px]"
       title="Orders"
       note="Everything sold this month, newest first."
       actions={
@@ -152,7 +202,7 @@ function App() {
       </Breadcrumbs>
 
       <Tabs>
-        <Tabs.ListContainer>
+        <Tabs.ListContainer className="w-fit">
           <Tabs.List aria-label="Order state">
             <Tabs.Tab id="all">
               All
@@ -171,34 +221,19 @@ function App() {
 
         <Tabs.Panel className="gap-4 pt-4" id="all">
           <Filters />
-          <OrderList />
-          <View class="flex-row items-center gap-3">
-            <Skeleton className="h-10 w-10 rounded-full" />
-            <Text class="text-sm text-muted">Loading more orders…</Text>
+          <Summary />
+          <View class="rounded-3xl bg-surface shadow-surface dark:shadow-surface-dark">
+            <View class="p-2">
+              <OrderList />
+            </View>
+            <Separator />
+            <View class="flex-row items-center justify-between gap-4 px-4 py-3">
+              <Text class="text-xs text-muted">4 orders</Text>
+              <View class="ms-auto w-fit">
+                <PaginationRow />
+              </View>
+            </View>
           </View>
-          <Pagination>
-            <Pagination.Content>
-              <Pagination.Item>
-                <Pagination.Previous aria-label="Previous page">
-                  <Pagination.PreviousIcon />
-                </Pagination.Previous>
-              </Pagination.Item>
-              <Pagination.Item>
-                <Pagination.Link isActive>1</Pagination.Link>
-              </Pagination.Item>
-              <Pagination.Item>
-                <Pagination.Link>2</Pagination.Link>
-              </Pagination.Item>
-              <Pagination.Item>
-                <Pagination.Link>3</Pagination.Link>
-              </Pagination.Item>
-              <Pagination.Item>
-                <Pagination.Next aria-label="Next page">
-                  <Pagination.NextIcon />
-                </Pagination.Next>
-              </Pagination.Item>
-            </Pagination.Content>
-          </Pagination>
         </Tabs.Panel>
 
         <Tabs.Panel className="pt-4" id="open">
