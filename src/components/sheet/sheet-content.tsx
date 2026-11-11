@@ -63,7 +63,7 @@ function edgeTranslate(placement: SheetPlacement, offset: number): [number, numb
 
 /**
  * Sheet.Content / SheetContent: the clip box whose axial length is the current
- * detent (R-008 … R-022, port sheet §4c).
+ * detent (R-008 / R-019 / R-020 / R-021 / R-022, port sheet §4c).
  *
  * Upstream this is React Aria's scroll-snap sheet: the panel is laid out at full
  * height inside a scroller and the scroll offset decides how much of it shows.
@@ -121,9 +121,10 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
     isExiting: () => false,
   };
 
-  // R-008 `z-1 box-content overflow-clip outline-none` is the slot; R-016 …
-  // R-018 are the detached pair, appended after it so they beat the placement's
-  // radius and max size; R-009 (`perspective` / `will-change`) is deleted.
+  // R-008 `z-1 box-content overflow-clip outline-none` is the slot; R-016 /
+  // R-017 / R-018 are the detached pair, appended after it so they beat the
+  // placement's radius and max size; R-009 (`perspective` / `will-change`) is
+  // deleted.
   const classes = () =>
     [
       slots().content(),
@@ -142,9 +143,9 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
   });
 
   /**
-   * R-019 … R-022, as the inline axial length they have to be: the detent is a
-   * runtime value, so the box's height (top / bottom) or width (left / right)
-   * is written here rather than in a class. The axis is the placement's, not
+   * R-019 / R-020 / R-021 / R-022, as the inline axial length they have to be:
+   * the detent is a runtime value, so the box's height (top / bottom) or width
+   * (left / right) is written here rather than in a class. The axis is the placement's, not
    * the drag axis: a horizontal `swipeDirection` on a bottom sheet still
    * reveals a height, it only changes which pointer coordinate the Handle
    * follows (`sheetDragLength` keeps the length on the panel's axis).
