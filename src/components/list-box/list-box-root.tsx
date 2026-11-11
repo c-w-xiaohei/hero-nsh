@@ -199,6 +199,45 @@ function descriptorToData(descriptor: ListBoxDescriptor): any {
   };
 }
 
+/**
+ * Port sheet §5, first change: a virtual-focus field (ComboBox) filters the
+ * collection, upstream through React Aria's `displayedCollection`. The rows keep
+ * mounting (`ListBox.Item` still registers), so a changed filter string brings
+ * them back; only the collection the keyboard walks is cut down.
+ */
+function filterData(
+  nodes: readonly any[],
+  matches: (textValue: string, inputValue: string) => boolean,
+  inputValue: string,
+): any[] {
+  return nodes.flatMap((node) => {
+    if (Array.isArray(node.children)) {
+      const children = filterData(node.children, matches, inputValue);
+
+      // `useComboBoxState.ts:679-683`: a section survives only while one of its
+      // filtered children is an item, so a filtered list keeps no empty header.
+      return children.some((child) => !Array.isArray(child.children))
+        ? [{ ...node, children }]
+        : [];
+    }
+
+    return matches(node.textValue ?? "", inputValue) ? [node] : [];
+  });
+}
+
+/** The keys of every option in a built collection, sections included. */
+function collectItemKeys(nodes: readonly any[], into: Set<string>): Set<string> {
+  for (const node of nodes) {
+    if (Array.isArray(node.children)) {
+      collectItemKeys(node.children, into);
+    } else {
+      into.add(String(node.key));
+    }
+  }
+
+  return into;
+}
+
 /** The option with `key`, at the top level or inside a section. */
 function findItemDescriptor(
   descriptors: readonly ListBoxDescriptor[],
@@ -345,6 +384,45 @@ export function ListBoxRoot<T>(
     sortByRenderedOrder(descriptors()).map(descriptorToData),
   );
 
+  // Port sheet §5, first change: the owner's `filterText` (ComboBox's current
+  // filter) cuts the collection down; `defaultFilter` replaces the language-
+  // aware `contains` when the caller gave one. A list with no owner never
+  // filters, so a standalone ListBox is untouched.
+  const matchesFilter = (textValue: string, inputValue: string): boolean => {
+    const custom = owner?.defaultFilter?.();
+
+    if (custom) {
+      return custom(textValue, inputValue);
+    }
+
+    // Kobalte's `createFilter({ sensitivity: "base" })`: a case-insensitive
+    // substring match, locale-aware through `toLocaleLowerCase`.
+    return textValue
+      .toLocaleLowerCase()
+      .includes(inputValue.toLocaleLowerCase());
+  };
+
+  const filteredData = computed(() => {
+    const data = dataSource();
+    const inputValue = owner?.filterText?.();
+
+    return inputValue === undefined
+      ? data
+      : filterData(data, matchesFilter, inputValue);
+  });
+
+  // Port sheet §5, third change: the rows learn which keys survive the filter
+  // so a cut-down row can be `hidden` while it stays mounted and registered.
+  // `undefined` means "nothing is filtered"; a standalone list keeps every row
+  // visible without building a set.
+  const visibleKeys = computed<ReadonlySet<string> | undefined>(() => {
+    if (owner?.filterText?.() === undefined) {
+      return undefined;
+    }
+
+    return collectItemKeys(filteredData(), new Set<string>());
+  });
+
   // A static Section without `id` still needs a key: React Aria derives one
   // from the section's position (`list-box.stories.tsx:87,117`). The root
   // hands out one per Section, prefixed with a NUL byte so it can never take
@@ -374,7 +452,7 @@ export function ListBoxRoot<T>(
   };
 
   const list = createListState({
-    dataSource,
+    dataSource: filteredData,
     getKey: () => "key",
     getTextValue: () => "textValue",
     getDisabled: () => "disabled",
@@ -441,7 +519,10 @@ export function ListBoxRoot<T>(
     collection: list.collection,
     selectionManager: list.selectionManager,
     autoFocus: () => local.autoFocus,
-    shouldFocusWrap: () => local.shouldFocusWrap,
+    // A field that owns this list through the owner contract carries the wrap
+    // setting itself (ComboBox's `shouldFocusWrap`, `useComboBox.ts:174-182`);
+    // the caller-written list has no prop for it.
+    shouldFocusWrap: () => local.shouldFocusWrap ?? owner?.shouldFocusWrap?.(),
     orientation: () => local.orientation ?? "vertical",
     disallowEmptySelection,
     focusCollection: focusRoot,
@@ -461,9 +542,20 @@ export function ListBoxRoot<T>(
         },
         focusedKey: () => manager().focusedKey(),
         findItem: (key) => findItemDescriptor(descriptors(), key),
+        // The unfiltered option count: a field's open guard asks for it
+        // (`useComboBoxState.ts:335`), because a live filter cuts the
+        // collection the keyboard walks.
+        itemCount: () => collectItemKeys(dataSource(), new Set<string>()).size,
         // The field's list stays mounted while it closes; its typeahead prefix
         // must not survive the close (the closed list would search "thf").
         resetTypeAhead: selectableList.resetTypeAhead,
+        // Port sheet §5, first change: a field whose input keeps the focus
+        // (ComboBox) routes its arrows and page keys here, because the list
+        // never becomes a focus stop of its own.
+        handleKeyDown: (event) => {
+          selectableList.onKeyDown(event.key);
+          return true;
+        },
       }),
     );
   }
@@ -804,6 +896,7 @@ export function ListBoxRoot<T>(
     createSectionKey,
     notePointer: () => modality.setPointerModality(),
     keyboardPressedKey,
+    visibleKeys,
     registerItemLayout: selectableList.registerItemLayout,
     unregisterItemLayout: selectableList.unregisterItemLayout,
     registerSectionLayout: selectableList.registerSectionLayout,
@@ -815,7 +908,20 @@ export function ListBoxRoot<T>(
   // read must be a JSX child expression, not a body local or an `If` `else`
   // element: only a binding re-reads it, so an `<If>` child added later, or a
   // changed render function, reaches the tree (each read builds new views).
-  const hasItems = computed(() => local.items != null);
+  // Port sheet §5, first change: the field root may own the dynamic collection
+  // (the HeroUI ComboBox stories write `items` on the root and render the rows
+  // through a function child there), so the list falls back to it.
+  const items = computed<T[] | undefined>(() => {
+    if (local.items !== undefined) {
+      return local.items as T[];
+    }
+
+    const external = owner?.items?.();
+
+    return external === undefined ? undefined : (Array.from(external) as T[]);
+  });
+
+  const hasItems = computed(() => items() != null);
 
   // One row of the dynamic collection. The row is keyed by the item itself
   // (`<Each>`'s default: objects by identity, primitives by value), not by its
@@ -853,8 +959,9 @@ export function ListBoxRoot<T>(
         role="listbox"
         // The root is the one Tab stop; items are virtual-focus rows and never
         // focusable themselves (port sheet section 5). An owned list is a Tab
-        // stop only while its field is open.
-        focusable={isActive()}
+        // stop only while its field is open, and a virtual-focus field
+        // (ComboBox) says it never is one (port sheet §5, first change).
+        focusable={owner?.isTabStop?.() ?? isActive()}
         accessibilityLabel={accessibilityLabel()}
         accessibilityState={local.accessibilityState}
         accessibilityElementsHidden={elementsHidden()}
@@ -874,7 +981,7 @@ export function ListBoxRoot<T>(
           {() => local.renderEmptyState?.(renderProps)}
         </If>
         <If when={hasItems()}>
-          <Each of={local.items}>
+          <Each of={items()}>
             {(item, index) => (
               <CollectionItemContext.Provider value={{ value: item, index }}>
                 {renderRow(item(), untracked(() => index()))}

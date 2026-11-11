@@ -47,6 +47,7 @@ export * from "./components/checkbox";
 export * from "./components/dropdown";
 export * from "./components/radio";
 export * from "./components/textfield";
+export * from "./components/combo-box";
 export * from "./components/tabs";
 export * from "./components/time-field";
 export * from "./components/input-otp";

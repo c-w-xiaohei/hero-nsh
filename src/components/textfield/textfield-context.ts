@@ -123,6 +123,29 @@ export interface TextFieldContextValue {
 
   /** The caret / selection moved. */
   onSelectionChange?: (event: { start: number; end: number }) => void;
+
+  /**
+   * Extra classes the owning composite field adds to the input, after the
+   * input's own classes and before the caller's `className` (ComboBox's
+   * `min-w-0 flex-1 pe-7`, port sheet §5, second change).
+   */
+  inputPartClass?: () => string | undefined;
+
+  /**
+   * The key the input is about to take (`"Enter"`, `"Backspace"`, a character).
+   * A composite field commits its highlighted option on Enter this way; the
+   * input's own editing keeps working (port sheet §5, second change).
+   */
+  onKeyPress?: (event: { key: string }) => void;
+
+  /**
+   * The role the input plays in the field. A ComboBox's input is the
+   * `combobox`; a plain TextField leaves this absent (port sheet §5).
+   */
+  role?: () => "combobox" | undefined;
+
+  /** The accessibility state the field derives (`expanded` for a ComboBox). */
+  accessibilityState?: () => { expanded?: boolean } | undefined;
 }
 
 /** Root → its inputs; `undefined` outside a `TextField`. */
