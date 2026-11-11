@@ -25,7 +25,8 @@ import {
  * T-024, T-027, T-028, T-035 … T-040, T-042 … T-044, T-048, T-056 …
  * T-058 (computed styles / CSS custom properties, BEM and data-slot assertions,
  * react-stately internals, Kobalte-only props, geometry). The keyboard cases
- * live in toast.keyboard.web.test.tsx.
+ * live in toast.keyboard.web.test.tsx. X-001 … X-003 at the end are round-2
+ * implementation regressions, written to the required behaviour.
  */
 
 /* Resolved on the harness theme (theme/hero-nsh.theme.json):
@@ -458,3 +459,71 @@ test("T-062 pauses timers on pointer move and resumes on pointer leave", async (
 });
 
 /* T-063 lives in toast.keyboard.web.test.tsx: it needs Tab focus movement. */
+
+/*
+ * Round-2 regressions. Both are implementation findings handed to the fixer:
+ * these cases state the required behaviour and may stay red until that fix
+ * lands.
+ */
+
+// Regression, evidence: src/components/toast/toast-queue.ts:365-387 — the
+// `exitDuration === 0` branch returned before running the entry's `onClose`.
+// Upstream fires the callback on every close path:
+// tmp/vendor/heroui/packages/react/src/components/toast/toast-queue.ts:283-285
+// delegates to `super.close`, and its early-callback path at :289-314 keeps
+// `onClose` at the moment of dismissal, not after an exit.
+test("X-001 calls onClose exactly once when exitDuration is 0", async () => {
+  const app = await openToast("close-immediate");
+
+  expect(app.shows("role:alert")).toBe(true);
+
+  await closeToast(app);
+
+  expect(callsOf(app, "onClose")).toHaveLength(1);
+
+  await advance(app, 20);
+
+  expect(app.count("role:alert")).toBe(0);
+  expect(callsOf(app, "onClose")).toHaveLength(1);
+});
+
+// Regression, same finding as X-001: reduced motion takes the immediate-removal
+// path (port sheet §2, "退场后移除"), and the entry's `onClose` must still run
+// once. Upstream makes the same `canAnimate` choice in one branch, so both
+// conditions share the dismissal callback.
+test("X-002 calls onClose exactly once under reduced motion", async () => {
+  const app = await openToast("close-onclose", { reducedMotion: true });
+
+  expect(app.shows("role:alert")).toBe(true);
+
+  await closeToast(app);
+
+  expect(callsOf(app, "onClose")).toHaveLength(1);
+
+  await advance(app, 20);
+
+  expect(app.count("role:alert")).toBe(0);
+  expect(callsOf(app, "onClose")).toHaveLength(1);
+});
+
+// Regression, evidence: src/components/toast/toast-provider.tsx:765-784 — the
+// function child read a frozen `entry` snapshot taken when the row was created,
+// so an in-place update never reached the custom layout. Upstream renders the
+// function child from the current Toast props
+// (tmp/vendor/heroui/packages/react/src/components/toast/toast.tsx:320-337),
+// so a queued update re-renders the custom layout with the new content while
+// the row keeps its identity.
+test("X-003 updates the function-as-children layout when a queued toast changes", async () => {
+  const app = await openToast("custom-layout-update");
+
+  await showToast(app, "Add");
+
+  expect(app.count("id:custom-toast")).toBe(1);
+  expect(app.shows("text:Draft")).toBe(true);
+
+  await showToast(app, "Update");
+
+  expect(app.count("id:custom-toast")).toBe(1);
+  expect(app.shows("text:Published")).toBe(true);
+  expect(app.count("text:Draft")).toBe(0);
+});

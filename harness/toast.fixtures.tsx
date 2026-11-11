@@ -340,6 +340,52 @@ function CustomLayout() {
   );
 }
 
+/* X-001: a queue that removes at close, with no exit animation to hold it. */
+function CloseImmediate() {
+  const queue = new ToastQueue({ exitDuration: 0 });
+
+  queue.add({ title: "Immediate" }, { onClose: probe("onClose"), timeout: 0 });
+
+  return (
+    <Frame>
+      <Toast.Provider queue={queue} />
+    </Frame>
+  );
+}
+
+/* X-003: a custom layout whose content changes when the queued toast updates. */
+function CustomLayoutUpdate() {
+  const id = signal("");
+
+  return (
+    <Frame>
+      <Toast.Provider>
+        {({ toast: item }) => (
+          <Toast testID="custom-toast" toast={item}>
+            <Toast.Content>
+              <Toast.Title>{item.content.title}</Toast.Title>
+            </Toast.Content>
+          </Toast>
+        )}
+      </Toast.Provider>
+      <Button
+        onPress={() => {
+          id.set(toast("Draft", { timeout: 0 }));
+        }}
+      >
+        Add
+      </Button>
+      <Button
+        onPress={() => {
+          toast.update(id(), "Published");
+        }}
+      >
+        Update
+      </Button>
+    </Frame>
+  );
+}
+
 /* T-045 / T-046: the title and the description register as the root's label. */
 function Labelled() {
   const queue = new ToastQueue();
@@ -627,6 +673,8 @@ const cases: Record<string, Component> = {
   "clear-two": ClearTwo,
   swapped: Swapped,
   "custom-layout": CustomLayout,
+  "custom-layout-update": CustomLayoutUpdate,
+  "close-immediate": CloseImmediate,
   labelled: Labelled,
   "region-label": RegionLabel,
   "focus-stack": FocusStack,
