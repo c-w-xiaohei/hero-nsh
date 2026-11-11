@@ -15,7 +15,7 @@ export function buttonGroupItemClasses(
   if (orientation === "horizontal") {
     // R-034, R-035. R-036 (a lone child) needs no rule of its own: first and
     // last both match, so all four corners keep their 24-point radius.
-    classes.push("first:rounded-s-3xl", "last:rounded-e-3xl");
+    // Corners belong to the group's own clipped box.
 
     if (variant === "outline") {
       // R-047, R-048, R-049: clear both logical sides, restore the outer ones,
@@ -26,7 +26,7 @@ export function buttonGroupItemClasses(
     }
   } else {
     // R-037, R-038, R-039
-    classes.push("first:rounded-t-3xl", "last:rounded-b-3xl");
+    // Corners belong to the group's own clipped box.
 
     if (variant === "outline") {
       // R-050, R-051, R-052

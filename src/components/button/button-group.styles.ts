@@ -12,7 +12,10 @@ export const buttonGroupVariants = tv({
   slots: {
     // R-030. w-fit writes out the shrink-to-content an inline-flex box has on
     // the web; NSH has no inline layout context.
-    base: "inline-flex h-auto w-fit items-center justify-center gap-0",
+    // Rounded and clipped on the group, as the toggle-button group is: a
+    // button is the only child of its own parent, so `first:` and `last:`
+    // both match and every member would round all four corners.
+    base: "inline-flex h-auto w-fit items-center justify-center gap-0 rounded-3xl overflow-clip",
     // R-042, R-044. R-043 (bg-current) becomes a colorless border in each
     // orientation rule below: a border without a color is drawn in the
     // element's text color, which is what currentColor asked for.
