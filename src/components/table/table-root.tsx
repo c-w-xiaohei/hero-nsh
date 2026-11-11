@@ -27,7 +27,8 @@ export interface TableRootProps
  * `Table.Root` / `TableRoot`: HeroUI's `Table` root, a `div` with the variant's
  * slot classes. It owns the slots and nothing else (`Table.Content` owns the
  * state, port sheet §2); the provider is what lets the parts below read the
- * variant.
+ * variant. R-001 and R-004 are the base and variant classes in
+ * `table.styles.ts`.
  */
 export function TableRoot(props: TableRootProps) {
   const [local, rest] = split(props, [

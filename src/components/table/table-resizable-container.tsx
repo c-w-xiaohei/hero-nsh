@@ -14,11 +14,17 @@ export interface TableResizableContainerProps extends TablePartProps {
 }
 
 /**
- * `Table.ResizableContainer` / `TableResizableContainer`: the two-axis
- * `Scroll` (R-051) that also measures itself, so the column layout can resolve
- * pixel widths and a resizer can write one of them. It reports the callbacks
+ * `Table.ResizableContainer` / `TableResizableContainer`: the `Scroll` of
+ * R-051 that also measures itself, so the column layout can resolve pixel
+ * widths and a resizer can write one of them. It reports the callbacks
  * `onResizeStart` / `onResize` / `onResizeEnd` with the whole width map, as the
  * sheet's events table spells them.
+ *
+ * R-051 asks for `overflow: auto` (both axes). NSH's `Scroll` scrolls along
+ * one axis (`horizontal` or vertical), so this container takes the horizontal
+ * one: column resizing is what changes the width, and the stories that use it
+ * let the page scroll vertically (no fixed height on the container). The
+ * vertical half is registered in the port sheet §8.
  */
 export function TableResizableContainer(props: TableResizableContainerProps) {
   const [local, rest] = split(props, [
@@ -66,6 +72,7 @@ export function TableResizableContainer(props: TableResizableContainerProps) {
     >
       <Scroll
         {...(rest as any)}
+        horizontal
         ref={(node) => local.ref?.(node)}
         nativeID={local.id}
         class={classes()}

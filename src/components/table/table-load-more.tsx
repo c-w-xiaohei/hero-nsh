@@ -25,9 +25,9 @@ export interface TableLoadMoreContentProps extends TablePartProps {}
  * plus, while `isLoading`, the content row that spans the whole grid (R-058).
  *
  * React Aria observes the sentinel with `IntersectionObserver` and a
- * `rootMargin` of `scrollOffset` viewports. NSH has no observer, but the
- * scroll container reports its viewport and offset, and the body reports its
- * own offset, so the sentinel's position in the scroll content is
+ * `rootMargin` of `scrollOffset` viewports. NSH has no observer, but the scroll
+ * container reports its viewport and offset, and the body reports its own
+ * offset, so the sentinel's position in the scroll content is
  * `bodyOffset + sentinelY`; the sentinel is visible when that position (plus
  * `scrollOffset` viewports on each side) overlaps the viewport (§2). Without a
  * scroll container it falls back to one trigger after mount (§8).
@@ -52,37 +52,62 @@ export function TableLoadMore(props: TableLoadMoreProps) {
   const viewport = TableViewportContext();
   const slots = useTableSlots();
 
-  const sentinelY = signal<number | undefined>(undefined);
+  // The single read of `children`, shared by the presence check and the
+  // content row's placement below (`_common`, the children read rule).
+  const children = computed(() => local.children);
+  const hasChildren = computed(() => {
+    const value = children();
+
+    return value !== null && value !== undefined;
+  });
+
+  /** The sentinel's own y inside the body, from its layout. */
+  const sentinelInBody = signal<number | undefined>(undefined);
+
+  /** Its position in the scrolled content: the body's offset plus its own y. */
+  const sentinelY = computed(() => {
+    const y = sentinelInBody();
+
+    return y == null ? undefined : (table?.bodyOffsetY() ?? 0) + y;
+  });
+
   const wasVisible = signal(false);
 
-  const scrollOffset = () => local.scrollOffset ?? 1;
+  const scrollOffset = computed(() => local.scrollOffset ?? 1);
 
   const visible = computed(() => {
     const y = sentinelY();
 
-    if (y == null) {
+    // No scroll container: the sentinel is laid out, so it is "visible" once
+    // (§8).
+    if (!viewport) {
+      return y != null;
+    }
+
+    const height = viewport.height();
+
+    // A container that has not measured itself yet has no viewport to compare
+    // against; the sentinel is not visible until it does.
+    if (y == null || height == null) {
       return false;
     }
 
-    const height = viewport?.height();
-    const offset = viewport?.offsetY() ?? 0;
-
-    // No scroll container: the sentinel is laid out, so it is "visible" once.
-    if (height == null) {
-      return true;
-    }
-
+    const offset = viewport.offsetY();
     const margin = height * scrollOffset();
 
-    return y < offset + height + margin && y > offset - margin;
+    return y > offset - margin && y < offset + height + margin;
   });
 
+  // `onLoadMore` is reported on each entry into the expanded viewport, not on
+  // `isLoading` (§2). The caller guards against re-entry; a sentinel pushed
+  // out by the rows that arrived re-arms by leaving the viewport.
   effect(() => {
     const isVisible = visible();
 
     if (isVisible && !wasVisible()) {
       wasVisible.set(true);
       local.onLoadMore?.();
+
       return;
     }
 
@@ -92,7 +117,7 @@ export function TableLoadMore(props: TableLoadMoreProps) {
   });
 
   const isLoading = computed(() => local.isLoading === true);
-  const showContent = computed(() => isLoading() && local.children != null);
+  const showContent = computed(() => isLoading() && hasChildren());
 
   const classes = computed(() =>
     [slots().loadMore(), local.className as string | undefined].filter(Boolean).join(" "),
@@ -100,22 +125,25 @@ export function TableLoadMore(props: TableLoadMoreProps) {
 
   return (
     <>
-      {/* The sentinel: 0 high, out of the accessibility tree, always mounted
-          (R-058). Its `onLayout` gives the position the visibility needs. */}
+      {/* R-058: the sentinel row is always mounted, zero high and out of the
+          accessibility tree; its 1px probe is what the position is measured
+          from (upstream: `height: 0` row with a `1px × 1px` div). */}
       <View
         {...(rest as any)}
         ref={(node) => local.ref?.(node)}
         nativeID={local.id}
-        role={"none" as any}
+        role="none"
         accessibilityElementsHidden
         onLayout={(event) => {
-          sentinelY.set(event.bounds.origin.y + (table?.bodyOffsetY() ?? 0));
+          sentinelInBody.set(event.bounds.origin.y);
           local.onLayout?.(event);
         }}
         class="h-0 min-h-0"
       >
         <View accessibilityElementsHidden class="h-px w-px" />
       </View>
+      {/* R-058: the content row exists only while loading with content; its
+          inner cell spans every track. */}
       <If when={showContent()}>
         <View
           role="row"
@@ -127,7 +155,7 @@ export function TableLoadMore(props: TableLoadMoreProps) {
             class="py-3 text-center"
             style={{ gridColumn: "1 / -1" }}
           >
-            {renderChildren(local.children)}
+            {renderChildren(children())}
           </View>
         </View>
       </If>
@@ -154,6 +182,9 @@ export function TableLoadMoreContent(props: TableLoadMoreContentProps) {
 
   const slots = useTableSlots();
 
+  // The single read of `children`, used at the placement below.
+  const children = computed(() => local.children);
+
   const classes = computed(() =>
     [slots().loadMoreContent(), local.className as string | undefined]
       .filter(Boolean)
@@ -169,7 +200,7 @@ export function TableLoadMoreContent(props: TableLoadMoreContentProps) {
       class={classes()}
       style={local.style as any}
     >
-      {renderChildren(local.children)}
+      {renderChildren(children())}
     </View>
   );
 }
