@@ -7,7 +7,16 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { computed, effect, keymap, signal, split, untracked, View } from "nsh";
+import {
+  cleanup,
+  computed,
+  effect,
+  keymap,
+  signal,
+  split,
+  untracked,
+  View,
+} from "nsh";
 
 import { createControllableSignal } from "../../primitives";
 import { joinClassNames } from "./class-names";
@@ -31,6 +40,7 @@ import {
   type SearchFieldEnterKeyHint,
   type SearchFieldInputBindings,
   type SearchFieldInputMode,
+  SearchFieldOwnerContext,
   type SearchFieldSlots,
 } from "./search-field-context";
 import { searchFieldVariants } from "./search-field.styles";
@@ -402,6 +412,10 @@ export function SearchFieldRoot(props: SearchFieldRootProps): JSX.Element {
 
   const variant = computed<"primary" | "secondary">(() => local.variant ?? "primary");
 
+  // The composite field above this one, if any (Autocomplete.Filter): it owns
+  // the text, the focus notifications and a class of its own (port sheet §5).
+  const owner = SearchFieldOwnerContext();
+
   // --- Value ----------------------------------------------------------------
   // React Stately's `useSearchFieldState`: `useControlledState(toString(value),
   // toString(defaultValue) ?? "", onChange)`. `toString` keeps `undefined` as
@@ -409,9 +423,16 @@ export function SearchFieldRoot(props: SearchFieldRootProps): JSX.Element {
   // prop, and every other value becomes the text (`null` → `"null"`, as
   // React Stately does).
   const [value, setValue] = createControllableSignal<string>({
-    value: () => toStringValue(local.value),
+    // The composite field above the search field (Autocomplete's Filter) owns
+    // the text while it is mounted: upstream React Aria's Autocomplete passes
+    // its `inputValue` down through `FieldInputContext` (Autocomplete port
+    // sheet §5, the SearchField change). Without one the field is its own.
+    value: () => owner?.value?.() ?? toStringValue(local.value),
     defaultValue: () => toStringValue(local.defaultValue) ?? "",
-    onChange: (next) => local.onChange?.(next),
+    onChange: (next) => {
+      owner?.setValue?.(next);
+      local.onChange?.(next);
+    },
   });
 
   const text = () => value() ?? "";
@@ -462,12 +483,14 @@ export function SearchFieldRoot(props: SearchFieldRootProps): JSX.Element {
 
   const handleInputFocus = () => {
     focused.set(true);
+    owner?.onFocus?.();
     local.onFocus?.();
     local.onFocusChange?.(true);
   };
 
   const handleInputBlur = () => {
     focused.set(false);
+    owner?.onBlur?.();
     // `useFormValidationState` commits on blur: from here on the errors follow
     // the value, so typing after a failed blur clears the error again.
     commitValidation();
@@ -528,10 +551,19 @@ export function SearchFieldRoot(props: SearchFieldRootProps): JSX.Element {
 
   const focusInput = () => inputFocus?.();
 
+  // The owner (Autocomplete.Filter) moves the focus into the input when it
+  // opens; React Aria's popover does the same through its focus scope.
+  if (owner?.registerFocus) {
+    cleanup(owner.registerFocus(focusInput));
+  }
+
   // --- Submit and the input binding ----------------------------------------
   const submit = () => {
     // React Aria commits validation on submit as well as on blur.
     commitValidation();
+    // The owner's submit runs first: in an Autocomplete the Return key picks
+    // the highlighted option instead of submitting a form (§5).
+    owner?.onSubmit?.(text());
     local.onSubmit?.(text());
   };
 
@@ -588,11 +620,23 @@ export function SearchFieldRoot(props: SearchFieldRootProps): JSX.Element {
   // whose keystroke the focused text input uses, and Escape never reached a
   // default binding while the input had the focus (measured while porting this
   // unit). The scope's own condition is what keeps the key from being taken
-  // anywhere else — it exists only around a focused, editable, non-empty field.
+  // anywhere else — it exists only around a focused, editable field.
   // `createKeymapScope` deliberately refuses `"always"`, so the bind lives in
   // this effect, which is the primitive's pattern with this one option.
+  //
+  // A composite field above this one (Autocomplete.Filter) takes Escape for
+  // itself: it closes the field and resets the text, and the field must not
+  // also empty only its own half of the filter (port sheet §5).
   effect(() => {
-    if (!focused() || isDisabled() || isReadOnly() || isEmpty()) {
+    if (!focused() || isDisabled() || isReadOnly()) {
+      return;
+    }
+
+    if (owner?.onEscape) {
+      return keymap.bind({ escape: () => owner.onEscape?.() }, { when: "always" });
+    }
+
+    if (isEmpty()) {
       return;
     }
 
@@ -637,7 +681,9 @@ export function SearchFieldRoot(props: SearchFieldRootProps): JSX.Element {
     return typeof value === "function" ? value(styleRenderProps) : value;
   };
 
-  const classes = computed(() => joinClassNames(slots.base(), resolvedClassName()));
+  const classes = computed(() =>
+    joinClassNames(slots.base(), owner?.partClass?.() ?? "", resolvedClassName()),
+  );
 
   // --- Contexts -------------------------------------------------------------
   const contextValue: SearchFieldContextValue = {
