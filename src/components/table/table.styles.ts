@@ -47,8 +47,11 @@ export const tableVariants = tv({
     sortableColumnIndicator:
       "inline-grid size-3 place-content-center transition-transform duration-100 ease-out motion-reduce:transition-none",
     // R-052 / R-053: the resizer's inner 1px bar (the hit area around it is
-    // transparent and carries the interaction classes as a classList).
-    columnResizer: "pointer-events-none mx-auto h-4 w-px rounded-sm bg-separator",
+    // transparent and carries the interaction classes as a classList). The bar
+    // is absolute at the hit area's end and moves half its width out, so the
+    // line stays on the column edge while the pressable box does not cross it.
+    columnResizer:
+      "pointer-events-none absolute end-0 top-1/2 h-4 w-px -translate-y-1/2 translate-x-1/2 rounded-sm bg-separator",
   },
   variants: {
     variant: {

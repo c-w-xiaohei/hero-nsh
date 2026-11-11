@@ -257,8 +257,13 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
 
   const classes = computed(() =>
     [
-      // R-053: the transparent hit area: 1px content + 8px on each side.
-      "absolute end-0 top-1/2 flex h-4 w-[17px] -translate-y-1/2 translate-x-1/2 flex-col items-center justify-center cursor-col-resize outline-none",
+      // R-053: the transparent 17px hit area. Upstream straddles the column
+      // edge (`end-0` + `translate-x-1/2`, 8px on each side); the host
+      // hit-tests the transformed box, and the centre of a straddling box is
+      // the boundary itself, which both grid frames claim half-open, so the
+      // press lands on the next column. The band therefore sits fully inside
+      // this column and the bar (pointer-events-none) keeps the edge position.
+      "absolute end-0 top-1/2 flex h-4 w-[17px] -translate-y-1/2 flex-col items-center justify-center cursor-col-resize outline-none",
       // R-054 / R-055 / R-056: the hit area grows to the column's height.
       active() ? "h-full" : "",
       resolvedClassName(),
