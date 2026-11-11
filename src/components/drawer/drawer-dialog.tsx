@@ -55,7 +55,7 @@ export function DrawerDialog(props: DrawerDialogProps): JSX.Element {
   };
 
   const className = () =>
-    [drawer.slots().dialog, local.className].filter(Boolean).join(" ");
+    [drawer.slots().dialog(), local.className].filter(Boolean).join(" ");
   const style = () => {
     const caller = local.style;
 

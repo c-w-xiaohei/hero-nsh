@@ -51,7 +51,7 @@ export function DrawerContent(props: DrawerContentProps): JSX.Element {
     const alignment = placement() === "bottom" ? "items-end"
       : placement() === "top" ? "items-start"
         : placement() === "left" ? "justify-start" : "justify-end";
-    return [contextValue.slots().content, alignment, custom].filter(Boolean).join(" ");
+    return [contextValue.slots().content(), alignment, custom].filter(Boolean).join(" ");
   };
   const { children, className: _className, placement: _placement, isDismissable: _isDismissable,
     isKeyboardDismissDisabled: _keyboardDisabled, isOpen: _isOpen, defaultOpen: _defaultOpen,
