@@ -20,8 +20,8 @@ import {
   Tooltip,
   toast,
 } from "hero-nsh";
-import { shadow } from "../../src/tokens/geometry";
-import { Section } from "./ui";
+import { shadow } from "../../../src/tokens/geometry";
+import { Section } from "../ui";
 
 function Row(props: { children?: JSX.Element }) {
   return <View class="flex-row flex-wrap items-center gap-2">{props.children}</View>;

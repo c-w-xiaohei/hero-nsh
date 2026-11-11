@@ -50,7 +50,7 @@ import {
   Typography,
   WarningIcon,
 } from "hero-nsh";
-import { Section } from "./ui";
+import { Section } from "../ui";
 
 /** A bordered stage that keeps each component's own surface readable. */
 function Frame(props: { children?: JSX.Element; className?: string }) {

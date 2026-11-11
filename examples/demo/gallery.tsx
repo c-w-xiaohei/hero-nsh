@@ -1,9 +1,9 @@
 import { mount, Text, View } from "nsh";
 import "./fonts";
 import { Page, Section } from "./ui";
-import { DataSection } from "./gallery-data";
-import { FeedbackSection } from "./gallery-feedback";
-import { FormsSection } from "./gallery-forms";
+import { DataSection } from "./gallery/data";
+import { FeedbackSection } from "./gallery/feedback";
+import { FormsSection } from "./gallery/forms";
 
 /**
  * Every component `hero-nsh` exports, grouped the way HeroUI's documentation

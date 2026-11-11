@@ -45,7 +45,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from "hero-nsh";
-import { Section } from "./ui";
+import { Section } from "../ui";
 
 const ANIMALS = [
   { id: "cat", name: "Cat" },
