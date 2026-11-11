@@ -71,9 +71,9 @@ function DrawerLayer(props: DrawerLayerProps): JSX.Element {
       closeOnSwipe={false}
       onCancel={props.onCancel}
       testID={props.testID()}
-      class="flex-1"
+      class="h-full w-full"
     >
-      <View class="relative flex-1">
+      <View class="relative h-full w-full">
         <View
           testID={props.backdropTestID()}
           class={props.backdropClass()}

@@ -47,12 +47,12 @@ export function DrawerContent(props: DrawerContentProps): JSX.Element {
   const className = () => {
     const value = props.className;
     const custom = typeof value === "function" ? value(renderValues) : value;
-    // R-012: placement aligns the panel to the requested viewport edge.
-    // The content is a column, so top and bottom place the panel along the
-    // main axis and the side placements along the cross axis.
-    const alignment = placement() === "bottom" ? "justify-end"
-      : placement() === "top" ? "justify-start"
-        : placement() === "left" ? "items-start" : "items-end";
+    // R-012: placement aligns the panel to the requested viewport edge. The
+    // content is a row, as upstream's is, so top and bottom align on the cross
+    // axis and the side placements on the main axis.
+    const alignment = placement() === "bottom" ? "items-end"
+      : placement() === "top" ? "items-start"
+        : placement() === "left" ? "justify-start" : "justify-end";
     return [contextValue.slots().content(), alignment, custom].filter(Boolean).join(" ");
   };
   const { children, className: _className, placement: _placement, isDismissable: _isDismissable,

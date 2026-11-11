@@ -20,9 +20,11 @@ export const DrawerContext = context<DrawerContextValue | null>(null);
 export function createDrawerContextValue(options: {
   isOpen: Accessor<boolean>;
   setOpen: (open: boolean | ((previous: boolean) => boolean)) => void;
+  placement?: Accessor<DrawerPlacement | undefined>;
+  variant?: Accessor<DrawerVariants["variant"] | undefined>;
 }): DrawerContextValue {
-  const placement = () => "bottom" as const;
-  const variant = () => "opaque" as const;
+  const placement = () => options.placement?.() ?? "bottom";
+  const variant = () => options.variant?.() ?? "opaque";
   const isDismissable = () => true;
   const value: DrawerContextValue = {
     slots: computed(() => drawerVariants({ placement: placement(), variant: variant() })),

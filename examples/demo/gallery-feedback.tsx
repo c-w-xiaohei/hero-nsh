@@ -204,10 +204,10 @@ function Drawers() {
           </Drawer.Backdrop>
         </Drawer>
 
-        <Drawer>
+        <Drawer placement="right">
           <Button variant="secondary">Open side drawer</Button>
           <Drawer.Backdrop>
-            <Drawer.Content placement="right">
+            <Drawer.Content>
               <Drawer.Dialog>
                 <Drawer.CloseTrigger />
                 <Drawer.Header>
