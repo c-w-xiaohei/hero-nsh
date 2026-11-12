@@ -132,6 +132,7 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
     isDismissable,
     isOpen,
     isEntering: presence.isEntering,
+    isExiting: presence.isExiting,
     open: () => setOpen(true),
     close: () => setOpen(false),
     toggle: () => setOpen(!isOpen()),
@@ -145,8 +146,10 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
   };
   const classes = () => {
     const value = props.className;
-    // `.drawer__scrim`: opacity 250ms cubic-bezier(0.32, 0.72, 0, 1).
-    const fade = `duration-[250ms] ${ease.outFluid} motion-reduce:transition-none`;
+    // `.drawer__scrim`: opacity 250ms cubic-bezier(0.32, 0.72, 0, 1) in,
+    // 200ms out — the same exit hold the presence keeps the subtree for.
+    const duration = presence.isExiting() ? "duration-[200ms]" : "duration-[250ms]";
+    const fade = `${duration} ${ease.outFluid} motion-reduce:transition-none`;
     const off = !isOpen() || presence.isEntering();
     return [
       slots().backdrop(),

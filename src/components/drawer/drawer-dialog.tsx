@@ -54,8 +54,35 @@ export function DrawerDialog(props: DrawerDialogProps): JSX.Element {
       : (node as JSX.Element);
   };
 
+  // The edge the panel leaves through; upstream sets the same translate on
+  // `[data-exiting="true"] .drawer__dialog`.
+  const exitEdge = () => {
+    switch (drawer.placement()) {
+      case "top":
+        return "-translate-y-full";
+      case "left":
+        return "-translate-x-full";
+      case "right":
+        return "translate-x-full";
+      default:
+        return "translate-y-full";
+    }
+  };
+
   const className = () =>
-    [drawer.slots().dialog(), local.className].filter(Boolean).join(" ");
+    [
+      drawer.slots().dialog(),
+      // Upstream's exit is the dialog's own `translate` transition (200ms),
+      // so a drag transform can compound with it; the content wrapper stays
+      // still and the enter slide never touches this element. Clearing the
+      // class on a reopen transitions the panel back over the slot's 250ms.
+      drawer.isExiting()
+        ? `duration-[200ms] ${exitEdge()}`
+        : "translate-x-0 translate-y-0",
+      local.className,
+    ]
+      .filter(Boolean)
+      .join(" ");
   const style = () => {
     const caller = local.style;
 
@@ -85,6 +112,7 @@ const fallbackContext: DrawerContextValue = {
   isDismissable: () => true,
   isOpen: () => false,
   isEntering: () => false,
+  isExiting: () => false,
   open: () => {},
   close: () => {},
   toggle: () => {},

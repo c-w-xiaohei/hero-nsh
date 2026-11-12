@@ -28,30 +28,45 @@ export interface DrawerContentProps extends Omit<ViewProps, "children" | "class"
 
 export function DrawerContent(props: DrawerContentProps): JSX.Element {
   const parent = DrawerContext();
-  const placement = () => props.placement ?? parent?.placement() ?? "bottom";
+  const base = parent ?? fallbackContext;
+  const placement = () => props.placement ?? base.placement();
   // Upstream animates the wrapper with `heroui-drawer-enter-*`: from the edge
   // off-screen (250ms, `cubic-bezier(0.32, 0.72, 0, 1)`) to rest. NSH has no
-  // keyframes, so the same two states are classes; `settled` starts false and
-  // flips one frame after the wrapper is painted, which is what makes the
-  // change a transition instead of the resting state from the first frame.
+  // keyframes, so the same two states are classes. The start state has to be
+  // painted before the class is replaced: the first frame after the mount can
+  // still be the frame that paints the wrapper, and the transition would be
+  // skipped. Two frames put a painted off-screen state between them on every
+  // host.
   const settled = signal(false);
   effect(() => {
     if (!base.isOpen()) {
-      settled.set(false);
+      // During the exit the wrapper stays at rest: the dialog is the layer
+      // that slides out. Once the hold ends, a retained subtree (a host that
+      // keeps the content mounted) starts the next open from the edge again.
+      if (!base.isExiting()) {
+        settled.set(false);
+      }
+
       return;
     }
-    const frame = requestAnimationFrame(() => settled.set(true));
-    return () => cancelAnimationFrame(frame);
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => settled.set(true));
+    });
+
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
   });
-  const base = parent ?? fallbackContext;
   const contextValue: DrawerContextValue = {
     ...base,
     placement,
     slots: computed(() => drawerVariants({ placement: placement(), variant: base.variant() })),
   };
   const renderValues: DrawerRenderValues = {
-    isEntering: () => false,
-    isExiting: () => false,
+    isEntering: base.isEntering,
+    isExiting: base.isExiting,
     state: {
       isOpen: base.isOpen,
       open: base.open,
@@ -68,20 +83,17 @@ export function DrawerContent(props: DrawerContentProps): JSX.Element {
     const alignment = placement() === "bottom" ? "items-end"
       : placement() === "top" ? "items-start"
         : placement() === "left" ? "justify-start" : "justify-end";
-    // The panel starts past the edge it comes from and slides to rest; the
-    // backdrop fades over the same 250ms in the backdrop's own classes.
-    const off = !base.isOpen() || !settled();
+    // R-015: only the open slide lives here. The panel starts past the edge it
+    // comes from and slides to rest over 250ms; the dialog owns the 200ms exit.
+    const off = !settled();
     const edge = placement() === "bottom" ? "translate-y-full"
       : placement() === "top" ? "-translate-y-full"
         : placement() === "left" ? "-translate-x-full" : "translate-x-full";
-    // Upstream's enter is 250ms and its exit 200ms, both on the fluid curve;
-    // the state picks the duration before the change lands.
-    const duration = base.isOpen() ? "duration-[250ms]" : "duration-[200ms]";
     return [
       contextValue.slots().content(),
       alignment,
       "transition motion-reduce:transition-none",
-      duration,
+      "duration-[250ms]",
       ease.outFluid,
       off ? edge : "translate-x-0 translate-y-0",
       custom,
@@ -115,6 +127,7 @@ const fallbackContext: DrawerContextValue = {
   isDismissable: () => true,
   isOpen: () => false,
   isEntering: () => false,
+  isExiting: () => false,
   open: () => {},
   close: () => {},
   toggle: () => {},
