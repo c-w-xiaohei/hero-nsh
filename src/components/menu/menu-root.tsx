@@ -335,14 +335,14 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
   let generatedSectionCount = 0;
 
   const createSectionKey = () =>
-    `\u0000nsh-menu-section:${generatedSectionCount++}`;
+    `__nsh:menu-section:${generatedSectionCount++}`;
 
   // The entry counterpart: React Aria gives an entry with no `id`, no value and
   // no index a generated key (`react-aria/dist/private/collections/
   // Document.js:212`), so two id-less static rows never share one node.
   let generatedItemCount = 0;
 
-  const createItemKey = () => `\u0000nsh-menu-item:${generatedItemCount++}`;
+  const createItemKey = () => `__nsh:menu-item:${generatedItemCount++}`;
 
   const isDisabledKey = (key: string) => {
     const keys = local.disabledKeys;

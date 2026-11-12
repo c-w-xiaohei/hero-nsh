@@ -303,7 +303,7 @@ export function TagGroupRoot(props: TagGroupRootProps): JSX.Element {
   // so it can never take a caller's key (the ListBox convention).
   let generatedKeyCount = 0;
 
-  const createKey = () => `\u0000nsh-tag:${generatedKeyCount++}`;
+  const createKey = () => `__nsh:tag:${generatedKeyCount++}`;
 
   const isDisabledKey = (key: string) => {
     const keys = local.disabledKeys;

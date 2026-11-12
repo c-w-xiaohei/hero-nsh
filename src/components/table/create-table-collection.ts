@@ -9,19 +9,19 @@
  *
  * Focus keys. A focused view is either a column header or a cell, and both
  * live in the same focus store while selection works on row keys, so the two
- * kinds of keys are namespaced: a header's key is `\u0000column:<key>` and a
- * cell's is `\u0000cell:<rowKey>\u0001<index>`. The prefixes cannot collide
- * with a caller's keys because they start with a NUL byte.
+ * kinds of keys are namespaced: a header's key is `__nsh:column:<key>` and a
+ * cell's is `__nsh:cell:<rowKey>\u0001<index>`. The `__nsh:` prefix keeps them
+ * apart from a caller's keys, and the unit separator keeps the row key whole.
  */
 
 import type { Accessor, Signal, ViewRef } from "nsh";
 import { computed, signal } from "nsh";
 
 /** The prefix of a column header's focus key. */
-export const COLUMN_FOCUS_PREFIX = "\u0000column:";
+export const COLUMN_FOCUS_PREFIX = "__nsh:column:";
 
 /** The prefix of a cell's focus key. */
-export const CELL_FOCUS_PREFIX = "\u0000cell:";
+export const CELL_FOCUS_PREFIX = "__nsh:cell:";
 
 /** The focus key of a column header. */
 export function columnFocusKey(columnKey: string): string {

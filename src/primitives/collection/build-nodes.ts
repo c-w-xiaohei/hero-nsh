@@ -29,7 +29,7 @@ interface BuildContext {
 }
 
 /** Marks a section key this builder made up rather than read from the data. */
-const GENERATED_SECTION_PREFIX = "\u0000nsh-section:";
+const GENERATED_SECTION_PREFIX = "__nsh:section:";
 
 function isString(value: unknown): value is string {
   return typeof value === "string";

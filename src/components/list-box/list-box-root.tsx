@@ -430,7 +430,7 @@ export function ListBoxRoot<T>(
   let generatedSectionCount = 0;
 
   const createSectionKey = () =>
-    `\u0000nsh-listbox-section:${generatedSectionCount++}`;
+    `__nsh:listbox-section:${generatedSectionCount++}`;
 
   const isDisabledKey = (key: string) => {
     // The owner's `disabledKeys` replace this list's own prop, never add to it:

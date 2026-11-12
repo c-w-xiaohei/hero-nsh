@@ -239,7 +239,7 @@ export function TabsRoot(props: TabsRootProps): JSX.Element {
   // keeps it from ever colliding with a key a caller made up.
   let generatedKeyCount = 0;
 
-  const createTabKey = () => `\u0000nsh-tab:${generatedKeyCount++}`;
+  const createTabKey = () => `__nsh:tab:${generatedKeyCount++}`;
 
   const disabledKeySet = computed<ReadonlySet<string>>(() => {
     const keys = local.disabledKeys;
