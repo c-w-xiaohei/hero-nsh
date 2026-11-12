@@ -1,5 +1,5 @@
 import type { Bounds, JSX, ViewProps, ViewRef } from "nsh";
-import { computed, locale as hostLocale, signal, split, View } from "nsh";
+import { cleanup, computed, locale as hostLocale, signal, split, View } from "nsh";
 import type {
   Calendar,
   CalendarDate,
@@ -11,6 +11,7 @@ import type {
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
 import { renderChildren } from "../calendar/children";
 import {
+  CalendarDefaultsContext,
   CalendarGridLayoutContext,
   CalendarOrRangeStateContext,
 } from "../calendar/calendar-context";
@@ -176,17 +177,55 @@ export function RangeCalendarRoot(props: RangeCalendarRootProps): JSX.Element {
   ]);
 
   const locale = local.locale ?? hostLocale();
+
+  // What an enclosing DatePicker / DateRangePicker hands down (port sheet §5,
+  // first cross-unit change): React Aria merges `calendarProps` into the
+  // calendar's own props with `useContextProps`, where the explicit prop wins.
+  // A range calendar outside such a picker reads `undefined` and behaves as
+  // before.
+  const defaults = CalendarDefaultsContext();
+
+  const fallback = <T,>(
+    own: T | undefined,
+    read: (() => T | undefined) | undefined,
+  ): T | undefined => (own !== undefined ? own : read?.());
+
+  // A range picker hands its selection over as the pair HeroUI's
+  // `calendarProps.value` carries; anything that is not a pair leaves this
+  // calendar uncontrolled, so an empty picker lets the calendar own the range
+  // it paints.
+  const defaultsRange = (): RangeCalendarValue<DateValue> | null | undefined => {
+    const value = defaults?.value?.();
+
+    if (!Array.isArray(value) || value.length < 2) {
+      return undefined;
+    }
+
+    return { start: value[0]!, end: value[1]! };
+  };
+
   const state = createRangeCalendarState({
     locale,
-    createCalendar: local.createCalendar,
-    value: local.value,
+    createCalendar: fallback(local.createCalendar, defaults?.createCalendar),
+    // `value` is the one input the range state keeps reading after it is
+    // created (`createControllableSignal` reads it through an accessor), so it
+    // stays a getter: a picker-driven calendar follows the picker's range
+    // instead of a copy taken at mount.
+    get value() {
+      return fallback(local.value, defaultsRange);
+    },
     defaultValue: local.defaultValue,
-    onChange: local.onChange,
+    onChange:
+      local.onChange ??
+      (defaults?.onChange
+        ? (range: RangeCalendarValue<DateValue>) =>
+            defaults.onChange?.([range.start, range.end])
+        : undefined),
     focusedValue: local.focusedValue,
-    defaultFocusedValue: local.defaultFocusedValue,
+    defaultFocusedValue: fallback(local.defaultFocusedValue, defaults?.defaultFocusedValue),
     onFocusChange: local.onFocusChange,
-    minValue: local.minValue,
-    maxValue: local.maxValue,
+    minValue: fallback(local.minValue, defaults?.minValue),
+    maxValue: fallback(local.maxValue, defaults?.maxValue),
     visibleDuration: local.visibleDuration,
     firstDayOfWeek: local.firstDayOfWeek,
     pageBehavior: local.pageBehavior,
@@ -194,11 +233,20 @@ export function RangeCalendarRoot(props: RangeCalendarRootProps): JSX.Element {
     weeksInMonth: local.weeksInMonth,
     allowsNonContiguousRanges: local.allowsNonContiguousRanges,
     disallowEmptySelection: local.disallowEmptySelection,
-    isDisabled: local.isDisabled,
-    isReadOnly: local.isReadOnly,
-    isDateUnavailable: local.isDateUnavailable,
-    autoFocus: local.autoFocus,
+    isDisabled: fallback(local.isDisabled, defaults?.isDisabled),
+    isReadOnly: fallback(local.isReadOnly, defaults?.isReadOnly),
+    isDateUnavailable: fallback(local.isDateUnavailable, defaults?.isDateUnavailable),
+    autoFocus: fallback(local.autoFocus, defaults?.autoFocus),
   });
+
+  // §5, second cross-unit change: an enclosing picker closes its layer on the
+  // press that completes a range, so it has to know whether this calendar is
+  // between its two presses.
+  if (defaults?.registerSelectionInProgress) {
+    cleanup(
+      defaults.registerSelectionInProgress(() => state.anchorDate() != null),
+    );
+  }
 
   const [isYearPickerOpen, setIsYearPickerOpen] = createControllableBooleanSignal({
     value: () => local.isYearPickerOpen,

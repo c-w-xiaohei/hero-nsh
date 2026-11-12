@@ -226,6 +226,19 @@ export interface DateFieldState {
 
   /** Formats the current value with extra options (React Stately's `formatValue`). */
   formatValue: (fieldOptions: Intl.DateTimeFormatOptions) => string;
+
+  /**
+   * A range owner's handle resolves to the real state of one side, so a part
+   * that belongs to one field can bind itself to it: `DateRangePicker` provides
+   * one handle for two fields through the single
+   * `DateInputGroupFieldContext` slot, and the segment table is keyed by segment
+   * type, which both sides share (date-range-picker port sheet §5, third
+   * cross-unit change).
+   *
+   * A single field's state returns `undefined`, and every caller falls back to
+   * the state it already has.
+   */
+  forSlot?: (slot: string | undefined) => DateFieldState;
 }
 
 const PAGE_STEP: Partial<Record<DateSegmentType, number>> = {

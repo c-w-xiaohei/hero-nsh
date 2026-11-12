@@ -137,6 +137,15 @@ export interface CalendarDefaultsValue {
    * (port sheet R-028 / R-029).
    */
   navButtonIconClass?: Accessor<string | undefined>;
+
+  /**
+   * Range mode only: reports whether this calendar is between the two presses
+   * of a range (React Stately's `anchorDate` is set), so an enclosing
+   * DateRangePicker closes its layer on the press that completes the range
+   * rather than on the first one. Returns the unregister function
+   * (date-range-picker port sheet §5, second cross-unit change).
+   */
+  registerSelectionInProgress?: (isSelecting: Accessor<boolean>) => () => void;
 }
 
 export const CalendarDefaultsContext = context<CalendarDefaultsValue | undefined>(undefined);
