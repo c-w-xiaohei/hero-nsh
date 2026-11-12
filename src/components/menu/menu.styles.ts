@@ -47,7 +47,7 @@ export const menuItemVariants = tv({
     // `start-auto end-2`). The remaining slot classes are the `.menu-item__indicator`
     // ones it also carries upstream (R-019 / R-020).
     submenuIndicator: [
-      "absolute end-2 top-1/2 flex size-4 shrink-0 -translate-y-1/2 items-center justify-center text-muted",
+      "absolute end-2 inset-y-0 flex w-4 shrink-0 items-center justify-center text-muted",
       "transition duration-[250ms] motion-reduce:transition-none",
     ].join(" "),
   },
