@@ -28,7 +28,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # npm reads the token from ~/.npmrc; provenance uses the OIDC token.
       - name: npm auth
-        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> "$HOME/.npmrc"
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> "$HOME/.npmrc"
+          npm whoami
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       - uses: changesets/action@v1
