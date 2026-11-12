@@ -127,6 +127,7 @@ export type {
 export type { CalendarSelectionMode } from "./create-calendar-state";
 export type { CalendarRenderProps, CalendarCellRenderProps } from "./calendar-context";
 export type { CalendarState } from "./create-calendar-state";
+export type { CalendarOrRangeState } from "./date-utils";
 
 /** The year picker's state API is exported here as well, as upstream does. */
 export { YearPickerContext, useYearPicker } from "./year-picker-context";

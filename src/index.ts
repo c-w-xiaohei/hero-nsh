@@ -72,3 +72,4 @@ export * from "./components/modal";
 export * from "./components/drawer";
 export * from "./components/autocomplete";
 export * from "./components/sheet";
+export * from "./components/range-calendar";

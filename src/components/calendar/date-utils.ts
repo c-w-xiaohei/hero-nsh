@@ -1,3 +1,4 @@
+import type { Accessor } from "nsh";
 import type { CalendarDate, DateDuration, DateValue } from "@internationalized/date";
 import {
   DateFormatter,
@@ -14,7 +15,25 @@ import {
   toCalendarDate,
 } from "@internationalized/date";
 
-import type { CalendarState } from "./create-calendar-state";
+/**
+ * The date state a heading, a grid label or a year panel needs. Both the
+ * single-date `CalendarState` and the `RangeCalendarState` are assignable to
+ * it, so the year-picker parts and `formatCalendarHeading` serve both roots
+ * (range-calendar port sheet §5, cross-unit contract: additive, Calendar's
+ * behaviour unchanged).
+ */
+export interface CalendarOrRangeState {
+  locale: string;
+  timeZone: string;
+  firstDayOfWeek?: FirstDayOfWeek;
+  minValue: DateValue;
+  maxValue: DateValue;
+  visibleDuration: DateDuration;
+  visibleRange: Accessor<{ start: CalendarDate; end: CalendarDate }>;
+  focusedDate: Accessor<CalendarDate>;
+  setFocusedDate: (date: DateValue) => void;
+  setFocused: (focused: boolean) => void;
+}
 
 /* -------------------------------------------------------------------------------------------------
  * Date arithmetic (React Stately's `@react-stately/calendar/src/utils.ts`)
@@ -291,7 +310,7 @@ function eraFormat(date: DateValue | undefined): "short" | undefined {
 
 /** RAC's `useCalendarHeading` as a string. */
 export function formatCalendarHeading(
-  state: CalendarState,
+  state: CalendarOrRangeState,
   options: { offset?: DateDuration; format?: CalendarHeadingFormatOptions } = {},
 ): string {
   const range = state.visibleRange();
