@@ -4,6 +4,7 @@ import type { CalendarDate } from "@internationalized/date";
 
 import type { calendarVariants } from "./calendar.styles";
 import type { CalendarState } from "./create-calendar-state";
+import type { CalendarOrRangeState } from "./date-utils";
 
 /** Everything a calendar part reads from its root. */
 export interface CalendarContextValue {
@@ -27,8 +28,18 @@ export function useCalendarContext(): CalendarContextValue {
   return value;
 }
 
-/** The active Calendar state, as HeroUI's `useCalendarOrRangeState` returns it. */
-export function useCalendarOrRangeState(): CalendarState {
+/**
+ * The date state the year-picker parts read, supplied by either root
+ * (range-calendar port sheet §5). A `RangeCalendar` provides this context
+ * because its state is not a `CalendarState`; `Calendar` provides nothing new
+ * and falls back to its own context, so its behaviour is unchanged.
+ */
+export const CalendarOrRangeStateContext = context<CalendarOrRangeState | undefined>(undefined);
+
+/** The active Calendar or RangeCalendar state, as HeroUI's `useCalendarOrRangeState` returns it. */
+export function useCalendarOrRangeState(): CalendarOrRangeState {
+  const rangeState = CalendarOrRangeStateContext();
+  if (rangeState) return rangeState;
   return useCalendarContext().state;
 }
 
