@@ -68,11 +68,17 @@ function Frame(props: { children?: JSX.Element; className?: string }) {
  * variant axis (`colors`, `sizes`, `disabled`, …). Two components in a row is
  * the default; a stack is passed in for taller samples.
  */
-function State(props: { label: string; children?: JSX.Element; className?: string }) {
+function State(props: {
+  label: string;
+  children?: JSX.Element;
+  className?: string;
+  /** The root's width; `md:w-auto` keeps a paired state at its content width. */
+  rootClassName?: string;
+}) {
   const layout = props.className ?? "flex-row flex-wrap items-center gap-3";
 
   return (
-    <View class="w-full flex-col items-start gap-1.5">
+    <View class={`${props.rootClassName ?? "w-full"} flex-col items-start gap-1.5`}>
       <Text class="text-xs text-muted">{props.label}</Text>
       <View class={layout}>{props.children}</View>
     </View>
@@ -620,7 +626,7 @@ function TabsSample() {
       </State>
 
       <View class="w-full flex-col gap-4 md:flex-row">
-        <State label="align: start" className="flex-col">
+        <State label="align: start" className="flex-col" rootClassName="w-full md:w-auto">
           <Tabs align="start" className="w-56" defaultSelectedKey="one">
             <Tabs.ListContainer className="w-full">
               <Tabs.List aria-label="Aligned start">
@@ -643,7 +649,7 @@ function TabsSample() {
           </Tabs>
         </State>
 
-        <State label="align: end" className="flex-col">
+        <State label="align: end" className="flex-col" rootClassName="w-full md:w-auto">
           <Tabs align="end" className="w-56" defaultSelectedKey="one">
             <Tabs.ListContainer className="w-full">
               <Tabs.List aria-label="Aligned end">
@@ -849,7 +855,7 @@ function TagGroupSample() {
       </State>
 
       <View class="w-full flex-col gap-4 md:flex-row">
-        <State label="variant: default" className="flex-col">
+        <State label="variant: default" className="flex-col" rootClassName="w-full md:w-auto">
           <TagGroup aria-label="Default variant">
             <TagGroup.List>
               <Tag id="d-a">Draft</Tag>
@@ -857,7 +863,7 @@ function TagGroupSample() {
             </TagGroup.List>
           </TagGroup>
         </State>
-        <State label="variant: surface" className="flex-col">
+        <State label="variant: surface" className="flex-col" rootClassName="w-full md:w-auto">
           <TagGroup aria-label="Surface variant" variant="surface">
             <TagGroup.List>
               <Tag id="s-a">Draft</Tag>
