@@ -1,7 +1,7 @@
 import type { JSX, ViewProps, ViewRef } from "nsh";
 import { split, View } from "nsh";
 
-import { useRangeCalendarContext } from "./range-calendar-context";
+import { RangeCalendarCellContext, useRangeCalendarContext } from "./range-calendar-context";
 
 export interface RangeCalendarCellIndicatorProps
   extends Omit<ViewProps, "children" | "class" | "ref"> {
@@ -11,14 +11,16 @@ export interface RangeCalendarCellIndicatorProps
 }
 
 /**
- * `RangeCalendar.CellIndicator`: the dot under a day (R-049).
- *
- * STUB for the core phase (port sheet §6): the public props type is final, the
- * body is a placeholder. The real part is `aria-hidden`, and takes the accent
- * foreground inside a selected cell through `RangeCalendarCellContext` (R-050).
+ * `RangeCalendar.CellIndicator`: the dot under a day (R-049, the `cellIndicator`
+ * slot). Upstream paints it from a descendant selector
+ * (`[data-selected="true"] > &`), which the host cannot express: the owning
+ * `RangeCalendar.Cell` publishes its selected state through
+ * `RangeCalendarCellContext` instead (R-050, port sheet §4). Outside a cell
+ * there is no context and the dot keeps the muted colour.
  */
 export function RangeCalendarCellIndicator(props: RangeCalendarCellIndicatorProps): JSX.Element {
   const { slots } = useRangeCalendarContext();
+  const cell = RangeCalendarCellContext();
   const [local, rest] = split(props, ["children", "className", "ref"]);
 
   return (
@@ -26,7 +28,10 @@ export function RangeCalendarCellIndicator(props: RangeCalendarCellIndicatorProp
       {...rest}
       ref={(node) => local.ref?.(node)}
       accessibilityElementsHidden
-      class={`${slots.cellIndicator()} ${local.className ?? ""}`}
+      class={`${slots.cellIndicator()} ${
+        // R-050: inside a selected cell the dot takes the accent foreground.
+        cell?.isSelected() ? "bg-accent-foreground" : ""
+      } ${local.className ?? ""}`}
     >
       {local.children}
     </View>
