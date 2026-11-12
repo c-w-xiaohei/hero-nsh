@@ -2,7 +2,7 @@ import type { JSX, ViewProps, ViewRef } from "nsh";
 import { split, View } from "nsh";
 
 import { renderChildren } from "../calendar/children";
-import { useRangeCalendarContext } from "./range-calendar-context";
+import { useRangeCalendarContext, useRangeCalendarGridContext } from "./range-calendar-context";
 
 export interface RangeCalendarGridHeaderProps
   extends Omit<ViewProps, "children" | "class" | "ref"> {
@@ -14,24 +14,29 @@ export interface RangeCalendarGridHeaderProps
 
 /**
  * `RangeCalendar.GridHeader`: the weekday row, hidden from assistive
- * technologies (R-006, R-021).
+ * technologies.
  *
- * STUB for the core phase (port sheet §6): the public props type is final, the
- * body is a placeholder. The real part maps `RangeCalendarGridContext`'s
- * `weekDays` through `children` into a seven-column grid.
+ * Upstream is a `thead` whose rows are `display:contents`; NSH has neither, so
+ * the header is a real row view that carries the seven columns itself
+ * (R-006/R-021) and maps the grid's weekday labels through `children`.
  */
 export function RangeCalendarGridHeader(props: RangeCalendarGridHeaderProps): JSX.Element {
   const { slots } = useRangeCalendarContext();
+  const grid = useRangeCalendarGridContext();
   const [local, rest] = split(props, ["children", "className", "ref"]);
-  const child = typeof local.children === "function" ? null : renderChildren(local.children as JSX.Element);
 
   return (
     <View
       {...rest}
       ref={(node) => local.ref?.(node)}
+      role="row"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
       class={`${slots.gridHeader()} ${local.className ?? ""}`}
     >
-      {child}
+      <Each of={grid.weekDays()} key="index">
+        {(day) => renderChildren(local.children(day()))}
+      </Each>
     </View>
   );
 }
