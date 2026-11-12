@@ -32,6 +32,11 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       - uses: changesets/action@v1
+        env:
+          # The action only looks for the token in its own environment; the
+          # ~/.npmrc above is not enough, and without this it falls back to
+          # OIDC trusted publishing, which cannot create a new package.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         with:
           version: pnpm changeset version
           publish: pnpm changeset publish
