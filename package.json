@@ -1,6 +1,6 @@
 {
   "name": "hero-nsh",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "HeroUI v3 components for NSH, written in TSX.",
   "license": "Apache-2.0",
   "type": "module",
