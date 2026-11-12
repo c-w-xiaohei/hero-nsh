@@ -1,0 +1,51 @@
+name: Pages
+
+# The gallery is a static site from `nsh package --target web`, served at
+# /hero-nsh/. Its assets are relative, so no base path is needed.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/**"
+      - "src/**"
+      - "theme/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  NSH_VERSION: v0.5.0
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - name: Web runtime
+        run: nsh component add web
+      - name: Build the gallery
+        run: |
+          nsh package examples/demo/gallery.tsx --target web -o "$RUNNER_TEMP/pages"
+          mkdir -p "$RUNNER_TEMP/site"
+          # `nsh package` writes the app into a directory named after the app.
+          app=$(find "$RUNNER_TEMP/pages" -mindepth 1 -maxdepth 1 -type d | head -1)
+          cp -r "$app/." "$RUNNER_TEMP/site/"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+      - id: deployment
+        uses: actions/deploy-pages@v4
