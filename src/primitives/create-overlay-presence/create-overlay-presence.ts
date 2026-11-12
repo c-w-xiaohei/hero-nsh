@@ -107,7 +107,6 @@ export function createOverlayPresence(
     const duration = props.durationMs?.() ?? 100;
 
     let frame: number | undefined;
-    let inner: number | undefined;
     let timer: number | undefined;
 
     if (skipNow) {
@@ -138,20 +137,15 @@ export function createOverlayPresence(
         entering.set(true);
       }
 
-      // R-005: the starting classes come off after the off-screen state has
-      // been painted, which is what turns the change into a transition. The
-      // first frame can still be the one that paints the mount, so the second
-      // one is where the flip is safe on every host.
+      // R-005: the starting classes come off one frame after they are laid
+      // out, which is what turns the change into a transition.
       frame = requestAnimationFrame(() => {
-        inner = requestAnimationFrame(() => {
-          enterStarted = false;
-          entering.set(false);
-        });
+        enterStarted = false;
+        entering.set(false);
       });
 
       return () => {
         cancelAnimationFrame(frame);
-        if (inner !== undefined) cancelAnimationFrame(inner);
       };
     }
 
