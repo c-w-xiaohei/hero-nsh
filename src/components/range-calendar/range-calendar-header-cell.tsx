@@ -1,5 +1,5 @@
 import type { JSX, ViewProps, ViewRef } from "nsh";
-import { split, View } from "nsh";
+import { split, Text } from "nsh";
 
 import { renderChildren } from "../calendar/children";
 import { useRangeCalendarContext } from "./range-calendar-context";
@@ -14,21 +14,22 @@ export interface RangeCalendarHeaderCellProps
 /**
  * `RangeCalendar.HeaderCell`: one weekday label (R-024).
  *
- * STUB for the core phase (port sheet §6): the public props type is final, the
- * body is a placeholder. The real part is a `Text role="columnheader"`.
+ * Upstream renders React Aria's `CalendarHeaderCell`, whose `th` carries
+ * `role="columnheader"`; the T-002 label count reads that role. The class string
+ * (R-024, `block min-w-0 truncate pb-2 text-center …`) is the `headerCell` slot.
  */
 export function RangeCalendarHeaderCell(props: RangeCalendarHeaderCellProps): JSX.Element {
   const { slots } = useRangeCalendarContext();
   const [local, rest] = split(props, ["children", "className", "ref"]);
-  const child = typeof local.children === "function" ? null : renderChildren(local.children as JSX.Element);
 
   return (
-    <View
+    <Text
       {...rest}
       ref={(node) => local.ref?.(node)}
+      role="columnheader"
       class={`${slots.headerCell()} ${local.className ?? ""}`}
     >
-      {child}
-    </View>
+      {renderChildren(local.children as JSX.Element)}
+    </Text>
   );
 }
