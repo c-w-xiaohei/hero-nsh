@@ -71,6 +71,7 @@ import { autocompleteScenarios } from "./autocomplete.scenarios";
 import { calendarScenarios } from "./calendar.scenarios";
 import { calendarYearPickerScenarios } from "./calendar-year-picker.scenarios";
 import { sheetScenarios } from "./sheet.scenarios";
+import { datePickerScenarios } from "./date-picker.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -145,4 +146,5 @@ export const scenarios: Record<string, Component> = {
   ...calendarScenarios,
   ...calendarYearPickerScenarios,
   ...sheetScenarios,
+  ...datePickerScenarios,
 };
