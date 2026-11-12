@@ -1065,25 +1065,6 @@ export function FormsSection() {
               </ComboBox.Popover>
             </ComboBox>
           </Row>
-          <Row label="open" align="start">
-            <ComboBox className="w-[220px]" defaultSelectedKey="cat">
-              <Label>Favorite animal (open)</Label>
-              <ComboBox.InputGroup>
-                <Input placeholder="Search animals..." />
-                <ComboBox.Trigger />
-              </ComboBox.InputGroup>
-              <ComboBox.Popover defaultOpen>
-                <ListBox>
-                  {ANIMALS.map((animal) => (
-                    <ListBox.Item id={animal.id} textValue={animal.name}>
-                      {animal.name}
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
-          </Row>
           <Row label="states" align="start">
             <ComboBox className="w-[220px]" defaultSelectedKey="cat" isDisabled>
               <Label>Disabled</Label>
