@@ -12,6 +12,7 @@ export {
   DangerIcon,
   ExternalLinkIcon,
   IconCalendar,
+  IconCheck,
   IconChevronDown,
   IconChevronLeft,
   IconChevronRight,

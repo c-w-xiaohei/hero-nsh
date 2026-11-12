@@ -197,6 +197,7 @@ function drawIcon(
   viewBoxHeight: number,
   fillRule: "nonzero" | "evenodd",
   paint: string,
+  mode: "fill" | "stroke",
 ): void {
   cx.clearRect(0, 0, size.width, size.height);
 
@@ -209,8 +210,17 @@ function drawIcon(
   cx.save();
   cx.translate(dx, dy);
   cx.scale(scale, scale);
-  cx.fillStyle = paint;
-  cx.fill(path, fillRule);
+  if (mode === "stroke") {
+    // Upstream's tick: stroke-width 1.5, round caps and joins.
+    cx.strokeStyle = paint;
+    cx.lineWidth = 1.5;
+    cx.lineCap = "round";
+    cx.lineJoin = "round";
+    cx.stroke(path);
+  } else {
+    cx.fillStyle = paint;
+    cx.fill(path, fillRule);
+  }
   cx.restore();
 }
 
@@ -237,6 +247,12 @@ interface IconCanvasProps extends IconProps {
 
   /** The identity the icon takes when the caller passes no `testID` (port sheet §3). */
   defaultTestID: string;
+
+  /**
+   * How the path is put down: `"fill"` for every shipped glyph, `"stroke"` for
+   * the selection tick, which upstream draws as a stroked polyline.
+   */
+  mode?: "fill" | "stroke";
 }
 
 /**
@@ -333,6 +349,7 @@ export function IconCanvas(props: IconCanvasProps): JSX.Element {
           props.viewBoxHeight,
           props.pathFillRule,
           paint(),
+          props.mode ?? "fill",
         )
       }
       // R-016: the upstream `svg` is an inline replaced box on the text

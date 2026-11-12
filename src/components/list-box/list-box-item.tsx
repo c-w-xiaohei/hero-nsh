@@ -9,7 +9,7 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, signal, split, View } from "nsh";
+import { cleanup, computed, effect, signal, split, View } from "nsh";
 
 import {
   createSelectableItem,
@@ -21,6 +21,7 @@ import {
 } from "../../primitives";
 import { DescriptionContext } from "../description/context";
 import type { DescriptionContextValue } from "../description/context";
+import { IconCheck } from "../icons";
 import { FieldContext } from "../label/context";
 import type { FieldState } from "../label/context";
 import { renderChildren } from "./children";
@@ -797,17 +798,35 @@ export function ListBoxItemIndicator(
   // `text-default-foreground`, its danger `text-danger` (R-022) or the
   // caller's own text class. Selection toggles opacity and scale, the port's
   // substitute for the stroke drawing.
+  // A tick that is already there when the popover opens must not animate in
+  // from its hidden state: upstream paints the selected row in its final state
+  // at the first frame. The transition turns on one frame after the item is
+  // laid out, so only a later selection change uses it.
+  const settled = signal(false);
+  effect(() => {
+    const frame = requestAnimationFrame(() => settled.set(true));
+    return () => cancelAnimationFrame(frame);
+  });
+
   const checkmark = () => (
     <View
-      class="h-2.5 w-1.5 border-b-2 border-e-2 rotate-45 transition-all duration-[250ms] ease-linear motion-reduce:transition-none"
+      class="size-2.5"
       classList={{
         "opacity-100 scale-100": isSelected(),
         "opacity-0 scale-75": !isSelected(),
+        "transition-all duration-[250ms] ease-linear motion-reduce:transition-none":
+          settled(),
         // R-045: a single-select popover draws no transition, on the checkmark
         // as well as on its slot.
         "transition-none": suppressTransition(),
       }}
-    />
+    >
+      {/* The upstream polyline, stroked by Canvas: the shape is the same one. */}
+      <IconCheck
+        className="size-full"
+        color={variant() === "danger" ? "danger" : "default-foreground"}
+      />
+    </View>
   );
 
   const content = () => {

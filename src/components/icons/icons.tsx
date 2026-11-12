@@ -17,6 +17,9 @@ const CHEVRON_DOWN_PATH = new Path2D(
   "M2.97 5.47a.75.75 0 0 1 1.06 0L8 9.44l3.97-3.97a.75.75 0 1 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 0 1 0-1.06",
 );
 
+/** Upstream's selection tick: a 16-unit polyline, stroked, never filled. */
+const CHECK_PATH = new Path2D("M1 9 L7 14 L15 4");
+
 const CHEVRON_UP_PATH = new Path2D(
   "M13.03 10.53a.75.75 0 0 1-1.06 0L8 6.56l-3.97 3.97a.75.75 0 0 1-1.06-1.06l4.5-4.5a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1 0 1.06",
 );
@@ -302,6 +305,24 @@ export function IconCalendar(props: IconProps): JSX.Element {
       pathFillRule="evenodd"
       defaultClass="h-4 w-4"
       defaultTestID="icon-calendar"
+    />
+  );
+}
+
+/** The selection tick of a menu item, a list-box row or a checkbox: the
+ * upstream `<polyline points="1 9 7 14 15 4">`, stroked at 1.5 with round ends
+ * in a 16-unit box. Canvas has a stroke, so the shape is the upstream one. */
+export function IconCheck(props: IconProps): JSX.Element {
+  return (
+    <IconCanvas
+      {...props}
+      path={CHECK_PATH}
+      viewBoxWidth={16}
+      viewBoxHeight={16}
+      pathFillRule="nonzero"
+      mode="stroke"
+      defaultClass="size-2.5"
+      defaultTestID="icon-check"
     />
   );
 }

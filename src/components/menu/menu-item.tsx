@@ -22,7 +22,7 @@ import {
 } from "../../primitives";
 import { DescriptionContext } from "../description/context";
 import type { DescriptionContextValue } from "../description/context";
-import { IconChevronRight } from "../icons";
+import { IconCheck, IconChevronRight } from "../icons";
 import { FieldContext } from "../label/context";
 import type { FieldState } from "../label/context";
 import { renderChildren } from "./children";
@@ -936,20 +936,35 @@ export function MenuItemIndicator(
   // `text-muted`, its danger `text-danger` (R-027) or the caller's own text
   // class. Selection toggles opacity and scale, the port's substitute for the
   // stroke drawing; the transition exists only while selected, as R-016 says.
+  // Indented markers must not play their own enter animation when the menu
+  // opens: upstream renders an already-selected item in its final state at the
+  // first paint, while a class that flips after mount would animate on every
+  // open. `settled` turns the transition on one frame after the item is laid
+  // out, so it only runs when the selection changes later.
+  const settled = signal(false);
+  effect(() => {
+    const frame = requestAnimationFrame(() => settled.set(true));
+    return () => cancelAnimationFrame(frame);
+  });
+
   const checkmark = () => (
     <View
-      // `border-l-2` is physical, as HeroUI's SVG polyline is: a logical
-      // `border-s-2` would mirror the tick into an inverted V in RTL.
-      class="h-2.5 w-1.5 border-b-2 border-r-2 rotate-45"
+      class="size-2.5"
       classList={{
         "opacity-100 scale-100": isSelected(),
         "opacity-0": !isSelected(),
-        "transition-all duration-100 ease-linear motion-reduce:transition-none":
-          isSelected() && !isMultiple(),
+        // Upstream gives the checkmark a transition only in a multiple-selection
+        // menu (300ms); a single-selection one draws it with none.
         "transition-all duration-[300ms] ease-linear motion-reduce:transition-none":
-          isSelected() && isMultiple(),
+          settled() && isSelected() && isMultiple(),
       }}
-    />
+    >
+      {/* The upstream polyline, stroked by Canvas: the shape is the same one. */}
+      <IconCheck
+        className="size-full"
+        color={variant() === "danger" ? "danger" : "muted"}
+      />
+    </View>
   );
 
   // R-022: the dot is a `size-2` View whose `border-4` sides meet in the middle
@@ -963,7 +978,7 @@ export function MenuItemIndicator(
         "scale-[0.7] opacity-0": !isSelected(),
         "scale-100 opacity-100": isSelected(),
         "transition-all duration-[250ms] motion-reduce:transition-none":
-          isMultiple(),
+          settled() && isMultiple(),
       }}
     />
   );
