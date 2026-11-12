@@ -25,6 +25,16 @@ import { lastLayout, rightOf, triggerFocusCount } from "../../testers/date-picke
  * file carries the PNG reader color-swatch and breadcrumbs use: Chrome's
  * screenshot is 8-bit RGB or RGBA, not interlaced, zlib-deflated, and `zlib`'s
  * `inflateSync` plus PNG's five filters turn it into pixels.
+ *
+ * Reading three pictures is not one call's worth of work: the runtime cuts a
+ * call into JS off after 2 s, and an `await` on the host starts the next call
+ * with a budget of its own (tmp/vendor/nsh-src/website/docs/sandbox-and-capabilities.md:40,45-48).
+ * Unfiltering one 1024x768 frame here measured 1.19 s idle — over budget once a
+ * shared machine stretches it, which is where X-001 used to die (inside the
+ * first decode, before any assertion). `differingPixels` below therefore walks
+ * the frames row by row, compares as it goes — no packed RGB copy of its own —
+ * and hands the host back every `ROWS_PER_CALL` rows, so one call carries at
+ * most a ninth of the budget however loaded the machine is.
  */
 
 const TRIGGER = "role:button[Open calendar]";
@@ -92,14 +102,18 @@ test("T-007 should lay a custom horizontal popover out with the preset beside th
   expect(preset.x - rightOf(calendar)).toBeGreaterThan(0);
 });
 
-/** A screenshot as packed RGB. */
-type Shot = { width: number; height: number; rgb: Uint8Array };
+/** A screenshot: its header, and its pixels still PNG-filtered. */
+type Frame = { width: number; height: number; channels: number; stride: number; raw: Uint8Array };
+
+/** Rows unfiltered in one call: 0.11–0.22 s measured here, a ninth of the 2 s budget. */
+const ROWS_PER_CALL = 16;
 
 function u32(bytes: Uint8Array, at: number): number {
   return ((bytes[at]! << 24) | (bytes[at + 1]! << 16) | (bytes[at + 2]! << 8) | bytes[at + 3]!) >>> 0;
 }
 
-function decodePng(png: Uint8Array): Shot {
+/** A screenshot's header and its inflated rows; the per-row filters stay applied. */
+function readPng(png: Uint8Array): Frame {
   let at = 8;
   let width = 0;
   let height = 0;
@@ -127,59 +141,82 @@ function decodePng(png: Uint8Array): Shot {
   const channels = colorType === 2 ? 3 : colorType === 6 ? 4 : 0;
   if (channels === 0) throw new Error(`unsupported PNG colour type ${colorType}`);
 
-  const raw = inflateSync(idat);
-  const stride = width * channels;
-  const rgb = new Uint8Array(width * height * 3);
-  const previous = new Uint8Array(stride);
-  const line = new Uint8Array(stride);
-  for (let y = 0; y < height; y += 1) {
-    const filter = raw[y * (stride + 1)]!;
-    const source = y * (stride + 1) + 1;
-    for (let i = 0; i < stride; i += 1) {
-      const left = i >= channels ? line[i - channels]! : 0;
-      const up = previous[i]!;
-      const upLeft = i >= channels ? previous[i - channels]! : 0;
-      const byte = raw[source + i]!;
-      let value: number;
-      if (filter === 0) value = byte;
-      else if (filter === 1) value = byte + left;
-      else if (filter === 2) value = byte + up;
-      else if (filter === 3) value = byte + ((left + up) >> 1);
-      else {
-        const estimate = left + up - upLeft;
-        const toLeft = Math.abs(estimate - left);
-        const toUp = Math.abs(estimate - up);
-        const toUpLeft = Math.abs(estimate - upLeft);
-        value = byte + (toLeft <= toUp && toLeft <= toUpLeft ? left : toUp <= toUpLeft ? up : upLeft);
-      }
-      line[i] = value & 255;
-    }
-    for (let x = 0; x < width; x += 1) {
-      const from = x * channels;
-      const to = (y * width + x) * 3;
-      rgb[to] = line[from]!;
-      rgb[to + 1] = line[from + 1]!;
-      rgb[to + 2] = line[from + 2]!;
-    }
-    previous.set(line);
-  }
-
-  return { width, height, rgb };
+  return { width, height, channels, stride: width * channels, raw: inflateSync(idat) };
 }
 
-/** How many pixels differ by more than `tolerance` in a channel. */
-function differing(a: Shot, b: Shot, tolerance = 8): number {
-  let count = 0;
-  for (let i = 0; i < a.rgb.length; i += 3) {
-    if (
-      Math.abs(a.rgb[i]! - b.rgb[i]!) > tolerance ||
-      Math.abs(a.rgb[i + 1]! - b.rgb[i + 1]!) > tolerance ||
-      Math.abs(a.rgb[i + 2]! - b.rgb[i + 2]!) > tolerance
-    ) {
-      count += 1;
+/** Rebuilds row `y` of `frame` into `line`, against the row above in `previous`. */
+function rowOf(frame: Frame, y: number, line: Uint8Array, previous: Uint8Array): void {
+  const { channels, stride, raw } = frame;
+  const filter = raw[y * (stride + 1)]!;
+  const source = y * (stride + 1) + 1;
+  for (let i = 0; i < stride; i += 1) {
+    const left = i >= channels ? line[i - channels]! : 0;
+    const up = previous[i]!;
+    const upLeft = i >= channels ? previous[i - channels]! : 0;
+    const byte = raw[source + i]!;
+    let value: number;
+    if (filter === 0) value = byte;
+    else if (filter === 1) value = byte + left;
+    else if (filter === 2) value = byte + up;
+    else if (filter === 3) value = byte + ((left + up) >> 1);
+    else {
+      const estimate = left + up - upLeft;
+      const toLeft = Math.abs(estimate - left);
+      const toUp = Math.abs(estimate - up);
+      const toUpLeft = Math.abs(estimate - upLeft);
+      value = byte + (toLeft <= toUp && toLeft <= toUpLeft ? left : toUp <= toUpLeft ? up : upLeft);
+    }
+    line[i] = value & 255;
+  }
+}
+
+/**
+ * How many pixels differ from `base` by more than `tolerance` in a channel, one
+ * count per frame in `others`. Row by row, handing the host back every
+ * `ROWS_PER_CALL` rows: see the header for why this is not one loop.
+ */
+async function differingPixels(
+  base: Frame,
+  others: Frame[],
+  turn: () => Promise<void>,
+  tolerance = 8,
+): Promise<number[]> {
+  for (const frame of others) {
+    if (frame.width !== base.width || frame.height !== base.height) {
+      throw new Error(`the frames differ in size: ${frame.width}x${frame.height}`);
     }
   }
-  return count;
+
+  const counts = others.map(() => 0);
+  const baseLine = new Uint8Array(base.stride);
+  const basePrevious = new Uint8Array(base.stride);
+  const lines = others.map((frame) => new Uint8Array(frame.stride));
+  const previous = others.map((frame) => new Uint8Array(frame.stride));
+
+  for (let y = 0; y < base.height; y += 1) {
+    rowOf(base, y, baseLine, basePrevious);
+    for (let f = 0; f < others.length; f += 1) {
+      const line = lines[f]!;
+      rowOf(others[f]!, y, line, previous[f]!);
+      let count = counts[f]!;
+      for (let x = 0; x < base.width; x += 1) {
+        const from = x * base.channels;
+        if (
+          Math.abs(baseLine[from]! - line[from]!) > tolerance ||
+          Math.abs(baseLine[from + 1]! - line[from + 1]!) > tolerance ||
+          Math.abs(baseLine[from + 2]! - line[from + 2]!) > tolerance
+        ) {
+          count += 1;
+        }
+      }
+      counts[f] = count;
+    }
+    basePrevious.set(baseLine);
+    for (let f = 0; f < others.length; f += 1) previous[f]!.set(lines[f]!);
+    if ((y + 1) % ROWS_PER_CALL === 0) await turn();
+  }
+
+  return counts;
 }
 
 // Regression X-001, evidence (pre-fix code):
@@ -213,20 +250,21 @@ test(
   "X-001 paints the popover at rest on the first frame under reduced motion",
   async () => {
     const app = await openCase("motion", {}, { reducedMotion: true });
+    /* Each `await` here is a new JS call, so each decode chunk starts fresh. */
+    const turn = () => app.wait(0);
 
-    const closed = decodePng(await app.screenshot());
+    const closed = readPng(await app.screenshot());
 
     await app.press(TRIGGER);
 
-    const first = decodePng(await app.screenshot());
+    const first = readPng(await app.screenshot());
 
     /* The frame the popover settles on: past the 6000 ms the caller asked for. */
     await app.wait(7000);
 
-    const settled = decodePng(await app.screenshot());
+    const settled = readPng(await app.screenshot());
 
-    const painted = differing(closed, settled);
-    const onFirstFrame = differing(closed, first);
+    const [onFirstFrame, painted] = await differingPixels(closed, [first, settled], turn);
 
     /* The open popover really is on screen, so the ratio below has a subject. */
     expect(painted).toBeGreaterThan(1000);
