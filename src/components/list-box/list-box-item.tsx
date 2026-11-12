@@ -9,7 +9,7 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, effect, signal, split, View } from "nsh";
+import { cleanup, computed, signal, split, View } from "nsh";
 
 import {
   createSelectableItem,
