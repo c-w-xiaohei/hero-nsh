@@ -1,5 +1,5 @@
 import type { JSX, ViewProps, ViewRef } from "nsh";
-import { split, View } from "nsh";
+import { createMotion, effect, reduceMotion, split, View, windowSize } from "nsh";
 import { SurfaceContext } from "../surface/surface-context";
 import { createDrawerPartOrder, DrawerDialogContext } from "./create-drawer-part-order";
 import type { DrawerContextValue } from "./drawer-context";
@@ -54,39 +54,75 @@ export function DrawerDialog(props: DrawerDialogProps): JSX.Element {
       : (node as JSX.Element);
   };
 
-  // The edge the panel leaves through; upstream sets the same translate on
-  // `[data-exiting="true"] .drawer__dialog`.
-  const exitEdge = () => {
-    switch (drawer.placement()) {
-      case "top":
-        return "-translate-y-full";
-      case "left":
-        return "-translate-x-full";
-      case "right":
-        return "translate-x-full";
-      default:
-        return "translate-y-full";
-    }
+  // Upstream slides the content wrapper from `translate: 100%` of the visual
+  // viewport, so the panel's visible travel is the last part of a full-screen
+  // move. A class transition depends on both the start state being painted and
+  // the class change landing after it, which a presented dialog does not
+  // guarantee (the host may mount it a few frames after `open`). A motion value
+  // moves the view natively from its first frame, so the slide cannot be
+  // skipped; the distance is the window's, the same 100% upstream uses.
+  const horizontal = () =>
+    drawer.placement() === "left" || drawer.placement() === "right";
+  // Upstream's enter starts past the edge the panel comes from: negative for
+  // top and left, positive for bottom and right.
+  const offset = () => {
+    const size = horizontal() ? windowSize().width : windowSize().height;
+
+    return drawer.placement() === "left" || drawer.placement() === "top" ? -size : size;
   };
+  const motion = createMotion({
+    initial: horizontal()
+      ? { translateX: offset(), translateY: 0 }
+      : { translateX: 0, translateY: offset() },
+  });
+  // Upstream's enter (250ms) and exit (200ms), on the fluid curve.
+  const slide = [0.32, 0.72, 0, 1] as [number, number, number, number];
+
+  effect(() => {
+    const open = drawer.isOpen();
+    const exiting = drawer.isExiting();
+    const shown = drawer.isPresented();
+    const moving = horizontal() ? motion.translateX : motion.translateY;
+    const across = horizontal() ? motion.translateY : motion.translateX;
+    across.set(0);
+
+    if (reduceMotion()) {
+      moving.set(0);
+
+      return;
+    }
+
+    if (exiting) {
+      moving.timing(offset(), { duration: 200, easing: slide });
+
+      return;
+    }
+
+    if (shown && open) {
+      // Presented: the panel starts off the edge (the motion's initial value)
+      // and slides to rest. A reopen during the exit continues from where it is.
+      moving.timing(0, { duration: 250, easing: slide });
+
+      return;
+    }
+
+    if (shown) {
+      // The close render arrives before the presence sets the exit hold; the
+      // panel stays where it is until `exiting` is true.
+      return;
+    }
+
+    // The dialog is gone (or never presented): park past the edge, ready.
+    moving.set(offset());
+  });
 
   const className = () =>
-    [
-      drawer.slots().dialog(),
-      // Upstream's exit is the dialog's own `translate` transition (200ms),
-      // so a drag transform can compound with it; the content wrapper stays
-      // still and the enter slide never touches this element. Clearing the
-      // class on a reopen transitions the panel back over the slot's 250ms.
-      drawer.isExiting()
-        ? `duration-[200ms] ${exitEdge()}`
-        : "translate-x-0 translate-y-0",
-      local.className,
-    ]
-      .filter(Boolean)
-      .join(" ");
+    [drawer.slots().dialog(), local.className].filter(Boolean).join(" ");
   const style = () => {
     const caller = local.style;
+    const base = drawer.isDismissable() ? { touchAction: "none" as const, ...caller } : caller;
 
-    return drawer.isDismissable() ? { touchAction: "none" as const, ...caller } : caller;
+    return [base, motion.style];
   };
 
   return (
@@ -113,6 +149,7 @@ const fallbackContext: DrawerContextValue = {
   isOpen: () => false,
   isEntering: () => false,
   isExiting: () => false,
+  isPresented: () => false,
   open: () => {},
   close: () => {},
   toggle: () => {},

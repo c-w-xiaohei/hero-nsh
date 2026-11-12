@@ -14,6 +14,8 @@ export interface DrawerContextValue {
   isEntering: Accessor<boolean>;
   /** The exit hold: the dialog owns the panel's slide out. */
   isExiting: Accessor<boolean>;
+  /** The host presented the dialog (`onOpen`); nothing is visible before this. */
+  isPresented: Accessor<boolean>;
   open: () => void;
   close: () => void;
   toggle: () => void;
@@ -38,6 +40,7 @@ export function createDrawerContextValue(options: {
     isOpen: options.isOpen,
     isEntering: () => false,
     isExiting: () => false,
+    isPresented: () => false,
     open: () => options.setOpen(true),
     close: () => options.setOpen(false),
     toggle: () => options.setOpen((previous) => !previous),

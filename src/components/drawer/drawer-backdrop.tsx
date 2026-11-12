@@ -1,5 +1,5 @@
 import type { Accessor, JSX, PressEvent, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
-import { computed, reduceMotion, View } from "nsh";
+import { computed, reduceMotion, signal, View } from "nsh";
 import { Dialog } from "nsh/base";
 
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
@@ -40,6 +40,8 @@ interface DrawerLayerProps {
   backdropTestID: Accessor<ViewProps["testID"]>;
   onBackdropPress: (event: PressEvent) => void;
   onCancel: () => void;
+  onPresented: () => void;
+  onDismissed: () => void;
   content: () => JSX.Element;
 }
 
@@ -76,6 +78,12 @@ function DrawerLayer(props: DrawerLayerProps): JSX.Element {
       closeOnEscape={false}
       closeOnSwipe={false}
       onCancel={props.onCancel}
+      // Everything visible starts here: the host has presented the dialog, so
+      // the panel's slide and the scrim's fade begin on a frame that is on
+      // screen. Starting them on `open` can run the whole animation while the
+      // host is still building the presented subtree.
+      onOpen={props.onPresented}
+      onClose={props.onDismissed}
       testID={props.testID()}
       class="h-full w-full"
     >
@@ -125,6 +133,9 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
   });
   const isDismissable = () => props.isDismissable ?? true;
   const isKeyboardDismissDisabled = () => props.isKeyboardDismissDisabled === true;
+  // The host's `onOpen`: the dialog is presented and painted. Both halves of
+  // the animation start here, so they cannot run behind a hidden subtree.
+  const presented = signal(false);
   const contextValue: DrawerContextValue = {
     ...(parent ?? createDrawerContextValue({ isOpen, setOpen })),
     slots,
@@ -133,6 +144,7 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
     isOpen,
     isEntering: presence.isEntering,
     isExiting: presence.isExiting,
+    isPresented: presented,
     open: () => setOpen(true),
     close: () => setOpen(false),
     toggle: () => setOpen(!isOpen()),
@@ -147,10 +159,12 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
   const classes = () => {
     const value = props.className;
     // `.drawer__scrim`: opacity 250ms cubic-bezier(0.32, 0.72, 0, 1) in,
-    // 200ms out — the same exit hold the presence keeps the subtree for.
-    const duration = presence.isExiting() ? "duration-[200ms]" : "duration-[250ms]";
+    // 200ms out — the same exit hold the presence keeps the subtree for. The
+    // close render comes before `isExiting`, so the closed state picks 200ms.
+    const leaving = !isOpen() || presence.isExiting();
+    const duration = leaving ? "duration-[200ms]" : "duration-[250ms]";
     const fade = `${duration} ${ease.outFluid} motion-reduce:transition-none`;
-    const off = !isOpen() || presence.isEntering();
+    const off = !isOpen() || !presented();
     return [
       slots().backdrop(),
       "transition-opacity",
@@ -198,6 +212,8 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
           backdropTestID={() => (props.testID ? `${props.testID}-backdrop` : undefined)}
           onBackdropPress={handleBackdropPress}
           onCancel={handleCancel}
+          onPresented={() => presented.set(true)}
+          onDismissed={() => presented.set(false)}
           content={content}
         />
       </OverlayTriggerContext.Provider>
