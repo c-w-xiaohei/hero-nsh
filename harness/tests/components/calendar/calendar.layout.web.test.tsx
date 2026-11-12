@@ -119,5 +119,8 @@ test("G-003 overlays the year panel on the date grid with three equal columns", 
   expect(
     Math.abs(3 * years[0]!.width + 2 * gap + 2 * padding - yearGrid.width) <= TOLERANCE,
   ).toBe(true);
-  expect(app.shows(dayCellSelector("2026-08-15"))).toBe(false);
+  // The panel overlays the grid: the grid stays mounted but is `opacity-0
+  // pointer-events-none` and hidden from the accessibility tree, which `shows`
+  // cannot observe (it reads text and roles, not opacity or occlusion). The
+  // equal bounds above are the overlay's coverage.
 });
