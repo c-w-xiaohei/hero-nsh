@@ -146,6 +146,13 @@ export interface CalendarDefaultsValue {
    * (date-range-picker port sheet §5, second cross-unit change).
    */
   registerSelectionInProgress?: (isSelecting: Accessor<boolean>) => () => void;
+
+  /**
+   * Range mode only: whether a selected range may hold dates the user cannot
+   * pick. React Aria's `calendarProps` carries it from `DateRangePicker`
+   * (date-range-picker port sheet §2, derived values).
+   */
+  allowsNonContiguousRanges?: Accessor<boolean | undefined>;
 }
 
 export const CalendarDefaultsContext = context<CalendarDefaultsValue | undefined>(undefined);

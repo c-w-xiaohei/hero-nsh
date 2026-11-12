@@ -231,7 +231,10 @@ export function RangeCalendarRoot(props: RangeCalendarRootProps): JSX.Element {
     pageBehavior: local.pageBehavior,
     selectionAlignment: local.selectionAlignment,
     weeksInMonth: local.weeksInMonth,
-    allowsNonContiguousRanges: local.allowsNonContiguousRanges,
+    allowsNonContiguousRanges: fallback(
+      local.allowsNonContiguousRanges,
+      defaults?.allowsNonContiguousRanges,
+    ),
     disallowEmptySelection: local.disallowEmptySelection,
     isDisabled: fallback(local.isDisabled, defaults?.isDisabled),
     isReadOnly: fallback(local.isReadOnly, defaults?.isReadOnly),

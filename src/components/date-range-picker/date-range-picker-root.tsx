@@ -538,6 +538,7 @@ export function DateRangePickerRoot(props: DateRangePickerRootProps): JSX.Elemen
     minValue: () => local.minValue,
     maxValue: () => local.maxValue,
     isDateUnavailable: () => (local.isDateUnavailable ? unavailableDay : undefined),
+    allowsNonContiguousRanges: () => local.allowsNonContiguousRanges,
     isDisabled: () => isDisabled(),
     isReadOnly: () => isReadOnly(),
     // RAC propagates `autoFocus` into the calendar, which would leave the
