@@ -1,5 +1,5 @@
 import type { Accessor, Bounds, JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { computed, effect, reduceMotion, signal, split, untracked, View } from "nsh";
+import { computed, cleanup, effect, reduceMotion, signal, split, untracked, View } from "nsh";
 
 import {
   createInteractionModality,
@@ -7,6 +7,7 @@ import {
 } from "../../primitives/create-interaction-modality";
 import { FieldsetContext } from "../fieldset/context";
 import {
+  DateInputGroupAnchorContext,
   DateInputGroupContext,
   type DateInputGroupContextValue,
   DateInputGroupFieldContext,
@@ -175,6 +176,13 @@ export function DateInputGroupRoot(props: DateInputGroupRootProps): JSX.Element 
   // it for its own disabled / invalid / read-only fallbacks only; the segments
   // and the Input read the field state directly (port sheet §2).
   const field = DateInputGroupFieldContext();
+
+  // Port sheet §5 (second cross-unit change): an enclosing picker anchors its
+  // layer to the whole group, which the group reports upwards because a
+  // context only flows down.
+  const reportAnchor = DateInputGroupAnchorContext();
+
+  cleanup(() => reportAnchor?.(undefined));
 
   const variant = computed<DateInputGroupVariant>(() => local.variant ?? "primary");
   const fullWidth = computed(() => local.fullWidth ?? false);
@@ -442,7 +450,10 @@ export function DateInputGroupRoot(props: DateInputGroupRootProps): JSX.Element 
   return (
     <DateInputGroupContext.Provider value={contextValue}>
       <View
-        ref={(node) => local.ref?.(node)}
+        ref={(node) => {
+          reportAnchor?.(node);
+          local.ref?.(node);
+        }}
         role={role()}
         nativeID={local.id ?? local.nativeID}
         testID={local.testID}

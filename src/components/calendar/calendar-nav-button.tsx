@@ -6,7 +6,7 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
-import { useCalendarContext } from "./calendar-context";
+import { useCalendarContext, CalendarDefaultsContext } from "./calendar-context";
 import { useYearPicker } from "./year-picker-context";
 
 export interface CalendarNavButtonProps extends Omit<ViewProps, "children" | "class" | "onPress" | "ref"> {
@@ -30,6 +30,18 @@ export interface CalendarNavButtonProps extends Omit<ViewProps, "children" | "cl
 export function CalendarNavButton(props: CalendarNavButtonProps): JSX.Element {
   const { state, slots } = useCalendarContext();
   const yearPicker = useYearPicker();
+  // R-028 / R-029: a picker's layer cancels the chevron's right-to-left flip
+  // (`.date-picker__popover .calendar__nav-button-icon { rotate: 0 }`). A
+  // descendant selector has no NSH counterpart, so the class comes from the
+  // enclosing picker through this context.
+  const defaults = CalendarDefaultsContext();
+
+  const iconClass = () => {
+    const own = slots.navButtonIcon();
+    const extra = defaults?.navButtonIconClass?.() ?? "";
+
+    return extra.length > 0 ? `${own} ${extra}` : own;
+  };
   const [local, rest] = split(props, [
     "slot",
     "children",
@@ -95,9 +107,9 @@ export function CalendarNavButton(props: CalendarNavButtonProps): JSX.Element {
         (local.slot === "previous" ? (
           // A Canvas icon cannot read the ancestor's `text-*`, so the nav
           // color is passed as a token.
-          <IconChevronLeft className={slots.navButtonIcon()} color="accent-soft-foreground" />
+          <IconChevronLeft className={iconClass()} color="accent-soft-foreground" />
         ) : (
-          <IconChevronRight className={slots.navButtonIcon()} color="accent-soft-foreground" />
+          <IconChevronRight className={iconClass()} color="accent-soft-foreground" />
         ))}
     </View>
   );

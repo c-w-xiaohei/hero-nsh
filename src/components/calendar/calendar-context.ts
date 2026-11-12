@@ -1,6 +1,6 @@
 import type { Accessor, Bounds } from "nsh";
 import { context } from "nsh";
-import type { CalendarDate } from "@internationalized/date";
+import type { Calendar, CalendarDate, CalendarIdentifier, DateValue } from "@internationalized/date";
 
 import type { calendarVariants } from "./calendar.styles";
 import type { CalendarState } from "./create-calendar-state";
@@ -81,6 +81,54 @@ export interface CalendarRenderProps {
   isDisabled: Accessor<boolean>;
   isInvalid: Accessor<boolean>;
 }
+
+/**
+ * What an enclosing component (DatePicker, DateRangePicker) hands the
+ * `Calendar` roots under it: React Aria's `calendarProps` from `useDatePicker`
+ * (`react-aria-components/src/DatePicker.tsx:205-222`, merged into the
+ * calendar's own props by `useContextProps` at `Calendar.tsx:180-186`).
+ *
+ * A calendar root that reads it uses each field only where its own prop is
+ * `undefined`: the explicit prop wins, as `useContextProps` rules. Not
+ * providing the context keeps a standalone `Calendar` behaving exactly as
+ * before (port sheet §5, first cross-unit change).
+ */
+export interface CalendarDefaultsValue {
+  /** The enclosing picker's value. */
+  value?: Accessor<DateValue | DateValue[] | null | undefined>;
+
+  /** The enclosing picker's change handler. */
+  onChange?: (value: DateValue | DateValue[] | null) => void;
+
+  /** The date the calendar opens on when it has no value. */
+  defaultFocusedValue?: Accessor<DateValue | null | undefined>;
+
+  /** The enclosing picker's bounds and availability. */
+  minValue?: Accessor<DateValue | null | undefined>;
+  maxValue?: Accessor<DateValue | null | undefined>;
+  isDateUnavailable?: Accessor<((date: DateValue) => boolean) | undefined>;
+
+  /** The enclosing picker's flags. */
+  isDisabled?: Accessor<boolean | undefined>;
+  isReadOnly?: Accessor<boolean | undefined>;
+  autoFocus?: Accessor<boolean | undefined>;
+
+  /** The calendar factory the enclosing picker was given. */
+  createCalendar?: Accessor<
+    ((name: CalendarIdentifier) => Calendar) | undefined
+  >;
+
+  /**
+   * Extra classes for the nav buttons' chevrons, appended after the icon slot
+   * class. A picker's layer carries `.date-picker__popover
+   * .calendar__nav-button-icon { rotate: 0 }` upstream; a descendant selector
+   * has no NSH counterpart, so the class travels through here instead
+   * (port sheet R-028 / R-029).
+   */
+  navButtonIconClass?: Accessor<string | undefined>;
+}
+
+export const CalendarDefaultsContext = context<CalendarDefaultsValue | undefined>(undefined);
 
 /** The value a cell's render function receives (HeroUI's 15-field shape). */
 export interface CalendarCellRenderProps {
