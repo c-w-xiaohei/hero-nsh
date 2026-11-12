@@ -171,8 +171,31 @@ export function createRangeCalendarState(
 
   // Selected range (`useControlledState` upstream). `onChange` only fires for a
   // real range: HeroUI's callback takes a `RangeValue`, never `null`.
+  //
+  // The controlled value is read through a function on every evaluation, not
+  // once at creation: a `DateRangePicker` hands its range down as a getter
+  // (port sheet §5, first cross-unit change), and the calendar has to follow the
+  // picker instead of painting the range it saw at mount. A plain `value` prop
+  // reads the same object each time, so a standalone calendar is unchanged.
+  const controlledRange = (): RangeCalendarValue<DateValue> | null | undefined => {
+    const current = props.value;
+
+    if (current === undefined) {
+      return undefined;
+    }
+
+    if (!current) {
+      return null;
+    }
+
+    const start = dayOf(current.start);
+    const end = dayOf(current.end);
+
+    return start.compare(end) <= 0 ? { start, end } : { start: end, end: start };
+  };
+
   const [rawValue, setRawValue] = createControllableSignal<RangeCalendarValue<DateValue> | null>({
-    value: () => props.value,
+    value: () => controlledRange(),
     defaultValue: () => props.defaultValue ?? null,
     onChange: (next) => {
       if (next) props.onChange?.(next);

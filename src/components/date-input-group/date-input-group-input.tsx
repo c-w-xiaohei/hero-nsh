@@ -106,16 +106,23 @@ export function DateInputGroupInput(props: DateInputGroupInputProps): JSX.Elemen
   // when no DateField provides one; a provided state wins.
   const field: DateFieldState = inheritedField ?? createDateFieldState();
 
+  // A range owner provides one handle for two fields; the Input binds itself
+  // (and the segments it renders) to the real state of its own slot, because
+  // the segment table is keyed by segment type and both sides have the same
+  // ones (date-range-picker port sheet §5, third cross-unit change). A single
+  // field has no `forSlot`, so `?? field` keeps every existing use identical.
+  const boundField = (): DateFieldState => field.forSlot?.(local.slot) ?? field;
+
   // The one read of `props.children`: the function is stored, and each segment
   // calls it once inside the field provider at the placement.
   const renderSegment = computed(() => local.children);
 
-  const isDisabled = () => field.isDisabled(local.slot);
-  const isInvalid = () => field.isInvalid(local.slot);
+  const isDisabled = () => boundField().isDisabled();
+  const isInvalid = () => boundField().isInvalid();
 
   // The Input's own `isFocusWithin` is the field's focused segment for this
   // slot (port sheet §2); segments live here and a Suffix trigger does not.
-  const isFocusWithin = () => field.focusedSegment(local.slot) != null;
+  const isFocusWithin = () => boundField().focusedSegment() != null;
 
   const hovered = signal(false);
 
@@ -223,7 +230,7 @@ export function DateInputGroupInput(props: DateInputGroupInputProps): JSX.Elemen
 
     group.setPointerModality();
 
-    const before = field.focusedSegment(local.slot)?.type ?? null;
+    const before = boundField().focusedSegment()?.type ?? null;
 
     // Mark the focus this press takes, so the segment's focus handler records
     // the pointer rather than the keyboard. The mark goes in before the move:
@@ -231,7 +238,7 @@ export function DateInputGroupInput(props: DateInputGroupInputProps): JSX.Elemen
     // segment already focused moves nothing, so its mark is dropped again.
     group.requestPointerFocus();
 
-    const target = field.focusLast();
+    const target = boundField().focusLast();
 
     if (target == null || target === before) {
       group.consumePointerFocus();
@@ -239,7 +246,7 @@ export function DateInputGroupInput(props: DateInputGroupInputProps): JSX.Elemen
   };
 
   return (
-    <DateInputGroupFieldContext.Provider value={field}>
+    <DateInputGroupFieldContext.Provider value={boundField()}>
       <View
         role={role()}
         focusable={false}
@@ -252,7 +259,7 @@ export function DateInputGroupInput(props: DateInputGroupInputProps): JSX.Elemen
         onMouseLeave={() => hovered.set(false)}
         onPress={handlePress}
       >
-        <Each of={field.segments(local.slot)} key="index">
+        <Each of={boundField().segments()} key="index">
           {(segment) => {
             const render = renderSegment();
 

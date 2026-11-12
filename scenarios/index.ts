@@ -73,6 +73,7 @@ import { calendarYearPickerScenarios } from "./calendar-year-picker.scenarios";
 import { sheetScenarios } from "./sheet.scenarios";
 import { rangeCalendarScenarios } from "./range-calendar.scenarios";
 import { datePickerScenarios } from "./date-picker.scenarios";
+import { dateRangePickerScenarios } from "./date-range-picker.scenarios";
 
 export const scenarios: Record<string, Component> = {
   ...smokeScenarios,
@@ -149,4 +150,5 @@ export const scenarios: Record<string, Component> = {
   ...sheetScenarios,
   ...rangeCalendarScenarios,
   ...datePickerScenarios,
+  ...dateRangePickerScenarios,
 };
