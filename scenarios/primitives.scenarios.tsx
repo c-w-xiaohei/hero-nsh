@@ -967,7 +967,7 @@ function CollectionCase() {
   // legitimately carry that very string, so the generated key must move aside.
   const keyless = [
     { textValue: "No key", children: [{ key: "x", textValue: "X" }] },
-    { key: "\u0000nsh-section:0:0", textValue: "Collision" },
+    { key: "__nsh:section:0:0", textValue: "Collision" },
   ];
   const colliding = buildNodes({
     dataSource: keyless,

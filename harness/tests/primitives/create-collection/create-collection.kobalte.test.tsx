@@ -141,9 +141,9 @@ describe("generated section keys", () => {
     const result = await collected();
 
     expect(result.collidingKeys).toEqual([
-      "section:\u0000nsh-section:0:0#2",
+      "section:__nsh:section:0:0#2",
       "item:x",
-      "item:\u0000nsh-section:0:0",
+      "item:__nsh:section:0:0",
     ]);
   });
 });

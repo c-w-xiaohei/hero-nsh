@@ -53,9 +53,11 @@ function isNumber(value: unknown): value is number {
  *
  * A section with no key in its data gets a generated key. It is a position,
  * not an identity: it changes when the section moves, so nothing may persist
- * it or use it as a lookup across renders. It is prefixed with a NUL byte and
- * then checked against every key the data produced (items and other sections);
- * a collision gets `#2`, `#3`, ... so it can never take an item's key.
+ * it or use it as a lookup across renders. Its prefix (`__nsh:section:`) is a
+ * printable sentinel, because a release build rejects a NUL byte in a string;
+ * it is then checked against every key the data produced (items and other
+ * sections), and a collision gets `#2`, `#3`, ... so it can never take an
+ * item's key.
  *
  * Keyboard navigation still steps over a section because only `"item"` nodes
  * are visited.
