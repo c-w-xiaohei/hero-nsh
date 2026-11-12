@@ -33,7 +33,9 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       - uses: changesets/action@v1
         env:
-          # The action only looks for the token in its own environment; the
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+          # The action looks for the token in its own environment; the
           # ~/.npmrc above is not enough, and without this it falls back to
           # OIDC trusted publishing, which cannot create a new package.
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -43,6 +45,3 @@ jobs:
           commit: "chore: version packages"
           title: "chore: version packages"
           createGithubReleases: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
