@@ -798,36 +798,15 @@ export function ListBoxItemIndicator(
   // `text-default-foreground`, its danger `text-danger` (R-022) or the
   // caller's own text class. Selection toggles opacity and scale, the port's
   // substitute for the stroke drawing.
-  // A tick that is already there when the popover opens must not animate in
-  // from its hidden state: upstream paints the selected row in its final state
-  // at the first frame. The transition turns on one frame after the item is
-  // laid out, so only a later selection change uses it.
-  const settled = signal(false);
-  effect(() => {
-    const frame = requestAnimationFrame(() => settled.set(true));
-    return () => cancelAnimationFrame(frame);
-  });
-
-  const checkmark = () => (
-    <View
-      class="size-2.5"
-      classList={{
-        "opacity-100 scale-100": isSelected(),
-        "opacity-0 scale-75": !isSelected(),
-        "transition-all duration-[250ms] ease-linear motion-reduce:transition-none":
-          settled(),
-        // R-045: a single-select popover draws no transition, on the checkmark
-        // as well as on its slot.
-        "transition-none": suppressTransition(),
-      }}
-    >
-      {/* The upstream polyline, stroked by Canvas: the shape is the same one. */}
+  // Upstream renders the tick only on the selected row, as part of the panel's
+  // first paint; it has no enter of its own to replay.
+  const checkmark = () =>
+    isSelected() ? (
       <IconCheck
-        className="size-full"
+        className="size-2.5"
         color={variant() === "danger" ? "danger" : "default-foreground"}
       />
-    </View>
-  );
+    ) : null;
 
   const content = () => {
     const children = local.children;

@@ -38,7 +38,7 @@ export const menuItemVariants = tv({
     // R-020: its 250ms transition (upstream's `duration-250` is not a standard
     // step, so it is written as an arbitrary value).
     indicator: [
-      "absolute start-2 top-1/2 flex size-4 shrink-0 -translate-y-1/2 items-center justify-center text-muted",
+      "absolute start-2 inset-y-0 flex w-4 shrink-0 items-center justify-center text-muted",
       "transition duration-[250ms] motion-reduce:transition-none",
     ].join(" "),
     // R-023: the submenu slot keeps `text-muted`.

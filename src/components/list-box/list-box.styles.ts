@@ -64,7 +64,7 @@ export const listboxItemVariants = tv({
     // centered.
     // R-018: its 250ms transition.
     indicator: [
-      "absolute end-2 top-1/2 flex size-4 shrink-0 -translate-y-1/2 items-center justify-center text-default-foreground",
+      "absolute end-2 inset-y-0 flex w-4 shrink-0 items-center justify-center text-default-foreground",
       "transition duration-[250ms] motion-reduce:transition-none",
     ].join(" "),
   },

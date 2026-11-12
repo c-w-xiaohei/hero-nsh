@@ -936,52 +936,24 @@ export function MenuItemIndicator(
   // `text-muted`, its danger `text-danger` (R-027) or the caller's own text
   // class. Selection toggles opacity and scale, the port's substitute for the
   // stroke drawing; the transition exists only while selected, as R-016 says.
-  // Indented markers must not play their own enter animation when the menu
-  // opens: upstream renders an already-selected item in its final state at the
-  // first paint, while a class that flips after mount would animate on every
-  // open. `settled` turns the transition on one frame after the item is laid
-  // out, so it only runs when the selection changes later.
-  const settled = signal(false);
-  effect(() => {
-    const frame = requestAnimationFrame(() => settled.set(true));
-    return () => cancelAnimationFrame(frame);
-  });
-
-  const checkmark = () => (
-    <View
-      class="size-2.5"
-      classList={{
-        "opacity-100 scale-100": isSelected(),
-        "opacity-0": !isSelected(),
-        // Upstream gives the checkmark a transition only in a multiple-selection
-        // menu (300ms); a single-selection one draws it with none.
-        "transition-all duration-[300ms] ease-linear motion-reduce:transition-none":
-          settled() && isSelected() && isMultiple(),
-      }}
-    >
-      {/* The upstream polyline, stroked by Canvas: the shape is the same one. */}
+  // Upstream renders the mark only on the selected row, with no enter of its
+  // own: it is part of the panel's first paint. So there is nothing to animate
+  // here, and nothing to hide on the rows that are not selected.
+  const checkmark = () =>
+    isSelected() ? (
       <IconCheck
-        className="size-full"
+        className="size-2.5"
         color={variant() === "danger" ? "danger" : "muted"}
       />
-    </View>
-  );
+    ) : null;
 
   // R-022: the dot is a `size-2` View whose `border-4` sides meet in the middle
   // of the 8pt box, filling it with `currentColor`. It starts at
   // `scale-[0.7] opacity-0` and scales in while selected.
   // R-017: the selected state is exactly `scale-100 opacity-100`.
-  const dot = () => (
-    <View
-      class="size-2 rounded-full border-4"
-      classList={{
-        "scale-[0.7] opacity-0": !isSelected(),
-        "scale-100 opacity-100": isSelected(),
-        "transition-all duration-[250ms] motion-reduce:transition-none":
-          settled() && isMultiple(),
-      }}
-    />
-  );
+  // The dot is upstream's `size-2` circle in the current colour.
+  const dot = () =>
+    isSelected() ? <View class="size-2 rounded-full bg-current" /> : null;
 
   const content = () => {
     const children = local.children;
