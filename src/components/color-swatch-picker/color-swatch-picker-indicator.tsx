@@ -2,6 +2,7 @@ import type { JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
 import { computed, split, View } from "nsh";
 
 import { joinClassNames } from "../color-picker/class-names";
+import { IconCheck } from "../icons";
 import type { AriaProps, DataProps, DomEventProps, GlobalDomProps } from "../color-picker/dom-props";
 import type { Color } from "../color-swatch";
 import { parseColor } from "../color-swatch";
@@ -77,9 +78,10 @@ function getColorLuminance(color: Color): number {
  *
  * R-019 (the slot) lives in the styles file. R-020 is the structural rewrite of
  * the default child: upstream draws a 12×12 `svg` polyline with `currentColor`
- * and a 1.5pt round stroke; NSH has no inline SVG and no checkmark in `icons`,
- * so the default is a `h-1/3 w-1/5`, `rotate-45` view whose `border-b` / `border-r`
- * draw the two strokes (1pt, no round caps; port sheet §8). R-021 / R-022 /
+ * and a 1.5pt round stroke; `IconCheck` draws that same polyline on a canvas,
+ * so the default is the real shape, painted with the contrast colour the slot
+ * already chooses (`text-white` / `text-black` reach a canvas only through a
+ * prop). R-021 / R-022 /
  * R-024 are the `scale-0` start, the 150ms transition and the `scale-100`
  * selected state of the indicator's direct child — the default checkmark, and
  * the wrapper that hosts caller children. R-023 is the root's `text-white` /
@@ -176,12 +178,17 @@ export function ColorSwatchPickerIndicator(
     // R-020 / R-021 / R-022 / R-024: the default checkmark.
     return (
       <View
-        class="h-1/3 w-1/5 rotate-45 border-b border-r transition-transform duration-150 ease-out motion-reduce:transition-none"
+        class="flex size-1/3 items-center justify-center transition-transform duration-150 ease-out motion-reduce:transition-none"
         classList={{
           "scale-0": !isSelected(),
           "scale-100": isSelected(),
         }}
-      />
+      >
+        <IconCheck
+          className="size-full"
+          color={isLightColor() ? "black" : "white"}
+        />
+      </View>
     );
   };
 
