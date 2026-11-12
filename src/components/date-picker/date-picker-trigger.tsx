@@ -1,5 +1,5 @@
 import type { Bounds, JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { cleanup, computed, effect, signal, split, untracked, View } from "nsh";
+import { cleanup, computed, effect, reduceMotion, signal, split, untracked, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives/create-interaction-modality";
 import { DateInputGroupContext } from "../date-input-group/date-input-group-context";
@@ -248,9 +248,14 @@ export function DatePickerTrigger(props: DatePickerTriggerProps): JSX.Element {
   }));
 
   // R-007: one transitioned property (`box-shadow`), so the list is inline and
-  // the duration / curve stay on the slot class. `motion-reduce` clears the
-  // list for the same reason the class cannot (an inline list wins over it).
-  const style = (): StyleProp<ViewStyle> => [{ transitionProperty: "box-shadow" }, local.style];
+  // the duration / curve stay on the slot class. R-008's
+  // `motion-reduce:transition-none` is a class, and an inline list outranks it,
+  // so reduced motion clears the list here too — the one owner of the property
+  // reads the preference as well (Button's solved pattern).
+  const style = (): StyleProp<ViewStyle> => [
+    { transitionProperty: reduceMotion() ? "none" : "box-shadow" },
+    local.style,
+  ];
 
   const pressed = signal(false);
 

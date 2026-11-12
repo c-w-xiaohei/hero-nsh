@@ -7,7 +7,7 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, effect, signal, split, Overlay } from "nsh";
+import { cleanup, computed, effect, reduceMotion, signal, split, Overlay } from "nsh";
 
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
@@ -157,8 +157,13 @@ export interface DatePickerPopoverProps {
 }
 
 // The two owners of the transition NSH cannot express with one class
-// (R-017 / R-027): the property list, and the shorter exit duration.
-const TRANSITION_STYLE = { transitionProperty: "opacity, transform" } as const;
+// (R-017 / R-027): the property list, and the shorter exit duration. The list is
+// a function, not a constant: R-017's `motion-reduce:transition-none` is a class
+// and an inline list outranks it, so reduced motion clears the list here — the
+// one owner of the property reads the preference as well.
+const transitionStyle = (): ViewStyle => ({
+  transitionProperty: reduceMotion() ? "none" : "opacity, transform",
+});
 const EXIT_DURATION_STYLE = { transitionDuration: "100ms" } as const;
 
 /**
@@ -469,7 +474,7 @@ export function DatePickerPopover(props: DatePickerPopoverProps): JSX.Element {
   // `animation-fill-mode: none` has no counterpart and needs none (the layer is
   // unmounted when the hold ends).
   const style = (): StyleProp<ViewStyle> => [
-    TRANSITION_STYLE,
+    transitionStyle(),
     presence.isExiting() ? EXIT_DURATION_STYLE : undefined,
     { transformOrigin: transformOrigin() },
     resolvedStyle(),
