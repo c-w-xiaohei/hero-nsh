@@ -180,7 +180,7 @@ function CardSamples() {
           <Text class="text-xs text-muted">$3,120 outstanding</Text>
         </Card.Content>
         <Card.Footer>
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="secondary">
             Review invoices
           </Button>
         </Card.Footer>
@@ -196,7 +196,7 @@ function CardSamples() {
           <Text class="text-xs text-muted">Then Pro at $29 per seat</Text>
         </Card.Content>
         <Card.Footer>
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="secondary">
             Compare plans
           </Button>
         </Card.Footer>
