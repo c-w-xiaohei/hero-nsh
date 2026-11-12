@@ -26,6 +26,9 @@ import { probe } from "@scenario/probe";
  *   no-close-on-select
  *                     `shouldCloseOnSelect={false}`, for the hand check and the
  *                     screenshot stage
+ *   motion            the default shape with the caller's `duration-[6000ms]` on
+ *                     the popover: a transition long enough for a screenshot to
+ *                     land inside it, for the reduced-motion paint case (X-001)
  *   controlled        `value` from params year/month/day, `onChange` probe
  *                     (controlled write-back)
  *
@@ -194,6 +197,10 @@ function Fixture() {
 
   if (name === "no-close-on-select") {
     return <Shell defaultValue={startDate()} shouldCloseOnSelect={false} />;
+  }
+
+  if (name === "motion") {
+    return <Shell defaultValue={startDate()} popoverProps={{ className: "duration-[6000ms]" }} />;
   }
 
   if (name === "controlled") {
