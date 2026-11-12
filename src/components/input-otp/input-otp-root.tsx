@@ -481,12 +481,17 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
   // selection covers by comparing the caret with it.
   let lastSelection: { start: number; end: number } | undefined;
 
-  const setSelection = (start: number, end: number) => {
+  const setSelection = (start: number, end: number, host = true) => {
     const next = { start, end };
 
     selection.set(next);
     lastSelection = next;
-    inputNode?.setSelection(start, end);
+
+    // A real host keeps its own caret through an edit; forcing ours mid-sequence
+    // (Windows' system text box) reorders or drops the characters still arriving.
+    if (host) {
+      inputNode?.setSelection(start, end);
+    }
   };
 
   // `input-otp`'s `selectionchange` handler (`dist/index.js`, the `f` function):
@@ -675,7 +680,7 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
     // against the code that just landed.
     const caret = caretAfterEdit(previous, candidate);
     const next = normalizeSelection(caret, caret);
-    setSelection(next.start, next.end);
+    setSelection(next.start, next.end, false);
   };
 
   const handlePaste = (event: PasteEvent) => {
