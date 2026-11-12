@@ -26,21 +26,13 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # npm reads the token from ~/.npmrc; provenance uses the OIDC token.
-      - name: npm auth
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> "$HOME/.npmrc"
-          npm whoami
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       - uses: changesets/action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
-          # The action looks for the token in its own environment; the
-          # ~/.npmrc above is not enough, and without this it falls back to
-          # OIDC trusted publishing, which cannot create a new package.
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # No NPM_TOKEN: the package's trusted publisher is this repository
+          # and this workflow file, so npm authenticates the OIDC token issued
+          # by the `id-token: write` permission above.
         with:
           version: pnpm changeset version
           publish: pnpm changeset publish
