@@ -13,13 +13,14 @@ export interface RangeCalendarHeaderProps extends Omit<ViewProps, "children" | "
 /**
  * `RangeCalendar.Header`: the row above the date grid (R-008).
  *
- * STUB for the core phase (port sheet §6): the public props type is final, the
- * body is a placeholder that renders the children in the header slot's view.
+ * Upstream's `:has(.calendar-year-picker__trigger[data-open="true"])` rule
+ * (R-009) fades the two nav buttons from here; NSH has no `:has()` and no
+ * descendant selectors, so the header is layout only and the `NavButton` parts
+ * read the year panel's open state from `YearPickerContext` themselves.
  */
 export function RangeCalendarHeader(props: RangeCalendarHeaderProps): JSX.Element {
   const { slots } = useRangeCalendarContext();
   const [local, rest] = split(props, ["children", "className", "ref"]);
-  const child = typeof local.children === "function" ? null : renderChildren(local.children as JSX.Element);
 
   return (
     <View
@@ -27,7 +28,7 @@ export function RangeCalendarHeader(props: RangeCalendarHeaderProps): JSX.Elemen
       ref={(node) => local.ref?.(node)}
       class={`${slots.header()} ${local.className ?? ""}`}
     >
-      {child}
+      {renderChildren(local.children)}
     </View>
   );
 }

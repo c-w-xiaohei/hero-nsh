@@ -1,9 +1,10 @@
 import type { JSX, ViewProps, ViewRef } from "nsh";
-import { split, View } from "nsh";
+import { split, Text } from "nsh";
 import type { DateDuration } from "@internationalized/date";
 
 import { renderChildren } from "../calendar/children";
 import type { CalendarHeadingFormatOptions } from "../calendar/date-utils";
+import { formatCalendarHeading } from "../calendar/date-utils";
 import { useRangeCalendarContext } from "./range-calendar-context";
 
 export interface RangeCalendarHeadingProps extends Omit<ViewProps, "children" | "class" | "ref"> {
@@ -13,6 +14,9 @@ export interface RangeCalendarHeadingProps extends Omit<ViewProps, "children" | 
   /** Date format options for the heading. */
   format?: CalendarHeadingFormatOptions;
 
+  /** Heading level; upstream inherits 2 from the calendar's heading context. @default 2 */
+  level?: number;
+
   children?: JSX.Element;
   className?: string;
   ref?: (node: ViewRef) => void;
@@ -21,22 +25,34 @@ export interface RangeCalendarHeadingProps extends Omit<ViewProps, "children" | 
 /**
  * `RangeCalendar.Heading`: the visible range's localized title (R-010).
  *
- * STUB for the core phase (port sheet §6): the public props type is final, the
- * body is a placeholder. The real part renders a `Text role="header"` built by
- * `formatCalendarHeading` with `offset` / `format`.
+ * `formatCalendarHeading` is React Aria's `useCalendarHeading` as a string
+ * (`../calendar/date-utils`): the month and year of the visible range, or a
+ * `formatRange` in a day/week view, with `offset` and `format` applied.
+ * Upstream renders an `h2`; NSH has `Text role="header"` (port sheet §8).
  */
 export function RangeCalendarHeading(props: RangeCalendarHeadingProps): JSX.Element {
-  const { slots } = useRangeCalendarContext();
-  const [local, rest] = split(props, ["offset", "format", "children", "className", "ref"]);
-  const child = typeof local.children === "function" ? null : renderChildren(local.children as JSX.Element);
+  const { state, slots } = useRangeCalendarContext();
+  const [local, rest] = split(props, [
+    "offset",
+    "format",
+    "level",
+    "children",
+    "className",
+    "ref",
+  ]);
+
+  const heading = () =>
+    formatCalendarHeading(state, { offset: local.offset, format: local.format });
 
   return (
-    <View
+    <Text
       {...rest}
       ref={(node) => local.ref?.(node)}
+      role="header"
+      accessibilityLevel={local.level ?? 2}
       class={`${slots.heading()} ${local.className ?? ""}`}
     >
-      {child}
-    </View>
+      {local.children != null ? renderChildren(local.children) : heading()}
+    </Text>
   );
 }
