@@ -947,25 +947,6 @@ export function FormsSection() {
               </Select.Popover>
             </Select>
           </Row>
-          <Row label="open" align="start">
-            <Select className="w-[200px]" defaultOpen defaultSelectedKey="cat">
-              <Label>Animal (open)</Label>
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  {ANIMALS.map((animal) => (
-                    <ListBox.Item id={animal.id} textValue={animal.name}>
-                      {animal.name}
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </Row>
           <Row label="states" align="start">
             <Select className="w-[200px]" defaultSelectedKey="dog" isDisabled>
               <Label>Disabled</Label>
@@ -1114,7 +1095,7 @@ export function FormsSection() {
               </Autocomplete.Trigger>
               <Autocomplete.Popover>
                 <Autocomplete.Filter filter={contains}>
-                  <SearchField aria-label="Search animals" autoFocus variant="secondary">
+                  <SearchField aria-label="Search animals" variant="secondary">
                     <SearchField.Group>
                       <SearchField.SearchIcon />
                       <SearchField.Input placeholder="Search..." />
@@ -1146,7 +1127,7 @@ export function FormsSection() {
               </Autocomplete.Trigger>
               <Autocomplete.Popover>
                 <Autocomplete.Filter filter={contains}>
-                  <SearchField aria-label="Search animals" autoFocus variant="secondary">
+                  <SearchField aria-label="Search animals" variant="secondary">
                     <SearchField.Group>
                       <SearchField.SearchIcon />
                       <SearchField.Input placeholder="Search..." />
@@ -1177,39 +1158,7 @@ export function FormsSection() {
               </Autocomplete.Trigger>
               <Autocomplete.Popover>
                 <Autocomplete.Filter filter={contains}>
-                  <SearchField aria-label="Search animals" autoFocus variant="secondary">
-                    <SearchField.Group>
-                      <SearchField.SearchIcon />
-                      <SearchField.Input placeholder="Search..." />
-                      <SearchField.ClearButton />
-                    </SearchField.Group>
-                  </SearchField>
-                  <ListBox>
-                    {ANIMALS.map((animal) => (
-                      <ListBox.Item id={animal.id} textValue={animal.name}>
-                        {animal.name}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Autocomplete.Filter>
-              </Autocomplete.Popover>
-            </Autocomplete>
-          </Row>
-          <Row label="open" align="start">
-            <Autocomplete
-              className="w-[220px]"
-              defaultOpen
-              placeholder="Select an animal"
-            >
-              <Label>Animal (open)</Label>
-              <Autocomplete.Trigger>
-                <Autocomplete.Value />
-                <Autocomplete.Indicator />
-              </Autocomplete.Trigger>
-              <Autocomplete.Popover>
-                <Autocomplete.Filter filter={contains}>
-                  <SearchField aria-label="Search animals" autoFocus variant="secondary">
+                  <SearchField aria-label="Search animals" variant="secondary">
                     <SearchField.Group>
                       <SearchField.SearchIcon />
                       <SearchField.Input placeholder="Search..." />
