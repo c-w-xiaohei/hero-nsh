@@ -17,6 +17,7 @@ import {
   ColorSwatchPicker,
   ComboBox,
   DateField,
+  DateRangePicker,
   Description,
   ErrorMessage,
   FieldError,
@@ -32,6 +33,7 @@ import {
   NumberField,
   Radio,
   RadioGroup,
+  RangeCalendar,
   SearchField,
   Select,
   Slider,
@@ -104,6 +106,105 @@ function PresetPicker(props: {
           </ColorSwatchPicker.Item>
         ))}
       </ColorSwatchPicker>
+    </View>
+  );
+}
+
+function RangeCalendarSample() {
+  return (
+    <View class="flex-col gap-3">
+      <Row label="a selected range" align="start">
+        <View class="w-fit rounded-2xl bg-surface p-3">
+          <RangeCalendar
+            aria-label="Selected range"
+            defaultValue={{ start: parseDate("2026-08-10"), end: parseDate("2026-08-16") }}
+          >
+            <RangeCalendar.Header>
+              <RangeCalendar.Heading />
+              <RangeCalendar.NavButton slot="previous" />
+              <RangeCalendar.NavButton slot="next" />
+            </RangeCalendar.Header>
+            <RangeCalendar.Grid>
+              <RangeCalendar.GridHeader>
+                {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
+              </RangeCalendar.GridHeader>
+              <RangeCalendar.GridBody>
+                {(date) => <RangeCalendar.Cell date={date} />}
+              </RangeCalendar.GridBody>
+            </RangeCalendar.Grid>
+          </RangeCalendar>
+        </View>
+      </Row>
+    </View>
+  );
+}
+
+function DateRangePickerSample() {
+  return (
+    <View class="flex-col gap-3">
+      <Row label="trip dates, calendar in the popover" align="start">
+        <DateRangePicker className="w-[320px]" endName="endDate" startName="startDate">
+          <View class="flex-col gap-2">
+          <Label>Trip dates</Label>
+          <DateField.Group fullWidth>
+            <DateField.Input slot="start">
+              {(segment) => <DateField.Segment segment={segment} />}
+            </DateField.Input>
+            <DateRangePicker.RangeSeparator />
+            <DateField.Input slot="end">
+              {(segment) => <DateField.Segment segment={segment} />}
+            </DateField.Input>
+            <DateField.Suffix>
+              <DateRangePicker.Trigger aria-label="Open calendar">
+                <DateRangePicker.TriggerIndicator />
+              </DateRangePicker.Trigger>
+            </DateField.Suffix>
+          </DateField.Group>
+          <Description>Select your check-in and check-out dates.</Description>
+          <DateRangePicker.Popover>
+            <RangeCalendar aria-label="Selected range">
+              <RangeCalendar.Header>
+                <RangeCalendar.YearPickerTrigger>
+                  <RangeCalendar.YearPickerTriggerHeading />
+                  <RangeCalendar.YearPickerTriggerIndicator />
+                </RangeCalendar.YearPickerTrigger>
+                <RangeCalendar.NavButton slot="previous" />
+                <RangeCalendar.NavButton slot="next" />
+              </RangeCalendar.Header>
+              <RangeCalendar.Grid>
+                <RangeCalendar.GridHeader>
+                  {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
+                </RangeCalendar.GridHeader>
+                <RangeCalendar.GridBody>
+                  {(date) => <RangeCalendar.Cell date={date} />}
+                </RangeCalendar.GridBody>
+              </RangeCalendar.Grid>
+            </RangeCalendar>
+          </DateRangePicker.Popover>
+          </View>
+        </DateRangePicker>
+      </Row>
+      <Row label="disabled with a fixed range" align="start">
+        <DateRangePicker className="w-[320px]" isDisabled>
+          <View class="flex-col gap-2">
+          <Label>Dates</Label>
+          <DateField.Group fullWidth>
+            <DateField.Input slot="start">
+              {(segment) => <DateField.Segment segment={segment} />}
+            </DateField.Input>
+            <DateRangePicker.RangeSeparator />
+            <DateField.Input slot="end">
+              {(segment) => <DateField.Segment segment={segment} />}
+            </DateField.Input>
+            <DateField.Suffix>
+              <DateRangePicker.Trigger aria-label="Open calendar">
+                <DateRangePicker.TriggerIndicator />
+              </DateRangePicker.Trigger>
+            </DateField.Suffix>
+          </DateField.Group>
+          </View>
+        </DateRangePicker>
+      </Row>
     </View>
   );
 }
@@ -2099,6 +2200,14 @@ export function FormsSection() {
             </ColorInputGroup>
           </Row>
         </View>
+      </Section>
+
+      <Section title="RangeCalendar">
+        <RangeCalendarSample />
+      </Section>
+
+      <Section title="DateRangePicker">
+        <DateRangePickerSample />
       </Section>
     </View>
   );
