@@ -362,11 +362,13 @@ function Geometry() {
 }
 
 /* §4c G-002 shape A: the popover is open at mount, so the calendar's box and
- * the popover's box exist without a press. */
+ * the popover's box exist without a press. `defaultValue` pins the month to the
+ * one the sheet measured: an empty picker opens on today's month, which would
+ * make the month in the grid's name depend on when the test ran. */
 function GeometryPopover() {
   return (
     <Stage>
-      <DatePicker defaultOpen className="w-[280px]" name="date">
+      <DatePicker defaultValue={VALUE} defaultOpen className="w-[280px]" name="date">
         <DatePickerField probes popoverProps={{ onLayout: layout("popover") }} />
       </DatePicker>
     </Stage>
@@ -374,11 +376,12 @@ function GeometryPopover() {
 }
 
 /* §4c G-002 shape B: the caller's row turns the popover content into a row with
- * the calendar and a trailing preset button. */
+ * the calendar and a trailing preset button. The same fixed value as shape A, so
+ * both shapes show the same month and their calendars compare. */
 function GeometryPopoverLayout() {
   return (
     <Stage>
-      <DatePicker defaultOpen className="w-[280px]" name="date">
+      <DatePicker defaultValue={VALUE} defaultOpen className="w-[280px]" name="date">
         <DatePickerField
           preset
           probes

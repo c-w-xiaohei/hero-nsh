@@ -25,6 +25,9 @@ const TRIGGER = "role:button[Open calendar]";
  * month ("Selected date, August 2026"), so this selector also proves which
  * month the popover shows. */
 const GRID = "role:grid[/August 2026/]";
+/* The day `defaultValue` 2026-08-15 leaves one month on screen, so "15 … August"
+ * names exactly one cell. */
+const DAY = "role:button[/August 15, 2026/]";
 const PREVIOUS = "role:button[/^Previous$/]";
 
 type CaseParams = Record<string, string | number | boolean>;
@@ -81,11 +84,19 @@ test("T-002 should open the calendar popover and close it on Escape", async () =
 // one), so a picker that handed the popover a calendar with its own state fails
 // here. The fixture records the payload as `{year, month, day}` because a
 // `DateValue` does not survive the probe's JSON round trip.
+//
+// Both flushes upstream takes with `runAllTimers()` (:104-106) are here as well:
+// the day the press just mounted is not in the host's snapshot yet, so pressing
+// its selector straight away is lost, and the payload reaches Storage a frame
+// after the press (_common.md "Real hosts": move the clock or wait before
+// counting). `select.heroui.test.tsx:216` waits for its listbox the same way.
 test("T-003 should call onChange when a calendar date is selected", async () => {
   const app = await openCase("default");
 
   await app.press(TRIGGER);
-  await app.press("role:button[/August 15, 2026/]");
+  await app.waitFor(DAY);
+  await app.press(DAY);
+  await app.wait(20);
 
   expect(changeCount(app)).toBe(1);
 
