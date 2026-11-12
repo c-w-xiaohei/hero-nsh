@@ -1,4 +1,4 @@
-import type { Accessor } from "nsh";
+import type { Accessor, ViewRef } from "nsh";
 import { context } from "nsh";
 
 import type { DateFieldState } from "./create-date-field-state";
@@ -138,3 +138,16 @@ export const DateInputGroupFieldContext = context<DateFieldState | undefined>(un
  * default keeps a plain DateField's affixes inert (R-025, R-026).
  */
 export const DateInputGroupAffixContext = context<Accessor<boolean>>(() => false);
+
+/**
+ * How an enclosing picker learns the group's element. React Aria anchors the
+ * DatePicker's popover to the whole field group (`DatePicker.tsx:209-219`,
+ * `triggerRef: groupRef`), and HeroUI then places the layer on `bottom`, so it
+ * is centred under the group rather than under the 24-point trigger suffix.
+ *
+ * NSH contexts only flow downwards, so the group reports its element upwards
+ * through this channel; a group without an enclosing picker reads `undefined`
+ * and does nothing (port sheet §5, second cross-unit change).
+ */
+export const DateInputGroupAnchorContext =
+  context<((ref: ViewRef | undefined) => void) | undefined>(undefined);

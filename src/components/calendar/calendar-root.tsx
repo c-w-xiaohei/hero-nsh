@@ -6,6 +6,7 @@ import { createCalendar as createCalendarDefault } from "@internationalized/date
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
 import {
   CalendarContext,
+  CalendarDefaultsContext,
   CalendarGridLayoutContext,
   type CalendarRenderProps,
 } from "./calendar-context";
@@ -161,17 +162,33 @@ export function CalendarRoot(props: CalendarRootProps): JSX.Element {
   ]);
 
   const locale = local.locale ?? hostLocale();
+
+  // What an enclosing DatePicker / DateRangePicker hands down (port sheet §5,
+  // first cross-unit change): React Aria merges `calendarProps` into the
+  // calendar's own props with `useContextProps`, where the explicit prop wins.
+  // A calendar outside such a picker reads `undefined` and behaves as before.
+  const defaults = CalendarDefaultsContext();
+
+  const fallback = <T,>(own: T | undefined, read: (() => T | undefined) | undefined): T | undefined =>
+    own !== undefined ? own : read?.();
+
   const state = createCalendarState({
     locale,
-    createCalendar: local.createCalendar,
-    value: local.value,
+    createCalendar: fallback(local.createCalendar, defaults?.createCalendar),
+    // `value` is the one input the state keeps reading after it is created
+    // (`createControllableSignal` reads it through an accessor), so it stays an
+    // accessor through a getter: a picker-driven calendar follows the picker's
+    // value instead of a copy taken at mount.
+    get value() {
+      return fallback(local.value, defaults?.value);
+    },
     defaultValue: local.defaultValue,
-    onChange: local.onChange,
+    onChange: local.onChange ?? defaults?.onChange,
     focusedValue: local.focusedValue,
-    defaultFocusedValue: local.defaultFocusedValue,
+    defaultFocusedValue: fallback(local.defaultFocusedValue, defaults?.defaultFocusedValue),
     onFocusChange: local.onFocusChange,
-    minValue: local.minValue,
-    maxValue: local.maxValue,
+    minValue: fallback(local.minValue, defaults?.minValue),
+    maxValue: fallback(local.maxValue, defaults?.maxValue),
     visibleDuration: local.visibleDuration,
     firstDayOfWeek: local.firstDayOfWeek,
     pageBehavior: local.pageBehavior,
@@ -179,10 +196,10 @@ export function CalendarRoot(props: CalendarRootProps): JSX.Element {
     selectionAlignment: local.selectionAlignment,
     weeksInMonth: local.weeksInMonth,
     disallowEmptySelection: local.disallowEmptySelection,
-    isDisabled: local.isDisabled,
-    isReadOnly: local.isReadOnly,
-    isDateUnavailable: local.isDateUnavailable,
-    autoFocus: local.autoFocus,
+    isDisabled: fallback(local.isDisabled, defaults?.isDisabled),
+    isReadOnly: fallback(local.isReadOnly, defaults?.isReadOnly),
+    isDateUnavailable: fallback(local.isDateUnavailable, defaults?.isDateUnavailable),
+    autoFocus: fallback(local.autoFocus, defaults?.autoFocus),
   });
 
   const [isYearPickerOpen, setIsYearPickerOpen] = createControllableBooleanSignal({
