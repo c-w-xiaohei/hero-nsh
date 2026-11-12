@@ -13,7 +13,7 @@
   "bin": {
     "hero-nsh": "./bin/hero-nsh.mjs"
   },
-  "files": ["src", "theme", "bin", "NOTICE", "!**/.nsh"],
+  "files": ["src", "theme", "bin", "NOTICE", "README-zh.md", "!**/.nsh"],
   "scripts": {
     "check": "nsh check harness",
     "test": "nsh test harness"
