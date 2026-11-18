@@ -81,8 +81,9 @@ export interface TextControlStyleRenderProps extends TextControlRenderProps {
  * The members of `InputHTMLAttributes` / `TextareaHTMLAttributes` that exist
  * only because HeroUI renders a real DOM control. They are accepted so code
  * written against HeroUI keeps compiling; port sheet §1.3, §1.4 and §8
- * register that NSH has no form submission or browser validation, and that the
- * remaining DOM events have no channel.
+ * register that NSH has no form submission or browser validation, and that
+ * the DOM events without an NSH channel (unlike `onKeyDown` / `onKeyUp`,
+ * which reach the host) are inert.
  */
 export interface TextControlDomProps {
   name?: string;
@@ -117,8 +118,6 @@ export interface TextControlDomProps {
   autoSave?: string;
   results?: number;
   enterKeyHint?: TextFieldEnterKeyHint;
-  onKeyDown?: unknown;
-  onKeyUp?: unknown;
   onBeforeInput?: unknown;
   onInput?: unknown;
   onCopy?: unknown;
@@ -457,8 +456,6 @@ export function renderTextControl(
     "autoSave",
     "results",
     "enterKeyHint",
-    "onKeyDown",
-    "onKeyUp",
     "onBeforeInput",
     "onInput",
     "onCopy",

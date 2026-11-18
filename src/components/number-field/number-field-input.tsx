@@ -80,8 +80,6 @@ export interface NumberFieldInputDomProps {
   autoSave?: string;
   results?: number;
   enterKeyHint?: "enter" | "done" | "go" | "next" | "previous" | "search" | "send";
-  onKeyDown?: unknown;
-  onKeyUp?: unknown;
   onBeforeInput?: unknown;
   onInput?: unknown;
   onCopy?: unknown;

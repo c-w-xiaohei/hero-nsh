@@ -65,8 +65,6 @@ const DOM_ONLY_PROPS = new Set([
   "autoSave",
   "results",
   "enterKeyHint",
-  "onKeyDown",
-  "onKeyUp",
   "onBeforeInput",
   "onInput",
   "onCopy",

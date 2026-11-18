@@ -43,8 +43,6 @@ const DOM_ONLY_PROPS = new Set([
   "inert",
   "translate",
   "name",
-  "onKeyDown",
-  "onKeyUp",
   "onClick",
   "onDoubleClick",
   "onMouseDown",

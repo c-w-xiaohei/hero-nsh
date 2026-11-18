@@ -297,14 +297,23 @@ export function renderTypography(
   // carries the inherited half). The root keeps its weight for the same reason
   // it keeps its color — the shared dimensions stay on the part — and the span
   // owns what the browser actually paints.
+  //
+  // NSH 0.6 gives a span's horizontal padding room in its line (nsh#2141),
+  // so the rule's `px-1.5` — and any caller padding — would paint twice: once
+  // inside the attachment and once on the `View` box. Padding is the `View`'s
+  // job; the span drops every `p-` / `px-` / `py-` utility.
   const inlineCodeClasses = computed(() =>
     typographyVariants({
       color: local.color,
       type: "code",
       weight: effectiveWeight(),
-    }).base({
-      className: local.className,
-    }),
+    })
+      .base({
+        className: local.className,
+      })
+      .split(/\s+/)
+      .filter((utility) => !/^p[xy]?-/.test(utility))
+      .join(" "),
   );
 
   // The caller's class lands on the `<code>` element upstream, so the painted

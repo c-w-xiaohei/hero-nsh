@@ -160,12 +160,6 @@ export interface RadioRootProps
 
   /** Hides the field root and its subtree from assistive technologies. */
   accessibilityElementsHidden?: boolean;
-
-  /** Accepted, no effect: NSH has no keydown on a view; the group handles the arrows. */
-  onKeyDown?: unknown;
-
-  /** Accepted, no effect: NSH has no keyup on a view. */
-  onKeyUp?: unknown;
 }
 
 function joinRegistered(values: readonly (() => string | undefined)[]): string | undefined {
@@ -226,8 +220,6 @@ export function RadioRoot(props: RadioRootProps): JSX.Element {
     "ref",
     "accessibilityLabel",
     "accessibilityElementsHidden",
-    "onKeyDown",
-    "onKeyUp",
   ] as const);
 
   // Read once, in the body: the group this item lives in (port sheet §2). There

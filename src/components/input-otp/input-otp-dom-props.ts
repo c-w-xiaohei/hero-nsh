@@ -54,8 +54,6 @@ const DOM_ONLY_PROPS = new Set([
   "multiple",
   "title",
   "containerClassName",
-  "onKeyDown",
-  "onKeyUp",
   "onBeforeInput",
   "onInput",
   "onCopy",

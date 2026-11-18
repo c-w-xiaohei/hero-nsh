@@ -58,8 +58,9 @@ export interface ColorInputGroupInputRenderProps {
  * The members of `InputHTMLAttributes<HTMLInputElement>` that exist only
  * because HeroUI renders a real `<input>`. They are accepted so code written
  * against HeroUI keeps compiling; §1.3 and §8 register that NSH has no form
- * submission or browser validation, and that DOM events beyond `onKeyPress` /
- * `onPaste` have no channel. `hostProps` drops them before the host spread.
+ * submission or browser validation, and that DOM events beyond `onKeyDown`,
+ * `onKeyUp`, `onKeyPress` / `onPaste` have no channel. `hostProps` drops them
+ * before the host spread.
  */
 export interface ColorInputGroupInputDomProps {
   name?: string;
@@ -78,8 +79,6 @@ export interface ColorInputGroupInputDomProps {
   autoSave?: string;
   results?: number;
   enterKeyHint?: "enter" | "done" | "go" | "next" | "previous" | "search" | "send";
-  onKeyDown?: unknown;
-  onKeyUp?: unknown;
   onBeforeInput?: unknown;
   onInput?: unknown;
   onCopy?: unknown;

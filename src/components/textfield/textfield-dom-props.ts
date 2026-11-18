@@ -34,9 +34,9 @@ export interface GlobalDomProps {
  * NSH's host logs every prop it does not know, so they are accepted by the
  * props types and dropped before the spread onto a host.
  *
- * DOM events that do have an NSH channel on an input (`onKeyPress`, `onPaste`,
- * `onSelectionChange`, `onCompositionChange`, `onCaretMove`) are absent from
- * this list on purpose: they reach the host.
+ * DOM events that do have an NSH channel on an input (`onKeyDown`, `onKeyUp`,
+ * `onKeyPress`, `onPaste`, `onSelectionChange`, `onCompositionChange`,
+ * `onCaretMove`) are absent from this list on purpose: they reach the host.
  */
 const DOM_ONLY_PROPS = new Set([
   "render",
@@ -82,8 +82,6 @@ const DOM_ONLY_PROPS = new Set([
   "excludeFromTabOrder",
   "validationBehavior",
   "validate",
-  "onKeyDown",
-  "onKeyUp",
   "onBeforeInput",
   "onInput",
   "onCopy",

@@ -3,6 +3,7 @@ import type {
   AccessibilityState,
   Bounds,
   JSX,
+  KeyEvent,
   PressEvent,
   StyleProp,
   ViewRef,
@@ -540,6 +541,29 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     keyboardPressedKey.set(undefined);
   };
 
+  // NSH 0.6 reports `onKeyDown`/`onKeyUp` on a view. The web host presses a
+  // focused control with Return or Space before the app keymap sees the key
+  // (the control mode fires only the focus' own bindings), so the activation
+  // arrives at `handlePress` without a key name and the close rule cannot tell
+  // Enter from Space. The key name is remembered from the raw event instead.
+  let pressedKeyName: MenuActivationKey | undefined;
+
+  const handleKeyDown = (event: KeyEvent) => {
+    if (event.repeat) {
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      pressedKeyName = event.key === "Enter" ? "Enter" : "Space";
+    }
+  };
+
+  const handleKeyUp = (event: KeyEvent) => {
+    if (event.key === "Enter" || event.key === " ") {
+      pressedKeyName = undefined;
+    }
+  };
+
   const handlePress = (event: PressEvent) => {
     // A pointer press on the container's own padding does nothing, as upstream.
     if (!isKeyboardPress(event)) {
@@ -547,7 +571,8 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     }
 
     modality.setKeyboardModality();
-    activateFocused("keyboard", event);
+    activateFocused("keyboard", event, undefined, pressedKeyName);
+    pressedKeyName = undefined;
   };
 
   const handleLayout = (event: { bounds: Bounds }) => {
@@ -865,6 +890,8 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
           style={resolvedStyle()}
           onFocus={handleFocus}
           onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          onKeyUp={handleKeyUp}
           onPress={handlePress}
           onPressDown={handlePressDown}
           onPressUp={handlePressUp}

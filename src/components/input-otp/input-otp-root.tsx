@@ -90,12 +90,6 @@ export interface InputOTPRootDomProps {
   /** Accepted, no effect: the input is never a file input. */
   multiple?: boolean;
 
-  /** Accepted, no effect: views have no key events (keys reach TSX through `keymap`). */
-  onKeyDown?: unknown;
-
-  /** Accepted, no effect, as `onKeyDown`. */
-  onKeyUp?: unknown;
-
   /** Accepted, no effect: NSH has no beforeinput event. */
   onBeforeInput?: unknown;
 
@@ -363,8 +357,6 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
     "spellCheck",
     "size",
     "multiple",
-    "onKeyDown",
-    "onKeyUp",
     "onBeforeInput",
     "onInput",
     "onCopy",
@@ -642,6 +634,8 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
 
     // Upstream's `onChange` holds the candidate to `maxLength` before anything
     // else; the host's own limit is not enough (the web target inserts past it).
+    // `slice` counts UTF-16 units where NSH 0.6 counts characters; cells are
+    // per position as upstream's are, and an OTP is ASCII in practice.
     const candidate = edited.slice(0, maxLength());
 
     const accepted = accept(candidate);

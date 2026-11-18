@@ -63,8 +63,6 @@ const DOM_ONLY_PROPS = new Set([
   "excludeFromTabOrder",
   "validationBehavior",
   "validate",
-  "onKeyDown",
-  "onKeyUp",
   "onBeforeInput",
   "onInput",
   "onCopy",

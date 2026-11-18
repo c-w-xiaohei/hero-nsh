@@ -72,8 +72,8 @@ export interface SearchFieldInputStyleRenderProps extends SearchFieldInputRender
  * because HeroUI renders a real `<input>`. They are accepted so code written
  * against HeroUI keeps compiling; port sheet §1.4 and §8 register that NSH has
  * no form submission or browser validation, and that DOM events beyond
- * `onKeyPress` / `onPaste` have no channel. `hostProps` drops them before the
- * host spread.
+ * `onKeyDown`, `onKeyUp`, `onKeyPress` / `onPaste` have no channel. `hostProps`
+ * drops them before the host spread.
  */
 export interface SearchFieldInputDomProps {
   name?: string;
@@ -93,8 +93,6 @@ export interface SearchFieldInputDomProps {
   autoSave?: string;
   results?: number;
   enterKeyHint?: SearchFieldEnterKeyHint;
-  onKeyDown?: unknown;
-  onKeyUp?: unknown;
   onBeforeInput?: unknown;
   onInput?: unknown;
   onCopy?: unknown;
@@ -349,8 +347,6 @@ export function SearchFieldInput(props: SearchFieldInputProps): JSX.Element {
     "multiple",
     "step",
     "enterKeyHint",
-    "onKeyDown",
-    "onKeyUp",
     "onBeforeInput",
     "onInput",
     "onCopy",

@@ -194,12 +194,6 @@ export interface TextFieldRootProps
   /** Accepted, no effect: NSH's input is always a Tab stop. */
   excludeFromTabOrder?: boolean;
 
-  /** Accepted, no effect: NSH has no element-level key events; keys go through `keymap`. */
-  onKeyDown?: unknown;
-
-  /** Accepted, no effect, as `onKeyDown`. */
-  onKeyUp?: unknown;
-
   /** Accepted, no effect: NSH has no DOM `beforeinput`. */
   onBeforeInput?: unknown;
 
@@ -333,8 +327,6 @@ export function TextFieldRoot(props: TextFieldRootProps): JSX.Element {
     "name",
     "form",
     "excludeFromTabOrder",
-    "onKeyDown",
-    "onKeyUp",
     "onBeforeInput",
     "onInput",
     "onCopy",

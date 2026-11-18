@@ -26,7 +26,7 @@ An app needs no `"tailwind"` block: the colors and `radius-field` come from the 
 
 ## Quick start
 
-Install NSH (0.5.0 or later):
+Install NSH (0.6.0 or later):
 
 ```sh
 curl -fsSL https://nsh.dev/install.sh | sh
@@ -69,10 +69,16 @@ mount(() => (
 
 ## Requirements
 
-- NSH 0.5.0 or later.
+- NSH 0.6.0 or later. NSH 0.6 reads the version an app is written for from `nsh.json`; declaring it turns a version
+  mismatch into one line instead of type errors:
+
+```json
+{ "nsh": ">=0.6" }
+```
+
 - For the browser target, add its runtime once: `nsh component add web`.
-- An app that formats dates or numbers in a non-English language lists it in `nsh.json` `locales`; NSH 0.5 bundles
-  only the languages an app names.
+- An app that formats dates or numbers in a non-English language lists it in `nsh.json` `locales`; since NSH 0.5
+  only the languages an app names are bundled.
 
 ```json
 { "locales": ["de", "ja"] }

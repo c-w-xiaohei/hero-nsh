@@ -166,12 +166,6 @@ export interface NumberFieldRootProps
   /** The focus moved in or out of the field. */
   onFocusChange?: (isFocused: boolean) => void;
 
-  /** Accepted, no effect: NSH has no element-level key events; keys go through `keymap`. */
-  onKeyDown?: (event: unknown) => void;
-
-  /** Accepted, no effect, as `onKeyDown`. */
-  onKeyUp?: (event: unknown) => void;
-
   /** The accessible name of the input; wins over the Label's registered text. */
   "aria-label"?: string;
 
@@ -253,8 +247,6 @@ export function NumberFieldRoot(props: NumberFieldRootProps): JSX.Element {
     "onFocus",
     "onBlur",
     "onFocusChange",
-    "onKeyDown",
-    "onKeyUp",
     "aria-label",
     "accessibilityLabel",
     "aria-disabled",

@@ -252,12 +252,6 @@ export interface SearchFieldRootProps
   /** Both focus transitions, as React Aria's `FocusEvents` report them. */
   onFocusChange?: (isFocused: boolean) => void;
 
-  /** Accepted, no effect: views have no key events, and Escape / Return are handled by the field. */
-  onKeyDown?: unknown;
-
-  /** Accepted, no effect, as `onKeyDown`. */
-  onKeyUp?: unknown;
-
   /** Accepted, no effect: NSH has no copy event. */
   onCopy?: unknown;
 
@@ -366,8 +360,6 @@ export function SearchFieldRoot(props: SearchFieldRootProps): JSX.Element {
     "onFocus",
     "onBlur",
     "onFocusChange",
-    "onKeyDown",
-    "onKeyUp",
     "onCopy",
     "onCut",
     "onPaste",

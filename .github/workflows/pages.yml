@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NSH_VERSION: v0.5.0
+  NSH_VERSION: v0.6.0
 
 jobs:
   deploy:
