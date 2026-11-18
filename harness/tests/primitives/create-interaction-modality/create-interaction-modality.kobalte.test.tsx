@@ -12,7 +12,6 @@
  * the events an owner actually receives (press, key command, focus).
  */
 
-import { platform } from "nsh";
 import { describe, expect, test } from "nsh/test";
 import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
@@ -184,11 +183,17 @@ describe("V4 key and focus events on a real engine", () => {
     expect(events(app)).toContain("keypress:q");
   });
 
-  test("a pointer press fires onPress, and moves the keyboard focus only where the platform does", async () => {
+  test("a pointer press fires onPress, and moves the keyboard focus only where the target does", async () => {
+    // `platform.os` in the test is the driver's simulated idiom (this file
+    // passes `platform: "web"`), not the runner's target. The scenario reports
+    // its own `platform.os`, which under `--target` is the real one.
     const app = await openScenario("v4/events", {
       params: { case: "events" },
       platform: "web",
     });
+
+    await app.waitUntil(() => events(app).includes("platform:windows") || events(app).includes("platform:web"));
+    const onWindows = events(app).includes("platform:windows");
 
     await app.press("id:stop-b");
     await app.waitUntil(() => events(app).includes("press:b"));
@@ -199,7 +204,7 @@ describe("V4 key and focus events on a real engine", () => {
     // window manager's rule). Windows does: a focusable view takes the focus
     // on press, as a real Win32 button does; the NSH 0.6 driver matches it.
     const focusEvents = events(app).filter((event) => event.startsWith("focus:"));
-    if (platform.os === "windows") {
+    if (onWindows) {
       expect(focusEvents).toEqual(["focus:b"]);
     } else {
       expect(focusEvents).toEqual([]);

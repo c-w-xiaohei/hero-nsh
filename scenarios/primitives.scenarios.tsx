@@ -1,4 +1,4 @@
-import { cleanup, effect, host, keymap, Text, View, signal } from "nsh";
+import { cleanup, effect, host, keymap, platform, Text, View, signal } from "nsh";
 import type { Accessor, Bounds, PressEvent, ViewRef } from "nsh";
 import { Input } from "nsh/base";
 import {
@@ -472,6 +472,11 @@ function InteractionModalityScenario() {
 
 function EventsCase() {
   const report = probe("event");
+
+  // The target the app actually runs on: `--target windows` reports
+  // `platform.os === "windows"` even when `open`'s `platform` idiom asks for
+  // the web. The test needs the runner's rule, which is this, not the option.
+  report("platform", platform.os);
 
   // A view has no key handler; the app's only keyboard entry points are
   // shortcuts and inputs. Both are bound here to see what a test can drive.
