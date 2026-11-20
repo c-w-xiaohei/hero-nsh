@@ -15,4 +15,5 @@ export * from "./environment";
 // stays untouched and `./tokens/density` is re-exported here instead.
 export * from "../tokens/density";
 export * from "./list";
+export * from "./presentation";
 export * from "./selection";
