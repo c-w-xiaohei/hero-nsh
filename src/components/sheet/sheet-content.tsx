@@ -34,7 +34,7 @@ import { sheetDragLength } from "./sheet.utils";
  * accepted, with no effect in NSH. Declared as an `extends`-clause mapped
  * type so every member of the props body below stays a plain named field.
  */
-type SheetContentDataProps = { [key in `data-${string}`]?: unknown };
+export type SheetContentDataProps = { [key in `data-${string}`]?: unknown };
 
 /**
  * The props of `Sheet.Content`: HeroUI's `SheetContentProps`, which is React
