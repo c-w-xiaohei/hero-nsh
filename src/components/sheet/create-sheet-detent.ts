@@ -75,16 +75,6 @@ export interface SheetDetentState {
   /** `Sheet.Body` reports its scroll offset here on every `onScroll`. */
   reportScrollOffset: (offset: Point) => void;
 
-  /**
-   * The content-area gesture, merged in by `Sheet.Content` at the
-   * `SheetDetentContext` provider (adapt-sheets/sheet-handoff.md A-004).
-   * `createSheetDetent` itself knows nothing of `src/primitives`, so it
-   * cannot produce this field; `Sheet.Body` reads `contentPan.scrollProps()`
-   * for the paired-scroll props (the touch-environment keyboard policy,
-   * empty under the default pointer environment).
-   */
-  contentPan: SheetContentPan;
-
   /** `Sheet.Dialog` reports its natural length here, for the dismissal threshold. */
   registerPanelLength: (length: number) => void;
 
@@ -111,13 +101,13 @@ export interface CreateSheetDetentProps {
 }
 
 /**
- * The slice of `src/primitives`' `Pan` a sheet detent carries. Declared here
- * structurally so `create-sheet-detent.ts` needs no import from
- * `src/primitives` (adapt-sheets/sheet-handoff.md A-004): `Sheet.Content`
- * merges the real `createPan` return, which is assignable to this type.
+ * The slice of `src/primitives`' `Pan` the content-area gesture hands down.
+ * Declared here structurally so this module needs no import from
+ * `src/primitives`: `Sheet.Dialog` provides the real `createPan` accessors,
+ * which are assignable to this type (adapt-sheets/sheet-handoff.md A-005/A-006).
  */
 export interface SheetContentPan {
-  /** The responder props the content-area gesture spreads on the clip box; an empty object when the gesture is not attached. */
+  /** The responder props the content-area gesture spreads on the panel; an empty object when the gesture is not attached. */
   panHandlers: () => object;
 
   /** The props the paired scroll view takes; an empty object when the gesture is not attached. */
@@ -126,6 +116,13 @@ export interface SheetContentPan {
 
 /** The context itself; `null` outside a `Sheet.Content`. */
 export const SheetDetentContext = context<SheetDetentState | null>(null);
+
+/**
+ * The content pan `Sheet.Dialog` provides to the parts inside it: `Sheet.Body`
+ * reads `scrollProps()` for the paired-scroll keyboard policy, and the fixture
+ * probe reads both accessors' resolved key counts. `null` outside a Dialog.
+ */
+export const SheetContentPanContext = context<SheetContentPan | null>(null);
 
 interface HandleDragState {
   startPosition: number;
@@ -148,7 +145,7 @@ interface HandleDragState {
  */
 export function createSheetDetent(
   props: CreateSheetDetentProps,
-): Omit<SheetDetentState, "contentPan"> {
+): SheetDetentState {
   const direction = (): SheetSwipeDirection =>
     props.swipeDirection() ?? props.placement();
 

@@ -1,7 +1,7 @@
 import type { JSX, ScrollEvent } from "nsh";
 import { computed, split, Scroll } from "nsh";
 
-import { SheetDetentContext } from "./create-sheet-detent";
+import { SheetContentPanContext, SheetDetentContext } from "./create-sheet-detent";
 import type { SheetPartDomProps } from "./sheet-dom-props";
 import { viewProps } from "./sheet-dom-props";
 import { SheetContext } from "./sheet-context";
@@ -56,6 +56,10 @@ export function SheetBody(
 
   const context = SheetContext();
   const detent = SheetDetentContext();
+  // The paired-scroll props of `Sheet.Dialog`'s content-area gesture
+  // (adapt-sheets/sheet-handoff.md A-006): the touch environment's keyboard
+  // policy, empty under the default pointer environment.
+  const contentPan = SheetContentPanContext();
 
   const slots = () => context?.slots() ?? sheetVariants();
 
@@ -72,10 +76,7 @@ export function SheetBody(
   return (
     <Scroll
       {...viewProps(rest)}
-      // The paired-scroll props of `Sheet.Content`'s content-area gesture
-      // (adapt-sheets/sheet-handoff.md A-006): the touch environment's
-      // keyboard policy, empty under the default pointer environment.
-      {...(detent?.contentPan.scrollProps() ?? {})}
+      {...(contentPan?.scrollProps() ?? {})}
       ref={(node) => local.ref?.(node)}
       nativeID={local.id ?? local.nativeID}
       scrollable={scrollable()}

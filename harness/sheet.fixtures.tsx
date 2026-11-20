@@ -8,7 +8,10 @@ import {
 } from "@heroui/react";
 import type { Pan, PanProps } from "@heroui/react";
 import { animateSheetValue } from "../src/components/sheet/sheet.utils";
-import { SheetDetentContext } from "../src/components/sheet/create-sheet-detent";
+import {
+  SheetContentPanContext,
+  SheetDetentContext,
+} from "../src/components/sheet/create-sheet-detent";
 import { probe } from "./probe";
 
 /*
@@ -195,6 +198,7 @@ function PanCase() {
  */
 function DetentProbe() {
   const detent = SheetDetentContext();
+  const contentPan = SheetContentPanContext();
   const report = probe("detent");
   const reportDrag = probe("drag");
 
@@ -217,8 +221,6 @@ function DetentProbe() {
 
   effect(() => {
     if (!detent) return;
-
-    const contentPan = detent.contentPan;
 
     report({
       length: detent.length(),
