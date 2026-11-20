@@ -75,4 +75,3 @@ export * from "./components/sheet";
 export * from "./components/range-calendar";
 export * from "./components/date-picker";
 export * from "./components/date-range-picker";
-export * from "./tokens/density";
