@@ -34,7 +34,7 @@ interface NodeSnapshot {
 }
 
 describe("list-item-data", () => {
-  // M-013: each row of the fixture's datum array normalizes per the chains:
+  // adapt-sheets/f-collection.md M-013: each row of the fixture's datum array normalizes per the chains:
   // id → key → String(datum) → String(index); textValue → name → label → "";
   // disabled → isDisabled → false; items → children → item/section.
   test("M-013 toListItemData normalizes every field chain", async () => {
@@ -64,7 +64,7 @@ describe("list-item-data", () => {
     expect(results[9]).toEqual({ key: "d2", textValue: "", disabled: true, children: null });
   });
 
-  // M-013 (second half): `listItemDataGetters()` feeds `createListState`
+  // adapt-sheets/f-collection.md M-013 (second half): `listItemDataGetters()` feeds `createListState`
   // directly — the section expands, every node gets key/textValue/disabled.
   test("M-013 listItemDataGetters feeds createListState correctly", async () => {
     const app = await openData();
@@ -79,7 +79,7 @@ describe("list-item-data", () => {
     ]);
   });
 
-  // M-015 half: `toListItemData`/`listItemDataGetters` resolve through the
+  // adapt-sheets/f-collection.md M-015 half: `toListItemData`/`listItemDataGetters` resolve through the
   // public entry (the fixture imports them from "@heroui/react").
   test("M-013 toListItemData is importable from the public entry", async () => {
     const app = await openData();

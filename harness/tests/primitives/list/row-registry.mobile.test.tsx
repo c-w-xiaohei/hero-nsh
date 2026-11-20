@@ -24,7 +24,7 @@ function openRegistry() {
 }
 
 describe("row-registry", () => {
-  // M-014: register → get/has; unregister removes only its own handle; a
+  // adapt-sheets/f-collection.md M-014: register → get/has; unregister removes only its own handle; a
   // second register under the same key overwrites, and the stale unregister
   // it leaves behind must not delete the newer handle.
   test("M-014 register/get/has/unregister and same-key overwrite semantics", async () => {
@@ -54,7 +54,7 @@ describe("row-registry", () => {
     expect(result.hasB).toBe(false);
   });
 
-  // M-015: `createRowRegistry` resolves through the public `hero-nsh` entry
+  // adapt-sheets/f-collection.md M-015: `createRowRegistry` resolves through the public `hero-nsh` entry
   // (the fixture imports it from "@heroui/react"); a mount that could not
   // import it would never reach the probe.
   test("M-015 createRowRegistry is importable from the public entry", async () => {

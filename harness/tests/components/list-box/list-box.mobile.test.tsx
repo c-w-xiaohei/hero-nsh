@@ -57,7 +57,7 @@ async function selectionChange(app: App): Promise<unknown[]> {
 }
 
 describe("f-collection", () => {
-  // M-001: with `hide=delta` the "4" row never mounts, yet typeahead still
+  // adapt-sheets/f-collection.md M-001: with `hide=delta` the "4" row never mounts, yet typeahead still
   // lands on its key — the data side holds the complete collection.
   test("M-001 typeahead hits an unmounted option's key", async () => {
     const app = await openMobile("m-items", { hide: "4", probekey: "4" });
@@ -68,7 +68,7 @@ describe("f-collection", () => {
     expect(lastCall<string | null>(app, "focusedKey")).toBe("4");
   });
 
-  // M-002: keyboard activation of an unmounted key selects it through the
+  // adapt-sheets/f-collection.md M-002: keyboard activation of an unmounted key selects it through the
   // manager fallback (Enter on focusedKey → onSelectionChange contains it).
   test("M-002 Enter on an unmounted focused key selects it (activation fallback)", async () => {
     const app = await openMobile("m-multi", { hide: "4", probekey: "4" });
@@ -78,7 +78,7 @@ describe("f-collection", () => {
     expect(change[0]).toEqual(["4"]);
   });
 
-  // M-003 (负断言): mounted presence is not collection truth. A row that
+  // adapt-sheets/f-collection.md M-003 (负断言): mounted presence is not collection truth. A row that
   // never mounted (`hide=4` at mount) leaves no handle in the row registry,
   // yet its key sits in the collection — and mounting it later registers the
   // handle while the collection answer never changed.
@@ -107,7 +107,7 @@ describe("f-collection", () => {
     expect(lastCall<string[]>(app, "keys")).toEqual(["1", "2", "3", "4", "5"]);
   });
 
-  // M-004: the mounted row's textValue wins typeahead; with the row absent
+  // adapt-sheets/f-collection.md M-004: the mounted row's textValue wins typeahead; with the row absent
   // the datum's own field answers (`""` here — the data names nothing) while
   // the key stays in the collection.
   test("M-004 row textValue override merges; absent row falls back to the datum", async () => {
@@ -138,7 +138,7 @@ describe("f-collection", () => {
     expect(lastCall<string[]>(unmounted, "keys")).toEqual(["x", "y"]);
   });
 
-  // M-005: a rendered row whose `id` matches no datum is appended to the
+  // adapt-sheets/f-collection.md M-005: a rendered row whose `id` matches no datum is appended to the
   // collection tail (RAC's row-id override contract) and selects normally.
   test("M-005 orphan row joins the collection and selects", async () => {
     const app = await openMobile("m-orphan", { probekey: "orphan" });
@@ -153,7 +153,7 @@ describe("f-collection", () => {
     expect(change[0]).toEqual(["orphan"]);
   });
 
-  // M-006: a row without `id` resolves the same positional key its datum
+  // adapt-sheets/f-collection.md M-006: a row without `id` resolves the same positional key its datum
   // normalized to — row and data converge on "0".
   test("M-006 keyless rows align with the datum's derived key", async () => {
     const app = await openMobile("m-nokey", { probekey: "0" });
@@ -171,7 +171,7 @@ describe("f-collection", () => {
     ).toEqual({ key: "0", textValue: "Plain A", hasChildren: true });
   });
 
-  // M-007: `items ?? children` expands data sections; keyless sections get
+  // adapt-sheets/f-collection.md M-007: `items ?? children` expands data sections; keyless sections get
   // the generated `__nsh:section:{level}:{index}` key, and findItem reaches
   // inside a section.
   test("M-007 data sections expand, generated section keys, items resolve", async () => {
@@ -196,7 +196,7 @@ describe("f-collection", () => {
     });
   });
 
-  // M-008: a row's `isDisabled` merges into its datum (node.disabled true →
+  // adapt-sheets/f-collection.md M-008: a row's `isDisabled` merges into its datum (node.disabled true →
   // navigation skips it, selection refused); `disabledKeys` unions on top.
   test("M-008 row isDisabled and disabledKeys merge into the node", async () => {
     const app = await openMobile("m-disabled", { probekey: "1" });
@@ -219,7 +219,7 @@ describe("f-collection", () => {
     expect(callsOf(app, "selectionChange")).toHaveLength(0);
   });
 
-  // M-009: `itemCount` reports the unfiltered data side; a live owner filter
+  // adapt-sheets/f-collection.md M-009: `itemCount` reports the unfiltered data side; a live owner filter
   // cuts the collection but not the count.
   test("M-009 itemCount is the unfiltered data count", async () => {
     const app = await openMobile("m-filter", { filter: "e" });
@@ -236,7 +236,7 @@ describe("f-collection", () => {
     expect(lastCall<number>(app, "itemCount")).toBe(5);
   });
 
-  // M-010: page keys on a collection with unmounted rows neither crash nor
+  // adapt-sheets/f-collection.md M-010: page keys on a collection with unmounted rows neither crash nor
   // leave the collection's bounds; a mounted section's frame still composes.
   test("M-010 page keys stay bounded with unmounted rows", async () => {
     const app = await openMobile("m-paged", { probekey: "1" });
@@ -258,7 +258,7 @@ describe("f-collection", () => {
     expect(lastCall<string[]>(app, "keys")).toContain(afterUp);
   });
 
-  // M-012: the same scenario under `EnvironmentScope input="touch"` — the
+  // adapt-sheets/f-collection.md M-012: the same scenario under `EnvironmentScope input="touch"` — the
   // collection seam is environment-agnostic, so every observable is identical.
   test("M-012 touch environment: unmounted typeahead and activation identical", async () => {
     const app = await openMobile(
