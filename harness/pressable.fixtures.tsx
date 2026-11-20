@@ -8,6 +8,7 @@ import {
   PressableFeedbackContext,
 } from "@heroui/react";
 import type {
+  PressableFeedbackContextValue,
   PressableFeedbackRootAnimation,
   PressableFeedbackScaleAnimation,
 } from "@heroui/react";
@@ -96,6 +97,21 @@ function Btn(props: { id: string; onPress: () => void }) {
     </View>
   );
 }
+
+/* -------------------------------------------------------------------------------------------------
+ * On-demand channel probe (component case)
+ *
+ * The `ctx-state` probe only samples after an `isPressed` edge, so a press
+ * that never engages the canonical flag (the default pointer environment,
+ * `enabled={false}`) produces no post-press sample — exactly the case the
+ * negative assertions need to read. `ctx-sample` is a plain button NEXT TO
+ * the pressable (never inside it, so pressing it cannot perturb the press
+ * state) that reads the context's AnimatedValue channels through
+ * `getValue()` on demand and reports them as `ctx-channels`.
+ * -----------------------------------------------------------------------------------------------*/
+
+/** The mounted component case's context value, kept for `ctx-sample`. */
+let componentCtx: PressableFeedbackContextValue | null = null;
 
 /* -------------------------------------------------------------------------------------------------
  * Factory case (M-001…M-004, M-009, M-015, M-016)
@@ -234,6 +250,13 @@ function ContextProbe() {
   const reportOrigin = probe("ctx-origin");
   const reportEnv = probe("ctx-env");
 
+  // Publish the live context value for the sibling `ctx-sample` button: the
+  // effect re-runs whenever the provider hands down a new value object, so
+  // `componentCtx` always holds the channels the parts currently drive.
+  effect(() => {
+    componentCtx = ctx;
+  });
+
   // Mount-time and layout-time environment of the seam: `enabled` (the
   // effective gate), the cascade flag, the computed `hitSlop` and `bounds`.
   // These are the assertions `viewStyle` cannot make — it does not resolve
@@ -252,12 +275,16 @@ function ContextProbe() {
     const pressed = ctx.isPressed();
     reportPressed(pressed);
 
-    // The delayed sample lands mid-hold under `longPress`/`dragAndHold` and
-    // after a finished press: it reads the canonical `pressed` channel plus
+    // The delayed samples land mid-hold under `longPress`/`dragAndHold` and
+    // after a finished press: they read the canonical `pressed` channel plus
     // the part channels the root owns (`highlightOpacity`, `rippleProgress`)
     // — `viewStyle` reports 1 on any `AnimatedValue` binding, so
-    // `getValue()` is the only way a test sees them.
-    setTimeout(() => {
+    // `getValue()` is the only way a test sees them. Two delays per edge:
+    // 600 ms catches the channels mid-run, 1500 ms lands late enough in a
+    // 2500 ms hold that the ripple's diagonal-timed 0→1 segment (≈750 ms,
+    // and restarted once if a late layout retriggers the part) has settled
+    // at its held end — the only stable read of "趋 1".
+    const sample = () => {
       void ctx.pressed.getValue().then((value) => {
         void ctx.highlightOpacity.getValue().then((highlight) => {
           void ctx.rippleProgress.getValue().then((ripple) => {
@@ -275,7 +302,9 @@ function ContextProbe() {
           });
         });
       });
-    }, 600);
+    };
+    setTimeout(sample, 600);
+    setTimeout(sample, 1500);
   });
 
   effect(() => {
@@ -287,6 +316,7 @@ function ContextProbe() {
 
 function ComponentInner() {
   const reportEvent = probe("events");
+  const reportChannels = probe("ctx-channels");
   const disabled = String(host.params.disabled ?? "") === "1";
   const enabledOff = String(host.params.enabled ?? "") === "off";
   const tiny = String(host.params.box ?? "") === "tiny";
@@ -297,32 +327,60 @@ function ComponentInner() {
       reportEvent({ kind, x: e.position.x, y: e.position.y });
     };
 
+  // Reads the context's three AnimatedValue channels plus the canonical
+  // state on demand — the post-press half of the negative assertions, which
+  // cannot ride `ctx-state` (that probe only samples on `isPressed` edges).
+  const sampleChannels = () => {
+    const c = componentCtx;
+    if (c === null) {
+      return;
+    }
+    void c.pressed.getValue().then((pressed) => {
+      void c.highlightOpacity.getValue().then((highlight) => {
+        void c.rippleProgress.getValue().then((ripple) => {
+          reportChannels({
+            pressed,
+            highlight,
+            ripple,
+            isPressed: c.isPressed(),
+            origin: c.pressOrigin(),
+            enabled: c.enabled(),
+            allDisabled: c.isAllAnimationsDisabled(),
+          });
+        });
+      });
+    });
+  };
+
   return (
-    <PressableFeedback
-      testID="root"
-      style={{ width: tiny ? 24 : 120, height: tiny ? 24 : 64 }}
-      isDisabled={disabled}
-      enabled={enabledOff ? false : undefined}
-      animation={rootAnimation()}
-      // 2500 ms: the ContextProbe samples the channels 600 ms into the hold.
-      // Web runs several times slower than headless, so the hold must stay
-      // comfortably wider than the sample delay plus timer drift.
-      delayLongPress={2500}
-      onPressDown={onEvent("down")}
-      onPressUp={onEvent("up")}
-      onPress={() => reportEvent({ kind: "press" })}
-      class="items-center justify-center"
-    >
-      <PressableFeedback.Highlight testID="highlight" />
-      <PressableFeedback.Ripple testID="ripple" />
-      <PressableFeedback.Scale
-        testID="scale-part"
-        class="flex-1 items-center justify-center"
+    <>
+      <PressableFeedback
+        testID="root"
+        style={{ width: tiny ? 24 : 120, height: tiny ? 24 : 64 }}
+        isDisabled={disabled}
+        enabled={enabledOff ? false : undefined}
+        animation={rootAnimation()}
+        // 2500 ms: the ContextProbe samples the channels 600 ms into the hold.
+        // Web runs several times slower than headless, so the hold must stay
+        // comfortably wider than the sample delay plus timer drift.
+        delayLongPress={2500}
+        onPressDown={onEvent("down")}
+        onPressUp={onEvent("up")}
+        onPress={() => reportEvent({ kind: "press" })}
+        class="items-center justify-center"
       >
-        <Text>pressable</Text>
-      </PressableFeedback.Scale>
-      <ContextProbe />
-    </PressableFeedback>
+        <PressableFeedback.Highlight testID="highlight" />
+        <PressableFeedback.Ripple testID="ripple" />
+        <PressableFeedback.Scale
+          testID="scale-part"
+          class="flex-1 items-center justify-center"
+        >
+          <Text>pressable</Text>
+        </PressableFeedback.Scale>
+        <ContextProbe />
+      </PressableFeedback>
+      <Btn id="ctx-sample" onPress={sampleChannels} />
+    </>
   );
 }
 

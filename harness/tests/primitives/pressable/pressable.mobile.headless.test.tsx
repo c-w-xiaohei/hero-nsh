@@ -82,11 +82,11 @@ describe("pressable-feedback headless", () => {
   // adapt-sheets/pressable-feedback.md M-005 (A-004): the Highlight part's
   // pressed end is opacity 0.1 and it returns to 0 on release. `viewStyle`
   // cannot resolve the part's AnimatedValue-bound opacity (measured: it
-  // reports the static 1 even mid-hold), and the channel is internal to the
-  // part — so the observable half is that the press engages the canonical
-  // channel with the Highlight mounted and the hold completes the roundtrip.
-  // The opacity end value itself degrades to the sheet §5 real-device check.
-  test("M-005 injected touch hold: the press engages with Highlight mounted and roundtrips on release", async () => {
+  // reports the static 1 even mid-hold), so the sheet's named end value is
+  // asserted through the `ctx-state` probe's `highlight` field —
+  // `ctx.highlightOpacity.getValue()` sampled 600 ms into the hold, past the
+  // part's 200 ms timing.
+  test("M-005 injected touch hold: Highlight reaches its 0.1 pressed end mid-hold and roundtrips on release", async () => {
     const app = await openPressable("component", { scope: "touch" });
 
     expect(app.shows("id:highlight")).toBe(true);
@@ -95,16 +95,29 @@ describe("pressable-feedback headless", () => {
     await app.waitUntil(
       () => callsOf(app, "ctx-pressed").filter((c) => c[0] === true).length > 0,
     );
-    // Mid-hold the canonical channel is engaged — the Highlight's opacity
-    // channel derives from this same isPressed edge.
-    await app.waitUntil(() => callsOf(app, "ctx-state").length > 0);
-    const held = callsOf(app, "ctx-state").at(-1)?.[0] as {
+    // Mid-hold the canonical channel is engaged and the Highlight's opacity
+    // channel — driven by the same isPressed edge — sits at its 0.1 end.
+    // Wait for BOTH held samples (600 ms and 1500 ms after the press edge):
+    // the late one is the settled read of `pressed`/`highlight`.
+    await app.waitUntil(
+      () =>
+        callsOf(app, "ctx-state").filter(
+          (c) => (c[0] as { isPressed?: boolean }).isPressed === true,
+        ).length >= 2,
+    );
+    const held = callsOf(app, "ctx-state")
+      .filter((c) => (c[0] as { isPressed?: boolean }).isPressed === true)
+      .at(-1)?.[0] as {
       isPressed: boolean;
       pressed: number;
+      highlight: number;
+      ripple: number;
       enabled: boolean;
     };
     expect(held.isPressed).toBe(true);
     expect(held.pressed).toBeGreaterThan(0.99);
+    expect(held.highlight).toBeGreaterThan(0.09);
+    expect(held.highlight).toBeLessThan(0.11);
     expect(held.enabled).toBe(true);
 
     await app.drop();
@@ -113,11 +126,12 @@ describe("pressable-feedback headless", () => {
 
   // adapt-sheets/pressable-feedback.md M-007/M-017 held-press halves: under
   // `animation="disable-all"` the cascade flag reaches the context while the
-  // canonical press still engages and completes; under the default pointer
-  // environment a held press never engages the seam at all. The parts'
-  // animated stillness itself is unobservable through `nsh/test` (the
-  // `viewStyle` opacity gap above) — these assertions cover the canonical
-  // edges the parts derive from.
+  // canonical press still engages and completes — with the part channels
+  // held at their rest values (the sheet's "端值恒 0/1"); under the default
+  // pointer environment a held press never engages the seam at all. The
+  // parts' animated stillness itself is unobservable through `viewStyle`
+  // (the opacity gap above), so the `getValue()` channel probes in
+  // `ctx-state`/`ctx-channels` carry the assertion.
   test("hold-state: disable-all still roundtrips the canonical press; the default environment never engages", async () => {
     const disabled = await openPressable("component", {
       scope: "touch",
@@ -132,6 +146,25 @@ describe("pressable-feedback headless", () => {
     await disabled.waitUntil(
       () => callsOf(disabled, "ctx-pressed").filter((c) => c[0] === true).length > 0,
     );
+    // Mid-hold the canonical `pressed` channel completes its run to 1 while
+    // the cascaded parts sit at rest: highlight 0, ripple 0 — both `set()`
+    // instantly under disable-all, so exact. Wait for BOTH held samples
+    // (600 ms and 1500 ms): the late one is the settled read of `pressed`.
+    await disabled.waitUntil(
+      () =>
+        callsOf(disabled, "ctx-state").filter(
+          (c) => (c[0] as { isPressed?: boolean }).isPressed === true,
+        ).length >= 2,
+    );
+    const heldAll = callsOf(disabled, "ctx-state")
+      .filter((c) => (c[0] as { isPressed?: boolean }).isPressed === true)
+      .at(-1)?.[0] as
+      | { pressed: number; highlight: number; ripple: number }
+      | undefined;
+    expect(heldAll?.pressed).toBeGreaterThan(0.99);
+    expect(heldAll?.highlight).toBe(0);
+    expect(heldAll?.ripple).toBe(0);
+
     await disabled.drop();
     await disabled.waitUntil(
       () => callsOf(disabled, "ctx-pressed").at(-1)?.[0] === false,
@@ -148,5 +181,28 @@ describe("pressable-feedback headless", () => {
     expect(
       callsOf(pointer, "ctx-pressed").filter((c) => c[0] === true),
     ).toHaveLength(0);
+
+    // The held-press half of the pointer negative: even a held press must
+    // leave the seam inert — no press origin recorded (it is the ripple's
+    // only trigger) and the part channels at rest, read on demand because a
+    // gated press never raises `isPressed` and so never schedules a
+    // `ctx-state` sample.
+    expect(callsOf(pointer, "ctx-origin").every((c) => c[0] === null)).toBe(
+      true,
+    );
+    await pointer.press("id:ctx-sample");
+    await pointer.waitUntil(() => callsOf(pointer, "ctx-channels").length > 0);
+    const pointerChannels = callsOf(pointer, "ctx-channels").at(-1)?.[0] as
+      | {
+          origin: unknown;
+          ripple: number;
+          highlight: number;
+          isPressed: boolean;
+        }
+      | undefined;
+    expect(pointerChannels?.origin).toBeNull();
+    expect(pointerChannels?.ripple).toBe(0);
+    expect(pointerChannels?.highlight).toBe(0);
+    expect(pointerChannels?.isPressed).toBe(false);
   });
 });

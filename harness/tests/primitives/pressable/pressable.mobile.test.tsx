@@ -14,7 +14,7 @@ import { callsOf } from "../../helpers/calls";
  * `enabled`, `box`. Every assertion reads what `nsh/test` can observe —
  * `texts()`, `enabled()`, `shows()` and the `@scenario/probe` calls in
  * `app.storage()` (`change`, `sample`, `origin`, `events`, `ctx-pressed`,
- * `ctx-state`, `ctx-origin`, `ctx-env`, `consume-press`).
+ * `ctx-state`, `ctx-origin`, `ctx-env`, `ctx-channels`, `consume-press`).
  *
  * `viewStyle` cannot resolve `AnimatedValue`-bound `opacity` (measured: it
  * reports the static value, 1, for an animated 0) — the parts' animated
@@ -56,7 +56,26 @@ type Sample = {
   bounds: { width: number; height: number };
 };
 
-type CtxState = Sample & { enabled: boolean; allDisabled: boolean };
+/* The `ctx-state` probe payload: the canonical `pressed` channel plus the
+ * part channels the root owns (`highlightOpacity`/`rippleProgress`, read via
+ * `getValue()`), the press origin, bounds, the effective gate and the
+ * cascade flag. */
+type CtxState = {
+  pressed: number;
+  highlight: number;
+  ripple: number;
+  isPressed: boolean;
+  hitSlop: Edges | null;
+  origin: { x: number; y: number } | null;
+  bounds: { width: number; height: number };
+  enabled: boolean;
+  allDisabled: boolean;
+};
+
+/* The `ctx-channels` probe payload: the same channel read on demand (the
+ * `ctx-sample` button), for presses that never raise `isPressed` and so
+ * never schedule a `ctx-state` sample. */
+type CtxChannels = Omit<CtxState, "hitSlop" | "bounds">;
 
 function lastOf<T>(app: App, name: string): T {
   const calls = callsOf(app, name);
@@ -248,6 +267,33 @@ describe("pressable-feedback", () => {
     // Release must hand the ripple its completion edge: pressOrigin returns
     // to null so the part's effect can run progress → 2.
     expect(callsOf(app, "ctx-origin").at(-1)?.[0]).toBeNull();
+
+    // Sheet M-006's ripple half: `progress` runs the 0→1 segment while the
+    // press is held and the →2 segment after release. The `ctx-state` probe
+    // reads `ctx.rippleProgress.getValue()` 600 ms and 1500 ms after each
+    // press edge; the late held sample is the stable "趋 1" read — by then
+    // the diagonal-timed segment (≈750 ms, restarted once if a late layout
+    // retriggers the part) has settled at its held end. The released sample
+    // past the 1 mark proves the →2 segment ran — progress > 1 is only
+    // reachable through it.
+    const held = callsOf(app, "ctx-state")
+      .filter((c) => (c[0] as CtxState).isPressed === true)
+      .at(-1)?.[0] as CtxState | undefined;
+    expect(held?.isPressed).toBe(true);
+    expect(held?.ripple).toBeGreaterThan(0.9);
+    expect(held?.ripple).toBeLessThanOrEqual(1);
+
+    await app.waitUntil(() => {
+      const last = callsOf(app, "ctx-state").at(-1)?.[0] as
+        | CtxState
+        | undefined;
+      return last !== undefined && !last.isPressed && last.ripple > 1;
+    });
+    const released = callsOf(app, "ctx-state").at(-1)?.[0] as
+      | CtxState
+      | undefined;
+    expect(released?.ripple).toBeGreaterThan(1);
+    expect(released?.ripple).toBeLessThanOrEqual(2);
   }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-007 (A-003): `animation="disable-all"`
@@ -264,12 +310,21 @@ describe("pressable-feedback", () => {
     await app.longPress("id:root");
     await app.waitUntil(() => callsOf(app, "ctx-state").length > 0);
 
-    const s = lastOf<CtxState>(app, "ctx-state");
-    expect(s.allDisabled).toBe(true);
-    expect(s.isPressed).toBe(true);
-    // `pressed` is the canonical channel, not a part animation: it still
-    // times to 1 while the parts are cascade-disabled.
-    expect(s.pressed).toBeGreaterThan(0.99);
+    // Read the LATE held sample (the probe fires at +600 ms and +1500 ms
+    // per press edge; web's slower steps can let the release-edge samples
+    // land before `longPress` resolves, so `lastOf` is not the held read).
+    // Under "disable-all" the canonical `pressed` channel still completes
+    // its run to 1 — it is not a part animation — while the cascaded part
+    // channels (`highlightOpacity`/`rippleProgress` via `getValue()`) hold
+    // their rest values 0, the sheet's "端值恒 0/1".
+    const s = callsOf(app, "ctx-state")
+      .filter((c) => (c[0] as CtxState).isPressed === true)
+      .at(-1)?.[0] as CtxState | undefined;
+    expect(s?.allDisabled).toBe(true);
+    expect(s?.isPressed).toBe(true);
+    expect(s?.pressed).toBeGreaterThan(0.99);
+    expect(s?.highlight).toBe(0);
+    expect(s?.ripple).toBe(0);
 
     await app.waitUntil(() => callsOf(app, "ctx-pressed").at(-1)?.[0] === false);
     // The cascade flag is also the mount-time environment the parts read.
@@ -315,6 +370,20 @@ describe("pressable-feedback", () => {
       callsOf(gated, "ctx-pressed").filter((c) => c[0] === true),
     ).toHaveLength(0);
     expect(gated.shows("id:highlight")).toBe(true);
+
+    // The seam stays fully inert under the closed gate, not just the
+    // canonical flag: no press origin may be recorded (it is the ripple's
+    // only trigger) and the part channels must hold their rest values. The
+    // on-demand `ctx-channels` probe reads them because `ctx-state` only
+    // samples on `isPressed` edges, which a gated press never raises.
+    expect(callsOf(gated, "ctx-origin").every((c) => c[0] === null)).toBe(true);
+    await gated.press("id:ctx-sample");
+    await gated.waitUntil(() => callsOf(gated, "ctx-channels").length > 0);
+    const gatedChannels = lastOf<CtxChannels>(gated, "ctx-channels");
+    expect(gatedChannels.origin).toBeNull();
+    expect(gatedChannels.ripple).toBe(0);
+    expect(gatedChannels.highlight).toBe(0);
+    expect(gatedChannels.isPressed).toBe(false);
   }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-009 (A-001): under reducedMotion the
@@ -464,5 +533,54 @@ describe("pressable-feedback", () => {
     ).toBe(true);
     expect(callsOf(app, "ctx-pressed").every((c) => c[0] === false)).toBe(true);
     expect(lastOf<{ enabled: boolean }>(app, "ctx-env").enabled).toBe(false);
+
+    // The parts must be inert, not just the canonical flag: no press origin
+    // may be recorded (it is the ripple's only trigger — a leaked point
+    // starts the 0→1 segment even with `isPressed` false) and the highlight /
+    // ripple channels must hold 0. `ctx-state` only samples on `isPressed`
+    // edges, so the on-demand `ctx-channels` probe reads them after the
+    // press — this is the sheet's "ripple progress.getValue() 恒 0" half.
+    expect(callsOf(app, "ctx-origin").every((c) => c[0] === null)).toBe(true);
+    await app.press("id:ctx-sample");
+    await app.waitUntil(() => callsOf(app, "ctx-channels").length > 0);
+    const channels = lastOf<CtxChannels>(app, "ctx-channels");
+    expect(channels.origin).toBeNull();
+    expect(channels.ripple).toBe(0);
+    expect(channels.highlight).toBe(0);
+    expect(channels.isPressed).toBe(false);
+  }, 120_000);
+
+  // Regression pin for the round-2 blocking review finding:
+  // src/primitives/pressable/press-feedback.ts:256-277 +
+  // src/primitives/pressable/pressable-feedback-parts.tsx:344-371 —
+  // pressDown() records pressOrigin before the enabled() early-return and
+  // the disabled pressUp() branch returns without clearing it, so under the
+  // default pointer environment a real press leaves pressOrigin non-null;
+  // the Ripple part keys on ctx.pressOrigin() and never reads ctx.enabled(),
+  // driving rippleProgress 0→1 — a radial-gradient overlay on desktop,
+  // stuck at 1 because the origin never returns to null. Required behavior
+  // (sheet A-004 "pointer 下全部静止", the M-017/M-008 gate intent): the seam
+  // is inert — pressOrigin stays null and the part channels hold 0.
+  test("M-901 default environment: a real press leaves pressOrigin null and the part channels at rest", async () => {
+    const app = await openPressable("component");
+
+    await app.press("id:root");
+    await app.waitUntil(() => callsOf(app, "events").length > 0);
+
+    // pressOrigin is the ripple's only trigger: under the closed gate it
+    // must never leave null — a recorded point is what starts the 0→1 run.
+    expect(callsOf(app, "ctx-origin").every((c) => c[0] === null)).toBe(true);
+
+    // On-demand channel read after the press: viewStyle cannot resolve the
+    // parts' AnimatedValue-bound styles, so the getValue() probes carry the
+    // assertion — every channel must still sit at its rest value.
+    await app.press("id:ctx-sample");
+    await app.waitUntil(() => callsOf(app, "ctx-channels").length > 0);
+    const s = lastOf<CtxChannels>(app, "ctx-channels");
+    expect(s.origin).toBeNull();
+    expect(s.ripple).toBe(0);
+    expect(s.highlight).toBe(0);
+    expect(s.isPressed).toBe(false);
+    expect(s.enabled).toBe(false);
   }, 120_000);
 });
