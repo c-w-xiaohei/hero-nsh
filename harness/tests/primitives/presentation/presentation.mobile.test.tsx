@@ -3,8 +3,8 @@ import type { App, OpenOptions } from "nsh/test";
 
 /*
  * Mobile assertions for the create-presentation mechanism unit, one test per
- * row of adapt-sheets/create-presentation.md §4 (M-001…M-010; M-011 lives in
- * `presentation.mobile.headless.test.tsx`, M-012 is the pickup fact itself).
+ * row of adapt-sheets/create-presentation.md §4 (M-001…M-010, M-012 below;
+ * M-011 lives in `presentation.mobile.headless.test.tsx`).
  * The fixture is `harness/presentation.fixtures.tsx`, opened by
  * `host.params.case`/`scope`/`allowed`; every assertion reads what `nsh/test`
  * can observe — `texts()` and `app.setViewport`.
@@ -240,5 +240,24 @@ describe("createPresentation", () => {
 
     await openOverlay(ps);
     expect(ps.texts()).toContain("presentation=sheet");
+  });
+
+  // adapt-sheets/create-presentation.md M-012 (A-006): the directory and
+  // suffix convention is proven by pickup — this file is the headless+web
+  // half, `presentation.mobile.headless.test.tsx` carries the
+  // `open({platform})` half that web cannot run. The runnable part asserts
+  // the fixture mounts on this file's targets and renders its closed
+  // baseline; its green status on both targets is itself the convention
+  // proof (a file web could not run would live in the .headless. file).
+  test("M-012 pickup convention: this file mounts the fixture and runs on headless+web", async () => {
+    const app = await openPresentation(
+      "probe",
+      {},
+      { width: 1024, height: 768 },
+    );
+
+    expect(app.shows("text:toggle")).toBe(true);
+    expect(app.texts()).toContain("open=false");
+    expect(app.texts()).toContain("presentation=panel");
   });
 });
