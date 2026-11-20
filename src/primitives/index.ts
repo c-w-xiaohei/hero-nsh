@@ -18,3 +18,4 @@ export * from "./pressable";
 export * from "./list";
 export * from "./presentation";
 export * from "./selection";
+export * from "./pan";

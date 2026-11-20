@@ -1,7 +1,7 @@
-import type { JSX } from "nsh";
+import type { JSX, ScrollEvent } from "nsh";
 import { computed, split, Scroll } from "nsh";
 
-import { SheetDetentContext } from "./create-sheet-detent";
+import { SheetContentPanContext, SheetDetentContext } from "./create-sheet-detent";
 import type { SheetPartDomProps } from "./sheet-dom-props";
 import { viewProps } from "./sheet-dom-props";
 import { SheetContext } from "./sheet-context";
@@ -10,6 +10,9 @@ import { sheetVariants } from "./sheet.styles";
 
 /**
  * The props of `Sheet.Body`: HeroUI's `ComponentPropsWithRef<"div">`.
+ * The caller's `onScroll` arrives through the parameter type below rather
+ * than a declared member: upstream accepts every DOM handler, and the detent
+ * only needs the key at the `split` seam to forward it.
  */
 export interface SheetBodyProps extends SheetPartDomProps {}
 
@@ -32,7 +35,13 @@ export interface SheetBodyProps extends SheetPartDomProps {}
  * (skill §2): NSH's `flex-1` basis is a hard zero, so in a column whose height
  * comes from its content the body would collapse.
  */
-export function SheetBody(props: SheetBodyProps): JSX.Element {
+export function SheetBody(
+  props: SheetBodyProps & {
+    /** Upstream's DOM `onScroll`: stripped from `rest` so the detent's offset
+     * report can forward every event to the caller's handler after it runs. */
+    onScroll?: (event: ScrollEvent) => void;
+  },
+): JSX.Element {
   const [local, rest] = split(props, [
     "children",
     "className",
@@ -42,10 +51,15 @@ export function SheetBody(props: SheetBodyProps): JSX.Element {
     "nativeID",
     "render",
     "slot",
+    "onScroll",
   ]);
 
   const context = SheetContext();
   const detent = SheetDetentContext();
+  // The paired-scroll props of `Sheet.Dialog`'s content-area gesture
+  // (adapt-sheets/sheet-handoff.md A-006): the touch environment's keyboard
+  // policy, empty under the default pointer environment.
+  const contentPan = SheetContentPanContext();
 
   const slots = () => context?.slots() ?? sheetVariants();
 
@@ -62,11 +76,18 @@ export function SheetBody(props: SheetBodyProps): JSX.Element {
   return (
     <Scroll
       {...viewProps(rest)}
+      {...(contentPan?.scrollProps() ?? {})}
       ref={(node) => local.ref?.(node)}
       nativeID={local.id ?? local.nativeID}
       scrollable={scrollable()}
       class={classes()}
       style={local.style}
+      // The offset is the content↔panel handoff's "at the top edge" input;
+      // the caller's own `onScroll` still hears every event.
+      onScroll={(event) => {
+        detent?.reportScrollOffset(event.offset);
+        local.onScroll?.(event);
+      }}
     >
       {renderSheetPartChildren(local.children)}
     </Scroll>
