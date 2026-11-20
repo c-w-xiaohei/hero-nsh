@@ -75,11 +75,10 @@ const DEFAULT_ALLOWED: readonly Presentation[] = ["panel", "sheet"];
 export function createPresentation<P extends Presentation>(
   props: CreatePresentationProps<P>,
 ): Accessor<P> {
-  // Owner-scope reads: the environment these accessors see is the one above
+  // Owner-scope read: the environment these accessors see is the one above
   // the owner that ran this factory — the same resolution rule
   // `createSelectableItem` documents.
-  const input = Environment().input;
-  const width = Environment().width;
+  const environment = Environment();
 
   const evaluate = (): P => {
     const pinned = props.pin?.();
@@ -95,7 +94,9 @@ export function createPresentation<P extends Presentation>(
     // else prefers "panel"; each preference falls back inside the
     // component's own domain, never outside it.
     const preferred: Presentation =
-      input() === "touch" && width() === "compact" ? "sheet" : "panel";
+      environment.input() === "touch" && environment.width() === "compact"
+        ? "sheet"
+        : "panel";
     if (domain.includes(preferred as P)) {
       return preferred as P;
     }
