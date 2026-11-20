@@ -136,42 +136,26 @@ describe("sheet-handoff", () => {
   });
 
   // adapt-sheets/sheet-handoff.md M-007 (A-005, A-006): at the full detent
-  // with the content at its start edge, a push away from the close edge
-  // stays a scroll — the direction predicate releases it — and a pull
-  // toward it claims the gesture and shrinks the panel.
+  // with the content at its start edge, a pull toward the close edge claims
+  // the gesture and shrinks the panel. The push-away half — the direction
+  // predicate releasing the gesture back to the Scroll — runs only on
+  // headless (sheet.mobile.headless.test.tsx): `app.drag` does not drive
+  // the web host's scroll recognizer, so a synthesized drag produces no
+  // scroll offset there at all (measured: neither detent records nor
+  // onScroll events), while the pull claim itself still works.
   //
   // `handoff-locked` is `!isDismissable`: the pull's release animates back
   // to the detent instead of dismissing, so the claim evidence lives in the
-  // mid-drag records. The push runs first because `app.drag`'s release
-  // carries a flick velocity that would settle a pull onto a snap decision
-  // the second half does not need.
-  test("M-007 touch + full detent + atTop: push-up scrolls, pull-down shrinks the panel", async () => {
+  // mid-drag records.
+  test("M-007 touch + full detent + atTop: pull-down claims the gesture, shrinks the panel", async () => {
     const app = await openSheet("handoff-locked", "touch");
 
     await settle(app);
     expect(lastDetent(app).isExpanded).toBe(true);
     expect(lastDetent(app).atTop).toBe(true);
 
-    // Push away from the close edge: the gesture is released to the Scroll
-    // and the detent's length never changes.
-    const recordsBefore = detentCalls(app).length;
-    await app.drag("id:body", { x: 0, y: -80 });
-    await settle(app);
-    expect(
-      detentCalls(app)
-        .slice(recordsBefore)
-        .every((record) => record.length >= 767),
-    ).toBe(true);
-    expect(bodyScrollCount(app)).toBeGreaterThan(0);
-    expect(lastBodyOffset(app)).toBeGreaterThan(0);
-    expect(lastDetent(app).atTop).toBe(false);
-
-    // Back at the start edge a pull toward the close edge claims: the panel
-    // shrinks during the drag and no scroll event fires on its account.
-    await app.scroll("id:body", -200);
-    await settle(app);
-    expect(lastDetent(app).atTop).toBe(true);
-
+    // A pull toward the close edge claims: the panel shrinks during the
+    // drag and no scroll event fires on its account.
     const scrolls = bodyScrollCount(app);
     const lengthsBefore = detentCalls(app).length;
     await app.drag("id:body", { x: 0, y: 120 });
