@@ -51,10 +51,12 @@
  *   It is optional; without it the item is selection-only.
  *
  * - `PressEvent` has no `pointerType`, so a touch press cannot be detected
- *   here. The owner reports it with the `pointerType` accessor (a phone can
- *   pass `"touch"` from `platform.desktop === false`); its only effect is
+ *   here. Its default source is the environment: `Environment().input` maps
+ *   to a touch press on a touch device, while the owner's `pointerType`
+ *   accessor stays the explicit override. Its only effect is
  *   Kobalte's: in multiple mode a touch press toggles, because touch has no
- *   modifier keys. Without it a press behaves like a mouse click.
+ *   modifier keys. Without it a press behaves like a mouse click — which the
+ *   default `"pointer"` environment reproduces unchanged.
  *
  * - `tabIndex` becomes `focusable`: NSH's views take part in the Tab order
  *   through the `focusable` prop, not an index. Only the item that holds the
@@ -67,6 +69,7 @@
 import type { Accessor, PressEvent } from "nsh";
 
 import { isKeyboardPress } from "../create-interaction-modality";
+import { Environment } from "../environment/environment";
 import {
   type MultipleSelectionManager,
   type SelectionModifiers,
@@ -98,8 +101,11 @@ export interface CreateSelectableItemProps {
   shouldSelectOnPressUp?: Accessor<boolean | undefined>;
 
   /**
-   * What pressed the item, when the owner knows. A touch press toggles in
-   * multiple mode; `undefined` behaves like a mouse.
+   * What pressed the item, as an explicit override of the environment's
+   * `input` axis. A touch press toggles in multiple mode; `undefined`
+   * behaves like a mouse — which is what the default `"pointer"`
+   * environment supplies on its own, so the prop is needed only to force a
+   * pointer type the environment does not report.
    */
   pointerType?: Accessor<SelectionPointerType>;
 
@@ -160,6 +166,14 @@ export function createSelectableItem(
   const shouldUseVirtualFocus = () => !!props.shouldUseVirtualFocus?.();
   const shouldSelectOnPressUp = () => !!props.shouldSelectOnPressUp?.();
 
+  // Read here, not in a handler: a context resolves against the owner the
+  // factory ran under. `Environment().input` is the default source of
+  // touch-ness; the `pointerType` prop overrides it when it reports a type.
+  const environmentInput = Environment().input;
+  const pointerType = () =>
+    props.pointerType?.() ??
+    (environmentInput() === "touch" ? "touch" : "mouse");
+
   const isSelected = () => manager().isSelected(key());
 
   /** The item's own disabled prop, which `disabledBehavior` also governs. */
@@ -197,7 +211,7 @@ export function createSelectableItem(
     } else if (
       selectionManager.selectionBehavior() === "toggle" ||
       isCtrlKeyPressed(modifiers) ||
-      props.pointerType?.() === "touch"
+      pointerType() === "touch"
     ) {
       selectionManager.toggleSelection(key());
     } else {
