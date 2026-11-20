@@ -1,4 +1,4 @@
-import type { Accessor } from "nsh";
+import type { Accessor, KeyboardDismissMode, Point } from "nsh";
 import { computed, context, effect, reduceMotion, signal, windowSize } from "nsh";
 
 import type { SheetPlacement, SheetSwipeDirection } from "./sheet.styles";
@@ -64,6 +64,27 @@ export interface SheetDetentState {
   /** A handle drag is in progress (R-035's cursor). */
   dragging: Accessor<boolean>;
 
+  /**
+   * Whether the Body's scroll view sits at its start edge (both offsets at
+   * zero). The content-area gesture gate reads it: only a pull toward the
+   * sheet's close edge at the content's top is a panel drag rather than a
+   * scroll.
+   */
+  atTop: Accessor<boolean>;
+
+  /** `Sheet.Body` reports its scroll offset here on every `onScroll`. */
+  reportScrollOffset: (offset: Point) => void;
+
+  /**
+   * The content-area gesture, merged in by `Sheet.Content` at the
+   * `SheetDetentContext` provider (adapt-sheets/sheet-handoff.md A-004).
+   * `createSheetDetent` itself knows nothing of `src/primitives`, so it
+   * cannot produce this field; `Sheet.Body` reads `contentPan.scrollProps()`
+   * for the paired-scroll props (the touch-environment keyboard policy,
+   * empty under the default pointer environment).
+   */
+  contentPan: SheetContentPan;
+
   /** `Sheet.Dialog` reports its natural length here, for the dismissal threshold. */
   registerPanelLength: (length: number) => void;
 
@@ -89,6 +110,20 @@ export interface CreateSheetDetentProps {
   close: () => void;
 }
 
+/**
+ * The slice of `src/primitives`' `Pan` a sheet detent carries. Declared here
+ * structurally so `create-sheet-detent.ts` needs no import from
+ * `src/primitives` (adapt-sheets/sheet-handoff.md A-004): `Sheet.Content`
+ * merges the real `createPan` return, which is assignable to this type.
+ */
+export interface SheetContentPan {
+  /** The responder props the content-area gesture spreads on the clip box; an empty object when the gesture is not attached. */
+  panHandlers: () => object;
+
+  /** The props the paired scroll view takes; an empty object when the gesture is not attached. */
+  scrollProps: () => { keyboardDismissMode?: KeyboardDismissMode };
+}
+
 /** The context itself; `null` outside a `Sheet.Content`. */
 export const SheetDetentContext = context<SheetDetentState | null>(null);
 
@@ -111,7 +146,9 @@ interface HandleDragState {
  * functions here, applied to the reveal length, and the animation writes the
  * length frame by frame because a size is not a CSS transition (port sheet §5).
  */
-export function createSheetDetent(props: CreateSheetDetentProps): SheetDetentState {
+export function createSheetDetent(
+  props: CreateSheetDetentProps,
+): Omit<SheetDetentState, "contentPan"> {
   const direction = (): SheetSwipeDirection =>
     props.swipeDirection() ?? props.placement();
 
@@ -151,6 +188,11 @@ export function createSheetDetent(props: CreateSheetDetentProps): SheetDetentSta
   const offset = computed(() => Math.max(0, fullLength() - length()));
 
   const isExpanded = computed(() => fullLength() > 0 && length() >= fullLength() - 0.5);
+
+  // The Body's last reported scroll offset; `atTop` is the handoff gate's
+  // "content is at its start edge" input.
+  const scrollOffset = signal<Point>({ x: 0, y: 0 });
+  const atTop = computed(() => scrollOffset().x <= 0.5 && scrollOffset().y <= 0.5);
 
   let drag: HandleDragState | undefined;
   let cancelAnimation: (() => void) | undefined;
@@ -343,6 +385,8 @@ export function createSheetDetent(props: CreateSheetDetentProps): SheetDetentSta
     offset,
     isExpanded,
     dragging,
+    atTop,
+    reportScrollOffset: (offset) => scrollOffset.set(offset),
     registerPanelLength: (value) => panelLength.set(value),
     goToDetent,
     beginDrag,

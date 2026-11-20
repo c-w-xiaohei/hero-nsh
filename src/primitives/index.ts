@@ -16,3 +16,4 @@ export * from "./environment";
 export * from "../tokens/density";
 export * from "./list";
 export * from "./selection";
+export * from "./pan";

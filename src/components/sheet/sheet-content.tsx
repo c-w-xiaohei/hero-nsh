@@ -1,6 +1,16 @@
-import type { JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
+import type {
+  GestureResponderEvent,
+  JSX,
+  StyleProp,
+  ViewProps,
+  ViewRef,
+  ViewStyle,
+} from "nsh";
+import type { SheetSwipeDirection } from "./sheet.styles";
 import { split, View, windowSize } from "nsh";
 
+import { createInput } from "../../primitives/environment";
+import { createPan } from "../../primitives/pan";
 import { createSheetDetent, SheetDetentContext } from "./create-sheet-detent";
 import {
   SheetContext,
@@ -17,6 +27,7 @@ import {
   sheetContentSnapClasses,
   sheetVariants,
 } from "./sheet.styles";
+import { sheetDragLength } from "./sheet.utils";
 
 /**
  * The props of `Sheet.Content`: HeroUI's `SheetContentProps`, which is React
@@ -113,6 +124,88 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
     snapPoints: () => context?.snapPoints(),
     isOpen: () => context?.isOpen() ?? false,
     close: () => context?.close(),
+  });
+
+  // The content-area gesture (adapt-sheets/sheet-handoff.md A-005): a touch
+  // environment attaches it, and the same `beginDrag` / `moveDrag` /
+  // `endDrag` / `cancelDrag` channel the Handle uses drives the detent.
+  // Under the default pointer environment `panHandlers()` is an empty
+  // object — no listener exists, so the desktop never sees this path.
+  //
+  // The claim is the JS move predicate alone, and it must fire on the first
+  // dominant move: measured on the headless host, the Scroll's native
+  // recognizer takes the touches at its own ~10-point threshold, and a
+  // claim that asks later is granted to no one — the gesture ends in a void
+  // (no drag, no scroll). A claim on the first move wins the race, and once
+  // granted, `onShouldBlockNativeResponder` keeps the Scroll from taking
+  // the touches back. `panActivation` is not usable as a native hold: it
+  // activates the UI-thread `pan` channel instead of the JS responder, so
+  // every direction goes dead with it mounted (measured, sheet §5).
+  //
+  // `enabled` is evaluated per event by the JS callbacks, so `input()`
+  // gates the mounted pan.
+  const input = createInput();
+  const position = (event: GestureResponderEvent) =>
+    detent.axis() === "x" ? event.pageX : event.pageY;
+  const pan = createPan({
+    enabled: () => input() === "touch",
+    shouldClaim: (_event, gesture) => {
+      const along = detent.axis() === "x" ? gesture.dx : gesture.dy;
+      const across = detent.axis() === "x" ? gesture.dy : gesture.dx;
+
+      // The drag must be along the swipe direction's axis and dominant over
+      // the scroll axis: a mostly-vertical move is the Body's scroll,
+      // whatever the detent state. There is no displacement floor here —
+      // the host's native scroll recognizer claims at its own ~10-point
+      // threshold, and the only claim that lands is one made on the first
+      // dominant move (measured: asking to claim at 20 points arrives after
+      // the Scroll already owns the touches).
+      if (along === 0 || Math.abs(across) >= Math.abs(along)) {
+        return false;
+      }
+
+      if (!detent.isExpanded()) {
+        // The Body's `scrollable` is off below the full detent, so the Scroll
+        // never competes: any axial drag is the panel's, opening or closing.
+        return true;
+      }
+
+      // At the full detent the Scroll owns the gesture except when the
+      // content is back at its start edge and the pull is toward the sheet's
+      // close edge — i.e. the move already shrinks the reveal
+      // (`sheetDragLength` below start length), exactly the condition the
+      // Handle's drag would take.
+      return (
+        detent.atTop() &&
+        sheetDragLength({
+          placement: placement(),
+          startLength: 1,
+          swipeDirection: detent.direction(),
+          travel: along,
+        }) < 1
+      );
+    },
+    onDragStart: (event, gesture) => {
+      // `y0` is where the finger went down, not where the claim fired, so the
+      // pre-threshold travel is not lost when the panel takes over.
+      detent.beginDrag(
+        detent.axis() === "x" ? gesture.x0 : gesture.y0,
+        event.timestamp,
+      );
+    },
+    onDrag: (event) => {
+      detent.moveDrag(position(event), event.timestamp);
+    },
+    onDragEnd: (event, _gesture, terminated) => {
+      if (terminated) {
+        detent.cancelDrag();
+      } else {
+        detent.endDrag(position(event), event.timestamp);
+      }
+    },
+    // Paired-scroll props: `Sheet.Body` spreads `scrollProps()` so a touch
+    // drag through the panel can dismiss the keyboard interactively.
+    keyboardDismissMode: "interactive",
   });
 
   const values: SheetRenderValues = {
@@ -231,6 +324,9 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
   return (
     <View
       {...viewProps(rest)}
+      // The mechanism seam lands last: `createPan` owns the responder props
+      // on this box, and under the pointer environment the spread is empty.
+      {...pan.panHandlers()}
       ref={(node) => local.ref?.(node)}
       nativeID={local.id ?? local.nativeID}
       class={classes()}
@@ -241,9 +337,13 @@ export function SheetContent(props: SheetContentProps): JSX.Element {
       {/*
         The provider exception in the common rules: the parts inside read
         `SheetDetentContext`, so `props.children` is read once, here at the
-        placement, inside the provider.
+        placement, inside the provider. `contentPan` merges the gesture into
+        the value the Body reads, without `create-sheet-detent` importing
+        `src/primitives` (A-004).
       */}
-      <SheetDetentContext.Provider value={detent}>{content()}</SheetDetentContext.Provider>
+      <SheetDetentContext.Provider value={{ ...detent, contentPan: pan }}>
+        {content()}
+      </SheetDetentContext.Provider>
     </View>
   );
 }

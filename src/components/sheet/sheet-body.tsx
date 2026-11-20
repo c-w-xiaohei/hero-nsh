@@ -1,4 +1,4 @@
-import type { JSX } from "nsh";
+import type { JSX, ScrollEvent } from "nsh";
 import { computed, split, Scroll } from "nsh";
 
 import { SheetDetentContext } from "./create-sheet-detent";
@@ -11,7 +11,13 @@ import { sheetVariants } from "./sheet.styles";
 /**
  * The props of `Sheet.Body`: HeroUI's `ComponentPropsWithRef<"div">`.
  */
-export interface SheetBodyProps extends SheetPartDomProps {}
+export interface SheetBodyProps extends SheetPartDomProps {
+  /**
+   * Scroll events, as upstream's DOM `onScroll`. Named explicitly so the
+   * detent's offset report can forward to the caller's handler after it runs.
+   */
+  onScroll?: (event: ScrollEvent) => void;
+}
 
 /**
  * Sheet.Body / SheetBody: the scrolling area between the header and the footer.
@@ -42,6 +48,7 @@ export function SheetBody(props: SheetBodyProps): JSX.Element {
     "nativeID",
     "render",
     "slot",
+    "onScroll",
   ]);
 
   const context = SheetContext();
@@ -62,11 +69,21 @@ export function SheetBody(props: SheetBodyProps): JSX.Element {
   return (
     <Scroll
       {...viewProps(rest)}
+      // The paired-scroll props of `Sheet.Content`'s content-area gesture
+      // (adapt-sheets/sheet-handoff.md A-006): the touch environment's
+      // keyboard policy, empty under the default pointer environment.
+      {...(detent?.contentPan.scrollProps() ?? {})}
       ref={(node) => local.ref?.(node)}
       nativeID={local.id ?? local.nativeID}
       scrollable={scrollable()}
       class={classes()}
       style={local.style}
+      // The offset is the content↔panel handoff's "at the top edge" input;
+      // the caller's own `onScroll` still hears every event.
+      onScroll={(event) => {
+        detent?.reportScrollOffset(event.offset);
+        local.onScroll?.(event);
+      }}
     >
       {renderSheetPartChildren(local.children)}
     </Scroll>
