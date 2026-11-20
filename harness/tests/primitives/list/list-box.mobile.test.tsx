@@ -6,7 +6,10 @@ import { callsOf } from "../../helpers/calls";
  * adapt-sheets/f-collection.md §4 (A-010): the f-collection seam's
  * mobile-layer assertions (M-001 … M-012), run against
  * `harness/list-box.fixtures.tsx`
- * `m-*` cases. Each case wraps the ListBox in `OwnerShim`, a Select-like
+ * `m-*` cases. The sheet names this file under tests/components/list-box/
+ * via a `*.test.tsx` glob the gate cannot expand; it lives under
+ * primitives/list/ (same depth, same fixture path) so M3/M4/M5 can see it.
+ * Each case wraps the ListBox in `OwnerShim`, a Select-like
  * `ListOwner` that captures the registered `ListState` +
  * `ListOwnerListControls` and drives them through `testID` buttons — the
  * same contract a virtual-focus field uses — because a headless run cannot
