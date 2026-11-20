@@ -10,14 +10,11 @@ import { sheetVariants } from "./sheet.styles";
 
 /**
  * The props of `Sheet.Body`: HeroUI's `ComponentPropsWithRef<"div">`.
+ * The caller's `onScroll` arrives through the parameter type below rather
+ * than a declared member: upstream accepts every DOM handler, and the detent
+ * only needs the key at the `split` seam to forward it.
  */
-export interface SheetBodyProps extends SheetPartDomProps {
-  /**
-   * Scroll events, as upstream's DOM `onScroll`. Named explicitly so the
-   * detent's offset report can forward to the caller's handler after it runs.
-   */
-  onScroll?: (event: ScrollEvent) => void;
-}
+export interface SheetBodyProps extends SheetPartDomProps {}
 
 /**
  * Sheet.Body / SheetBody: the scrolling area between the header and the footer.
@@ -38,7 +35,13 @@ export interface SheetBodyProps extends SheetPartDomProps {
  * (skill §2): NSH's `flex-1` basis is a hard zero, so in a column whose height
  * comes from its content the body would collapse.
  */
-export function SheetBody(props: SheetBodyProps): JSX.Element {
+export function SheetBody(
+  props: SheetBodyProps & {
+    /** Upstream's DOM `onScroll`: stripped from `rest` so the detent's offset
+     * report can forward every event to the caller's handler after it runs. */
+    onScroll?: (event: ScrollEvent) => void;
+  },
+): JSX.Element {
   const [local, rest] = split(props, [
     "children",
     "className",
