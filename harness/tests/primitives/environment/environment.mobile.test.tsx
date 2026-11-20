@@ -70,21 +70,13 @@ describe("environment", () => {
     expect(app.texts()).toContain("width=regular");
   });
 
-  // The same row's derivation half (port-tests role note): `open`'s platform
-  // drives the default — ios/android yield touch and the phone width class,
-  // windows/web in the desktop idiom yield pointer.
-  test("M-001 host derivation: ios and android report touch, windows and web report pointer", async () => {
-    for (const platform of ["ios", "android"] as Platform[]) {
-      const app = await openEnvironment(
-        "fields",
-        {},
-        { platform, width: 390, height: 844 },
-      );
-      expect(app.texts()).toContain("input=touch");
-      // 390×844 phone: short side 390 < 640 → compact.
-      expect(app.texts()).toContain("width=compact");
-    }
-
+  // The same row's derivation half: desktop platforms keep the desktop idiom
+  // on every local target (a desktop's `platform` is legal under
+  // `--target web`). The phone half lives in
+  // `environment.mobile.headless.test.tsx`: `open({platform: "ios" |
+  // "android"})` is headless-only and rejects on `--target web`
+  // (ERR_NSH_TEST_UNSUPPORTED).
+  test("M-001 host derivation: windows and web report pointer", async () => {
     for (const platform of ["windows", "web"] as Platform[]) {
       const app = await openEnvironment(
         "fields",
