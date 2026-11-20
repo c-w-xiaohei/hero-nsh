@@ -2,7 +2,7 @@ import { describe, expect, open, test } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
- * adapt-sheets/f-collection.md M-014 / M-015: unit assertions for
+ * adapt-sheets/f-collection.md M-014 / M-015 (A-011): unit assertions for
  * `createRowRegistry` (sheet §2 A-002) and its public-entry reachability
  * (A-003). The probe case `f-collection&which=registry` lives in
  * harness/list-box.fixtures.tsx — the only fixture this unit owns — and

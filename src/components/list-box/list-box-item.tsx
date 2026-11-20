@@ -464,8 +464,8 @@ export function ListBoxItemRoot<T>(
     disabled: () => local.isDisabled === true || list.isDisabledKey(key),
   };
 
-  // f-collection: the static-children path still feeds the collection through
-  // a descriptor; under `items` the data itself is the collection, so this row
+  // f-collection (A-006): the static-children path still feeds the collection
+  // through a descriptor; under `items` the data itself is the collection, so this row
   // only mounts a handle — its `textValue`/`isDisabled`/`value` merge into its
   // datum while mounted, and activation/Select.Value read the handle.
   if (collectionItem == null) {

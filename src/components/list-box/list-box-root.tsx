@@ -297,6 +297,8 @@ function handleForDatum(
   );
 }
 
+// A-005: the data side holds the complete collection; mounted rows only merge
+// overrides (textValue/disabled) into their datum and append orphan rows.
 /**
  * `items` data → collection entries, mounted-row overrides merged in. A row
  * that claims a datum renames it to the row's key (the association key), wins

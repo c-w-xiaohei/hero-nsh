@@ -3,8 +3,9 @@ import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
- * adapt-sheets/f-collection.md §4: the f-collection seam's mobile-layer
- * assertions (M-001 … M-012), run against `harness/list-box.fixtures.tsx`
+ * adapt-sheets/f-collection.md §4 (A-010): the f-collection seam's
+ * mobile-layer assertions (M-001 … M-012), run against
+ * `harness/list-box.fixtures.tsx`
  * `m-*` cases. Each case wraps the ListBox in `OwnerShim`, a Select-like
  * `ListOwner` that captures the registered `ListState` +
  * `ListOwnerListControls` and drives them through `testID` buttons — the

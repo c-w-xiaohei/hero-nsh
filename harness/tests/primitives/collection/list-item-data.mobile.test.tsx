@@ -2,7 +2,7 @@ import { describe, expect, open, test } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
- * adapt-sheets/f-collection.md M-013: unit assertions for `toListItemData`
+ * adapt-sheets/f-collection.md M-013 (A-011): unit assertions for `toListItemData`
  * and `listItemDataGetters()` (sheet §2 A-001) — the key/textValue/disabled/
  * children chains every `items`-driven collection normalizes through, and
  * their consumption by `createListState`. The probe case `f-collection&

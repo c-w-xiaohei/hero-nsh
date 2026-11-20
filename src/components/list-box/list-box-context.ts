@@ -18,10 +18,10 @@ import type { ListBoxItemRenderProps } from "./list-box-item";
  * only the collection source is ours, since HeroUI's options are
  * caller-written parts rather than an `options` array.
  *
- * f-collection split: an option descriptor now holds only what the static
- * collection needs. Everything that exists because a row is mounted — the
- * activation entry, the view ref, the `children` a Select re-places — moved
- * to `ListBoxRowHandle`, which lives in the `rowRegistry`.
+ * f-collection split (A-004): an option descriptor now holds only what the
+ * static collection needs. Everything that exists because a row is mounted —
+ * the activation entry, the view ref, the `children` a Select re-places —
+ * moved to `ListBoxRowHandle`, which lives in the `rowRegistry`.
  */
 export interface ListBoxItemDescriptor {
   type: "item";

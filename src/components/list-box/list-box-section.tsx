@@ -179,8 +179,8 @@ export function ListBoxSectionRoot<T>(
     children: () => sortByRenderedOrder(sectionItems()),
   };
 
-  // f-collection: the section's own datum feeds the collection under `items`,
-  // so a dynamic section registers only its layout handle (the group's frame
+  // f-collection (A-007): the section's own datum feeds the collection under
+  // `items`, so a dynamic section registers only its layout handle (the group's frame
   // composes each item's page-key frame through `registerSectionLayout`). The
   // static path keeps its descriptor, which carries the group's options.
   if (collectionItem == null) {
