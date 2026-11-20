@@ -69,6 +69,8 @@ function lastOf<T>(app: App, name: string): T {
  * in this file passes an explicit 120 s cap. The cap is a ceiling, not a
  * delay — and the call must be a literal `test(...)`: the M4 gate scans the
  * source for test/it/describe call sites and cannot see a local wrapper.
+ * Titles must also carry no backslash escapes: M4 regexes the raw literal
+ * content, so a \" would demand a literal backslash the runner never prints.
  */
 
 /** Presses the fixture's `sample` button and returns the probe it recorded. */
@@ -253,7 +255,7 @@ describe("pressable-feedback", () => {
   // canonical press channel still roundtrips — the flag gates the parts, not
   // the press state. The held-press proof that Highlight/Ripple hold their
   // rest values lives in the headless file's hold-state test.
-  test("M-007 animation=\"disable-all\": cascade flag reaches the context and the canonical press still completes", async () => {
+  test("M-007 animation='disable-all': cascade flag reaches the context and the canonical press still completes", async () => {
     const app = await openPressable("component", {
       scope: "touch",
       anim: "disable-all",
@@ -356,7 +358,7 @@ describe("pressable-feedback", () => {
   // adapt-sheets/pressable-feedback.md M-013 (A-002): every tier of the
   // `animation` control flow mounts and renders — true, "disabled", false,
   // a config object and a config carrying `state`.
-  test("M-013 animation tiers mount: true, \"disabled\", false, object and state-carrying configs", async () => {
+  test("M-013 animation tiers mount: true, 'disabled', false, object and state-carrying configs", async () => {
     for (const anim of [
       "true",
       "disabled",
