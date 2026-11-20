@@ -62,4 +62,41 @@ describe("row-registry", () => {
 
     expect(callsOf(app, "import")[0][0]).toEqual({ registry: true });
   });
+
+  // adapt-sheets/f-collection.md M-011 (执行项): the static-children path is
+  // untouched — the `log` case is the same PlainList the existing heroui /
+  // kobalte suites drive (their files are read-only, so the baseline is
+  // re-asserted here under the default pointer environment): pressing an
+  // option selects it and reports the key.
+  test("M-011 static-children baseline: press selects and reports the key", async () => {
+    const app = await open("../../../list-box.fixtures.tsx", {
+      platform: "windows",
+      width: 1024,
+      height: 768,
+      host: { params: { case: "log" } },
+    });
+
+    expect(app.count("role:option")).toBe(3);
+    await app.press("role:option[Two]");
+    const calls = callsOf(app, "selectionChange");
+    expect(calls[calls.length - 1][0]).toEqual(["2"]);
+    expect(app.shows("text:✓")).toBe(true);
+  });
+
+  // adapt-sheets/f-collection.md M-016: the seam's own probes mount and record
+  // — the same open() path every `f-collection` case in the mobile-layer files
+  // takes; a run that could not reach the assertions would record nothing.
+  test("M-016 the seam's probe cases mount and record", async () => {
+    const dataApp = await open("../../../list-box.fixtures.tsx", {
+      platform: "windows",
+      width: 1024,
+      height: 768,
+      host: { params: { case: "f-collection", which: "data" } },
+    });
+    expect(callsOf(dataApp, "data").length).toBeGreaterThan(0);
+    expect(callsOf(dataApp, "getters").length).toBeGreaterThan(0);
+
+    const registryApp = await openRegistry();
+    expect(callsOf(registryApp, "registry").length).toBeGreaterThan(0);
+  });
 });
