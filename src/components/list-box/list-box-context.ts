@@ -3,6 +3,7 @@ import { context } from "nsh";
 
 import type {
   ListState,
+  RowRegistry,
   SelectionBehavior,
   SelectionManager,
   SelectionMode,
@@ -11,10 +12,16 @@ import type {
 import type { ListBoxItemRenderProps } from "./list-box-item";
 
 /**
- * One registered option, as the Item hands it to the Root. The Root turns this
- * registry into the `dataSource` of `createListState` (port sheet section 2):
- * the algorithm is the primitive's, only the collection source is ours, since
- * HeroUI's options are caller-written parts rather than an `options` array.
+ * The static-path collection entry, as the Item hands it to the Root. With no
+ * `items` the registry of these descriptors is still the `dataSource` of
+ * `createListState` (port sheet section 2): the algorithm is the primitive's,
+ * only the collection source is ours, since HeroUI's options are
+ * caller-written parts rather than an `options` array.
+ *
+ * f-collection split: an option descriptor now holds only what the static
+ * collection needs. Everything that exists because a row is mounted — the
+ * activation entry, the view ref, the `children` a Select re-places — moved
+ * to `ListBoxRowHandle`, which lives in the `rowRegistry`.
  */
 export interface ListBoxItemDescriptor {
   type: "item";
@@ -36,16 +43,44 @@ export interface ListBoxItemDescriptor {
 
   /** Whether the option is disabled (its own `isDisabled` or `disabledKeys`). */
   disabled: () => boolean;
+}
+
+/**
+ * What a mounted Item registers in the `rowRegistry`: the fields only a
+ * mounted row can answer. Every member is optional so a section's layout-only
+ * handle and probes can coexist; the collection never reads it — mounted
+ * presence only merges `textValue` / `disabled` / `value` into a datum.
+ */
+export interface ListBoxRowHandle {
+  /** "item" handles feed the merged data source; "section" is layout only. */
+  type: "item" | "section";
+
+  /** The collection key; the same domain `toListItemData` produces. */
+  key: string;
+
+  /**
+   * The raw datum this row renders (its `<Each>` value accessor, or the
+   * `value` prop). The merge uses it to follow a keyless datum whose
+   * positional key moved on a reorder.
+   */
+  value?: () => unknown;
+
+  /**
+   * Typeahead text the mounted row overrides its datum with; empty falls back
+   * to the datum's own `textValue`/`name`/`label`.
+   */
+  textValue?: () => string;
+
+  /** Whether the row disables its option (`isDisabled` or `disabledKeys`). */
+  disabled?: () => boolean;
 
   /** The row view, for the screen reader focus that follows `focusedKey`. */
-  ref: () => ViewRef | undefined;
+  ref?: () => ViewRef | undefined;
 
   /**
    * The row's rendered children, for a container that renders the selected
-   * option outside the list (Select.Value). HeroUI's `Select.Value` renders the
-   * selected item's `children` again; the value cannot reach the JSX the
-   * caller wrote, so the row shares the one element tree it built (port sheet
-   * §5, fifth change). Reading it never reads `props.children` again.
+   * option outside the list (Select.Value). Reading it never reads
+   * `props.children` again (port sheet §5, fifth change).
    */
   children?: () => JSX.Element | undefined;
 
@@ -56,7 +91,7 @@ export interface ListBoxItemDescriptor {
    * `modifiers` carries what the keystroke was pressed with (Shift, Control,
    * Command), so a keymap binding keeps React Aria's extend / toggle rules.
    */
-  activate: (
+  activate?: (
     source: "pointer" | "keyboard",
     event?: PressEvent,
     modifiers?: SelectionModifiers,
@@ -112,8 +147,23 @@ export interface ListBoxContextValue {
   /** Read directly by the item primitive. */
   selectionManager: Accessor<SelectionManager>;
 
-  /** Registers one option or group; the returned function unregisters it. */
+  /**
+   * Registers one static-path option or group into the collection source; the
+   * returned function unregisters it. `items`-driven rows never call it —
+   * their collection comes from the data (f-collection).
+   */
   register: (descriptor: ListBoxDescriptor) => () => void;
+
+  /**
+   * The mounted-row registry (f-collection, mounted side). Every Item and
+   * Section registers a `ListBoxRowHandle` here in both paths; `findItem`,
+   * keyboard activation and screen-reader focus read mounted presence from
+   * it, and the `items` data source reads `keys()` to merge row overrides.
+   */
+  rowRegistry: RowRegistry<ListBoxRowHandle>;
+
+  /** `rowRegistry.register`, named for the part's point of view. */
+  registerRow: (handle: ListBoxRowHandle) => () => void;
 
   selectionMode: Accessor<SelectionMode>;
 

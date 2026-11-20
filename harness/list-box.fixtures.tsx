@@ -1,6 +1,23 @@
 import { host, mount, signal, Text, View } from "nsh";
-import { Description, Label, ListBox } from "@heroui/react";
-import type { SelectionValue } from "@heroui/react";
+import type { JSX } from "nsh";
+import {
+  createListState,
+  createRowRegistry,
+  Description,
+  EnvironmentScope,
+  Label,
+  ListBox,
+  ListOwnerContext,
+  toListItemData,
+  listItemDataGetters,
+} from "@heroui/react";
+import type {
+  ListOwner,
+  ListOwnerListControls,
+  ListState,
+  SelectionValue,
+} from "@heroui/react";
+import { ListBoxContext } from "../src/components/list-box/list-box-context";
 import { probe } from "@scenario/probe";
 
 /*
@@ -599,9 +616,580 @@ function DynamicReplace() {
   );
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * f-collection: the seam's own cases (sheet §2 A-009)
+ *
+ * `OwnerShim` plays a Select-like owner: it provides `ListOwnerContext`,
+ * captures the `ListState`/`ListOwnerListControls` the ListBox registers, and
+ * exposes `testID` buttons that drive the same controls a virtual-focus field
+ * would (`handleKeyDown` navigation, `focusKey`, `activateFocused`,
+ * `findItem`, `itemCount`, collection reads). It is the only headless-safe
+ * way to reach the keyboard paths — a headless run cannot give the root view
+ * focus, and the assertions test the seam, not view focus.
+ *
+ * `RegistryProbe` mounts inside a row, reads `rowRegistry` from the list
+ * context and probes `has(param.probekey)` — the mounted-presence half of the
+ * M-003 negative assertion.
+ * -----------------------------------------------------------------------------------------------*/
+
+function param(name: string): string {
+  return String(host.params[name] ?? "");
+}
+
+/** `find-<key>`, `focus-<key>`, … testIDs cannot hold `:`/`#`; sanitize once. */
+function safe(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function OwnerShim(props: {
+  children: () => JSX.Element;
+  mode: "none" | "single" | "multiple";
+  disabledKeys?: string[];
+  withFilter?: boolean;
+  onToggle: () => void;
+}) {
+  const filter = signal<string | undefined>(undefined);
+
+  let listState: ListState | undefined;
+  let listControls: ListOwnerListControls | undefined;
+
+  const owner: ListOwner = {
+    selectionMode: () => props.mode,
+    selectedKeys: () => undefined,
+    defaultSelectedKeys: () => undefined,
+    onSelectionChange,
+    allowDuplicateSelectionEvents: () => false,
+    disallowEmptySelection: () => false,
+    disabledKeys: () => props.disabledKeys,
+    shouldFocusOnHover: () => false,
+    shouldSelectOnPressUp: () => false,
+    escape: () => {},
+    closeOnSelection: () => false,
+    close: () => {},
+    isActive: () => true,
+    registerList: (state, controls) => {
+      listState = state;
+      listControls = controls;
+      return () => {};
+    },
+    filterText: props.withFilter ? () => filter() : undefined,
+  };
+
+  const sendKey = (key: string) => {
+    if (key === "focus") {
+      const keyParam = param("probekey");
+      listControls?.focusKey(keyParam);
+      probe("focusKey")(keyParam);
+      return;
+    }
+
+    if (key === "activate") {
+      listControls?.activateFocused?.();
+      probe("activate")("done");
+      return;
+    }
+
+    if (key === "find") {
+      const keyParam = param("probekey");
+      const item = listControls?.findItem(keyParam);
+      probe("findItem")({
+        key: item?.key ?? null,
+        textValue: item?.textValue() ?? null,
+        hasChildren: item?.children != null,
+      });
+      return;
+    }
+
+    if (key === "node") {
+      const keyParam = param("probekey");
+      const node = listState?.collection().getItem(keyParam);
+      probe("node")(
+        node
+          ? {
+              type: node.type,
+              key: node.key,
+              textValue: node.textValue,
+              disabled: node.disabled,
+            }
+          : null,
+      );
+      return;
+    }
+
+    if (key === "keys") {
+      probe("keys")([...(listState?.collection().getKeys() ?? [])]);
+      return;
+    }
+
+    if (key === "itemcount") {
+      probe("itemCount")(listControls?.itemCount?.() ?? -1);
+      return;
+    }
+
+    if (key === "focused") {
+      probe("focusedKey")(listControls?.focusedKey() ?? null);
+      return;
+    }
+
+    if (key === "toggle") {
+      props.onToggle();
+      probe("toggle")(param("toggle"));
+      return;
+    }
+
+    if (key === "filter") {
+      const next = filter() === undefined ? param("filter") : undefined;
+      filter.set(next);
+      probe("filterSet")(next ?? null);
+      return;
+    }
+
+    listControls?.handleKeyDown?.({ key });
+  };
+
+  const buttons = [
+    "keys",
+    "focused",
+    "activate",
+    "itemcount",
+    "toggle",
+    "filter",
+    "nav-down",
+    "nav-up",
+    "nav-pageup",
+    "nav-pagedown",
+    "nav-t",
+    "nav-d",
+    "nav-a",
+    "nav-c",
+    "nav-x",
+  ];
+
+  return (
+    <ListOwnerContext.Provider value={owner}>
+      <View class="w-64">
+        {props.children()}
+        {buttons.map((id) => (
+          <View
+            role="button"
+            testID={id}
+            onPress={() => sendKey(id.startsWith("nav-") ? id.slice(4) : id)}
+          >
+            <Text>{id}</Text>
+          </View>
+        ))}
+        {param("probekey") !== "" && (
+          <View
+            role="button"
+            testID={`find-${safe(param("probekey"))}`}
+            onPress={() => sendKey("find")}
+          >
+            <Text>find</Text>
+          </View>
+        )}
+        {param("probekey") !== "" && (
+          <View
+            role="button"
+            testID={`node-${safe(param("probekey"))}`}
+            onPress={() => sendKey("node")}
+          >
+            <Text>node</Text>
+          </View>
+        )}
+        {param("probekey") !== "" && (
+          <View
+            role="button"
+            testID={`focus-${safe(param("probekey"))}`}
+            onPress={() => sendKey("focus")}
+          >
+            <Text>focus</Text>
+          </View>
+        )}
+      </View>
+    </ListOwnerContext.Provider>
+  );
+}
+
+/** Mounted-presence probe: `probe("hasRow")` records `rowRegistry.has`. */
+function RegistryProbe() {
+  const list = ListBoxContext();
+
+  if (!list) {
+    return null;
+  }
+
+  return (
+    <View
+      role="button"
+      testID="hasrow"
+      class="h-2 w-2"
+      onPress={() => probe("hasRow")(list.rowRegistry.has(param("probekey")))}
+    />
+  );
+}
+
+const MOBILE_ITEMS = [
+  { id: "1", name: "Alpha" },
+  { id: "2", name: "Bravo" },
+  { id: "3", name: "Charlie" },
+  { id: "4", name: "Delta" },
+  { id: "5", name: "Echo" },
+];
+
+function MobileItemsList(props: { mode: "single" | "multiple" }) {
+  const hidden = signal<string[]>(
+    param("hide") === "" ? [] : [param("hide")],
+  );
+
+  return (
+    <OwnerShim
+      mode={props.mode}
+      onToggle={() => hidden.set(hidden().length ? [] : [param("toggle")])}
+    >
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode={props.mode}
+          items={MOBILE_ITEMS}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item, index) => (
+            <If when={!hidden().includes(item.id)}>
+              {() => (
+                <ListBox.Item
+                  id={item.id}
+                  textValue={item.name}
+                  aria-label={item.name}
+                >
+                  {index === 0
+                    ? [<Label>{item.name}</Label>, <RegistryProbe />]
+                    : [<Label>{item.name}</Label>]}
+                </ListBox.Item>
+              )}
+            </If>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileOverrideList() {
+  const hidden = signal<string[]>(
+    param("hide") === "" ? [] : [param("hide")],
+  );
+  const DATA = [
+    { id: "x" },
+    { id: "y", name: "Wye" },
+  ];
+
+  return (
+    <OwnerShim
+      mode="single"
+      onToggle={() => hidden.set(hidden().length ? [] : [param("toggle")])}
+    >
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="single"
+          items={DATA}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item, index) => (
+            <If when={!hidden().includes(item.id)}>
+              {() => (
+                <ListBox.Item
+                  id={item.id}
+                  textValue={item.id === "x" ? "Xray" : undefined}
+                  aria-label={item.id === "x" ? "Xray" : item.name}
+                >
+                  {index === 0
+                    ? [<Label>{item.id === "x" ? "Xray" : item.name}</Label>, <RegistryProbe />]
+                    : [<Label>{item.id === "x" ? "Xray" : item.name}</Label>]}
+                </ListBox.Item>
+              )}
+            </If>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileOrphanList() {
+  const DATA = [
+    { id: "1", name: "One" },
+    { id: "2", name: "Two" },
+  ];
+
+  return (
+    <OwnerShim mode="multiple" onToggle={() => {}}>
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="multiple"
+          items={DATA}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item) => (
+            <ListBox.Item
+              id={item.id === "1" ? "orphan" : item.id}
+              textValue={item.name}
+              aria-label={item.name}
+            >
+              <Label>{item.name}</Label>
+            </ListBox.Item>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileNoKeyList() {
+  const DATA = [{ name: "Plain A" }, { name: "Plain B" }];
+
+  return (
+    <OwnerShim mode="single" onToggle={() => {}}>
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="single"
+          items={DATA}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item) => (
+            <ListBox.Item textValue={item.name} aria-label={item.name}>
+              <Label>{item.name}</Label>
+            </ListBox.Item>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileSectionList() {
+  const DATA = [
+    {
+      name: "Fruits",
+      items: [
+        { id: "a", name: "Apple" },
+        { id: "b", name: "Banana" },
+      ],
+    },
+    {
+      name: "Veggies",
+      items: [
+        { id: "c", name: "Carrot" },
+        { id: "d", name: "Daikon" },
+      ],
+    },
+  ];
+
+  return (
+    <OwnerShim mode="single" onToggle={() => {}}>
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="single"
+          items={DATA}
+          onSelectionChange={onSelectionChange}
+        >
+          {(group) => (
+            <ListBox.Section aria-label={group.name} items={group.items}>
+              {(item) => (
+                <ListBox.Item
+                  id={item.id}
+                  textValue={item.name}
+                  aria-label={item.name}
+                >
+                  <Label>{item.name}</Label>
+                </ListBox.Item>
+              )}
+            </ListBox.Section>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileDisabledList() {
+  const DATA = [
+    { id: "1", name: "One", disabled: false },
+    { id: "2", name: "Two", disabled: false },
+    { id: "3", name: "Three", disabled: false },
+  ];
+
+  return (
+    <OwnerShim
+      mode="single"
+      disabledKeys={["2"]}
+      onToggle={() => {}}
+    >
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="single"
+          items={DATA}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item) => (
+            <ListBox.Item
+              id={item.id}
+              textValue={item.name}
+              aria-label={item.name}
+              isDisabled={item.id === "1"}
+            >
+              <Label>{item.name}</Label>
+            </ListBox.Item>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileFilterList() {
+  return (
+    <OwnerShim
+      mode="single"
+      withFilter
+      onToggle={() => {}}
+    >
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="single"
+          items={MOBILE_ITEMS}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item) => (
+            <ListBox.Item id={item.id} textValue={item.name} aria-label={item.name}>
+              <Label>{item.name}</Label>
+            </ListBox.Item>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobilePagedList() {
+  return (
+    <OwnerShim mode="single" onToggle={() => {}}>
+      {() => (
+        <View class="h-40 w-64">
+          <ListBox
+            aria-label="Options"
+            className="h-40 w-full"
+            selectionMode="single"
+            items={PAGED}
+            onSelectionChange={onSelectionChange}
+          >
+            {(item, index) => (
+              <If when={index < 3}>
+                <ListBox.Item
+                  id={item.id}
+                  textValue={item.name}
+                  aria-label={item.name}
+                  className="h-10"
+                >
+                  <Label>{item.name}</Label>
+                </ListBox.Item>
+              </If>
+            )}
+          </ListBox>
+        </View>
+      )}
+    </OwnerShim>
+  );
+}
+
+/** M-013: `toListItemData` normalization and the getters a state consumes. */
+function FDataProbe() {
+  const results = [
+    { id: "x" },
+    { key: "k" },
+    "plain",
+    { textValue: "OnlyText" },
+    { name: "ByName", items: [{ id: "in" }] },
+    { children: [{ id: "c1" }] },
+    undefined,
+    { label: "Lab" },
+    { id: "d1", isDisabled: true },
+    { id: "d2", disabled: true },
+  ].map((datum, index) => {
+    const n = toListItemData(datum, index);
+    return {
+      key: n.key,
+      textValue: n.textValue,
+      disabled: n.disabled,
+      children: n.children?.length ?? null,
+    };
+  });
+  probe("data")(results);
+
+  const g = listItemDataGetters();
+  const state = createListState({
+    dataSource: () => [
+      { id: "s1", name: "Sec", items: [{ id: "i1", name: "Inner" }] },
+      { id: "i2", name: "Outer", disabled: true },
+      "prim",
+    ],
+    getKey: () => g.getKey,
+    getTextValue: () => g.getTextValue,
+    getDisabled: () => g.getDisabled,
+    getSectionChildren: () => g.getSectionChildren,
+  });
+  probe("getters")(
+    [...state.collection()].map((n) => ({
+      type: n.type,
+      key: n.key,
+      textValue: n.textValue,
+      disabled: n.disabled,
+    })),
+  );
+  probe("import")({ data: true });
+
+  return <Text>f-data</Text>;
+}
+
+/** M-014: `createRowRegistry` register/get/has/overwrite/unregister. */
+function FRegistryProbe() {
+  const registry = createRowRegistry<{ key: string; mark: number }>();
+  const first = { key: "a", mark: 1 };
+  const unregisterFirst = registry.register(first);
+  const unregisterB = registry.register({ key: "b", mark: 2 });
+  registry.register({ key: "a", mark: 3 });
+  unregisterFirst();
+  const keysBefore = registry.keys().join(",");
+  const mark = registry.get("a")?.mark ?? -1;
+  unregisterB();
+  probe("registry")({
+    size: registry.size(),
+    keys: keysBefore,
+    keysAfter: registry.keys().join(","),
+    mark,
+    hasA: registry.has("a"),
+    hasB: registry.has("b"),
+  });
+  probe("import")({ registry: true });
+
+  return <Text>f-registry</Text>;
+}
+
+function FCollectionFixture() {
+  const which = param("which");
+
+  return which === "registry" ? <FRegistryProbe /> : <FDataProbe />;
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "log");
   const disabledMapping = String(host.params.disabled ?? "mapped") !== "none";
+  const scope = param("scope");
 
   if (name === "log") {
     return <PlainList mode="single" />;
@@ -756,6 +1344,61 @@ function Fixture() {
 
   if (name === "dynamic-replace") {
     return <DynamicReplace />;
+  }
+
+  /* f-collection cases (sheet §2 A-009). `scope=touch` wraps the whole case in
+   * `EnvironmentScope` for the M-012 injected-environment contrast; the seam
+   * is environment-agnostic, so every result must read identically. */
+  const mobile = (() => {
+    if (name === "m-items") {
+      return <MobileItemsList mode="single" />;
+    }
+
+    if (name === "m-multi") {
+      return <MobileItemsList mode="multiple" />;
+    }
+
+    if (name === "m-override") {
+      return <MobileOverrideList />;
+    }
+
+    if (name === "m-orphan") {
+      return <MobileOrphanList />;
+    }
+
+    if (name === "m-nokey") {
+      return <MobileNoKeyList />;
+    }
+
+    if (name === "m-section") {
+      return <MobileSectionList />;
+    }
+
+    if (name === "m-disabled") {
+      return <MobileDisabledList />;
+    }
+
+    if (name === "m-filter") {
+      return <MobileFilterList />;
+    }
+
+    if (name === "m-paged") {
+      return <MobilePagedList />;
+    }
+
+    if (name === "f-collection") {
+      return <FCollectionFixture />;
+    }
+
+    return undefined;
+  })();
+
+  if (mobile !== undefined) {
+    return scope === "touch" ? (
+      <EnvironmentScope input="touch">{mobile}</EnvironmentScope>
+    ) : (
+      mobile
+    );
   }
 
   return <PlainList mode="single" />;
