@@ -15,6 +15,7 @@ import {
   createSelectableItem,
   isKeyboardPress,
   modifiersFromPress,
+  toListItemData,
   type SelectionBehavior,
   type SelectionMode,
   type SelectionModifiers,
@@ -32,6 +33,7 @@ import {
   ListBoxItemContext,
   type ListBoxItemContextValue,
   type ListBoxItemDescriptor,
+  type ListBoxRowHandle,
   ListBoxSectionContext,
 } from "./list-box-context";
 import { listboxItemVariants, type ListBoxItemVariants } from "./list-box.styles";
@@ -174,8 +176,12 @@ export interface ListBoxItemRootProps<T = unknown> extends ListBoxItemVariants {
 }
 
 /**
- * The key React Aria derives for an entry: `id` → the object's `id` → its
- * `key` → the item's index (`react-aria-components/src/ListBox.tsx:513`).
+ * The key React Aria derives for an entry: `id` → the datum's `id`/`key` → a
+ * primitive value itself → the item's index (`react-aria-components/
+ * ListBox.tsx:513`). f-collection converged the chain: `toListItemData` is
+ * the same normalization the `items` data source runs, so a mounted row and
+ * its datum resolve one key (`value` + positional `index`), with the row's
+ * own `textValue` left as the last resort it always was.
  */
 function resolveKey(
   id: string | number | undefined,
@@ -187,24 +193,9 @@ function resolveKey(
     return String(id);
   }
 
-  if (value != null) {
-    if (typeof value === "object") {
-      const record = value as { id?: unknown; key?: unknown };
-      const derived = record.id ?? record.key;
+  const derived = toListItemData(value, index).key;
 
-      if (derived != null) {
-        return String(derived);
-      }
-    } else {
-      return String(value);
-    }
-  }
-
-  if (index != null) {
-    return String(index);
-  }
-
-  return textValue ?? "";
+  return derived !== "" ? derived : textValue ?? "";
 }
 
 /**
@@ -471,6 +462,23 @@ export function ListBoxItemRoot<T>(
     // follows the data rather than the order rows were created in.
     order: collectionItem?.index,
     disabled: () => local.isDisabled === true || list.isDisabledKey(key),
+  };
+
+  // f-collection (A-006): the static-children path still feeds the collection
+  // through a descriptor; under `items` the data itself is the collection, so this row
+  // only mounts a handle — its `textValue`/`isDisabled`/`value` merge into its
+  // datum while mounted, and activation/Select.Value read the handle.
+  if (collectionItem == null) {
+    const register = section?.register ?? list.register;
+    cleanup(register(descriptor));
+  }
+
+  const handle: ListBoxRowHandle = {
+    type: "item",
+    key,
+    value: collectionItem ? collectionItem.value : () => local.value,
+    textValue: () => textValue(),
+    disabled: () => local.isDisabled === true || list.isDisabledKey(key),
     ref: () => node,
     activate,
     // A Select's value renders the selected option's children; the container
@@ -478,9 +486,7 @@ export function ListBoxItemRoot<T>(
     children: copyContent,
   };
 
-  const register = section?.register ?? list.register;
-
-  cleanup(register(descriptor));
+  cleanup(list.registerRow(handle));
   cleanup(() => list.unregisterItemLayout(key));
 
   // R-010: `:has(.list-box-item__indicator)` has no NSH form, so the Indicator

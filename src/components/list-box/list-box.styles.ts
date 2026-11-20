@@ -2,8 +2,6 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease } from "../../tokens/geometry";
-
 /**
  * The three ListBox variant tables of `@heroui/styles` 3.2.7
  * (`packages/styles/src/components/{list-box,list-box-item,list-box-section}/
@@ -45,7 +43,10 @@ export const listboxItemVariants = tv({
     // two `[data-slot]` descendant rules (R-008 / R-009).
     // R-005: transform 250ms `--ease-out-quart` + box-shadow 150ms
     // `--ease-out`; NSH has one duration and one curve, so both are 250ms
-    // out-quart (registered in port sheet section 8).
+    // out-quart (registered in port sheet section 8). The curve is written
+    // out instead of imported from `src/tokens/geometry.ts` (`ease.outQuart`)
+    // because the class check loads this file with plain Node, which
+    // resolves neither an extensionless relative import nor a `.ts` one.
     // R-006: `cursor: var(--cursor-interactive)` → `cursor-pointer`.
     // R-014: hover background (`hover:` is pointer-only in NSH, so the upstream
     // `@media (hover: hover)` wrapper has no counterpart).
@@ -57,7 +58,7 @@ export const listboxItemVariants = tv({
     // only the indicator (R-019 / R-020) shows it.
     item: [
       "relative flex min-h-9 w-full items-center justify-start gap-3 rounded-2xl px-2 py-1.5 text-foreground outline-none select-none",
-      `transition duration-[250ms] ${ease.outQuart} motion-reduce:transition-none cursor-pointer`,
+      "transition duration-[250ms] ease-[cubic-bezier(0.165,0.84,0.44,1)] motion-reduce:transition-none cursor-pointer",
       "hover:bg-default",
     ].join(" "),
     // R-017: the indicator slot, pinned to the inline end and vertically

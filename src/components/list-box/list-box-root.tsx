@@ -23,12 +23,17 @@ import {
 } from "nsh";
 
 import {
+  createInput,
   createInteractionModality,
   createKeymapScope,
   createListState,
+  createRowRegistry,
   createSelectableList,
+  isCtrlKeyPressed,
   isKeyboardPress,
+  isNonContiguousSelectionModifier,
   ListOwnerContext,
+  toListItemData,
   type ListState,
   type SelectionBehavior,
   type SelectionMode,
@@ -43,6 +48,7 @@ import {
   type ListBoxContextValue,
   type ListBoxDescriptor,
   type ListBoxItemDescriptor,
+  type ListBoxRowHandle,
   sortByRenderedOrder,
 } from "./list-box-context";
 import { listboxVariants, type ListBoxVariants } from "./list-box.styles";
@@ -238,26 +244,117 @@ function collectItemKeys(nodes: readonly any[], into: Set<string>): Set<string> 
   return into;
 }
 
-/** The option with `key`, at the top level or inside a section. */
-function findItemDescriptor(
-  descriptors: readonly ListBoxDescriptor[],
-  key: string,
-): ListBoxItemDescriptor | undefined {
-  for (const descriptor of descriptors) {
-    if (descriptor.type === "item") {
-      if (descriptor.key === key) {
-        return descriptor;
-      }
-    } else {
-      const found = findItemDescriptor(descriptor.children(), key);
+/**
+ * f-collection, mounted side: the registry of the rows that exist. A mounted
+ * option/section registers a `ListBoxRowHandle` on mount and drops it on
+ * unmount; the `items` data source subscribes to `keys()` so a row's own
+ * `textValue`/`isDisabled` overrides merge into its datum while it is mounted
+ * and fall back when it is not — without the row ever feeding the collection.
+ */
+interface MergedEntry {
+  key: string;
+  textValue: string;
+  disabled: boolean;
+  children?: any[];
 
-      if (found) {
-        return found;
-      }
-    }
+  /**
+   * The raw datum behind this entry. `buildNodes` copies it to
+   * `CollectionNode.rawValue`, which lets a mounted section find the node its
+   * keyless datum produced (`__nsh:section:` key) by identity — the merged
+   * entry itself is a fresh object, so it could never be matched.
+   */
+  datum?: unknown;
+}
+
+/**
+ * Finds the item handle whose row renders `datum`. A named datum
+ * (`namedKey !== ""`) is claimed by key only: a row whose `id` renames a
+ * real data key does not claim it — it stays an orphan and is appended,
+ * which is the sheet's "孤儿行追加" contract. A keyless datum (`namedKey`
+ * `""`) claims by identity first — `value` equality is the association that
+ * survives a reorder moving the positional key, since the row's own key is
+ * a mount-time constant — and by the positional key as the fallback.
+ */
+function handleForDatum(
+  registry: readonly ListBoxRowHandle[],
+  namedKey: string,
+  positionalKey: string,
+  datum: unknown,
+): ListBoxRowHandle | undefined {
+  if (namedKey !== "") {
+    return registry.find(
+      (handle) => handle.type === "item" && handle.key === namedKey,
+    );
   }
 
-  return undefined;
+  return (
+    registry.find(
+      (handle) => handle.type === "item" && handle.value?.() === datum,
+    ) ??
+    registry.find(
+      (handle) => handle.type === "item" && handle.key === positionalKey,
+    )
+  );
+}
+
+// A-005: the data side holds the complete collection; mounted rows only merge
+// overrides (textValue/disabled) into their datum and append orphan rows.
+/**
+ * `items` data → collection entries, mounted-row overrides merged in. A row
+ * that claims a datum renames it to the row's key (the association key), wins
+ * `textValue` only when it reports one, and overrides `disabled` when it
+ * reports one (an explicit `isDisabled={false}` clears the datum's flag);
+ * the datum's key
+ * itself is never overridden — a row whose key matches nothing is an orphan
+ * and is appended at the data-source tail, which keeps the RAC contract where
+ * a row's `id` adds its option to a data-driven list.
+ *
+ * A keyless section datum keeps `""` (not the positional index): only then
+ * does `buildNodes` mint the `__nsh:section:{level}:{index}` key the sheet's
+ * key-convergence rule names, and the mounted section reads it back by
+ * matching `datum` through `rawValue`.
+ */
+function mergeRows(
+  data: readonly unknown[],
+  registry: readonly ListBoxRowHandle[],
+  seen: Set<ListBoxRowHandle>,
+): MergedEntry[] {
+  const merged = data.map((datum, index) => {
+    const normalized = toListItemData(datum, index);
+    const isSection = normalized.children !== undefined;
+    // A section datum never takes the positional key (buildNodes mints
+    // `__nsh:section:` for ""); an item datum keeps it.
+    const namedKey = toListItemData(datum).key;
+    const ownKey = isSection ? namedKey : normalized.key;
+    const handle = isSection
+      ? undefined
+      : handleForDatum(registry, namedKey, ownKey, datum);
+
+    if (handle) {
+      seen.add(handle);
+    }
+
+    return {
+      key: handle?.key ?? ownKey,
+      textValue:
+        normalized.children === undefined
+          ? handle?.textValue?.() || normalized.textValue
+          : normalized.textValue,
+      // The mounted row's disabled is an override, not a union: its
+      // `isDisabled === false` clears a datum's `disabled: true` exactly the
+      // way the static descriptor path decided it (the row's own disabled
+      // already unions `disabledKeys` through `isDisabledKey`). An absent row
+      // falls back to the datum's own flag.
+      disabled: handle?.disabled?.() ?? normalized.disabled,
+      children:
+        normalized.children === undefined
+          ? undefined
+          : mergeRows(normalized.children, registry, seen),
+      datum,
+    };
+  });
+
+  return merged;
 }
 
 /** `"all"` stays the sentinel; an iterable becomes the string-keyed set. */
@@ -370,6 +467,8 @@ export function ListBoxRoot<T>(
   // its options so `buildNodes` expands the hierarchy. Registration order is
   // creation order, so a dynamic collection is sorted back into data order
   // through each row's `order` accessor (its `<Each>` index signal).
+  // f-collection: only the static-children path feeds this registry; with
+  // `items` the data itself is the collection and rows only mount handles.
   const descriptors = signal<readonly ListBoxDescriptor[]>([]);
 
   const register = (descriptor: ListBoxDescriptor) => {
@@ -380,9 +479,79 @@ export function ListBoxRoot<T>(
     };
   };
 
-  const dataSource = computed(() =>
-    sortByRenderedOrder(descriptors()).map(descriptorToData),
-  );
+  // f-collection, mounted side: the one store that knows which rows exist.
+  const rowRegistry = createRowRegistry<ListBoxRowHandle>();
+
+  // Port sheet §5, first change: the field root may own the dynamic collection
+  // (the HeroUI ComboBox stories write `items` on the root and render the rows
+  // through a function child there), so the list falls back to it.
+  const items = computed<T[] | undefined>(() => {
+    if (local.items !== undefined) {
+      return local.items as T[];
+    }
+
+    const external = owner?.items?.();
+
+    return external === undefined ? undefined : (Array.from(external) as T[]);
+  });
+
+  const hasItems = computed(() => items() != null);
+
+  const dataSource = computed(() => {
+    const data = items();
+
+    if (data == null) {
+      return sortByRenderedOrder(descriptors()).map(descriptorToData);
+    }
+
+    // The data side holds the complete collection. Mounted rows only merge
+    // their overrides; a row whose key claims no datum is appended as an
+    // orphan (registration order), as RAC's row-id override contract keeps.
+    const rows = rowRegistry
+      .keys()
+      .map((key) => rowRegistry.get(key))
+      .filter((handle): handle is ListBoxRowHandle => handle != null);
+    const seen = new Set<ListBoxRowHandle>();
+    const merged = mergeRows(data, rows, seen);
+
+    const used = new Set<string>();
+    const collectKeys = (entries: readonly MergedEntry[]) => {
+      for (const entry of entries) {
+        used.add(entry.key);
+        if (entry.children) {
+          collectKeys(entry.children);
+        }
+      }
+    };
+    collectKeys(merged);
+
+    const orphans: MergedEntry[] = [];
+
+    for (const handle of rows) {
+      if (seen.has(handle) || handle.type !== "item") {
+        continue;
+      }
+
+      // Two orphans under one key cannot both own it: the later entry loses
+      // the collision in `ListCollection` anyway, so give it a printable
+      // suffix instead of silently dropping the row's option.
+      let orphanKey = handle.key;
+      let suffix = 2;
+
+      while (used.has(orphanKey)) {
+        orphanKey = `${handle.key}#${suffix++}`;
+      }
+      used.add(orphanKey);
+
+      orphans.push({
+        key: orphanKey,
+        textValue: handle.textValue?.() ?? "",
+        disabled: handle.disabled?.() === true,
+      });
+    }
+
+    return [...merged, ...orphans];
+  });
 
   // Port sheet §5, first change: the owner's `filterText` (ComboBox's current
   // filter) cuts the collection down; `defaultFilter` replaces the language-
@@ -541,7 +710,27 @@ export function ListBoxRoot<T>(
           manager().setFocusedKey(key);
         },
         focusedKey: () => manager().focusedKey(),
-        findItem: (key) => findItemDescriptor(descriptors(), key),
+        // f-collection: mounted presence decides whether the rich contract
+        // (`children` for Select.Value) exists; the collection node is the
+        // fallback an unmounted option still answers (`{key, textValue}`).
+        findItem: (key) => {
+          const handle = rowRegistry.get(key);
+
+          if (handle?.type === "item") {
+            return {
+              key,
+              textValue: handle.textValue ?? (() => ""),
+              children: handle.children,
+            };
+          }
+
+          const node = list.collection().getItem(key);
+
+          return node
+            ? { key: node.key, textValue: () => node.textValue }
+            : undefined;
+        },
+        activateFocused: (modifiers) => activateFocused("keyboard", undefined, modifiers),
         // The unfiltered option count: a field's open guard asks for it
         // (`useComboBoxState.ts:335`), because a live filter cuts the
         // collection the keyboard walks.
@@ -630,6 +819,53 @@ export function ListBoxRoot<T>(
     return typeof style === "function" ? style(renderProps) : style;
   };
 
+  // Environment.input, read once under this root's context: the unmounted
+  // activation fallback below needs the same touch rule `createSelectableItem`
+  // applies to a mounted row (touch toggles instead of replacing).
+  const input = createInput();
+
+  /**
+   * f-collection 激活兜底: activation of a focused key whose row is not
+   * mounted. It replays `createSelectableItem`'s keyboard selection against
+   * the manager — a truly disabled node is inert, `mode "none"` only acts,
+   * and the modifier rules match `selectWithEvent` — then fires the root's
+   * `onAction`, so Enter on an unmounted option is never silently dropped.
+   */
+  const activateUnmounted = (
+    key: string,
+    node: { disabled: boolean },
+    modifiers?: SelectionModifiers,
+  ) => {
+    const m = manager();
+    const inert = node.disabled && m.disabledBehavior() === "all";
+
+    if (!inert) {
+      if (!node.disabled && m.canSelectItem(key)) {
+        if (modifiers && isNonContiguousSelectionModifier(modifiers)) {
+          m.toggleSelection(key);
+        } else if (m.selectionMode() === "single") {
+          if (m.isSelected(key) && !m.disallowEmptySelection()) {
+            m.toggleSelection(key);
+          } else {
+            m.replaceSelection(key);
+          }
+        } else if (modifiers?.shift) {
+          m.extendSelection(key);
+        } else if (
+          m.selectionBehavior() === "toggle" ||
+          isCtrlKeyPressed(modifiers) ||
+          input() === "touch"
+        ) {
+          m.toggleSelection(key);
+        } else {
+          m.replaceSelection(key);
+        }
+      }
+
+      local.onAction?.(key);
+    }
+  };
+
   const activateFocused = (
     source: "pointer" | "keyboard",
     event?: PressEvent,
@@ -641,7 +877,18 @@ export function ListBoxRoot<T>(
       return;
     }
 
-    findItemDescriptor(descriptors(), key)?.activate(source, event, modifiers);
+    const handle = rowRegistry.get(key);
+
+    if (handle?.type === "item" && handle.activate) {
+      handle.activate(source, event, modifiers);
+      return;
+    }
+
+    const node = list.collection().getItem(key);
+
+    if (node?.type === "item") {
+      activateUnmounted(key, node, modifiers);
+    }
   };
 
   const runKey = (key: string, modifiers?: SelectionModifiers) => {
@@ -844,24 +1091,30 @@ export function ListBoxRoot<T>(
       return;
     }
 
-    const descriptor = findItemDescriptor(descriptors(), key);
-
-    if (!descriptor) {
-      return;
-    }
+    const handle = rowRegistry.get(key);
+    const node =
+      handle == null || handle.type !== "item"
+        ? list.collection().getItem(key)
+        : undefined;
 
     if (platform.os === "web") {
-      if (screenReaderEnabled()) {
-        announce(descriptor.textValue());
+      // The announce fallback covers unmounted keys too: the collection still
+      // knows the option's text (f-collection §5, host gap register).
+      const text = handle?.textValue?.() ?? node?.textValue;
+
+      if (screenReaderEnabled() && text != null) {
+        announce(text);
       }
 
       return;
     }
 
-    const node = descriptor.ref();
+    const view = handle?.ref?.();
 
-    if (node) {
-      setAccessibilityFocus(node);
+    if (view) {
+      // An unmounted option has no view to take accessibility focus; the
+      // announce/textValue fallback above is its degradation (sheet §5).
+      setAccessibilityFocus(view);
     }
   });
 
@@ -880,6 +1133,8 @@ export function ListBoxRoot<T>(
     list,
     selectionManager: () => manager(),
     register,
+    rowRegistry,
+    registerRow: rowRegistry.register,
     selectionMode,
     selectionBehavior,
     isFocused: rootFocused,
@@ -908,20 +1163,6 @@ export function ListBoxRoot<T>(
   // read must be a JSX child expression, not a body local or an `If` `else`
   // element: only a binding re-reads it, so an `<If>` child added later, or a
   // changed render function, reaches the tree (each read builds new views).
-  // Port sheet §5, first change: the field root may own the dynamic collection
-  // (the HeroUI ComboBox stories write `items` on the root and render the rows
-  // through a function child there), so the list falls back to it.
-  const items = computed<T[] | undefined>(() => {
-    if (local.items !== undefined) {
-      return local.items as T[];
-    }
-
-    const external = owner?.items?.();
-
-    return external === undefined ? undefined : (Array.from(external) as T[]);
-  });
-
-  const hasItems = computed(() => items() != null);
 
   // One row of the dynamic collection. The row is keyed by the item itself
   // (`<Each>`'s default: objects by identity, primitives by value), not by its
