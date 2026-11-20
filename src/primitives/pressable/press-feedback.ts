@@ -27,7 +27,10 @@
  *
  * `PressEvent.position` at `pressDown` is the ripple's only origin source —
  * `pressOrigin` is exposed through `PressableFeedbackContext` for the Ripple
- * part. `bounds` is set by `layout(e)` off `onLayout`'s payload.
+ * part and is only ever recorded while `enabled` holds: a gated press leaves
+ * it null, so a non-null value cannot linger under pointer or `enabled={false}`
+ * (`pressUp` clears it on every end). `bounds` is set by `layout(e)` off
+ * `onLayout`'s payload.
  */
 
 import {
@@ -107,7 +110,11 @@ export interface PressFeedback {
   /** The root view's measured size. */
   bounds: Accessor<Size>;
 
-  /** Where the current press went down (`PressEvent.position`). */
+  /**
+   * Where the current press went down (`PressEvent.position`), recorded only
+   * while `enabled` holds and cleared on every `pressUp` — null while the
+   * seam is gated off.
+   */
   pressOrigin: Accessor<Point | null>;
 
   /**
@@ -254,25 +261,30 @@ export function createPressFeedback(
   });
 
   const pressDown = (event: PressEvent) => {
-    pressOrigin.set(event.position);
-
     if (!options.enabled()) {
+      // A disabled press records nothing: `pressOrigin` non-null is the
+      // ripple's start edge, so a gated press must leave it null (sheet §1
+      // pointer 下全部静止 / M-017, M-008).
       options.onPressChange?.(false);
       return;
     }
 
+    pressOrigin.set(event.position);
     isPressed.set(true);
     options.onPressChange?.(true);
   };
 
   const pressUp = (_event: PressEvent) => {
+    // Cleared unconditionally — the ripple's completion edge is `pressOrigin`
+    // back-to-null, and clearing an already-null origin is a no-op.
+    pressOrigin.set(null);
+
     if (!options.enabled()) {
       options.onPressChange?.(false);
       return;
     }
 
     isPressed.set(false);
-    pressOrigin.set(null);
     options.onPressChange?.(false);
   };
 

@@ -340,12 +340,17 @@ export function PressableFeedbackRipple(
   // `pressOrigin` is the press edge the factory records on `onPressDown`:
   // non-null starts a segment to 1 from the recorded point, back-to-null
   // completes a press that started to 2. `reduceMotion` lands each segment
-  // instantly.
+  // instantly. The seam's own gate (`ctx.enabled`) sits beside the animation
+  // tier in this check — not in `disabled()` — because `disabled` also picks
+  // the unbound resting style; a gated seam still binds `opacity` at rest so
+  // the overlay stays invisible, it just never runs (sheet §1 pointer 下全部
+  // 静止 / M-017). The factory records `pressOrigin` only while enabled, so
+  // this guard also wipes a segment an `enabled` flip stranded mid-press.
   effect(() => {
     const point = ctx.pressOrigin();
     const duration = segmentDuration();
 
-    if (disabled()) {
+    if (disabled() || !ctx.enabled()) {
       wasPressed = false;
       progress.set(0);
       return;

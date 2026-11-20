@@ -263,7 +263,12 @@ export interface PressableFeedbackContextValue {
   /** The root view's measured size (0×0 until `onLayout` reports it). */
   bounds: Accessor<Size>;
 
-  /** Where the current press went down in the view (`PressEvent.position`). */
+  /**
+   * Where the current press went down in the view (`PressEvent.position`),
+   * recorded only while `enabled` holds and cleared on every `pressUp` —
+   * null while the seam is gated off, so a gated press cannot start the
+   * ripple below.
+   */
   pressOrigin: Accessor<Point | null>;
 
   /** The root's built-in scale channel (the factory's `scale`). */
