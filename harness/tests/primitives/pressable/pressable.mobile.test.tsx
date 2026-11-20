@@ -66,10 +66,10 @@ function lastOf<T>(app: App, name: string): T {
 /*
  * Web runs are several times slower than headless (measured: single opens
  * take 8–20 s and multi-open tests exceed the 30 s default), so every test
- * in this file gets a generous cap. The cap is a ceiling, not a delay.
+ * in this file passes an explicit 120 s cap. The cap is a ceiling, not a
+ * delay — and the call must be a literal `test(...)`: the M4 gate scans the
+ * source for test/it/describe call sites and cannot see a local wrapper.
  */
-const mobileTest = (name: string, body: () => Promise<void>) =>
-  test(name, body, 120_000);
 
 /** Presses the fixture's `sample` button and returns the probe it recorded. */
 async function sample(app: App): Promise<Sample> {
@@ -92,7 +92,7 @@ describe("pressable-feedback", () => {
   // the default pointer environment the seam is a zero-cost pass-through —
   // no isPressed, no hitSlop, scale pinned at 1 — while press events still
   // reach the view (desktop zero change).
-  mobileTest("M-001 default environment: feedback is inert — no isPressed, no hitSlop, scale 1, presses still fire", async () => {
+  test("M-001 default environment: feedback is inert — no isPressed, no hitSlop, scale 1, presses still fire", async () => {
     const app = await openPressable("factory");
 
     await app.press("id:down");
@@ -121,12 +121,12 @@ describe("pressable-feedback", () => {
     for (const call of callsOf(consumer, "change")) {
       expect(call[0]).toBe(false);
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-002 (A-001): under an injected
   // touch environment pressDown sets the canonical flag and pressUp clears
   // it; onPressChange reports down→up in order.
-  mobileTest("M-002 injected touch: isPressed and onPressChange roundtrip down then up", async () => {
+  test("M-002 injected touch: isPressed and onPressChange roundtrip down then up", async () => {
     const app = await openPressable("factory", { scope: "touch" });
 
     await app.press("id:down");
@@ -141,12 +141,12 @@ describe("pressable-feedback", () => {
       [false],
     ]);
     expect(app.texts()).toContain("isPressed=false");
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-003 (A-001): the computed hitSlop
   // pads each side by (44 − side) / 2 while a side is under the 44 pt minimum
   // target, and answers undefined once both sides reach it.
-  mobileTest("M-003 injected touch: hitSlop pads a 24pt box by 10 per side and stays empty at 320pt and up", async () => {
+  test("M-003 injected touch: hitSlop pads a 24pt box by 10 per side and stays empty at 320pt and up", async () => {
     const app = await openPressable("factory", { scope: "touch" });
 
     await app.press("id:layout-small"); // 24×24 → (44−24)/2 = 10 per side
@@ -179,7 +179,7 @@ describe("pressable-feedback", () => {
       bottom: 10,
       left: 10,
     });
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-004 (A-003): the scale channel's
   // pressed end is `1 − (1 − 0.985) · (300 / width)` with no clamping —
@@ -187,7 +187,7 @@ describe("pressable-feedback", () => {
   // `ignoreScaleCoefficient` uses the raw 0.985. The component's built-in
   // scale binds this same factory channel, so the factory's getValue()
   // probe is the observable half.
-  mobileTest("M-004 injected touch: scale end follows the width coefficient — 0.97 at 150pt, 0.9925 at 600pt, 0.985 when ignored", async () => {
+  test("M-004 injected touch: scale end follows the width coefficient — 0.97 at 150pt, 0.9925 at 600pt, 0.985 when ignored", async () => {
     // width 150 → coefficient 2 → 1 − 0.015·2 = 0.97
     let app = await openPressable("factory", { scope: "touch" });
     await app.press("id:layout-mid");
@@ -214,7 +214,7 @@ describe("pressable-feedback", () => {
     expect(s.scale).toBeGreaterThan(0.983);
     expect(s.scale).toBeLessThan(0.987);
     await app.press("id:up");
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-006 (A-004): the ripple's origin is
   // `PressEvent.position` — the context's `pressOrigin` must report the press
@@ -222,7 +222,7 @@ describe("pressable-feedback", () => {
   // (the part's own contract: "back-to-null completes a press"). The raw
   // `progress` channel is internal to `PressableFeedback.Ripple`; its
   // 0→1→2 run is covered by the held-press assertions in the headless file.
-  mobileTest("M-006 injected touch: pressOrigin records the press point and clears on release; ripple mounts", async () => {
+  test("M-006 injected touch: pressOrigin records the press point and clears on release; ripple mounts", async () => {
     const app = await openPressable("component", { scope: "touch" });
 
     expect(app.shows("id:ripple")).toBe(true);
@@ -246,14 +246,14 @@ describe("pressable-feedback", () => {
     // Release must hand the ripple its completion edge: pressOrigin returns
     // to null so the part's effect can run progress → 2.
     expect(callsOf(app, "ctx-origin").at(-1)?.[0]).toBeNull();
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-007 (A-003): `animation="disable-all"`
   // cascades through the context (`isAllAnimationsDisabled`) while the
   // canonical press channel still roundtrips — the flag gates the parts, not
   // the press state. The held-press proof that Highlight/Ripple hold their
   // rest values lives in the headless file's hold-state test.
-  mobileTest("M-007 animation=\"disable-all\": cascade flag reaches the context and the canonical press still completes", async () => {
+  test("M-007 animation=\"disable-all\": cascade flag reaches the context and the canonical press still completes", async () => {
     const app = await openPressable("component", {
       scope: "touch",
       anim: "disable-all",
@@ -276,13 +276,13 @@ describe("pressable-feedback", () => {
     );
     expect(app.shows("id:highlight")).toBe(true);
     expect(app.shows("id:ripple")).toBe(true);
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-008 (A-003): `isDisabled` closes the
   // gate — the view reports disabled, no press events fire and the context's
   // `enabled()` stays false. `enabled={false}` keeps the view pressable but
   // the feedback seam inert.
-  mobileTest("M-008 isDisabled and enabled=false: no feedback path, press events follow the view's own disabled state", async () => {
+  test("M-008 isDisabled and enabled=false: no feedback path, press events follow the view's own disabled state", async () => {
     const disabled = await openPressable("component", {
       scope: "touch",
       disabled: "1",
@@ -313,12 +313,12 @@ describe("pressable-feedback", () => {
       callsOf(gated, "ctx-pressed").filter((c) => c[0] === true),
     ).toHaveLength(0);
     expect(gated.shows("id:highlight")).toBe(true);
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-009 (A-001): under reducedMotion the
   // scale channel is pinned to 1 (instant path, no timing) while `pressed`
   // still completes its 0→1→0 run and press events stay intact.
-  mobileTest("M-009 reducedMotion: scale stays 1 while pressed still roundtrips", async () => {
+  test("M-009 reducedMotion: scale stays 1 while pressed still roundtrips", async () => {
     const app = await openPressable(
       "factory",
       { scope: "touch" },
@@ -337,13 +337,13 @@ describe("pressable-feedback", () => {
       [true],
       [false],
     ]);
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-010 (A-006): the fixture mounts
   // `PressableFeedback` imported through the public `hero-nsh` entry — the
   // primitives barrel and the component lines of src/index.ts make it
   // reachable.
-  mobileTest("M-010 PressableFeedback mounts from the public entry", async () => {
+  test("M-010 PressableFeedback mounts from the public entry", async () => {
     const app = await openPressable("component", { scope: "touch" });
 
     expect(app.shows("id:root")).toBe(true);
@@ -351,12 +351,12 @@ describe("pressable-feedback", () => {
     expect(app.shows("id:highlight")).toBe(true);
     expect(app.shows("id:ripple")).toBe(true);
     expect(app.shows("id:scale-part")).toBe(true);
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-013 (A-002): every tier of the
   // `animation` control flow mounts and renders — true, "disabled", false,
   // a config object and a config carrying `state`.
-  mobileTest("M-013 animation tiers mount: true, \"disabled\", false, object and state-carrying configs", async () => {
+  test("M-013 animation tiers mount: true, \"disabled\", false, object and state-carrying configs", async () => {
     for (const anim of [
       "true",
       "disabled",
@@ -373,14 +373,14 @@ describe("pressable-feedback", () => {
       expect(app.shows("id:root")).toBe(true);
       expect(app.shows("text:pressable")).toBe(true);
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-014 (A-005, A-006): the whole export
   // chain — `createPressFeedback`, `PressableFeedback`,
   // `PressableFeedbackContext` and the animation types — is importable from
   // `@heroui/react`; the fixture uses every one of them and the context
   // probe records canonical state through it.
-  mobileTest("M-014 export chain: factory, component and context all work through the public entry", async () => {
+  test("M-014 export chain: factory, component and context all work through the public entry", async () => {
     const app = await openPressable("component", { scope: "touch" });
     await app.longPress("id:root");
     await app.waitUntil(() => callsOf(app, "ctx-pressed").length > 0);
@@ -395,13 +395,13 @@ describe("pressable-feedback", () => {
     await factory.press("id:down");
     await factory.waitUntil(() => callsOf(factory, "change").length === 1);
     expect(callsOf(factory, "change")).toEqual([[true]]);
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-015 (A-008): the fixture's probe
   // surface itself is asserted — pressDown/pressUp drive `change`, `sample`
   // carries isPressed/pressed/scale/hitSlop/origin/bounds, and `origin`
   // carries pressOrigin.
-  mobileTest("M-015 fixture probes record the canonical channels for every case", async () => {
+  test("M-015 fixture probes record the canonical channels for every case", async () => {
     const app = await openPressable("factory", { scope: "touch" });
 
     await app.press("id:layout-small");
@@ -423,12 +423,12 @@ describe("pressable-feedback", () => {
       [false],
     ]);
     expect(callsOf(app, "origin").length).toBeGreaterThan(0);
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-016 (A-009, A-010): the dual
   // environment structure — default and EnvironmentScope(touch) — mounts and
   // answers probes in the same file; the rows above are its content.
-  mobileTest("M-016 both environments mount and answer probes", async () => {
+  test("M-016 both environments mount and answer probes", async () => {
     for (const scope of ["", "touch"] as const) {
       const app = await openPressable("factory", scope ? { scope } : {});
       await app.press("id:down");
@@ -437,7 +437,7 @@ describe("pressable-feedback", () => {
       expect(typeof s.pressed).toBe("number");
       expect(typeof s.scale).toBe("number");
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-017 (A-004, 负断言): under the
   // default environment the touch-feedback path does not exist — the
@@ -445,7 +445,7 @@ describe("pressable-feedback", () => {
   // real press, and the parts stay mounted but inert. (`viewStyle` cannot
   // read the parts' AnimatedValue-bound opacity — a registered host gap —
   // so the negative assertion rides the canonical channel and the gate.)
-  mobileTest("M-017 default environment: the feedback gate stays closed through a real press", async () => {
+  test("M-017 default environment: the feedback gate stays closed through a real press", async () => {
     const app = await openPressable("component");
 
     expect(app.shows("id:highlight")).toBe(true);
@@ -462,5 +462,5 @@ describe("pressable-feedback", () => {
     ).toBe(true);
     expect(callsOf(app, "ctx-pressed").every((c) => c[0] === false)).toBe(true);
     expect(lastOf<{ enabled: boolean }>(app, "ctx-env").enabled).toBe(false);
-  });
+  }, 120_000);
 });
