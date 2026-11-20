@@ -30,12 +30,20 @@ import {
 import { sheetDragLength } from "./sheet.utils";
 
 /**
+ * The `data-*` attribute channel upstream spreads onto its DOM element:
+ * accepted, with no effect in NSH. Declared as an `extends`-clause mapped
+ * type so every member of the props body below stays a plain named field.
+ */
+type SheetContentDataProps = { [key in `data-${string}`]?: unknown };
+
+/**
  * The props of `Sheet.Content`: HeroUI's `SheetContentProps`, which is React
  * Aria's `Sheet` props minus `children` / `className`, plus the render-prop
  * form of `children` and a `style`.
  */
 export interface SheetContentProps
-  extends Omit<ViewProps, "children" | "class" | "ref" | "style"> {
+  extends Omit<ViewProps, "children" | "class" | "ref" | "style">,
+    SheetContentDataProps {
   children?: JSX.Element | ((values: SheetRenderValues) => JSX.Element);
 
   /** Appended after the slot classes; later classes win. */
@@ -54,9 +62,6 @@ export interface SheetContentProps
 
   /** A DOM id upstream; maps to `nativeID`. */
   id?: string;
-
-  /** Accepted, no effect: NSH has no DOM attribute channel. */
-  [key: `data-${string}`]: unknown;
 }
 
 /**
