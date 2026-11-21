@@ -1,5 +1,5 @@
 import { context } from "nsh";
-import type { Accessor } from "nsh";
+import type { Accessor, Edges } from "nsh";
 
 import type { linkVariants } from "./link.styles";
 
@@ -23,6 +23,15 @@ export interface LinkContextValue {
 
   /** Whether the link currently shows its keyboard focus ring. */
   isFocusVisible: Accessor<boolean>;
+
+  /**
+   * The press-feedback seam's computed `hitSlop` (A-003): the invisible
+   * expansion to the 44 pt touch minimum, `undefined` under pointer, while
+   * disabled or before layout. A view prop has no test read-back, so the
+   * context publishes it for the fixture probe (sheet §6); `Link.Icon`
+   * ignores it.
+   */
+  hitSlop: Accessor<number | Partial<Edges> | undefined>;
 }
 
 export const LinkContext = context<LinkContextValue | undefined>(undefined);
