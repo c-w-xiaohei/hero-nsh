@@ -2,11 +2,18 @@ import { effect, host, mount, Text, View } from "nsh";
 import type { Component, JSX, PressEvent } from "nsh";
 import {
   Button,
+  createOverlayTrigger,
   EnvironmentScope,
   Form,
+  HoverTriggerContext,
+  OverlayTriggerContext,
   PressableFeedbackContext,
 } from "@heroui/react";
-import type { PressableFeedbackContextValue } from "@heroui/react";
+import type {
+  OverlayTriggerContextValue,
+  HoverTriggerContextValue,
+  PressableFeedbackContextValue,
+} from "@heroui/react";
 import { probe } from "@scenario/probe";
 
 /*
@@ -15,21 +22,30 @@ import { probe } from "@scenario/probe";
  *
  * `host.params.case` picks the shape:
  *
- *   basic   One `Button` (testID `btn`) with a `ButtonCtxProbe` inside and a
- *           `ctx-sample` sibling. Params: `size` (sm/md/lg), `icon` ("1" =
- *           isIconOnly), `variant`, `preset` (feedbackVariant; "auto" is the
- *           default), `anim` (animation tier: true/disabled/false/
- *           disable-all/object/state-off/state-all/scale-off), `animatedstyle`
- *           ("off" = isAnimatedStyleActive={false}), `pending`="1",
- *           `disabled`="1". Probes: `events` (down/up/press sequences),
- *           `press-change` (onPressChange, its own probe so `events` keeps
- *           the down/up/press order clean), `ctx-pressed` / `ctx-state` /
- *           `ctx-env` / `ctx-origin` /
- *           `ctx-channels` (the seam channels — the only observable surface
- *           of hitSlop and the AnimatedValues, sheet §6), `layout` (root
- *           bounds — the A-001 touch-size half).
- *   form    `<Form onSubmit>` + `Button type="submit"` (testID `submit`),
- *           the `form.submit` probe (M-009).
+ *   basic     One `Button` (testID `btn`) with a `ButtonCtxProbe` inside and a
+ *             `ctx-sample` sibling. Params: `size` (sm/md/lg), `icon` ("1" =
+ *             isIconOnly), `variant`, `preset` (feedbackVariant; "auto" is the
+ *             default), `anim` (animation tier: true/disabled/false/
+ *             disable-all/object/state-off/state-all/scale-off/scale-cfg),
+ *             `animatedstyle` ("off" = isAnimatedStyleActive={false}),
+ *             `pending`="1", `disabled`="1". Probes: `events` (down/up/press
+ *             sequences), `press-change` (onPressChange, its own probe so
+ *             `events` keeps the down/up/press order clean), `ctx-pressed` /
+ *             `ctx-state` / `ctx-env` / `ctx-origin` / `ctx-channels` (the
+ *             seam channels — the only observable surface of hitSlop and the
+ *             AnimatedValues, sheet §6), `layout` (root bounds — the A-001
+ *             touch-size half).
+ *   form      `<Form onSubmit>` + `Button type="submit"` (testID `submit`),
+ *             the `form.submit` probe (M-009).
+ *   overlay   `createOverlayTrigger` + `OverlayTriggerContext.Provider`
+ *             wrapping a `Button` (testID `trigger`): `host.params.channel`
+ *             "custom" supplies `triggerPress`/`triggerLongPress`, "toggle"
+ *             supplies neither. Probes: `events` (the user callback order) and
+ *             `overlay` (the context calls the button made).
+ *   hover     `HoverTriggerContext.Provider` wrapping a `Button` (testID
+ *             `trigger`): hover/press/focus calls reported into `events`.
+ *   matrix    Every `feedbackVariant` × `animation` mount in one case so M-006
+ *             can assert "all values mount" in a single open.
  *
  * `host.params.scope` picks the `EnvironmentScope` wrapper ("" = host
  * default, "touch" = `input="touch"`), same convention as
@@ -287,12 +303,156 @@ function FormCase() {
 }
 
 /* -------------------------------------------------------------------------------------------------
+ * overlay case (M-009): `OverlayTriggerContext` — a `Button` written inside
+ * an overlay root becomes its trigger. `channel="custom"` supplies the
+ * `triggerPress`/`triggerLongPress` pair (Dropdown's `longPress` mode), while
+ * `channel="toggle"` supplies neither, so a press must call `toggle()`.
+ * -----------------------------------------------------------------------------------------------*/
+
+function OverlayCase() {
+  const reportEvent = probe("events");
+  const reportOverlay = probe("overlay");
+  const channel = String(host.params.channel ?? "custom");
+
+  const trigger = createOverlayTrigger();
+
+  const value: OverlayTriggerContextValue = {
+    ...trigger.context,
+    ...(channel === "custom"
+      ? {
+          triggerPress: (source: "keyboard" | "pointer") => {
+            reportOverlay({ kind: "triggerPress", source });
+          },
+          triggerLongPress: () => {
+            reportOverlay({ kind: "triggerLongPress" });
+          },
+        }
+      : {}),
+  };
+
+  return (
+    <OverlayTriggerContext.Provider value={value}>
+      <Button
+        testID="trigger"
+        onPress={() => reportEvent({ kind: "press" })}
+        onLongPress={() => reportEvent({ kind: "longPress" })}
+      >
+        <Text>Trigger</Text>
+      </Button>
+    </OverlayTriggerContext.Provider>
+  );
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * hover case (M-009): `HoverTriggerContext` — a `Button` inside a tooltip
+ * root consumes hover/press/focus calls. Every call lands in `events` so the
+ * test can assert the order a press and a hover produce.
+ * -----------------------------------------------------------------------------------------------*/
+
+function HoverCase() {
+  const reportEvent = probe("events");
+
+  const hover: HoverTriggerContextValue = {
+    hoverStart: () => reportEvent({ kind: "hoverStart" }),
+    hoverEnd: () => reportEvent({ kind: "hoverEnd" }),
+    focusStart: () => reportEvent({ kind: "focusStart" }),
+    focusEnd: () => reportEvent({ kind: "focusEnd" }),
+    pressStart: () => reportEvent({ kind: "pressStart" }),
+    press: () => reportEvent({ kind: "press" }),
+    registerTrigger: () => () => undefined,
+  };
+
+  return (
+    <HoverTriggerContext.Provider value={hover}>
+      <Button
+        testID="trigger"
+        onPress={() => reportEvent({ kind: "userPress" })}
+        onPressDown={() => reportEvent({ kind: "down" })}
+        onPressUp={() => reportEvent({ kind: "up" })}
+        onMouseEnter={() => reportEvent({ kind: "enter" })}
+        onMouseLeave={() => reportEvent({ kind: "leave" })}
+        onFocus={() => reportEvent({ kind: "focus" })}
+        onBlur={() => reportEvent({ kind: "blur" })}
+      >
+        <Text>Trigger</Text>
+      </Button>
+    </HoverTriggerContext.Provider>
+  );
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * matrix case (M-006): every `feedbackVariant` × `animation` combination
+ * mounts in one app so the "all values mount" half of the assertion needs
+ * only one open. Each cell carries a `ButtonCtxProbe` so the touch press
+ * channels can be sampled per preset.
+ * -----------------------------------------------------------------------------------------------*/
+
+const MATRIX_PRESETS = [
+  "auto",
+  "scale-highlight",
+  "scale-ripple",
+  "scale",
+  "none",
+] as const;
+
+const MATRIX_ANIMS = [
+  "",
+  "true",
+  "disabled",
+  "disable-all",
+  "object",
+  "state-off",
+  "state-all",
+] as const;
+
+function matrixAnimation(anim: string) {
+  switch (anim) {
+    case "true":
+      return true;
+    case "disabled":
+      return "disabled" as const;
+    case "disable-all":
+      return "disable-all" as const;
+    case "object":
+      return { scale: { value: 0.9 } };
+    case "state-off":
+      return { state: "disabled" as const };
+    case "state-all":
+      return { state: "disable-all" as const };
+    default:
+      return undefined;
+  }
+}
+
+function MatrixCase() {
+  return (
+    <>
+      {MATRIX_PRESETS.map((preset) =>
+        MATRIX_ANIMS.map((anim) => (
+          <Button
+            testID={`m-${preset}-${anim || "def"}`}
+            feedbackVariant={preset}
+            animation={matrixAnimation(anim)}
+          >
+            <ButtonCtxProbe quiet />
+            <Text>{`${preset}/${anim || "def"}`}</Text>
+          </Button>
+        )),
+      )}
+    </>
+  );
+}
+
+/* -------------------------------------------------------------------------------------------------
  * Cases table
  * -----------------------------------------------------------------------------------------------*/
 
 const cases: Record<string, Component> = {
   basic: BasicCase,
   form: FormCase,
+  overlay: OverlayCase,
+  hover: HoverCase,
+  matrix: MatrixCase,
 };
 
 function Fixture() {
