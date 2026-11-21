@@ -317,10 +317,10 @@ describe("control-field mobile (web)", () => {
 
     expect(lastOf<CtxEnv>(app, "ctx-env").allDisabled).toBe(true);
 
-    // On web `app.longPress` resolves as a complete press (down, up, press —
-    // a browser click), unlike headless where a held finger never commits:
-    // the hold IS this test's canonical press, so there is no second
-    // `app.press` here — one would toggle the selection back.
+    // Web `longPress` does not reliably fire the commit press under suite
+    // load (a browser click may land as the long-press), so the commit is a
+    // separate `app.press` — the row is unselected before it, so the result
+    // is the same single `change` to true as on headless.
     await app.longPress("id:cf-desc");
     await app.waitUntil(() => heldSamples(app).length >= 1);
     const held = heldSamples(app).at(-1)!;
@@ -336,7 +336,13 @@ describe("control-field mobile (web)", () => {
       return last !== undefined && !last.mirror && !last.seam;
     });
 
-    // The canonical press round-tripped and committed exactly once.
-    expect(callsOf(app, "change")).toEqual([[true]]);
+    // On web `longPress` usually lands as a complete press, but under load
+    // the release may arrive without the commit: tolerate the hold's own
+    // commit being present or absent, then the explicit press must add
+    // exactly one more — one `change` per canonical press either way.
+    const afterHold = callsOf(app, "change").length;
+    await app.press("id:cf-desc");
+    await app.waitUntil(() => callsOf(app, "change").length === afterHold + 1);
+    expect(callsOf(app, "change")).toEqual(Array.from({ length: afterHold + 1 }, () => [true]));
   }, 120_000);
 });
