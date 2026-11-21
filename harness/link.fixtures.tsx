@@ -19,6 +19,10 @@ import { probe } from "@scenario/probe";
  *   disabled  `isDisabled`: press and hover are refused, `enabled()` false,
  *             and the feedback seam's `hitSlop` stays undefined even under
  *             touch (M-002's `enabled=false` half).
+ *   nav       Three links side by side — absolute URL, relative path and
+ *             `#anchor` — each reporting `press`/`click` through the shared
+ *             `nav` probe, so M-005 covers both environments in two opens
+ *             instead of six.
  *
  * `host.params.scope` picks the environment ("" = host default, "touch" =
  * `EnvironmentScope input="touch"`), same convention as
@@ -32,7 +36,10 @@ import { probe } from "@scenario/probe";
  *              and its absence under pointer / disabled.
  *   onPress    the caller's press handler, recording `e.position` so the
  *              press that lands still carries a real payload (M-001).
+ *   onClick    the caller's click alias, same payload (M-001, M-005).
  *   onHover    start/end flags — the hover roundtrip the `pointer` cell keeps.
+ *   nav        the `nav` case's per-link `press`/`click` reports, args
+ *              `[testID, event]` (M-005).
  */
 
 type Scope = "" | "touch";
@@ -70,6 +77,7 @@ function SeamProbe() {
 function LinkCase() {
   const name = String(host.params.case ?? "basic");
   const reportPress = probe("onPress");
+  const reportClick = probe("onClick");
   const reportHover = probe("onHover");
 
   const href = {
@@ -86,6 +94,8 @@ function LinkCase() {
       isDisabled={name === "disabled"}
       onPress={(e) =>
         reportPress({ x: e.position.x, y: e.position.y })}
+      onClick={(e) =>
+        reportClick({ x: e.position.x, y: e.position.y })}
       onHoverStart={() => reportHover("start")}
       onHoverEnd={() => reportHover("end")}
     >
@@ -95,12 +105,40 @@ function LinkCase() {
   );
 }
 
+/**
+ * The three navigation shapes in one mount: an absolute URL reaches `openUrl`,
+ * a relative path and a `#anchor` only fire the press/click callbacks (M-005).
+ * Each link reports `[testID, "press"|"click"]` through the shared `nav` probe.
+ */
+function NavCase() {
+  const reportNav = probe("nav");
+
+  const navLink = (id: string, href: string, label: string) => (
+    <Link
+      testID={id}
+      href={href}
+      onPress={() => reportNav(id, "press")}
+      onClick={() => reportNav(id, "click")}
+    >
+      {label}
+    </Link>
+  );
+
+  return (
+    <View class="flex-col gap-2">
+      {navLink("link-nav-abs", "https://example.com/nav", "Absolute")}
+      {navLink("link-nav-rel", "./nav-docs", "Relative")}
+      {navLink("link-nav-anchor", "#nav-section", "Anchor")}
+    </View>
+  );
+}
+
 function Fixture() {
+  const name = String(host.params.case ?? "basic");
+
   return (
     <Frame>
-      <Scoped>
-        <LinkCase />
-      </Scoped>
+      <Scoped>{name === "nav" ? <NavCase /> : <LinkCase />}</Scoped>
     </Frame>
   );
 }
