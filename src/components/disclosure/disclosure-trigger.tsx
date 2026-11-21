@@ -287,6 +287,10 @@ export function DisclosureTrigger(props: DisclosureTriggerProps): JSX.Element {
   // ListGroup split). No Highlight/Ripple/Scale overlay mounts by default —
   // a caller that wants a press visual composes
   // `<PressableFeedback.Highlight/>` into the trigger's children.
+  // A-009: this context and `feedback` are sampled by the `Scoped`/`mobile`
+  // cases in `harness/disclosure.fixtures.tsx` (the dual-environment carrier).
+  // A-010: asserted by `disclosure.mobile.headless.test.tsx` /
+  // `disclosure.mobile.web.test.tsx` (M-001..M-010).
   const feedbackValue: PressableFeedbackContextValue = {
     isPressed: feedback.isPressed,
     pressed: feedback.pressed,
