@@ -2,8 +2,6 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
-import { ease } from "../../tokens/geometry";
-
 /*
  * Link variant table (HeroUI 3.2.7, packages/styles/src/components/link/
  * link.styles.ts plus the declarations of packages/styles/components/link.css).
@@ -45,7 +43,11 @@ export const linkVariants = tv({
      */
     base: [
       "relative inline-flex h-fit w-fit items-center rounded-xl font-medium text-link no-underline decoration-separator-tertiary decoration-[1.5px] underline-offset-4",
-      `cursor-pointer duration-150 ${ease.smooth}`,
+      // `ease.smooth` (`ease-[cubic-bezier(0.25,0.1,0.25,1)]`,
+      // `src/tokens/geometry.ts`) written out: a `.styles.ts` imports only
+      // `tailwind-variants` — the M2 class walker loads this file with plain
+      // Node, which cannot resolve an extensionless `.ts` import.
+      "cursor-pointer duration-150 ease-[cubic-bezier(0.25,0.1,0.25,1)]",
       "active:underline active:decoration-muted",
       "disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:no-underline",
     ].join(" "),
