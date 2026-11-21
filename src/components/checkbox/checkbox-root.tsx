@@ -24,10 +24,13 @@ import type {
   CheckboxPressHandlers,
   CheckboxToggleState,
 } from "./checkbox-context";
+import { createInput } from "../../primitives/environment";
 import {
   CheckboxContext,
   type CheckboxContextValue,
+  type CheckboxFeedbackChannels,
   CheckboxGroupContext,
+  FALLBACK_CHECKBOX_CONTEXT,
 } from "./checkbox-context";
 import { checkboxVariants, type CheckboxVariant } from "./checkbox.styles";
 import { renderChildren } from "./render-children";
@@ -503,6 +506,8 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
   );
 
   // --- Interaction state (R-010, R-014, R-016, R-023 … R-031) ----------------
+  const input = createInput();
+
   const hovered = signal(false);
   const rootHovered = signal(false);
   const pressed = signal(false);
@@ -526,6 +531,13 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
 
   const setContentRef = (node: ViewRef | undefined) => {
     contentNode = node;
+  };
+
+  // A-003: the Content's touch-gated press-feedback seam, exposed as read
+  // channels — the only observable surface of the `hitSlop` view prop.
+  const contentFeedback = signal<CheckboxFeedbackChannels | undefined>(undefined);
+  const setContentFeedback = (channels: CheckboxFeedbackChannels | undefined) => {
+    contentFeedback.set(channels);
   };
 
   const labelPressEvent = (): PressEvent => ({
@@ -783,6 +795,8 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
     errorText,
     itemClass: () => group?.itemClass(),
     setContentRef,
+    feedback: () => contentFeedback() ?? FALLBACK_CHECKBOX_CONTEXT.feedback(),
+    setContentFeedback,
     setContentPressHandlers,
     focusContentFromPointer: focusContentAsPointer,
     pressStart,
@@ -854,7 +868,7 @@ export function CheckboxRoot(props: CheckboxRootProps): JSX.Element {
 
   const classes = computed(() =>
     [
-      checkboxVariants({ variant: variant() }).base(),
+      checkboxVariants({ variant: variant(), input: input() }).base(),
       // R-042: the group's `.checkbox [data-slot="checkbox"] { mt-4 }`, handed
       // down through the group context; the first item gets it too.
       contextValue.itemClass() ?? "",

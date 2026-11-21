@@ -79,6 +79,17 @@ export const checkboxVariants = tv({
       // accent fill), so the modifier itself carries no class.
       secondary: {},
     },
+    // A-001: the `input` axis — `touch` gives the clickable row the 44 pt
+    // minimum visible height a hit target needs (the `hitSlop` half of the
+    // hit-area path lives in `createPressFeedback`, A-003). No `density`
+    // axis: row spacing and the square's size are content-driven, not a
+    // density preset's.
+    input: {
+      pointer: {},
+      touch: {
+        content: "min-h-11",
+      },
+    },
   },
   defaultVariants: {
     variant: "primary",
@@ -112,6 +123,13 @@ export const checkboxGroupVariants = tv({
       // carried to each item's Control by the group context (R-035,
       // R-038—R-040).
       secondary: "",
+    },
+    // A-001: the `input` axis on the group's own table is inert — the row's
+    // hit area belongs to each item's `checkboxVariants` — kept so every
+    // `checkbox*Variants` call site feeds the same variant arguments.
+    input: {
+      pointer: "",
+      touch: "",
     },
   },
   defaultVariants: {
