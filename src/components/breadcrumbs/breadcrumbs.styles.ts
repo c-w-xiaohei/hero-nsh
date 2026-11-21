@@ -17,9 +17,13 @@ import { tv } from "tailwind-variants/lite";
  * - `input` owns interaction usability only (adapt sheet A-001): the link's
  *   `hover:underline` is a hover dependency, so it lives in the `pointer`
  *   cell and a touch environment resolves it away — web's sticky hover would
- *   otherwise keep it after a press. The `touch` cell stays empty: the
- *   visible hit size does not grow here because the navigation item's hit
- *   area is the inner Link's `hitSlop`, which belongs to the link unit.
+ *   otherwise keep it after a press. The `touch` cell also writes
+ *   `hover:no-underline`: the inner Link's own base still carries
+ *   `hover:underline`, and on web a press leaves a sticky hover the class
+ *   keeps honoring — the slot resolves after the base, so the cell blocks
+ *   the leak until the link unit suppresses its own hover (§5). It adds no
+ *   visible size: the navigation item's hit area is the inner Link's
+ *   `hitSlop`, which belongs to the link unit.
  * - `density` owns visual density (adapt sheet A-002): the gap / separator
  *   literals move out of the base slots into `density` cells so a `compact`
  *   preset tightens them one step. `src/tokens/density.ts` registers only
@@ -80,7 +84,12 @@ export const breadcrumbsVariants = tv({
       pointer: {
         link: "hover:underline",
       },
-      touch: {},
+      // `hover:no-underline` overrides the inner Link base's `hover:underline`
+      // (variant order is equal, this slot's class is later): web's sticky
+      // hover would otherwise keep the label underlined after a touch press.
+      touch: {
+        link: "hover:no-underline",
+      },
     },
     // A-002: the `density` axis carries the spacing/size literals of the
     // base, item and separator slots. `default` is the current value;
