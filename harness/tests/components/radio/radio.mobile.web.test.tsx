@@ -4,7 +4,7 @@ import { callsOf } from "../../helpers/calls";
 
 /*
  * Web-target mobile assertions for the radio adapt unit: the same M-001…
- * M-007 / M-009 / M-010 assertion set as the headless file, minus M-008 —
+ * M-007 / M-009 / M-010 / M-011 assertion set as the headless file, minus M-008 —
  * `open({platform:"ios"})` host derivation is headless-only (`ERR_NSH_TEST_
  * UNSUPPORTED` on web).
  *
@@ -250,5 +250,29 @@ describe("radio mobile (web)", () => {
     await app.waitUntil(() => callsOf(app, "ctx-env").length > 0);
     expect(app.shows("id:row")).toBe(true);
     expect(lastOf<CtxEnv>(app, "ctx-env").enabled).toBe(true);
+  }, 120_000);
+
+  // adapt-sheets/radio.md M-011 (A-007): the F波及 verdict recorded as a
+  // test — an item registers exactly once through the unchanged
+  // `RadioGroupContext.registerItem` path (no collection data, no second
+  // owner): two different items commit one `onChange` apiece and the
+  // selection marker migrates.
+  test("M-011 the F verdict holds: items share the unchanged group collection", async () => {
+    const app = await open("../../../radio.fixtures.tsx", {
+      platform: "web",
+      width: 1024,
+      height: 768,
+      host: { params: { case: "pets" } },
+    });
+
+    await app.press("role:radio[Cats]");
+    await app.waitUntil(() => callsOf(app, "onChange").length === 1);
+    expect(app.shows("Cats:selected")).toBe(true);
+
+    await app.press("role:radio[Dragons]");
+    await app.waitUntil(() => callsOf(app, "onChange").length === 2);
+    expect(callsOf(app, "onChange")).toEqual([["cats"], ["dragons"]]);
+    expect(app.shows("Dragons:selected")).toBe(true);
+    expect(app.shows("Cats:selected")).toBe(false);
   }, 120_000);
 });

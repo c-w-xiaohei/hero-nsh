@@ -4,9 +4,9 @@ import { callsOf } from "../../helpers/calls";
 
 /*
  * Headless mobile assertions for the radio adapt unit, one test per row of
- * adapt-sheets/radio.md §4 (M-001…M-008), plus the baseline sample (M-009)
- * and the export probe (M-010). M-011 records the F-波及 verdict on the
- * sheet, not in a test.
+ * adapt-sheets/radio.md §4 (M-001…M-008), plus the baseline sample (M-009),
+ * the export probe (M-010) and the F-波及 verdict recorded as a test
+ * (M-011 — M4 requires every §4 row as an executed test).
  *
  * The fixture is `harness/radio.fixtures.tsx`, opened by `host.params`:
  * `case` ("mobile" / "control-field"), `scope` ("" or "touch" through
@@ -301,5 +301,32 @@ describe("radio mobile (headless)", () => {
     await app.waitUntil(() => callsOf(app, "ctx-env").length > 0);
     expect(app.shows("id:row")).toBe(true);
     expect(lastOf<CtxEnv>(app, "ctx-env").enabled).toBe(true);
+  }, 120_000);
+
+  // adapt-sheets/radio.md M-011 (A-007): the F波及 verdict recorded as a
+  // test — this unit is NOT impacted by the collection/lifecycle seam: an
+  // item registers exactly once through the unchanged
+  // `RadioGroupContext.registerItem` path (no mobile collection data, no
+  // second owner). The `pets` case demonstrates it end to end: two
+  // different items commit one `onChange` apiece with their own values and
+  // the selection marker migrates — a duplicated registration would double
+  // a commit, a missing one would starve it.
+  test("M-011 the F verdict holds: items share the unchanged group collection", async () => {
+    const app = await open("../../../radio.fixtures.tsx", {
+      platform: "windows",
+      width: 1024,
+      height: 768,
+      host: { params: { case: "pets" } },
+    });
+
+    await app.press("role:radio[Cats]");
+    await app.waitUntil(() => callsOf(app, "onChange").length === 1);
+    expect(app.shows("Cats:selected")).toBe(true);
+
+    await app.press("role:radio[Dragons]");
+    await app.waitUntil(() => callsOf(app, "onChange").length === 2);
+    expect(callsOf(app, "onChange")).toEqual([["cats"], ["dragons"]]);
+    expect(app.shows("Dragons:selected")).toBe(true);
+    expect(app.shows("Cats:selected")).toBe(false);
   }, 120_000);
 });
