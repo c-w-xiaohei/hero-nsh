@@ -17,6 +17,8 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { FieldsetContext } from "../fieldset/context";
 import { renderChildren } from "./children";
 import { CloseIcon } from "./close-icon";
@@ -53,7 +55,9 @@ export interface CloseButtonRenderProps {
  * real NSH counterpart are mapped by the component body.
  */
 export interface CloseButtonRootProps
-  extends CloseButtonVariants,
+  // A-001: the `input` axis feeds `closeButtonVariants` internally; it is not
+  // a public variant prop (the caller-facing dimension stays `variant` only).
+  extends Omit<CloseButtonVariants, "input">,
     AriaProps,
     DataProps,
     GlobalDomProps,
@@ -213,6 +217,21 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
   const isPending = () => props.isPending === true;
   const isBlocked = () => isDisabled() || isPending();
 
+  // A-001/A-002: the `input` axis of the surrounding environment, feeding the
+  // tv() table below and gating the press-feedback seam.
+  const input = createInput();
+
+  // A-002: `createPressFeedback` is the `hitSlop` half of the hit-area path —
+  // the Native wrapper's `hitSlop={12}` expressed as a seam. `enabled` is
+  // touch-only and closes while blocked, so under the default pointer
+  // environment `hitSlop()` answers `undefined` and the press channels stay
+  // still. `scale`/`highlightOpacity` are deliberately not bound: the press
+  // look keeps the variant's `active:scale-[0.93]`, the same `active:` family
+  // Button's preset uses (action "反馈复用 Button"; adapt sheet A-002).
+  const feedback = createPressFeedback({
+    enabled: () => input() === "touch" && !isBlocked(),
+  });
+
   const variant = computed(() => props.variant ?? "default");
 
   const renderProps: CloseButtonRenderProps = {
@@ -233,7 +252,9 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
   // R-001 … R-004, R-012 … R-015: the variant table, then the caller's classes,
   // which win by coming later (D13).
   const classes = computed(() =>
-    [closeButtonVariants({ variant: variant() }), resolvedClassName()]
+    // A-001: `input` is a variant argument like `variant`, read from the
+    // environment — never a prop.
+    [closeButtonVariants({ variant: variant(), input: input() }), resolvedClassName()]
       .filter((part): part is string => typeof part === "string" && part.length > 0)
       .join(" "),
   );
@@ -276,6 +297,10 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
   };
 
   const handlePressDown = (event: PressEvent) => {
+    // A-002: the seam hears every press down; its own `enabled` gate decides
+    // whether it records. Under pointer or while blocked this is a no-op.
+    feedback.pressDown(event);
+
     if (isBlocked()) {
       return;
     }
@@ -292,6 +317,11 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
   // with the pressed state, then `onPress` / `onClick` on the same release
   // (`handlePress` runs after this host event).
   const handlePressUp = (event: PressEvent) => {
+    // A-002: unconditional — `pressUp` clears the seam's press origin on
+    // every release and cancel alike, so a press that started before the
+    // button became blocked cannot leave it set.
+    feedback.pressUp(event);
+
     const blocked = isBlocked();
 
     if (!blocked) {
@@ -412,7 +442,7 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
       role={toAccessibilityRole(props.role, "button")}
       disabled={isDisabled()}
       focusable={props.excludeFromTabOrder === true ? false : undefined}
-      hitSlop={props.hitSlop}
+      hitSlop={props.hitSlop ?? feedback.hitSlop()}
       accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel ?? "Close"}
       accessibilityState={accessibilityState()}
       accessibilityElementsHidden={props["aria-hidden"] ?? props.accessibilityElementsHidden}
@@ -432,7 +462,12 @@ export function CloseButtonRoot(props: CloseButtonRootProps) {
       onContextMenu={props.onContextMenu}
       onFocus={handleFocus}
       onBlur={handleBlur}
-      onLayout={props.onLayout}
+      onLayout={(e) => {
+        // A-002: the measured bounds feed `hitSlop()`; the caller's
+        // `onLayout` still hears the event.
+        feedback.layout(e);
+        props.onLayout?.(e);
+      }}
     >
       {renderContent()}
     </View>
