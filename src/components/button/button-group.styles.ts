@@ -2,7 +2,12 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
-import { ease } from "../../tokens/geometry";
+/*
+ * `ease-smooth` = `ease.smooth` of `src/tokens/geometry.ts`, inlined — the
+ * class walker reads a `.styles.ts` as a plain ESM module and Node cannot
+ * resolve the extensionless relative import there.
+ */
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
 
 /*
  * ButtonGroup variant table (HeroUI 3.2.7,
@@ -17,7 +22,7 @@ export const buttonGroupVariants = tv({
     // orientation rule below: a border without a color is drawn in the
     // element's text color, which is what currentColor asked for.
     separator:
-      `absolute rounded-sm opacity-15 pointer-events-none transition-opacity duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `absolute rounded-sm opacity-15 pointer-events-none transition-opacity duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
   },
   variants: {
     fullWidth: {

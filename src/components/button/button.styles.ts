@@ -2,7 +2,14 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
-import { ease } from "../../tokens/geometry";
+/*
+ * `ease-smooth` = `ease.smooth` of `src/tokens/geometry.ts`, inlined.
+ * The geometry module is the shared home for these curves, but a `.styles.ts`
+ * file is also read by the class walker as a plain ESM module, and Node
+ * cannot resolve the extensionless relative import there — the literal keeps
+ * this file importable in both places while producing the identical class.
+ */
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
 
 /*
  * Button variant table (HeroUI 3.2.7, packages/styles/components/button.css).
@@ -18,7 +25,7 @@ export const buttonVariants = tv({
   // AnimatedValue owns the transform and two writers may not share it.
   base: [
     "relative inline-flex h-10 w-fit shrink origin-center items-center justify-center gap-2 overflow-hidden rounded-3xl px-4 text-sm font-medium whitespace-nowrap outline-none select-none md:h-9",
-    `duration-[250ms] ${ease.smooth} cursor-pointer bg-transparent`,
+    `duration-[250ms] ${EASE_SMOOTH} cursor-pointer bg-transparent`,
     "disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none",
   ].join(" "),
   variants: {
