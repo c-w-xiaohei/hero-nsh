@@ -20,7 +20,7 @@ import {
 } from "./control-field-context";
 import { controlFieldVariants } from "./control-field.styles";
 
-/** The default control a `ControlField.Indicator` mounts for each variant. */
+/** The default control a `ControlField.Indicator` mounts for each variant (sheet A-003). */
 export type ControlFieldIndicatorVariant = "checkbox" | "radio" | "switch";
 
 /**

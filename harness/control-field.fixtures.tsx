@@ -16,7 +16,7 @@ import { probe } from "@scenario/probe";
 
 /*
  * NSH-only fixture for the e-parts ControlField mechanism unit
- * (adapt-sheets/e-parts.md §2 A-001…A-005, §4 M-001…M-011, M-036).
+ * (sheet A-016: this fixture; adapt-sheets/e-parts.md §2 A-001…A-005, §4 M-001…M-011, M-036).
  *
  * `host.params.case` picks the shape:
  *

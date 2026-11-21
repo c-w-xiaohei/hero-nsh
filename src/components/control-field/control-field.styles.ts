@@ -11,10 +11,10 @@ import { tv } from "tailwind-variants";
  * the minimum hit size; there is no `density` axis here because the row's
  * spacing is content-driven, not a density preset's).
  *
- * `touch` adds `min-h-11`: the visible row is the press target (the
- * `hitSlop` half of the hit-area path lives in `createPressFeedback`, which
- * can only expand a target the layout already gave a size — a one-line row
- * would otherwise sit under the 44 pt minimum).
+ * `touch` adds `min-h-11` (sheet A-004): the visible row is the press target
+ * (the `hitSlop` half of the hit-area path lives in `createPressFeedback`,
+ * which can only expand a target the layout already gave a size — a one-line
+ * row would otherwise sit under the 44 pt minimum).
  */
 export const controlFieldVariants = tv({
   slots: {

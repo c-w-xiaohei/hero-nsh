@@ -6,9 +6,9 @@ import { ControlFieldRoot, type ControlFieldRootProps } from "./control-field";
  * -----------------------------------------------------------------------------------------------*/
 
 /**
- * `ControlField` is `Object.assign(ControlFieldRoot, { Root, Indicator })`:
- * the pressable settings row plus the control slot that mounts a default
- * checkbox / radio / switch under the row's state.
+ * `ControlField` is `Object.assign(ControlFieldRoot, { Root, Indicator })`
+ * (sheet A-005): the pressable settings row plus the control slot that mounts
+ * a default checkbox / radio / switch under the row's state.
  */
 export const ControlField = Object.assign(ControlFieldRoot, {
   Root: ControlFieldRoot,

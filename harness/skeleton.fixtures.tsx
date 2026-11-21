@@ -6,7 +6,7 @@ import { probe } from "@scenario/probe";
 
 /*
  * NSH-only fixture for the e-parts Skeleton / SkeletonGroup mechanism unit
- * (adapt-sheets/e-parts.md §2 A-010…A-012, §4 M-019…M-026).
+ * (sheet A-016: this fixture; adapt-sheets/e-parts.md §2 A-010…A-012, §4 M-019…M-026).
  *
  * `host.params.case` picks the shape:
  *

@@ -4,7 +4,7 @@ import { callsOf } from "../../helpers/calls";
 
 /*
  * Headless mobile assertions for the e-parts ControlField mechanism unit,
- * one test per row of adapt-sheets/e-parts.md §4 (M-001…M-011, M-033…M-036),
+ * one test per row of (sheet A-017) adapt-sheets/e-parts.md §4 (M-001…M-011, M-033…M-036),
  * plus the headless-only halves — `open({platform:"ios"})` host derivation
  * (M-009) and `app.drag` press cancellation (M-010).
  *

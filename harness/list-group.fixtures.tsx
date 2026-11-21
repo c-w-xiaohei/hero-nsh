@@ -11,7 +11,7 @@ import { probe } from "@scenario/probe";
 
 /*
  * NSH-only fixture for the e-parts ListGroup mechanism unit
- * (adapt-sheets/e-parts.md §2 A-006…A-009, §4 M-012…M-018).
+ * (sheet A-016: this fixture; adapt-sheets/e-parts.md §2 A-006…A-009, §4 M-012…M-018).
  *
  * `host.params.case` picks the shape:
  *

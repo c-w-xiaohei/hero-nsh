@@ -4,7 +4,7 @@ import { callsOf } from "../../helpers/calls";
 
 /*
  * Headless mobile assertions for the e-parts Skeleton / SkeletonGroup
- * mechanism unit, one test per row of adapt-sheets/e-parts.md §4
+ * mechanism unit, one test per row of (sheet A-017) adapt-sheets/e-parts.md §4
  * (M-019…M-026, M-033, M-034). There are no headless-only rows for this
  * unit (no press paths, no platform derivation), so this file and the web
  * twin carry the same assertions — the sheet's dual-target replay.

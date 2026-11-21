@@ -24,9 +24,9 @@ export type Skeleton = {
 };
 
 /**
- * `SkeletonGroup` is `Object.assign(SkeletonGroupRoot, { Root, Item })`:
- * the shared-defaults provider and the item that inherits them
- * (`skeleton-group.tsx:88-92`).
+ * `SkeletonGroup` is `Object.assign(SkeletonGroupRoot, { Root, Item })`
+ * (sheet A-012): the shared-defaults provider and the item that inherits
+ * them (`skeleton-group.tsx:88-92`).
  */
 export const SkeletonGroup = Object.assign(SkeletonGroupRoot, {
   Root: SkeletonGroupRoot,

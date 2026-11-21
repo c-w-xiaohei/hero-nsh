@@ -3,8 +3,8 @@ import type { App, OpenOptions } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
- * Headless mobile assertions for the e-parts ListGroup mechanism unit, one
- * test per row of adapt-sheets/e-parts.md §4 (M-012…M-018, M-033, M-034),
+ * Headless mobile assertions for the e-parts ListGroup mechanism unit (sheet
+ * A-017), one test per row of adapt-sheets/e-parts.md §4 (M-012…M-018, M-033, M-034),
  * plus the headless-only halves — `open({platform:"ios"})` host derivation
  * and `app.drag` press cancellation (M-017).
  *

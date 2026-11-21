@@ -23,10 +23,11 @@ import {
 
 /**
  * `ListGroup` is `Object.assign(ListGroupRoot, {Item, ItemPrefix, ItemContent,
- * ItemTitle, ItemDescription, ItemSuffix})`: the Surface container plus the
- * pressable row and its five slots (upstream `CompoundListGroup`,
- * `list-group.tsx:198-211`). No collection, no `selectionMode` — it is the
- * navigation/action row set of the role boundary table.
+ * ItemTitle, ItemDescription, ItemSuffix})` (sheet A-009): the Surface
+ * container plus the pressable row and its five slots (upstream
+ * `CompoundListGroup`, `list-group.tsx:198-211`). No collection, no
+ * `selectionMode` — it is the navigation/action row set of the role boundary
+ * table.
  */
 export const ListGroup = Object.assign(ListGroupRoot, {
   Root: ListGroupRoot,

@@ -12,7 +12,7 @@ import { tv } from "tailwind-variants";
  * 44 pt minimum visible height the hit-area path requires (the `hitSlop`
  * half lives in `createPressFeedback`).
  *
- * `flex-1` on `itemContent` follows the upstream `flex: 1`; NSH's `flex-1`
+ * (sheet A-008). `flex-1` on `itemContent` follows the upstream `flex: 1`; NSH's `flex-1`
  * is `1 1 0` against Tailwind's `1 1 0%`, which collapses only when the
  * content must drive the row's width — a settings row fills the surface, so
  * the zero basis is the upstream behavior. `rtl:-scale-x-100` on the

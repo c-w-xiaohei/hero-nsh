@@ -12,9 +12,10 @@ import {
 import { listGroupVariants } from "./list-group.styles";
 
 /**
- * The props of `ListGroup` / `ListGroupRoot`: upstream's `ListGroupRootProps`
- * (`list-group.types.ts:8-22`) — `children`, `variant` forwarded to the
- * `Surface` container, `className`, `style` — on NSH's surface props.
+ * The props of `ListGroup` / `ListGroupRoot` (sheet A-006): upstream's
+ * `ListGroupRootProps` (`list-group.types.ts:8-22`) — `children`, `variant`
+ * forwarded to the `Surface` container, `className`, `style` — on NSH's
+ * surface props.
  */
 export interface ListGroupRootProps extends SurfaceRootProps {}
 

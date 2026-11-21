@@ -25,7 +25,8 @@ export interface ListGroupIconProps {
 }
 
 /* -------------------------------------------------------------------------------------------------
- * Parts
+ * Parts (sheet A-007: ItemPrefix / ItemContent / ItemTitle / ItemDescription
+ * and the ItemSuffix chevron default)
  * -----------------------------------------------------------------------------------------------*/
 
 /** `ListGroup.ItemPrefix`: the leading slot (`list-group.tsx:68-78`), a plain `View`. */

@@ -5,9 +5,9 @@ import type { SelectionValue } from "@heroui/react";
 import { probe } from "@scenario/probe";
 
 /*
- * NSH-only fixture for the e-parts TagGroup mechanism unit — the `TagGroupItem`
- * compound and its convenience parts (adapt-sheets/e-parts.md §2 A-013…A-015,
- * §4 M-027…M-032).
+ * NSH-only fixture for the e-parts TagGroup mechanism unit (sheet A-016) — the
+ * `TagGroupItem` compound and its convenience parts (adapt-sheets/e-parts.md §2
+ * A-013…A-015, §4 M-027…M-032).
  *
  * `host.params.case` picks the shape:
  *

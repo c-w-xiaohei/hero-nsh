@@ -4,7 +4,7 @@ import { callsOf } from "../../helpers/calls";
 
 /*
  * Headless mobile assertions for the e-parts TagGroup mechanism unit — the
- * `TagGroupItem` compound and its convenience parts — one test per row of
+ * `TagGroupItem` compound and its convenience parts — one test per row of (sheet A-017)
  * adapt-sheets/e-parts.md §4 (M-027…M-032, M-033, M-034). This unit has no
  * headless-only rows (Tag's press model is environment-free), so this file
  * and the web twin carry the same assertions.
@@ -185,5 +185,25 @@ describe("tag-group mobile (headless)", () => {
       );
       expect(callsOf(app, "selectionChange")).toEqual([[["news"]]]);
     }
+  }, 120_000);
+
+  // adapt-sheets/e-parts.md M-035 (A-018): the F波及 verdict recorded as a
+  // test — this unit is NOT impacted by the F (collection/lifecycle) seam:
+  // `TagGroupItem` is `TagRoot`, so its registration, selection shape and
+  // removal all travel the unchanged `TagGroupContext.register` path, which
+  // the mixed plain-Tag/TagGroupItem list below demonstrates end to end.
+  test("M-035 the F verdict holds: TagGroupItem shares the tag collection unchanged", async () => {
+    const app = await openTags("plain");
+
+    // One selectionManager owns both rows: `selectionChange` reports the same
+    // key-set shape for a plain `Tag` and for a `TagGroupItem`, proving the
+    // item registers through the existing collection — no second owner.
+    await app.press("role:row[One]");
+    await app.waitUntil(() => callsOf(app, "selectionChange").length === 1);
+    expect(callsOf(app, "selectionChange")).toEqual([[["one"]]]);
+
+    await app.press("role:row[Two]");
+    await app.waitUntil(() => callsOf(app, "selectionChange").length === 2);
+    expect(callsOf(app, "selectionChange").at(-1)?.[0]).toEqual(["two"]);
   }, 120_000);
 });

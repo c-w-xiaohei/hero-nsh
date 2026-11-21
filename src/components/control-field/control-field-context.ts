@@ -14,7 +14,9 @@ import {
 } from "../switch/switch-context";
 
 /* -------------------------------------------------------------------------------------------------
- * ControlField context
+ * ControlField context (sheet A-001: the context value plus the three
+ * control-context adapters that inject the row's state into the default
+ * checkbox / radio-group / switch pieces)
  * -----------------------------------------------------------------------------------------------*/
 
 /**

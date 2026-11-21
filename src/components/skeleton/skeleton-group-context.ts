@@ -10,10 +10,11 @@ import type { SkeletonVariants } from "./skeleton.styles";
  * `variant`/`animationType` and `animation`, as accessors. An item's own prop
  * wins over each member — context is the default, not the owner.
  *
- * Upstream also shares `progress`/`componentWidth`/`screenWidth` so every
- * item's shimmer sweeps together; this port deliberately does not share an
- * animation clock (action-list §3.4: the group's value is shared defaults and
- * whole-group gating), so the context carries only the prop defaults.
+ * (sheet A-011.) Upstream also shares `progress`/`componentWidth`/`screenWidth`
+ * so every item's shimmer sweeps together; this port deliberately does not
+ * share an animation clock (action-list §3.4: the group's value is shared
+ * defaults and whole-group gating), so the context carries only the prop
+ * defaults.
  */
 export interface SkeletonGroupContextValue {
   isLoading: Accessor<boolean | undefined>;
