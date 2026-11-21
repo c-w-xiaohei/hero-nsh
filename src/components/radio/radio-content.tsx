@@ -1,5 +1,6 @@
 import type {
   AccessibilityState,
+  Bounds,
   JSX,
   MouseEvent as NshMouseEvent,
   PressEvent,
@@ -11,6 +12,7 @@ import type {
 import { cleanup, computed, split, untracked, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
 import { DescriptionContext } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
 import {
@@ -132,6 +134,11 @@ export function RadioContent(props: RadioContentProps): JSX.Element {
     "onHoverStart",
     "onHoverEnd",
     "onHoverChange",
+    "onLayout",
+    // A-002: `hitSlop` is a view prop tv() cannot produce — only the seam's
+    // value reaches the view; a caller's own value is honoured but is not a
+    // prop this component advertises.
+    "hitSlop",
     "accessibilityLabel",
     "accessibilityHint",
     "accessibilityState",
@@ -147,6 +154,11 @@ export function RadioContent(props: RadioContentProps): JSX.Element {
   ] as const);
 
   const ctx = RadioItemContext() ?? FALLBACK_RADIO_ITEM_CONTEXT;
+
+  // A-002: the environment seam — gates the touch feedback channels and the
+  // sticky-hover suppression; read once in the body (context reads are
+  // body-only in NSH).
+  const input = createInput();
 
   // R-006 / R-008 are scoped to the field root's *direct* Description /
   // FieldError children (`& > [data-slot="description"]` upstream). A
@@ -287,7 +299,9 @@ export function RadioContent(props: RadioContentProps): JSX.Element {
 
   const classes = computed(() =>
     [
-      radioVariants().content(),
+      // A-001: the `input` axis — `touch` gives the row the 44 pt minimum hit
+      // height (`min-h-11` in the `content` slot).
+      radioVariants({ input: input() }).content(),
       // R-009: `cursor-[inherit]` in the stylesheet has no NSH equivalent; the
       // part names the cursor itself, and the disabled state keeps the root's
       // `not-allowed`.
@@ -311,6 +325,10 @@ export function RadioContent(props: RadioContentProps): JSX.Element {
   };
 
   const handlePressDown = (event: PressEvent) => {
+    // A-002: the seam's canonical channel — internally gated on `enabled`, so
+    // under the default pointer environment it records nothing.
+    ctx.feedbackDriver.pressDown(event);
+
     // A read-only press dispatches no value change upstream but still reports
     // its press events; a disabled one reports none at all. The root gates the
     // callbacks; the held signal starts here so the Control can paint.
@@ -326,6 +344,10 @@ export function RadioContent(props: RadioContentProps): JSX.Element {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-002: release and cancel share the canonical path (`onPressUp` covers
+    // both in NSH); the seam clears `pressOrigin` either way.
+    ctx.feedbackDriver.pressUp(event);
+
     ctx.pressUp(event);
     // `onPressUp` fires before `onPress`; the press is over even when the
     // release does not become a press (a release outside).
@@ -360,6 +382,13 @@ export function RadioContent(props: RadioContentProps): JSX.Element {
   };
 
   const handleMouseEnter = (event: NshMouseEvent) => {
+    // A-004: sticky hover is real on web — a touch press leaves `hover:` on.
+    // Under touch the face is not a hover target at all: `isHovered` never
+    // sets and the hover callbacks never fire.
+    if (input() === "touch") {
+      return;
+    }
+
     local.onMouseEnter?.(event);
 
     // React Aria's `useHover({ isDisabled: isDisabled || isReadOnly })`:
@@ -374,6 +403,12 @@ export function RadioContent(props: RadioContentProps): JSX.Element {
   };
 
   const handleMouseLeave = (event: NshMouseEvent) => {
+    // A-004: same suppression — under touch no pointer left the face, so no
+    // leave callback and no hover teardown is owed.
+    if (input() === "touch") {
+      return;
+    }
+
     local.onMouseLeave?.(event);
 
     // NSH has no press-cancel event: a press that leaves the face ends here.
@@ -432,6 +467,13 @@ export function RadioContent(props: RadioContentProps): JSX.Element {
     local.ref?.(node);
   };
 
+  // A-002: the seam's layout channel keeps `bounds`/`hitSlop` honest; the
+  // caller's `onLayout` still runs.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    ctx.feedbackDriver.layout(event);
+    local.onLayout?.(event);
+  };
+
   // A Content unmounting while focused must leave the group's focus-within set
   // and the root's focus state, or the group would stay "focused" for ever.
   cleanup(() => {
@@ -457,6 +499,9 @@ export function RadioContent(props: RadioContentProps): JSX.Element {
       accessibilityElementsHidden={local.accessibilityElementsHidden}
       class={classes()}
       style={resolvedStyle()}
+      // A-002: the invisible-hit-area path — `undefined` under the default
+      // pointer environment or once the row already meets the 44 pt target.
+      hitSlop={local.hitSlop ?? ctx.feedback.hitSlop()}
       onPressDown={handlePressDown}
       onPressUp={handlePressUp}
       onPress={handlePress}
@@ -464,6 +509,7 @@ export function RadioContent(props: RadioContentProps): JSX.Element {
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
       onBlur={handleBlur}
+      onLayout={handleLayout}
     >
       <DescriptionContext.Provider value={nestedDescriptionState}>
         <FieldErrorContext.Provider value={nestedFieldErrorState}>

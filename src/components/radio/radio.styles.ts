@@ -57,6 +57,19 @@ export const radioVariants = tv({
     // justify-center; pointer-events: none`.
     indicator: "absolute inset-0 flex items-center justify-center pointer-events-none",
   },
+  variants: {
+    // A-001: the `input` axis — the whole row is the press target, so `touch`
+    // gives the `content` slot the 44 pt minimum hit height (`min-h-11`; the
+    // hitSlop half of the path lives in `createPressFeedback`). The 16 pt
+    // `control`/`indicator` circle and dot are decorative pieces of that row:
+    // they are not grown into their own touch targets.
+    input: {
+      pointer: {},
+      touch: {
+        content: "min-h-11",
+      },
+    },
+  },
 });
 
 export type RadioVariants = VariantProps<typeof radioVariants>;

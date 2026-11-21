@@ -13,6 +13,8 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { DescriptionContext } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
 import { FieldContext } from "../label/context";
@@ -240,6 +242,15 @@ export function RadioRoot(props: RadioRootProps): JSX.Element {
   const isInvalid = computed(() => group?.isInvalid() === true);
 
   const isSelected = computed(() => group?.state.selectedValue() === value());
+
+  // A-002 / A-003: the hit-area path and the canonical feedback channels. The
+  // gate reads the environment seam, never `platform`; a disabled item keeps
+  // every channel at rest (the same split `control-field` uses). The Content
+  // binds no `scale` — the existing `scale-95` press of the Control is already
+  // the visual feedback.
+  const input = createInput();
+  const feedbackEnabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
 
   // RAC gives the item `tabIndex=0` only while it is the group's tab stop, and
   // `-1` when disabled.
@@ -534,6 +545,23 @@ export function RadioRoot(props: RadioRootProps): JSX.Element {
     isFocused: focused,
     isFocusVisible,
     focusable,
+    // A-003: the seam's read half — the Content's `View` keeps the writers
+    // (feedbackDriver below), consumers only observe the channels.
+    feedback: {
+      isPressed: feedback.isPressed,
+      pressed: feedback.pressed,
+      scale: feedback.scale,
+      highlightOpacity: feedback.highlightOpacity,
+      hitSlop: feedback.hitSlop,
+      pressOrigin: feedback.pressOrigin,
+      bounds: feedback.bounds,
+      enabled: feedbackEnabled,
+    },
+    feedbackDriver: {
+      pressDown: feedback.pressDown,
+      pressUp: feedback.pressUp,
+      layout: feedback.layout,
+    },
     // `aria-label` is the HeroUI name; `accessibilityLabel` is its NSH alias,
     // and both name the clickable face rather than the role-less field root.
     ariaLabel: () => local["aria-label"] ?? local.accessibilityLabel,
