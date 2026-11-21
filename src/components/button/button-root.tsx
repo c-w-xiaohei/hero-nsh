@@ -121,6 +121,8 @@ export interface ButtonRootProps
   onPressEnd?: (e: PressEvent) => void;
   onPressChange?: (isPressed: boolean) => void;
   onPressDown?: (e: PressEvent) => void;
+  /** Milliseconds before a press becomes a long press (View's own prop; upstream forwards it to the pressable through `restProps`). */
+  delayLongPress?: number;
   onLongPress?: (e: PressEvent) => void;
   onLongPressStart?: (e: PressEvent) => void;
   onLongPressEnd?: (e: PressEvent) => void;
@@ -700,42 +702,45 @@ export function ButtonRoot(props: ButtonRootProps) {
     return renderChildren(content as JSX.Element);
   };
   return (
-    <View
-      ref={handleRef}
-      testID={props.testID}
-      nativeID={props.id ?? props.nativeID}
-      tooltip={props.tooltip}
-      role={toAccessibilityRole(props.role, "button")}
-      disabled={isDisabled()}
-      focusable={props.excludeFromTabOrder === true ? false : undefined}
-      accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel}
-      accessibilityState={accessibilityState()}
-      accessibilityElementsHidden={props["aria-hidden"] ?? props.accessibilityElementsHidden}
-      class={classes()}
-      // R-006 focus ring; R-008 pending pointer blocking.
-      classList={{
-        "ring-2 ring-focus ring-offset-2 ring-offset-background": isFocusVisible(),
-        "pointer-events-none": isPending(),
-      }}
-      style={rootStyle()}
-      // A-004: the seam's computed hitSlop is the only writer of this view
-      // prop — components never set a literal and never take a hitSlop prop.
-      hitSlop={feedback.hitSlop()}
-      onPress={handlePress}
-      onPressDown={handlePressDown}
-      onPressUp={handlePressUp}
-      onLongPress={handleLongPress}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      onLayout={handleLayout}
-    >
-      {/* A-005: children read `PressableFeedbackContext` — `props.children`
-          is still read exactly once, inside the provider. The overlays are
-          absolute `pointerEvents: none` layers, so they neither lay out nor
-          take presses. */}
-      <PressableFeedbackContext.Provider value={feedbackContextValue}>
+    <PressableFeedbackContext.Provider value={feedbackContextValue}>
+      <View
+        ref={handleRef}
+        testID={props.testID}
+        nativeID={props.id ?? props.nativeID}
+        tooltip={props.tooltip}
+        role={toAccessibilityRole(props.role, "button")}
+        disabled={isDisabled()}
+        focusable={props.excludeFromTabOrder === true ? false : undefined}
+        accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel}
+        accessibilityState={accessibilityState()}
+        accessibilityElementsHidden={props["aria-hidden"] ?? props.accessibilityElementsHidden}
+        class={classes()}
+        // R-006 focus ring; R-008 pending pointer blocking.
+        classList={{
+          "ring-2 ring-focus ring-offset-2 ring-offset-background": isFocusVisible(),
+          "pointer-events-none": isPending(),
+        }}
+        style={rootStyle()}
+        // A-004: the seam's computed hitSlop is the only writer of this view
+        // prop — components never set a literal and never take a hitSlop prop.
+        hitSlop={feedback.hitSlop()}
+        onPress={handlePress}
+        onPressDown={handlePressDown}
+        onPressUp={handlePressUp}
+        delayLongPress={props.delayLongPress}
+        onLongPress={handleLongPress}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onLayout={handleLayout}
+      >
+        {/* A-005: children read `PressableFeedbackContext` — `props.children`
+            is still read exactly once, inside the provider. The overlays are
+            absolute `pointerEvents: none` layers, so they neither lay out nor
+            take presses. The Provider wraps the root View outright (the same
+            shape `PressableFeedback` uses): a Provider nested inside the root
+            View leaves children outside its scope on the web host. */}
         <If when={preset() === "scale-highlight" && highlightAnimation !== undefined}>
           <PressableFeedback.Highlight animation={highlightAnimation} />
         </If>
@@ -743,7 +748,7 @@ export function ButtonRoot(props: ButtonRootProps) {
           <PressableFeedback.Ripple animation={rippleAnimation} />
         </If>
         {renderContent(props.children)}
-      </PressableFeedbackContext.Provider>
-    </View>
+      </View>
+    </PressableFeedbackContext.Provider>
   );
 }
