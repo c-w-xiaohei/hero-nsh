@@ -1,4 +1,10 @@
-import { ButtonRoot, type ButtonRenderProps, type ButtonRootProps } from "./button-root";
+import {
+  ButtonRoot,
+  type ButtonAnimation,
+  type ButtonFeedbackVariant,
+  type ButtonRenderProps,
+  type ButtonRootProps,
+} from "./button-root";
 import { ButtonGroupSeparator, type ButtonGroupSeparatorProps } from "./button-group-separator";
 import {
   ButtonGroupRoot,
@@ -35,6 +41,8 @@ export type ButtonGroup = {
 export { ButtonRoot, ButtonGroupRoot, ButtonGroupSeparator };
 
 export type {
+  ButtonAnimation,
+  ButtonFeedbackVariant,
   ButtonRenderProps,
   ButtonRootProps,
   ButtonRootProps as ButtonProps,
