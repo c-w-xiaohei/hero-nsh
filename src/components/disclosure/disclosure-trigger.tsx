@@ -24,6 +24,7 @@ import type { PressableFeedbackContextValue } from "../../primitives/pressable";
 import { toAccessibilityRole } from "../button/roles";
 import { DisclosureContext, FALLBACK_DISCLOSURE_CONTEXT } from "./disclosure-context";
 import { disclosureVariants } from "./disclosure.styles";
+import type { AriaProps, DataProps } from "./dom-props";
 import { renderChildren } from "./render-children";
 
 /**
@@ -60,7 +61,7 @@ export interface DisclosureTriggerRenderProps {
  * relations) are accepted so HeroUI code keeps compiling; port sheet §1.1 and
  * §8 say what each can and cannot do here.
  */
-export interface DisclosureTriggerProps {
+export interface DisclosureTriggerProps extends AriaProps, DataProps {
   /** The trigger's content: a node, or a render prop called with the trigger state. */
   children?: JSX.Element | ((values: DisclosureTriggerRenderProps) => JSX.Element);
 
@@ -183,11 +184,8 @@ export interface DisclosureTriggerProps {
   /** Accepted, no effect: NSH has no slot collection. */
   slot?: string;
 
-  /** Every other `aria-*` attribute, accepted for API parity. */
-  [key: `aria-${string}`]: unknown;
-
-  /** Every `data-*` attribute: NSH projects none of them (D18). */
-  [key: `data-${string}`]: unknown;
+  // Every other `aria-*` / `data-*` attribute stays accepted through the
+  // `AriaProps` / `DataProps` parents (dom-props.ts), for API parity.
 }
 
 /**
