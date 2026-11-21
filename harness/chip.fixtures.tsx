@@ -1,4 +1,4 @@
-import { host, mount, View } from "nsh";
+import { host, mount, platform, View } from "nsh";
 import type { Component, JSX } from "nsh";
 import { Chip, EnvironmentScope } from "@heroui/react";
 import type { ChipVariants } from "@heroui/react";
@@ -160,6 +160,11 @@ const cases: Record<string, Component> = {
 function Fixture() {
   const name = String(host.params.case ?? "static");
   const Case = cases[name] ?? StaticCase;
+
+  // The host's own platform report, for the test to pick the right geometry
+  // baseline: headless and web measure text differently, so the M-001 pins
+  // are per-target (the values themselves are still "与现值一致").
+  probe("env")({ os: platform.os, desktop: platform.desktop });
 
   return (
     <Frame>
