@@ -56,6 +56,20 @@ export const switchVariants = tv({
     icon: "flex h-full w-full items-center justify-center",
   },
   variants: {
+    // A-001: the `input` axis of the encapsulation model — `input` owns
+    // interaction usability, and the visible hit minimum is one half of the
+    // hit-area path (`hitSlop` is the other, inside `createPressFeedback`).
+    // `touch` adds `min-h-11` on the clickable face (44 pt target, the same
+    // value control-field/list-group take); `pointer` keeps the content-sized
+    // face, so the default environment sees no change. There is no `density`
+    // axis: the track/thumb dimensions are the `size` contract, not a spacing
+    // preset.
+    input: {
+      pointer: {},
+      touch: {
+        content: "min-h-11",
+      },
+    },
     // R-018 / R-019 / R-020: `.switch--sm` / `.switch--md` / `.switch--lg` are
     // empty blocks upstream; the dimensions they scope onto the control and the
     // thumb are the values below.

@@ -98,7 +98,11 @@ export function SwitchControl(props: SwitchControlProps): JSX.Element {
         "ring-2 ring-focus ring-offset-[2px] ring-offset-background outline-none":
           ctx.isFocusVisible(),
       }}
-      style={local.style}
+      // A-002: the touch press-feedback `scale` binds on the track — upstream
+      // scales the whole component (§8 registers the narrower carrier), and
+      // the channel is pinned to 1 whenever the seam is gated, so the binding
+      // is unconditional.
+      style={[{ scale: ctx.feedback.scale }, local.style]}
       onLayout={handleLayout}
     >
       {local.children}
