@@ -14,7 +14,7 @@ import { callsOf } from "../../helpers/calls";
  *   `env`    the Content's registered seam channels — `input`, `hitSlop`,
  *            `seamPressed`, `enabled`, the gated `effectHover` and the raw
  *            `rawHover` context signal — sampled on mount and on every
- *            press edge (M-002/M-004/M-005/M-009).
+ *            press/hover/selection edge (M-002/M-004/M-005/M-009).
  *   `events` the Content's press lifecycle plus the `toggle` marker the
  *            root's `onChange` fires between `onPress` and `onClick`
  *            (M-003's order).
@@ -84,7 +84,8 @@ describe("checkbox mobile", () => {
 
   // M-001 (A-001): the `input` axis' `min-h-11` lifts the short Content row
   // to the 44 pt hit minimum under touch; the same row keeps its content
-  // height under pointer.
+  // height under pointer, and a row already taller than 44 pt is not
+  // clamped or shrunk by the floor.
   test("M-001 short Content row measures at least 44pt under touch and stays short under pointer", async () => {
     const touch = await openCase("row", { scope: "touch" });
     await touch.waitUntil(() => callsOf(touch, "layout").length > 0);
@@ -95,17 +96,48 @@ describe("checkbox mobile", () => {
     await pointer.waitUntil(() => callsOf(pointer, "layout").length > 0);
     const pointerLayout = callsOf(pointer, "layout").at(-1)![0] as { height: number };
     expect(pointerLayout.height).toBeLessThan(44);
+
+    // The "taller content is not forced" half: `tall=1` stacks four text
+    // lines inside the same Content — over 44 pt on its own — and `min-h-11`
+    // must leave that height alone in both environments.
+    const tallTouch = await openCase("row", { scope: "touch", tall: "1" });
+    await tallTouch.waitUntil(() => callsOf(tallTouch, "layout").length > 0);
+    const tallTouchLayout = callsOf(tallTouch, "layout").at(-1)![0] as {
+      height: number;
+    };
+    expect(tallTouchLayout.height).toBeGreaterThan(44);
+
+    const tallPointer = await openCase("row", { tall: "1" });
+    await tallPointer.waitUntil(() => callsOf(tallPointer, "layout").length > 0);
+    const tallPointerLayout = callsOf(tallPointer, "layout").at(-1)![0] as {
+      height: number;
+    };
+    expect(tallPointerLayout.height).toBe(tallTouchLayout.height);
   }, 120_000);
 
   // M-002 (A-003, 负断言): the default environment leaves the seam inert —
   // `hitSlop` stays null, `seamPressed` never rises — while the press
-  // contract round-trips exactly as on desktop.
+  // contract round-trips exactly as on desktop: same lifecycle order, same
+  // single toggle, same click tail (the seam is a physical no-op).
   test("M-002 default environment: seam stays inert while the press contract holds", async () => {
     const app = await openCase("row");
 
     await app.press("id:cb-row");
     await app.waitUntil(() => callsOf(app, "onChange").length === 1);
     expect(callsOf(app, "onChange")).toEqual([[true]]);
+
+    // The callback sequence is the desktop one, item for item — identical
+    // to what M-003 pins under the injected touch environment.
+    expect(kinds(app)).toEqual([
+      "start",
+      "change:true",
+      "up",
+      "end",
+      "change:false",
+      "press",
+      "toggle",
+      "click",
+    ]);
 
     const samples = envs(app);
     expect(samples.length).toBeGreaterThan(0);
@@ -144,23 +176,33 @@ describe("checkbox mobile", () => {
   }, 120_000);
 
   // M-004 (A-002): under touch the Control's hover effect cells stay off
-  // even while the raw hover signal can still be set; under pointer a press
-  // keeps the desktop effect the signal reports.
+  // even while the raw hover signal still records — `app.hover` raises
+  // `rawHover` and the gated `effectHover` must not follow; a press that
+  // toggles selection leaves it off too (the sticky-hover half). Under
+  // pointer the same hover drives the effect exactly as on desktop.
   test("M-004 injected touch: the gated hover effect stays off; pointer keeps it", async () => {
     const touch = await openCase("row", { scope: "touch" });
+
+    // The hover signal itself is contract surface and still records under
+    // touch — only the Control's paint read is gated (A-002).
+    await touch.hover("id:cb-row");
+    await touch.waitUntil(() => envs(touch).some((s) => s.rawHover));
+    expect(envs(touch).every((s) => !s.effectHover)).toBe(true);
+
     await touch.press("id:cb-row");
     await touch.waitUntil(() => callsOf(touch, "onChange").length === 1);
-    for (const s of envs(touch)) {
-      expect(s.effectHover).toBe(false);
-    }
+    expect(envs(touch).every((s) => !s.effectHover)).toBe(true);
 
     const pointer = await openCase("row");
-    await pointer.press("id:cb-row");
-    await pointer.waitUntil(() => callsOf(pointer, "onChange").length === 1);
-    // The raw signal may or may not have been fed a mouse-enter; whatever it
-    // reports, the gated effect mirrors it under pointer (no suppression).
-    const last = lastEnv(pointer);
-    expect(last.effectHover).toBe(last.rawHover);
+    await pointer.hover("id:cb-row");
+    await pointer.waitUntil(() =>
+      envs(pointer).some((s) => s.rawHover && s.effectHover),
+    );
+    // Whatever the raw signal reports, the gated effect mirrors it under
+    // pointer — no suppression on the desktop half.
+    for (const s of envs(pointer)) {
+      expect(s.effectHover).toBe(s.rawHover);
+    }
   }, 120_000);
 
   // M-005 (A-001, A-003): under touch the seam computes a real `hitSlop`
@@ -190,7 +232,10 @@ describe("checkbox mobile", () => {
 
   // M-006 (A-004): the ControlField row with the checkbox default piece —
   // one press on the row fires `onSelectedChange` exactly once and nothing
-  // else; the default Control and Indicator mount.
+  // else; the default Control and Indicator mount, and the row's `isSelected`
+  // prop drives the commit value in both directions (the piece's own selected
+  // paint is canvas-drawn — sheet §6's registered gap — so the commit value
+  // is the observable half of "选中态随行 prop").
   test("M-006 ControlField checkbox default piece: one row press, one commit, no double toggle", async () => {
     const app = await openCase("cf-checkbox", { scope: "touch" });
 
@@ -202,17 +247,40 @@ describe("checkbox mobile", () => {
     expect(callsOf(app, "onSelectedChange")).toEqual([[true]]);
     expect(callsOf(app, "onChange")).toHaveLength(0);
     expect(callsOf(app, "onPress").length).toBeGreaterThanOrEqual(1);
+
+    // The same row driven selected: the commit reports the flip to false —
+    // proof the row's `isSelected` prop reaches the single commit point.
+    const selected = await openCase("cf-checkbox", {
+      scope: "touch",
+      selected: "1",
+    });
+    expect(selected.shows("id:cf-checkbox-control")).toBe(true);
+    expect(selected.shows("id:cf-checkbox-indicator")).toBe(true);
+
+    await selected.press("id:cf-checkbox");
+    await selected.waitUntil(() => callsOf(selected, "onSelectedChange").length === 1);
+    expect(callsOf(selected, "onSelectedChange")).toEqual([[false]]);
+    expect(callsOf(selected, "onChange")).toHaveLength(0);
   }, 120_000);
 
   // M-007 (基线): under the default environment the existing cases behave
   // exactly as the desktop contract — selection markers, indeterminate,
-  // disabled, read-only, invalid and validation, through the same probes.
+  // disabled, read-only, invalid and validation, through the same probes the
+  // desktop suite pins (the remaining cases — readonly-uncontrolled,
+  // valid-error, required, group-disabled/invalid — regress through the
+  // existing heroui suite this row samples). The Content row keeps its
+  // content height (no layout floor assertion) and the hover path is
+  // unchanged. Kept to one open per listed case: a dozen sequential web
+  // hosts in one test exhausts the target.
   test("M-007 baseline: default environment keeps the desktop contract", async () => {
     const log = await openCase("log");
     expect(log.shows("text:Unchecked")).toBe(true);
     await log.press("role:checkbox[Accept terms]");
     expect(log.shows("text:Checked")).toBe(true);
     expect(callsOf(log, "onChange")).toEqual([[true]]);
+
+    const defaultSelected = await openCase("default-selected");
+    expect(defaultSelected.shows("text:Checked")).toBe(true);
 
     const indeterminate = await openCase("indeterminate-toggle");
     expect(indeterminate.shows("text:Mixed")).toBe(true);
@@ -236,10 +304,26 @@ describe("checkbox mobile", () => {
 
     const aria = await openCase("validation-aria");
     expect(aria.shows("text:Subscribe to continue")).toBe(true);
+
+    const native = await openCase("validation-native");
+    expect(native.shows("text:Subscribe to continue")).toBe(false);
+    await native.press("role:checkbox[Accept terms]");
+    expect(native.shows("text:Subscribe to continue")).toBe(false);
+    await native.press("role:checkbox[Accept terms]");
+    expect(native.shows("text:Subscribe to continue")).toBe(true);
+
+    // The hover path is untouched on the desktop half: a hover on the mobile
+    // row case still raises the raw signal AND the gated effect read.
+    const row = await openCase("row");
+    await row.hover("id:cb-row");
+    await row.waitUntil(() => envs(row).some((s) => s.rawHover && s.effectHover));
   }, 120_000);
 
   // M-008 (基线): the group path on both sides — one item press fires the
-  // group's `onChange` exactly once with the value's addition.
+  // group's `onChange` exactly once with the value's addition, and pressing
+  // a selected item removes it; the per-item `onChange` still reports the
+  // item's own next value. (`slot="selection"` table checkboxes regress
+  // through the existing table assertion files — sheet §4's note.)
   test("M-008 baseline: group items commit once per press in both environments", async () => {
     for (const params of [{}, { scope: "touch" }] as Params[]) {
       const app = await openCase("group-log", params);
@@ -248,6 +332,50 @@ describe("checkbox mobile", () => {
       expect(callsOf(app, "groupChange")).toEqual([[["coding"]]]);
       expect(callsOf(app, "codingChange")).toEqual([[true]]);
       expect(callsOf(app, "designChange")).toHaveLength(0);
+
+      // The removal half: a second item adds, then re-pressing the first
+      // takes its value back out — one `groupChange` per press, payload is
+      // the whole next selection each time.
+      await app.press("role:checkbox[Design]");
+      await app.waitUntil(() => callsOf(app, "groupChange").length === 2);
+      expect(callsOf(app, "groupChange")).toEqual([
+        [["coding"]],
+        [["coding", "design"]],
+      ]);
+
+      await app.press("role:checkbox[Coding]");
+      await app.waitUntil(() => callsOf(app, "groupChange").length === 3);
+      expect(callsOf(app, "groupChange")).toEqual([
+        [["coding"]],
+        [["coding", "design"]],
+        [["design"]],
+      ]);
+      expect(callsOf(app, "codingChange")).toEqual([[true], [false]]);
+    }
+  }, 120_000);
+
+  // M-010 (A-006): this file is the assertion carrier — it collects under
+  // the `.mobile.test.tsx` naming layer and every row above drives the
+  // fixture through `open("../../../checkbox.fixtures.tsx")` +
+  // `host.params` (`case`/`scope`/`box`/`tall`/`selected`), never class
+  // names or computed style. This smoke row proves the whole probe surface
+  // — `env`, `events`, `layout`, `onChange` — records on both scopes, so a
+  // silent fixture regression cannot pass the other rows vacuously.
+  test("M-010 fixture entry: every probe records through open + host.params on both scopes", async () => {
+    for (const params of [{}, { scope: "touch" }] as Params[]) {
+      const app = await openCase("row", params);
+
+      expect(app.shows("id:cb-row")).toBe(true);
+
+      await app.press("id:cb-row");
+      await app.waitUntil(() => callsOf(app, "onChange").length === 1);
+
+      expect(kinds(app)).toContain("press");
+      expect(kinds(app)).toContain("toggle");
+      expect(kinds(app)).toContain("click");
+      expect(callsOf(app, "layout").length).toBeGreaterThan(0);
+      expect(envs(app).length).toBeGreaterThan(0);
+      expect(lastEnv(app).input).toBe(params.scope === "touch" ? "touch" : "pointer");
     }
   }, 120_000);
 });

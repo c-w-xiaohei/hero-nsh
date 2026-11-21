@@ -76,7 +76,9 @@ import { createInput } from "../src/primitives/environment";
  * default, "touch" = `input="touch"`), the same convention as
  * `control-field.fixtures.tsx`. `box`="tiny" gives the row a 24 pt width so
  * the seam's `hitSlop` has an axis left to expand — under touch the row's
- * height already sits at the 44 pt minimum `min-h-11` gives it.
+ * height already sits at the 44 pt minimum `min-h-11` gives it. `tall`="1"
+ * stacks extra text lines inside the same Content so the row's natural
+ * height clears 44 pt (M-001's not-forced half).
  */
 
 const NAME = "Accept terms";
@@ -661,11 +663,16 @@ function EnvProbe() {
   };
 
   effect(() => {
-    // Subscribe to the edge signals — presses AND the layout that feeds
-    // `hitSlop` — so the probe re-reports on each.
+    // Subscribe to the edge signals — presses, the layout that feeds
+    // `hitSlop`, the hover pair `effectHover`/`rawHover` read, and the
+    // selection the `selected` field reports — so the probe re-reports on
+    // each (M-004's hover half needs the hover edges, not just press ones).
     void ctx?.isPressed();
     void ctx?.feedback().isPressed();
     void ctx?.feedback().bounds();
+    void ctx?.isHovered();
+    void ctx?.rootHovered();
+    void ctx?.isSelected();
     sample();
   });
 
@@ -685,6 +692,10 @@ function RowCase() {
     };
 
   const tiny = String(host.params.box ?? "") === "tiny";
+  // `tall=1` stacks extra text lines inside the same Content so the row's
+  // natural height clears the 44 pt minimum — M-001's "taller content is not
+  // forced" half: `min-h-11` is a floor, it must not shrink or clamp it.
+  const tall = String(host.params.tall ?? "") === "1";
 
   return (
     <Stage>
@@ -712,6 +723,14 @@ function RowCase() {
             <Checkbox.Indicator />
           </Checkbox.Control>
           {NAME}
+          {tall ? (
+            <View class="flex-col">
+              <Text>First line of a taller row</Text>
+              <Text>Second line of a taller row</Text>
+              <Text>Third line of a taller row</Text>
+              <Text>Fourth line of a taller row</Text>
+            </View>
+          ) : null}
           <EnvProbe />
         </Checkbox.Content>
       </Checkbox>
