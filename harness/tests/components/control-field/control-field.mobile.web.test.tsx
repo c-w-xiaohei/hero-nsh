@@ -12,6 +12,13 @@ import { callsOf } from "../../helpers/calls";
  * `platform:"web"` plays the pointer host; `EnvironmentScope input="touch"`
  * supplies the injected touch environment, so the sheet's dual-environment
  * assertions run identically here.
+ *
+ * Row presses target `id:cf-desc`, not `id:cf-row`: `app.press`/`longPress`
+ * hit-test on web and the row's `Label` is its own pressable (it reports to
+ * `focusField`), so pressing the row's testID lands on the label — one
+ * `press`+`change`, no `down`/`up`/seam edge. The `Description` is not
+ * pressable, so a press on it bubbles to the row's own handlers, which is
+ * what `id:cf-row` resolves to on headless.
  */
 
 type Params = Record<string, string>;
@@ -118,14 +125,14 @@ describe("control-field mobile (web)", () => {
   test("M-002 injected touch: press roundtrips mirror and seam channels and commits once", async () => {
     const app = await openField("row", { scope: "touch" });
 
-    await app.press("id:cf-row");
+    await app.press("id:cf-desc");
     await app.waitUntil(() => callsOf(app, "change").length === 1);
 
     const edges = callsOf(app, "ctx-pressed").map((c) => c[0] as PressedEdge);
     expect(edges).toContainEqual({ mirror: true, seam: true });
     expect(edges.at(-1)).toEqual({ mirror: false, seam: false });
 
-    await app.longPress("id:cf-row");
+    await app.longPress("id:cf-desc");
     await app.waitUntil(() => heldSamples(app).length >= 1);
     const held = heldSamples(app).at(-1)!;
     expect(held.seamPressed).toBe(true);
@@ -241,7 +248,7 @@ describe("control-field mobile (web)", () => {
   test("M-007 press lifecycle order: down, up, press, then the selection change", async () => {
     const app = await openField("row");
 
-    await app.press("id:cf-row");
+    await app.press("id:cf-desc");
     await app.waitUntil(() => callsOf(app, "change").length === 1);
 
     expect(kinds(app)).toEqual(["down", "up", "press", "change"]);
@@ -310,7 +317,11 @@ describe("control-field mobile (web)", () => {
 
     expect(lastOf<CtxEnv>(app, "ctx-env").allDisabled).toBe(true);
 
-    await app.longPress("id:cf-row");
+    // On web `app.longPress` resolves as a complete press (down, up, press —
+    // a browser click), unlike headless where a held finger never commits:
+    // the hold IS this test's canonical press, so there is no second
+    // `app.press` here — one would toggle the selection back.
+    await app.longPress("id:cf-desc");
     await app.waitUntil(() => heldSamples(app).length >= 1);
     const held = heldSamples(app).at(-1)!;
     expect(held.allDisabled).toBe(true);
@@ -325,8 +336,7 @@ describe("control-field mobile (web)", () => {
       return last !== undefined && !last.mirror && !last.seam;
     });
 
-    await app.press("id:cf-row");
-    await app.waitUntil(() => callsOf(app, "change").length === 1);
+    // The canonical press round-tripped and committed exactly once.
     expect(callsOf(app, "change")).toEqual([[true]]);
   }, 120_000);
 });

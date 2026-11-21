@@ -237,7 +237,13 @@ function RowCase() {
           <Label testID="cf-label">Notifications</Label>
           {short ? undefined : (
             <>
-              <Description>Get notified about activity</Description>
+              {/* `id:cf-desc` is the web-target press point for the row:
+                  `app.press` hit-tests on web and the label is pressable, so
+                  pressing the row id lands on the label's `focusField` path
+                  (press+change, no down/up/seam). The description is not
+                  pressable, so its press bubbles to the row's own handlers —
+                  the same target `id:cf-row` resolves to on headless. */}
+              <Description testID="cf-desc">Get notified about activity</Description>
               <FieldError>Something is wrong</FieldError>
             </>
           )}
