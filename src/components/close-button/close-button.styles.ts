@@ -2,7 +2,14 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
-import { ease } from "../../tokens/geometry";
+/*
+ * `--ease-out-quart` = `ease.outQuart` of `src/tokens/geometry.ts`, inlined.
+ * The geometry module is the shared home for these curves, but a `.styles.ts`
+ * file is also read by the class walker as a plain ESM module, and Node
+ * cannot resolve the extensionless relative import there — the literal keeps
+ * this file importable in both places while producing the identical class.
+ */
+const EASE_OUT_QUART = "ease-[cubic-bezier(0.165,0.84,0.44,1)]";
 
 /*
  * CloseButton's variant table, mirroring `@heroui/styles` 3.2.7
@@ -30,7 +37,7 @@ export const closeButtonVariants = tv({
   // it lives in the inline `transitionProperty` of
   // `close-button-root.tsx`; `ease-out-quart` is the theme's
   // `--ease-out-quart`.
-  base: `relative inline-flex h-6 w-6 shrink-0 origin-center items-center justify-center rounded-xl p-1 select-none cursor-pointer duration-[250ms] ${ease.outQuart}`,
+  base: `relative inline-flex h-6 w-6 shrink-0 origin-center items-center justify-center rounded-xl p-1 select-none cursor-pointer duration-[250ms] ${EASE_OUT_QUART}`,
   variants: {
     variant: {
       // R-012: `.close-button--default` → `bg-default text-muted`.
