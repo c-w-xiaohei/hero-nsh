@@ -103,6 +103,7 @@ async function observeCase(env: EnvParams): Promise<{
   await press.press("id:press-root");
   const after = press.viewStyle("id:press-root");
   result.pressCalls = callsOf(press, "onPress");
+  result.texts.push(...press.texts());
   result.boxes = [
     JSON.stringify(latestBox(press, "root")),
     `opacity:${before?.opacity}->${after?.opacity}`,

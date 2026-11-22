@@ -1,4 +1,4 @@
-import { host, mount, Text, View } from "nsh";
+import { host, mount, Text } from "nsh";
 import type { JSX } from "nsh";
 import { EnvironmentScope, Surface, SurfaceContext } from "@heroui/react";
 import { Stage } from "@scenario/stage";
