@@ -183,19 +183,37 @@ export const avatarGroupVariants = tv({
       false: {},
       /*
        * R-028: `.avatar-group--grid` → `@apply flex-wrap gap-3`: no overlap,
-       * no ring, no optical nudge.
+       * no ring, no optical nudge. The wrap stays on this cell; the gap
+       * literal moved to the `density` compounds below (A-002).
        */
-      true: { base: "flex-wrap gap-3" },
+      true: { base: "flex-wrap" },
     },
     overlap: {
       // R-029 / R-032: clip and ring both reach the avatars through context.
       clip: {},
       ring: {},
     },
+    /*
+     * A-002: the environment's `density` axis, fed by the group root from
+     * `createDensity()` — callers do not set it. The cells are empty: the
+     * gap only exists under `isGrid`, so it is written as compounds instead
+     * of a full `isGrid × density` matrix.
+     */
+    density: {
+      default: {},
+      compact: {},
+    },
   },
+  compoundVariants: [
+    // A-002: R-028's `gap-3` (12pt) is the grid's spacing literal; under the
+    // compact preset it tightens to `gap-2` (8pt).
+    { isGrid: true, density: "default", class: { base: "gap-3" } },
+    { isGrid: true, density: "compact", class: { base: "gap-2" } },
+  ],
   defaultVariants: {
     isGrid: false,
     overlap: "clip",
+    density: "default",
   },
 });
 
