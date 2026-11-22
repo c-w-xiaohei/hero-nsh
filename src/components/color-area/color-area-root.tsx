@@ -405,6 +405,15 @@ export function ColorAreaRoot(props: ColorAreaRootProps): JSX.Element {
   // R-022: pressing the panel moves the value to the pointer (React Aria's
   // background pointerdown) and starts the drag; moving applies the gesture's
   // total delta; release / terminate report the end once.
+  //
+  // This responder stays on `PanResponder` — it is the desktop's existing 2D
+  // drag, and the sheet rules `createPan` out for it: `createPan` hard-codes
+  // `onShouldBlockNativeResponder() => true` and `terminationRequest ?? false`
+  // (the never-yield layer), which is the exact opposite of the A-002
+  // arbitration's contract — a vertical gesture must keep the host default so
+  // a Scroll can take the touches, with the deferred press doing the
+  // arbitration instead. `createPan`'s enabled-gating is for NEW touch paths;
+  // this path must exist on pointer too.
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => !isDisabled(),
     onPanResponderGrant: (event) => {
