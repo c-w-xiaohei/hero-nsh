@@ -372,9 +372,12 @@ describe("list-box mobile", () => {
   }, 120_000);
 
   // adapt-sheets/list-box.md M-008 (基线): the default environment is the
-  // desktop-parity half — the `log` case's selection payload, the
-  // `disabled` case's refusal and `section-action`'s `none`+`onAction`
-  // contract answer exactly what `list-box.heroui.test.tsx` pins.
+  // desktop-parity half — the `log`/`multiple-log`/`items-section`/
+  // `typeahead`/`disabled` cases' `selectionChange` payloads, selection
+  // markers and disabled refusal answer exactly what
+  // `list-box.heroui.test.tsx`/`list-box.kobalte.test.tsx` pin, and
+  // `b-action`'s `selectionMode="none"` activation reports `onAction`
+  // only.
   test("M-008 default environment: selection, disabled refusal and none-mode onAction baselines", async () => {
     const log = await openListBox("log");
     await log.press("role:option[One]");
@@ -384,6 +387,50 @@ describe("list-box mobile", () => {
     await log.press("role:option[Two]");
     await log.waitUntil(() => callsOf(log, "selectionChange").length === 2);
     expect(callsOf(log, "selectionChange")[1]).toEqual([["2"]]);
+
+    // `multiple-log`: the uncontrolled set accumulates in press order and
+    // the shared `✓` marker counts it (T-015's observable payload shape).
+    const multiple = await openListBox("multiple-log");
+    await multiple.press("role:option[One]");
+    await multiple.waitUntil(
+      () => callsOf(multiple, "selectionChange").length === 1,
+    );
+    await multiple.press("role:option[Three]");
+    await multiple.waitUntil(
+      () => callsOf(multiple, "selectionChange").length === 2,
+    );
+    expect(callsOf(multiple, "selectionChange")).toEqual([
+      [["1"]],
+      [["1", "3"]],
+    ]);
+    expect(multiple.count("text:✓")).toBe(2);
+
+    // `items-section`: the grouped `items` path keeps the same payload
+    // shape and the mapped `isDisabled` still refuses the press (T-007's
+    // observable half — the section's `role="group"` wrapper changes no
+    // selection semantics).
+    const section = await openListBox("items-section");
+    expect(section.count("role:option")).toBe(3);
+    await section.press("role:option[One]");
+    await section.waitUntil(
+      () => callsOf(section, "selectionChange").length === 1,
+    );
+    expect(callsOf(section, "selectionChange")).toEqual([[["1"]]]);
+    expect(section.enabled("role:option[Two]")).toBe(false);
+    await expect(section.press("role:option[Two]")).rejects.toMatchObject({
+      code: "ERR_NSH_TEST_DISABLED",
+    });
+    expect(callsOf(section, "selectionChange")).toHaveLength(1);
+
+    // `typeahead`: identical list shape to `log` — the pointer half of the
+    // baseline; the keyboard typeahead itself is the read-only web suite's
+    // T-021/T-022, not re-ported here.
+    const typeahead = await openListBox("typeahead");
+    await typeahead.press("role:option[Two]");
+    await typeahead.waitUntil(
+      () => callsOf(typeahead, "selectionChange").length === 1,
+    );
+    expect(callsOf(typeahead, "selectionChange")).toEqual([[["2"]]]);
 
     const disabled = await openListBox("disabled");
     expect(disabled.enabled("role:option[Two]")).toBe(false);
@@ -402,9 +449,10 @@ describe("list-box mobile", () => {
   }, 120_000);
 
   // adapt-sheets/list-box.md M-009 (基线对偶): under `scope="touch"` the
-  // same baseline cases read identically — selection, disabled refusal,
-  // typeahead-free section activation and the `none`-mode action are
-  // environment-independent semantics.
+  // same baseline cases read identically — selection payloads, markers,
+  // disabled refusal, section semantics and the `none`-mode action are
+  // environment-independent (the F data source's own dual lives in
+  // `tests/primitives/list/list-box.mobile.test.tsx`, read-only here).
   test("M-009 injected touch: baseline cases read identically", async () => {
     const log = await openListBox("log", { scope: "touch" });
     await log.press("role:option[One]");
@@ -414,6 +462,39 @@ describe("list-box mobile", () => {
     await log.press("role:option[Two]");
     await log.waitUntil(() => callsOf(log, "selectionChange").length === 2);
     expect(callsOf(log, "selectionChange")[1]).toEqual([["2"]]);
+
+    // The same accumulation and grouped-section contracts under touch —
+    // the F data source is environment-agnostic (f-collection's own file
+    // carries that assertion; this row covers the B face only).
+    const multiple = await openListBox("multiple-log", { scope: "touch" });
+    await multiple.press("role:option[One]");
+    await multiple.press("role:option[Three]");
+    await multiple.waitUntil(
+      () => callsOf(multiple, "selectionChange").length === 2,
+    );
+    expect(callsOf(multiple, "selectionChange")).toEqual([
+      [["1"]],
+      [["1", "3"]],
+    ]);
+    expect(multiple.count("text:✓")).toBe(2);
+
+    const section = await openListBox("items-section", { scope: "touch" });
+    await section.press("role:option[One]");
+    await section.waitUntil(
+      () => callsOf(section, "selectionChange").length === 1,
+    );
+    expect(callsOf(section, "selectionChange")).toEqual([[["1"]]]);
+    expect(section.enabled("role:option[Two]")).toBe(false);
+    await expect(section.press("role:option[Two]")).rejects.toMatchObject({
+      code: "ERR_NSH_TEST_DISABLED",
+    });
+
+    const typeahead = await openListBox("typeahead", { scope: "touch" });
+    await typeahead.press("role:option[Two]");
+    await typeahead.waitUntil(
+      () => callsOf(typeahead, "selectionChange").length === 1,
+    );
+    expect(callsOf(typeahead, "selectionChange")).toEqual([[["2"]]]);
 
     const disabled = await openListBox("disabled", { scope: "touch" });
     expect(disabled.enabled("role:option[Two]")).toBe(false);
