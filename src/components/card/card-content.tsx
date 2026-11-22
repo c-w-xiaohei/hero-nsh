@@ -89,7 +89,12 @@ export function CardContent(props: CardContentProps): JSX.Element {
       return local.className;
     }
 
-    return cardVariants({ variant }).content({ className: local.className });
+    // A-002: the content slot keys on `density` too — its `gap` literal lives
+    // in the `density` cells. The default `density` (or none outside a Card)
+    // reproduces the previous class verbatim.
+    return cardVariants({ variant, density: ctx.density?.() }).content({
+      className: local.className,
+    });
   });
 
   const tooltip = computed<JSX.Element>(() => {
