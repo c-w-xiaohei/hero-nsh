@@ -1,4 +1,4 @@
-import { effect, host, mount, Scroll, Text, View } from "nsh";
+import { effect, host, mount, Scroll, signal, Text, View } from "nsh";
 import type { JSX } from "nsh";
 import { ColorArea, EnvironmentScope } from "@heroui/react";
 import type { Color } from "@heroui/react";
@@ -42,13 +42,24 @@ import {
  *   mobile        a 200pt area on the default white→mid-grey value with the
  *                 full probe surface: onChange/onChangeEnd (with lightness),
  *                 the thumb's hovered/dragging texts, `ctx-env`/`ctx-layout`/
- *                 `ctx-thumb`/`ctx-bound` (the thumbFeedback seam channels —
+ *                 `ctx-thumb` (the thumbFeedback seam channels —
  *                 M-001/M-002/M-006). `callerSlop=1` gives the Thumb an explicit
- *                 `hitSlop={2}` so local priority is observable (M-002).
+ *                 `hitSlop={2}`; the effective binding is a view prop
+ *                 `nsh/test` cannot read (sheet §6), so M-002 asserts the
+ *                 seam channel under the override instead.
  *   mobile-scroll the same area inside a vertical `Scroll` with overflow and
  *                 `scroll`/`scroll-drag` probes — M-005's transfer case.
+ *   controlled    a controlled `value` held from a signal: `onChange` reports
+ *                 every proposed color while `value` keeps printing the held
+ *                 one — M-011's 受控 value/onChangeEnd 单发 half.
  * `host.params.scope` injects `input="touch"`/`"pointer"` via
  * `EnvironmentScope`; absent means the host-derived default.
+ *
+ * M-002 note (sheet §6): the effective `hitSlop` a Thumb binds
+ * (`local.hitSlop ?? seam`) is a view prop — `nsh/test` cannot read it, so
+ * caller priority degrades to "the seam still computes its own Edges under a
+ * caller `hitSlop`" (asserted on `ctx-env`), the same registered gap radio
+ * and pressable-feedback carry.
  */
 
 type LayoutEvent = {
@@ -156,26 +167,6 @@ function thumbLayoutProbe() {
   };
 }
 
-/**
- * The M-002 caller-priority check: `bound` is the value the view actually
- * receives (`local.hitSlop ?? seam`), reported alongside the seam's own
- * computation so the test can tell a caller-supplied slop from the 44 pt
- * expansion.
- */
-function BoundProbe(props: { callerSlop: boolean }) {
-  const ctx = ColorAreaContext();
-  const reportBound = probe("ctx-bound");
-
-  effect(() => {
-    reportBound({
-      bound: props.callerSlop ? 2 : (ctx?.thumbFeedback.hitSlop() ?? null),
-      seam: ctx?.thumbFeedback.hitSlop() ?? null,
-    });
-  });
-
-  return null;
-}
-
 function MobileCase() {
   const callerSlop = String(host.params.callerSlop ?? "") === "1";
 
@@ -218,7 +209,6 @@ function MobileCase() {
           )}
         </ColorArea.Thumb>
         <CtxProbe />
-        <BoundProbe callerSlop={callerSlop} />
       </ColorArea>
       <View testID="ctx-sample" class="size-4" onPress={sampleThumbChannels} />
     </Stage>
@@ -259,6 +249,49 @@ function MobileScrollCase() {
       </Scroll>
     </Stage>
   );
+}
+
+/**
+ * M-011's controlled half: `value` is held by a signal the drag never
+ * writes, so `onChange` keeps reporting proposals while the displayed color
+ * (and the `value` probe) stays on the held one — the controlled contract
+ * under an injected touch environment.
+ */
+function ControlledCase() {
+  const value = signal("hsl(0, 50%, 50%)");
+
+  return (
+    <Stage>
+      <ColorArea
+        aria-label="Color"
+        className="w-[200px]"
+        testID="area"
+        value={value()}
+        onChange={recordColor("onChange")}
+        onChangeEnd={recordColor("onChangeEnd")}
+      >
+        {({ state }) => (
+          <View class="flex-col">
+            <ColorArea.Thumb testID="thumb" />
+            <Text testID="value">{state.value().toString("hsl")}</Text>
+            <DisplayedValueProbe color={state.value} />
+          </View>
+        )}
+      </ColorArea>
+    </Stage>
+  );
+}
+
+/* Reports the color the area actually displays on every change, so the test
+ * can prove the controlled value never adopted a dragged proposal. */
+function DisplayedValueProbe(props: { color: () => Color }) {
+  const report = probe("value");
+
+  effect(() => {
+    report({ hsl: props.color().toString("hsl") });
+  });
+
+  return null;
 }
 
 function KeyboardCase() {
@@ -364,6 +397,7 @@ function Fixture() {
   if (name === "rtl-geometry") return <Scoped><GeometryCase dir="rtl" /></Scoped>;
   if (name === "mobile") return <Scoped><MobileCase /></Scoped>;
   if (name === "mobile-scroll") return <Scoped><MobileScrollCase /></Scoped>;
+  if (name === "controlled") return <Scoped><ControlledCase /></Scoped>;
 
   return <Scoped><KeyboardCase /></Scoped>;
 }

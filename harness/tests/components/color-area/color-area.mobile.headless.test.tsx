@@ -10,12 +10,12 @@ import { callsOf } from "../../helpers/calls";
  * carries the same settle-state assertions through `app.press`/`app.drag`.
  *
  * The fixture is `harness/color-area.fixtures.tsx`, opened by `host.params`:
- * `case` ("mobile" / "mobile-scroll" / "disabled"), `scope` ("" = host
+ * `case` ("mobile" / "mobile-scroll" / "disabled" / "controlled"), `scope` ("" = host
  * default, "touch"/"pointer" through `EnvironmentScope`), `callerSlop` ("1"
  * gives the Thumb an explicit `hitSlop={2}`). Probes in `app.storage()`:
  * `onChange`/`onChangeEnd` ({hue,saturation,lightness,hsl}), `hover`
  * ({kind}), `ctx-env`, `ctx-layout` (thumb layout + the seam's hitSlop at that
- * instant), `ctx-thumb` (on-demand channel sample), `ctx-bound`, `layout`
+ * instant), `ctx-thumb` (on-demand channel sample), `layout`
  * (area bounds), `scroll`/`scroll-drag`.
  *
  * The area is 200pt wide on `hsl(0, 0%, 50%)`: the thumb sits at the left
@@ -71,8 +71,6 @@ type ThumbLayout = {
   height: number;
   hitSlop: Edges | number | null;
 };
-
-type BoundSample = { bound: Edges | number | null; seam: Edges | number | null };
 
 function lastOf<T>(app: App, name: string): T {
   const calls = callsOf(app, name);
@@ -149,13 +147,20 @@ describe("color-area mobile (headless)", () => {
     expect(slopOf(held.hitSlop)).toBeLessThan(13);
     await app.drop();
 
-    // A caller's explicit hitSlop stays the bound value; the seam still
-    // reports its own computation (internal wiring, radio A-002 precedent).
+    // A caller's explicit `hitSlop` does not feed back into the seam: the
+    // gate and the 44 pt computation report the same Edges. The effective
+    // bound value is a view prop `nsh/test` cannot read (sheet §6), so
+    // caller priority degrades to this channel check — the same registered
+    // gap radio and pressable-feedback carry.
     const caller = await openArea({ scope: "touch", callerSlop: "1" });
-    await caller.waitUntil(() => callsOf(caller, "ctx-bound").length > 0);
-    const bound = lastOf<BoundSample>(caller, "ctx-bound");
-    expect(bound.bound).toBe(2);
-    expect(slopOf(bound.seam)).toBeGreaterThan(0);
+    await caller.waitUntil(() => {
+      const last = callsOf(caller, "ctx-env").at(-1)?.[0] as CtxEnv | undefined;
+      return last !== undefined && last.hitSlop !== null;
+    });
+    const callerEnv = lastOf<CtxEnv>(caller, "ctx-env");
+    expect(callerEnv.enabled).toBe(true);
+    expect(slopOf(callerEnv.hitSlop)).toBeGreaterThan(13);
+    expect(slopOf(callerEnv.hitSlop)).toBeLessThan(15);
 
     // `isDisabled` closes the gate: enabled false, hitSlop undefined.
     const disabled = await openArea({ scope: "touch" }, {}, "disabled");
@@ -220,7 +225,10 @@ describe("color-area mobile (headless)", () => {
   test("M-005 injected touch: a scroll handover drops the pending press without a late commit", async () => {
     const app = await openArea({ scope: "touch" }, {}, "mobile-scroll");
 
-    await app.drag("id:area", { x: 0, y: 80 });
+    // Upward drag: the Scroll can actually take the gesture (a downward
+    // drag at the top edge can never move the offset, so it would only
+    // ever exercise the non-handover branch).
+    await app.drag("id:area", { x: 0, y: -80 });
     await app.wait(300);
 
     const scrolls = callsOf(app, "scroll").map((c) => c[0] as { x: number; y: number });
@@ -231,7 +239,21 @@ describe("color-area mobile (headless)", () => {
     await app.wait(300);
     expect(callsOf(app, "onChange").length).toBe(changesAfterEnd);
 
-    if (!handed) {
+    if (handed) {
+      // Handover observed: the deferred press must have been dropped. The
+      // only way a lone press-point commit ({hue 180, sat 50} — panel
+      // centre, zero moves) can appear is the pendingPress committing
+      // after the steal; real moves write saturation ≠ 50.
+      const last = callsOf(app, "onChange").at(-1)?.[0] as
+        | RecordedColor
+        | undefined;
+      const pendingSignature =
+        changesAfterEnd === 1 &&
+        last !== undefined &&
+        Math.abs(last.hue - 180) <= 3 &&
+        Math.abs(last.saturation - 50) <= 2;
+      expect(pendingSignature).toBe(false);
+    } else {
       // The JS responder kept the gesture: it wrote per frame — and still
       // ended exactly once above.
       expect(changesAfterEnd).toBeGreaterThan(0);
@@ -338,6 +360,21 @@ describe("color-area mobile (headless)", () => {
     const ios = await openArea({}, { platform: "ios", width: 390, height: 844 });
     await ios.waitUntil(() => callsOf(ios, "ctx-env").length > 0);
     expect(lastOf<CtxEnv>(ios, "ctx-env").enabled).toBe(true);
+
+    // 抽样对照 (sheet M-010): RTL mirroring is unchanged — the same panel
+    // drag under `ar-EG` lands near hue 90, X-007's contract.
+    const rtl = await open("../../../color-area.fixtures.tsx", {
+      platform: "windows",
+      width: 1024,
+      height: 768,
+      locale: "ar-EG",
+      host: { params: { case: "rtl-drag" } },
+    });
+    await rtl.drag("id:area", { x: 50, y: 0 });
+    const rtlLast = callsOf(rtl, "onChange")
+      .map((c) => c[0] as RecordedColor)
+      .at(-1)!;
+    expect(Math.abs(rtlLast.hue - 90)).toBeLessThanOrEqual(10);
   }, 120_000);
 
   // M-011 (基线移动对偶): injected touch — the keyboard contract is
@@ -361,5 +398,20 @@ describe("color-area mobile (headless)", () => {
     await app.keyboard.press("pageup");
     await app.waitUntil(() => callsOf(app, "onChangeEnd").length === 2);
     expect(callsOf(app, "onChange").length).toBe(2);
+
+    // 受控 value/onChangeEnd 单发 (sheet M-011): a controlled area reports
+    // every proposal but never adopts it — the displayed-color probe stays
+    // on the held value and the drag still ends exactly once.
+    const controlled = await openArea({ scope: "touch" }, {}, "controlled");
+    await controlled.drag("id:area", { x: 60, y: 0 });
+    await controlled.waitUntil(
+      () => callsOf(controlled, "onChangeEnd").length === 1,
+    );
+    expect(callsOf(controlled, "onChange").length).toBeGreaterThanOrEqual(1);
+    const displayed = callsOf(controlled, "value").map(
+      (c) => (c[0] as { hsl: string }).hsl,
+    );
+    expect(displayed.length).toBeGreaterThan(0);
+    expect(new Set(displayed).size).toBe(1);
   }, 120_000);
 });

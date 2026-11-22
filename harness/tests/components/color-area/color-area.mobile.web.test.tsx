@@ -59,8 +59,6 @@ type ThumbLayout = {
   hitSlop: Edges | number | null;
 };
 
-type BoundSample = { bound: Edges | number | null; seam: Edges | number | null };
-
 function lastOf<T>(app: App, name: string): T {
   const calls = callsOf(app, name);
   return calls[calls.length - 1][0] as T;
@@ -90,9 +88,16 @@ describe("color-area mobile (web)", () => {
     expect(env.hitSlop).toBeNull();
     expect(env.seamPressed).toBe(false);
 
-    await app.press("id:area");
+    // A zero-delta drag is the web tap: `app.press` reaches the responder
+    // grant without coordinates on this target (the headless file's
+    // dragAndHold+drop is the same gesture there), while `app.drag`
+    // delivers the landing point — hue 180 at the panel centre.
+    await app.drag("id:area", { x: 0, y: 0 });
     await app.waitUntil(() => callsOf(app, "onChange").length === 1);
     expect(callsOf(app, "onChangeEnd")).toHaveLength(1);
+    expect(
+      Math.abs(lastOf<RecordedColor>(app, "onChange").hue - 180),
+    ).toBeLessThanOrEqual(5);
 
     await app.press("id:ctx-sample");
     await app.waitUntil(() => callsOf(app, "ctx-thumb").length > 0);
@@ -120,11 +125,18 @@ describe("color-area mobile (web)", () => {
     expect(slopOf(rest.hitSlop)).toBeLessThan(15);
     expect(lastOf<CtxEnv>(app, "ctx-env").enabled).toBe(true);
 
+    // The effective bound value is a view prop `nsh/test` cannot read
+    // (sheet §6): caller priority degrades to the seam still reporting its
+    // own 44 pt Edges under a caller `hitSlop`.
     const caller = await openArea({ scope: "touch", callerSlop: "1" });
-    await caller.waitUntil(() => callsOf(caller, "ctx-bound").length > 0);
-    const bound = lastOf<BoundSample>(caller, "ctx-bound");
-    expect(bound.bound).toBe(2);
-    expect(slopOf(bound.seam)).toBeGreaterThan(0);
+    await caller.waitUntil(() => {
+      const last = callsOf(caller, "ctx-env").at(-1)?.[0] as CtxEnv | undefined;
+      return last !== undefined && last.hitSlop !== null;
+    });
+    const callerEnv = lastOf<CtxEnv>(caller, "ctx-env");
+    expect(callerEnv.enabled).toBe(true);
+    expect(slopOf(callerEnv.hitSlop)).toBeGreaterThan(13);
+    expect(slopOf(callerEnv.hitSlop)).toBeLessThan(15);
 
     const disabled = await openArea({ scope: "touch" }, "disabled");
     await disabled.waitUntil(() => callsOf(disabled, "ctx-env").length > 0);
@@ -139,7 +151,10 @@ describe("color-area mobile (web)", () => {
   test("M-003 injected touch: tap commits once from the deferred press, a drag ends once", async () => {
     const app = await openArea({ scope: "touch" });
 
-    await app.press("id:area");
+    // The tap is a zero-delta drag: `app.press` gives the grant no
+    // coordinates on web (the headless file's dragAndHold+drop is the same
+    // gesture there).
+    await app.drag("id:area", { x: 0, y: 0 });
     await app.waitUntil(() => callsOf(app, "onChange").length === 1);
     const tapChange = lastOf<RecordedColor>(app, "onChange");
     expect(Math.abs(tapChange.saturation - 50)).toBeLessThanOrEqual(6);
@@ -238,14 +253,32 @@ describe("color-area mobile (web)", () => {
   test("M-010 baseline: pointer writes at grant and a drag ends once", async () => {
     const app = await openArea();
 
-    await app.press("id:area");
+    await app.drag("id:area", { x: 0, y: 0 });
     await app.waitUntil(() => callsOf(app, "onChange").length === 1);
     expect(callsOf(app, "onChangeEnd")).toHaveLength(1);
+    expect(
+      Math.abs(lastOf<RecordedColor>(app, "onChange").hue - 180),
+    ).toBeLessThanOrEqual(5);
 
     await app.drag("id:area", { x: 60, y: 0 });
     expect(callsOf(app, "onChange").length).toBeGreaterThan(1);
     expect(callsOf(app, "onChangeEnd")).toHaveLength(2);
     expect(app.shows("text:Idle")).toBe(true);
+
+    // 抽样对照 (sheet M-010): RTL mirroring is unchanged — the same panel
+    // drag under `ar-EG` lands near hue 90, X-007's contract.
+    const rtl = await open("../../../color-area.fixtures.tsx", {
+      platform: "web",
+      width: 1024,
+      height: 768,
+      locale: "ar-EG",
+      host: { params: { case: "rtl-drag" } },
+    });
+    await rtl.drag("id:area", { x: 50, y: 0 });
+    const rtlLast = callsOf(rtl, "onChange")
+      .map((c) => c[0] as RecordedColor)
+      .at(-1)!;
+    expect(Math.abs(rtlLast.hue - 90)).toBeLessThanOrEqual(10);
   }, 120_000);
 
   // M-011 (基线移动对偶): injected touch — the keyboard contract is
@@ -265,5 +298,20 @@ describe("color-area mobile (web)", () => {
     await app.keyboard.press("pageup");
     await app.waitUntil(() => callsOf(app, "onChangeEnd").length === 2);
     expect(callsOf(app, "onChange").length).toBe(2);
+
+    // 受控 value/onChangeEnd 单发 (sheet M-011): a controlled area reports
+    // every proposal but never adopts it — the displayed-color probe stays
+    // on the held value and the drag still ends exactly once.
+    const controlled = await openArea({ scope: "touch" }, "controlled");
+    await controlled.drag("id:area", { x: 60, y: 0 });
+    await controlled.waitUntil(
+      () => callsOf(controlled, "onChangeEnd").length === 1,
+    );
+    expect(callsOf(controlled, "onChange").length).toBeGreaterThanOrEqual(1);
+    const displayed = callsOf(controlled, "value").map(
+      (c) => (c[0] as { hsl: string }).hsl,
+    );
+    expect(displayed.length).toBeGreaterThan(0);
+    expect(new Set(displayed).size).toBe(1);
   }, 120_000);
 });
