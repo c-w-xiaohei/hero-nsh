@@ -12,8 +12,15 @@ import { cleanup, computed, effect, reduceMotion, signal, split, Overlay } from 
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
+import type { OverlayTriggerContextValue } from "../../primitives/create-overlay-trigger";
+import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { createPresentation } from "../../primitives/presentation";
 import type { PopoverPlacement, PopoverSide } from "../popover/popover-placement";
 import { resolvePopoverPlacement } from "../popover/popover-placement";
+import { SheetBackdrop } from "../sheet/sheet-backdrop";
+import { SheetBody } from "../sheet/sheet-body";
+import { SheetContent } from "../sheet/sheet-content";
+import { SheetRoot } from "../sheet/sheet-root";
 import { SurfaceContext, type SurfaceContextValue } from "../surface/surface-context";
 import { DatePickerContext } from "./date-picker-context";
 import { renderChildren } from "./render-children";
@@ -91,6 +98,17 @@ export interface DatePickerPopoverProps {
 
   /** When `true`, Escape does not close (the `onCancel` channel still fires). */
   isKeyboardDismissDisabled?: boolean;
+
+  /**
+   * The container the layer presents as: the `createPresentation` rule —
+   * touch plus a compact short side picks `"sheet"`; `"panel"` is the
+   * anchored floating layer this part has always been; `"sheet"` is the
+   * `Sheet` carrier. The value domain narrows to the two carriers this
+   * overlay supports, following the Popover/Menu two-state convention
+   * (`fullscreen` / `"dialog"` are not in the domain).
+   * @default "auto"
+   */
+  presentation?: "auto" | "panel" | "sheet";
 
   /** Accepted, no effect: NSH has no element object to hand to the predicate. */
   shouldCloseOnInteractOutside?: (element: unknown) => boolean;
@@ -214,6 +232,7 @@ export function DatePickerPopover(props: DatePickerPopoverProps): JSX.Element {
     "onOpenChange",
     "isNonModal",
     "isKeyboardDismissDisabled",
+    "presentation",
     "shouldCloseOnInteractOutside",
     "isEntering",
     "isExiting",
@@ -285,6 +304,26 @@ export function DatePickerPopover(props: DatePickerPopoverProps): JSX.Element {
     skip: () => local.shouldSkipAnimation,
     isEntering: () => local.isEntering,
     isExiting: () => local.isExiting,
+  });
+
+  /* -------------------------------------------------------------------------------------------
+   * Presentation: the carrier the open layer takes (A-002). The value is
+   * evaluated once on `isOpen`'s false→true edge and latched until close, so
+   * a rotation or a scope change can never swap the container mid-open.
+   *
+   * `isNonModal` folds into the pin: a non-modal layer has no sheet
+   * semantics (upstream's bottom-sheet is always modal), so under `"auto"`
+   * it resolves to `"panel"` — while an explicit `presentation="sheet"`
+   * still pins, the caller's stated intent winning over the derived rule
+   * (the conservative ruling the adapt sheet §6 margin note records).
+   * ----------------------------------------------------------------------------------------- */
+  const presentation = createPresentation<"panel" | "sheet">({
+    pin: () =>
+      isNonModal() && (local.presentation === undefined || local.presentation === "auto")
+        ? "panel"
+        : local.presentation,
+    isOpen,
+    allowed: () => ["panel", "sheet"],
   });
 
   const resolved = computed(() => resolvePopoverPlacement(local.placement));
@@ -503,6 +542,33 @@ export function DatePickerPopover(props: DatePickerPopoverProps): JSX.Element {
   // interface faithful (port sheet §3).
   const surfaceValue: SurfaceContextValue = { variant: () => "default" };
 
+  /* -------------------------------------------------------------------------------------------
+   * Scoped trigger context (A-004, popover's A-004 ruling): the sheet
+   * carrier's `SheetRoot` provides its own `OverlayTriggerContext`, which
+   * would shadow this layer's ambient scope — a Button written in the
+   * content would then register as the sheet's trigger. Re-supplying a
+   * neutral context inside the carrier keeps the same contract the panel
+   * chain gives: `isOpen` reports "no opinion" (`undefined`), writes are
+   * no-ops, and `close` still reaches this layer's `setOpen`.
+   * ----------------------------------------------------------------------------------------- */
+  const scopedTrigger: OverlayTriggerContextValue = {
+    isOpen: () => undefined,
+    setIsOpen: () => {},
+    toggle: () => {},
+    close: () => setOpen(false),
+    registerTrigger: () => () => {},
+    triggerRef: () => undefined,
+  };
+
+  // A-011: the carrier probes. Each branch derives its `testID` from the
+  // caller's — `<id>-panel` on the anchored overlay, `<id>-sheet` on the
+  // Sheet panel — so `app.shows`/`count` can tell which carrier the resolved
+  // presentation mounted (the `arrow` part's `<id>-default` convention;
+  // §8 registers the observable-id change). `nativeID` keeps its verbatim
+  // mapping.
+  const panelTestID = () => (local.testID !== undefined ? `${local.testID}-panel` : undefined);
+  const sheetTestID = () => (local.testID !== undefined ? `${local.testID}-sheet` : undefined);
+
   // The one read of `props.children`, at the placement inside the layer.
   const contentOverlay = (
     <Overlay
@@ -516,7 +582,7 @@ export function DatePickerPopover(props: DatePickerPopoverProps): JSX.Element {
       offset={local.offset ?? 8}
       margin={local.containerPadding ?? 12}
       focusable={true}
-      testID={local.testID}
+      testID={panelTestID()}
       nativeID={local.id ?? local.nativeID}
       accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel ?? picker.labelText()}
       class={classes()}
@@ -538,22 +604,74 @@ export function DatePickerPopover(props: DatePickerPopoverProps): JSX.Element {
   // closes, so the trigger stays reachable during the exit hold.
   const underlayClassList = computed(() => ({ "pointer-events-none": !isOpen() }));
 
+  // A-003: the panel branch is the pre-existing render chain, verbatim — the
+  // modal underlay plus the anchored content overlay. `"panel"` *is* the
+  // upstream layer, so nothing about its structure changes.
+  const panelBranch = (
+    <If when={!isNonModal()} else={contentOverlay}>
+      <Overlay
+        class="inset-0"
+        classList={underlayClassList()}
+        focusable={false}
+        onPress={() => {
+          if (isOpen()) {
+            setOpen(false);
+          }
+        }}
+      >
+        {contentOverlay}
+      </Overlay>
+    </If>
+  );
+
   return (
     <SurfaceContext.Provider value={surfaceValue}>
       <If when={presence.isPresent()}>
-        <If when={!isNonModal()} else={contentOverlay}>
-          <Overlay
-            class="inset-0"
-            classList={underlayClassList()}
-            focusable={false}
-            onPress={() => {
-              if (isOpen()) {
-                setOpen(false);
-              }
-            }}
-          >
-            {contentOverlay}
-          </Overlay>
+        {/* A-004: the sheet carrier composes the existing Sheet parts. The
+            popover keeps owning the open state — `SheetRoot` is a controlled
+            shell fed `isOpen`, and its `onOpenChange` writes back through the
+            same `setOpen` the underlay and Escape take (M-006's channel).
+            `SheetBackdrop`'s dismissable paint layer replaces the underlay;
+            `SheetContent` carries the layer's own look (`slots.popover()`
+            plus the caller's class/style, the `aria-label`, the ids and the
+            `onLayout` channel); `SheetBody` is the scroll container the
+            children land in, the upstream `contentContainer` counterpart
+            (§8). `local.isExiting` reaches the backdrop so the retained-mount
+            contract holds on this carrier too, and
+            `isKeyboardDismissDisabled` goes with it so the contract prop
+            gates Escape on the sheet carrier exactly as `handleCancel`
+            gates it on the panel chain (§1 baseline — the prop keeps its
+            documented effect under `presentation="sheet"`). The panel-only
+            machinery — anchor geometry, `onPosition`, `transformOrigin`,
+            the `UNMODIFIED_KEYS`-independent focus chain — is simply not
+            referenced here (A-010). */}
+        <If when={presentation() === "sheet"} else={panelBranch}>
+          <SheetRoot isOpen={isOpen()} onOpenChange={setOpen}>
+            <SheetBackdrop
+              isExiting={local.isExiting}
+              isKeyboardDismissDisabled={isKeyboardDismissDisabled()}
+            >
+              <SheetContent
+                ref={(node) => local.ref?.(node)}
+                testID={sheetTestID()}
+                nativeID={local.id ?? local.nativeID}
+                accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel ?? picker.labelText()}
+                className={classes()}
+                style={resolvedStyle()}
+                onLayout={local.onLayout}
+              >
+                {/* `SheetRoot` provides its own `OverlayTriggerContext`, which
+                    would shadow this scope: a Button written in the content
+                    would then pose as the sheet's trigger. Re-supplying
+                    `scopedTrigger` keeps the same contract the panel branch
+                    gives its children — `close` still reaches this layer's
+                    `setOpen`, `isOpen` still reports "no opinion". */}
+                <OverlayTriggerContext.Provider value={scopedTrigger}>
+                  <SheetBody>{renderChildren(local.children)}</SheetBody>
+                </OverlayTriggerContext.Provider>
+              </SheetContent>
+            </SheetBackdrop>
+          </SheetRoot>
         </If>
       </If>
     </SurfaceContext.Provider>

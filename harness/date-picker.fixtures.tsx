@@ -1,5 +1,19 @@
 import { host, mount } from "nsh";
-import { Button, Calendar, DateField, DatePicker, Label } from "@heroui/react";
+import type { JSX } from "nsh";
+import {
+  Button,
+  Calendar,
+  DateField,
+  DatePicker,
+  EnvironmentScope,
+  Label,
+} from "@heroui/react";
+import type {
+  DateInputGroupInputKeyboardType,
+  EnvironmentDensity,
+  EnvironmentInput,
+  EnvironmentWidth,
+} from "@heroui/react";
 import { CalendarDate } from "@internationalized/date";
 import type { DateValue } from "@internationalized/date";
 import { Stage } from "@scenario/stage";
@@ -32,7 +46,26 @@ import { probe } from "@scenario/probe";
  *   controlled        `value` from params year/month/day, `onChange` probe
  *                     (controlled write-back)
  *
- * testIDs: dp-root, dp-group, dp-trigger, dp-popover, dp-calendar, dp-preset.
+ * Every case mounts inside `Scoped` (A-011): `host.params.input` /
+ * `host.params.width` / `host.params.density` inject an `EnvironmentScope`
+ * over the whole app — a field absent keeps the host-derived baseline, so an
+ * unparameterized open mounts the desktop side untouched. This is a real
+ * provider, never a bare fragment: a fragment would break the exit-hold
+ * unmount channel the presence assertions ride on (adapt sheet §6, popover
+ * §7's measured damage).
+ *
+ * `host.params.presentation` ∈ "auto"|"panel"|"sheet" pins
+ * `DatePicker.Popover`'s carrier (absent = auto, adapt sheet A-001).
+ * `host.params.nonmodal`="1" sets `isNonModal` (the non-modal fold of A-002).
+ * `host.params.kt` feeds `DateField.Input`'s `keyboardType` ("auto" when
+ * absent — the inherited date-input-group A-007 channel, A-006/M-010).
+ * `host.params.readonly`/`disabled`="1" set the Root's `isReadOnly` /
+ * `isDisabled`.
+ *
+ * testIDs: dp-root, dp-group, dp-trigger, dp-popover (+ the derived carriers
+ * `dp-popover-panel` / `dp-popover-sheet`, adapt sheet §8), dp-calendar,
+ * dp-preset; `dig-seg-<type>` is the soft-keyboard channel id the
+ * date-input-group unit owns and this fixture rides on unchanged.
  * The host locale would otherwise decide the date order and the segment names,
  * so every case pins `locale` through the test's `open` options (en-US).
  */
@@ -126,7 +159,12 @@ type ShellProps = {
     className?: string;
     "aria-label"?: string;
     onLayout?: (event: LayoutEvent) => void;
+    presentation?: "auto" | "panel" | "sheet";
+    isNonModal?: boolean;
   };
+  inputKeyboardType?: DateInputGroupInputKeyboardType;
+  isReadOnly?: boolean;
+  isDisabled?: boolean;
 };
 
 function Shell(props: ShellProps) {
@@ -134,6 +172,8 @@ function Shell(props: ShellProps) {
     <Stage>
       <DatePicker
         defaultValue={props.defaultValue}
+        isDisabled={props.isDisabled}
+        isReadOnly={props.isReadOnly}
         name="date"
         onChange={recordChange}
         onOpenChange={props.onOpenChange}
@@ -143,7 +183,7 @@ function Shell(props: ShellProps) {
       >
         <Label>Date</Label>
         <DateField.Group testID="dp-group">
-          <DateField.Input>
+          <DateField.Input keyboardType={props.inputKeyboardType}>
             {(segment) => <DateField.Segment segment={segment} />}
           </DateField.Input>
           <DateField.Suffix>
@@ -159,7 +199,9 @@ function Shell(props: ShellProps) {
         <DatePicker.Popover
           aria-label={props.popoverProps?.["aria-label"]}
           className={props.popoverProps?.className}
+          isNonModal={props.popoverProps?.isNonModal}
           onLayout={props.popoverProps?.onLayout}
+          presentation={props.popoverProps?.presentation}
           testID="dp-popover"
         >
           <CalendarContent probes={props.probes} />
@@ -174,40 +216,109 @@ function Shell(props: ShellProps) {
   );
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * EnvironmentScope wrapper (A-011): always a real provider, per-field.
+ * -------------------------------------------------------------------------------------------------*/
+
+function Scoped(props: { children?: JSX.Element }) {
+  const input = host.params.input;
+  const width = host.params.width;
+  const density = host.params.density;
+
+  return (
+    <EnvironmentScope
+      input={input === undefined ? undefined : (String(input) as EnvironmentInput)}
+      width={width === undefined ? undefined : (String(width) as EnvironmentWidth)}
+      density={
+        density === undefined ? undefined : (String(density) as EnvironmentDensity)
+      }
+    >
+      {props.children}
+    </EnvironmentScope>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "default");
 
+  const presentation = String(host.params.presentation ?? "");
+  const nonModal = String(host.params.nonmodal ?? "") === "1";
+  const kt = String(host.params.kt ?? "");
+  const readonly = String(host.params.readonly ?? "") === "1";
+  const disabled = String(host.params.disabled ?? "") === "1";
+
+  const shellProps: ShellProps = {
+    defaultValue: startDate(),
+    isReadOnly: readonly || undefined,
+    isDisabled: disabled || undefined,
+    inputKeyboardType:
+      kt === "" ? undefined : (kt as DateInputGroupInputKeyboardType),
+    popoverProps: {
+      presentation:
+        presentation === ""
+          ? undefined
+          : (presentation as "auto" | "panel" | "sheet"),
+      isNonModal: nonModal || undefined,
+    },
+  };
+
   if (name === "open") {
-    return <Shell defaultValue={startDate()} onOpenChange={probe("openChange")} />;
+    return (
+      <Scoped>
+        <Shell {...shellProps} onOpenChange={probe("openChange")} />
+      </Scoped>
+    );
   }
 
   if (name === "layout") {
     return (
-      <Shell
-        defaultValue={startDate()}
-        preset
-        probes
-        popoverProps={{
-          className: "flex items-start gap-4",
-          "aria-label": "Choose a date",
-        }}
-      />
+      <Scoped>
+        <Shell
+          {...shellProps}
+          preset
+          probes
+          popoverProps={{
+            ...shellProps.popoverProps,
+            className: "flex items-start gap-4",
+            "aria-label": "Choose a date",
+          }}
+        />
+      </Scoped>
     );
   }
 
   if (name === "no-close-on-select") {
-    return <Shell defaultValue={startDate()} shouldCloseOnSelect={false} />;
+    return (
+      <Scoped>
+        <Shell {...shellProps} shouldCloseOnSelect={false} />
+      </Scoped>
+    );
   }
 
   if (name === "motion") {
-    return <Shell defaultValue={startDate()} popoverProps={{ className: "duration-[6000ms]" }} />;
+    return (
+      <Scoped>
+        <Shell
+          {...shellProps}
+          popoverProps={{ ...shellProps.popoverProps, className: "duration-[6000ms]" }}
+        />
+      </Scoped>
+    );
   }
 
   if (name === "controlled") {
-    return <Shell value={startDate()} />;
+    return (
+      <Scoped>
+        <Shell {...shellProps} defaultValue={undefined} value={startDate()} />
+      </Scoped>
+    );
   }
 
-  return <Shell defaultValue={startDate()} />;
+  return (
+    <Scoped>
+      <Shell {...shellProps} />
+    </Scoped>
+  );
 }
 
 mount(Fixture);
