@@ -128,7 +128,10 @@ export interface ColorInputGroupFieldValue {
   /**
    * The field's `enterKeyHint` for the soft keyboard's return-key label.
    * Read-port reserved for the ColorField unit (sheet §5): `undefined` when
-   * the field root exposes no hint, and the Input's own `enterKeyHint` wins.
+   * the field root exposes no hint, and the Input's own `enterKeyHint`
+   * wins. A-011: this channel is also what the `field-mock` fixture drives
+   * through a `ColorInputGroupFieldContext.Provider` — the same fixture
+   * privilege checkbox's `CtxProbe` uses.
    */
   enterKeyHint?: () => ColorInputGroupEnterKeyHint | undefined;
 
