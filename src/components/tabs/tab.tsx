@@ -256,6 +256,7 @@ export function Tab(props: TabProps): JSX.Element | null {
     }),
   );
   cleanup(() => tabs.unregisterBounds(key));
+  cleanup(() => tabs.registerTabRef(key, undefined));
 
   const selectable = createSelectableItem({
     selectionManager: tabs.selectionManager,
@@ -348,6 +349,23 @@ export function Tab(props: TabProps): JSX.Element | null {
     }
 
     if (node == null) {
+      return;
+    }
+
+    if (pointerFocusPending) {
+      // The focus request is driven by a pointer press: defer it past the
+      // press window. On the web host `el.focus()` scrolls the element into
+      // view, and that scroll cancels the host's in-flight press gesture —
+      // `down/up/end` landed but `press`/`click` never fired (measured: a
+      // selection-changing press on an unfocused tab died after `up` — and
+      // in the successful runs `focus` always landed AFTER `click`). Two
+      // frames puts the call behind `up → end → press → click` on every
+      // observed ordering; keyboard-driven focus (`pointerFocusPending`
+      // false) stays synchronous — T-015's focus-trail semantics are
+      // untouched.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => node?.focus()),
+      );
       return;
     }
 
@@ -559,6 +577,7 @@ export function Tab(props: TabProps): JSX.Element | null {
       <View
         ref={(next) => {
           node = next;
+          tabs.registerTabRef(key, next);
           local.ref?.(next);
         }}
         nativeID={local.nativeID ?? (local.id != null ? String(local.id) : undefined)}

@@ -1,5 +1,5 @@
 import type { Bounds, JSX, ScrollEvent, ScrollRef, Size, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { cleanup, computed, effect, signal, split, View } from "nsh";
+import { cleanup, computed, effect, signal, split, untracked, View } from "nsh";
 
 import { createInput } from "../../primitives/environment";
 import { IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp } from "../icons";
@@ -189,6 +189,12 @@ export function TabListContainer(props: TabListContainerProps): JSX.Element | nu
 
   const clamp = (value: number) => Math.min(Math.max(value, 0), maxScroll());
 
+  // A-004's gating seam: `input()==="touch"` switches scroll-to-visible from
+  // the pointer's minimal edge alignment to the Native `scrollAlign="center"`
+  // default (see the effect below). Declared before `scrollKeyIntoView`,
+  // which reads it on every call.
+  const input = createInput();
+
   let scroller: ScrollRef | undefined;
 
   /* -------------------------------------------------------------------------------------------
@@ -196,9 +202,12 @@ export function TabListContainer(props: TabListContainerProps): JSX.Element | nu
    * the sign flipped for a right-to-left horizontal list (port sheet §2, §5).
    *
    * NSH reports a horizontal offset as the distance from the content's left
-   * edge, so a right-to-left list rests at `maxScroll` and its start side is
-   * the larger offset. The flip therefore applies to the delta, and the clamp
-   * stays `[0, maxScroll]` in both directions.
+   * edge in both directions, so a right-to-left list rests at `maxScroll`
+   * showing the end of the content — where the logical start's mirrored
+   * frames live — and scrolling toward the content's start lowers it toward
+   * 0 (measured: rest emits `offset.x` 244, `t1`'s mirrored bounds 472..520
+   * in view). The flip therefore applies to the delta, and the clamp stays
+   * `[0, maxScroll]` in both directions.
    * ----------------------------------------------------------------------------------------- */
   const scrollBy = (direction: 1 | -1) => {
     const vertical = isVertical();
@@ -211,7 +220,11 @@ export function TabListContainer(props: TabListContainerProps): JSX.Element | nu
 
     const isRtl = !vertical && dir() === "rtl";
     const delta = direction * viewportSize * 0.8 * (isRtl ? -1 : 1);
-    const current = clamp(vertical ? offset().y : offset().x);
+    // `untracked`: a press on a chevron runs in an event handler, but the
+    // offset read must not leak into any caller's effect either — a scroll
+    // updating `offset` would re-fire it and undo the step (the
+    // scroll-into-view effect's reads are handled the same way below).
+    const current = clamp(untracked(() => (vertical ? offset().y : offset().x)));
     const next = clamp(current + delta);
 
     if (next === current) {
@@ -224,41 +237,49 @@ export function TabListContainer(props: TabListContainerProps): JSX.Element | nu
   };
 
   /* -------------------------------------------------------------------------------------------
-   * Bring a tab into view when the keyboard focus moves to it. The bounds are in
-   * the list's coordinates, which are the scroll content's coordinates; the
-   * offset is where the viewport starts. A horizontal right-to-left list needs
-   * no flip here: both are measured from the content's physical left edge.
+   * Bring a tab into view when the keyboard focus moves to it — `reveal`
+   * scrolls the enclosing scroll views so the tab shows, applying the offset
+   * natively once the turn's layout lands. That removes the whole
+   * offset-signal path that was breaking this: the reported `offset` reads
+   * stale inside the collection's focused-key effect (measured: it saw 0
+   * after `onScroll` had already parked an rtl scroller at rest 244, so the
+   * ltr-shaped window math issued bogus 240/48 scrolls — and `select-t5`
+   * then parked at 48, which broke the chevron's 224 pt page).
+   *
+   * `"nearest"` keeps the pointer's minimal-visibility semantic; under
+   * `input()==="touch"` it is `"center"` — the same `scrollAlign="center"`
+   * the effect below applies, so a focus move and a programmatic selection
+   * cannot fight each other (measured: minimal visibility's 60 overwrote
+   * centering's 176 for an off-screen key). `bounds` is still read so the
+   * primitive's effect keeps its retry-on-first-layout dependency.
    * ----------------------------------------------------------------------------------------- */
   const scrollKeyIntoView = (key: string) => {
-    const tabBounds = tabs.bounds(key);
-    const vertical = isVertical();
-    const viewportSize = vertical ? viewport().height : viewport().width;
+    // `bounds` stays a dependency of the calling focused-key effect so it
+    // retries once the first layout reports the tab's frame.
+    tabs.bounds(key);
 
-    if (tabBounds == null || viewportSize <= 0) {
+    if (tabs.tabRef(key) == null) {
       return;
     }
 
-    const current = vertical ? offset().y : offset().x;
-    const start = vertical ? tabBounds.origin.y : tabBounds.origin.x;
-    const end = start + (vertical ? tabBounds.size.height : tabBounds.size.width);
+    const centered = input() === "touch";
 
-    let next = current;
-
-    if (start < current) {
-      next = start;
-    } else if (end > current + viewportSize) {
-      next = end - viewportSize;
-    }
-
-    if (next === current) {
-      return;
-    }
-
-    scroller?.scrollTo(
-      vertical
-        ? { y: clamp(next), animated: true }
-        : { x: clamp(next), animated: true },
-    );
+    // `reveal` applies its scroll once the turn's layout lands, but a call
+    // issued before the tab's *first* layout is dropped entirely on hosts
+    // that report it "not laid out". One animation frame puts the call behind
+    // the first layout on every host — and on touch the deferred call reads
+    // the CURRENT selected key instead of the captured one, so a slower
+    // in-flight `reveal` can never win the scroll back to a stale tab
+    // (measured on ios: a `press t1` reveal landed after `select-t7`'s and
+    // re-centered the strip to 0).
+    requestAnimationFrame(() => {
+      if (centered) {
+        const selected = tabs.selectedKey();
+        tabs.tabRef(selected ?? key)?.reveal({ horizontal: "center", vertical: "center", animated: true });
+      } else {
+        tabs.tabRef(key)?.reveal({ horizontal: "nearest", vertical: "nearest", animated: true });
+      }
+    });
   };
 
   tabs.registerScrollToKey(scrollKeyIntoView);
@@ -272,13 +293,11 @@ export function TabListContainer(props: TabListContainerProps): JSX.Element | nu
    * the pointer environment keeps the existing `focusedKey→scrollToItem`
    * minimal-visibility scroll as its only scroll path.
    *
-   * The geometry reuses the same physical coordinates as `scrollKeyIntoView`
-   * (content-space bounds minus a viewport-space offset, so a right-to-left
-   * horizontal list needs no sign flip); `clamp` keeps the target inside the
-   * scroll range, so a tab already near an edge lands at the edge.
+   * The target is the same `scrollAlign="center"` `scrollKeyIntoView` applies
+   * on touch — both paths call `reveal`, so whichever fires last lands on the
+   * same centered window; `dir="rtl"` mirroring is handled natively by the
+   * scroll views (no offset math on this side at all).
    * ----------------------------------------------------------------------------------------- */
-  const input = createInput();
-
   effect(() => {
     if (input() !== "touch") {
       return;
@@ -290,28 +309,15 @@ export function TabListContainer(props: TabListContainerProps): JSX.Element | nu
       return;
     }
 
-    const tabBounds = tabs.bounds(key);
-    const vertical = isVertical();
-    const viewportSize = vertical ? viewport().height : viewport().width;
-
-    if (tabBounds == null || viewportSize <= 0) {
-      return;
-    }
-
-    const current = vertical ? offset().y : offset().x;
-    const start = vertical ? tabBounds.origin.y : tabBounds.origin.x;
-    const end = start + (vertical ? tabBounds.size.height : tabBounds.size.width);
-    const next = clamp((start + end) / 2 - viewportSize / 2);
-
-    if (next === current) {
-      return;
-    }
-
-    scroller?.scrollTo(
-      vertical
-        ? { y: next, animated: true }
-        : { x: next, animated: true },
-    );
+    // `bounds` is read only as the retry trigger: the effect re-runs when the
+    // first layout lands, which is also when `reveal` has a real frame to aim
+    // at. The same one-frame deferral as `scrollKeyIntoView` keeps the call
+    // behind that first layout on hosts that drop a too-early `reveal`.
+    tabs.bounds(key);
+    requestAnimationFrame(() => {
+      const selected = tabs.selectedKey() ?? key;
+      tabs.tabRef(selected)?.reveal({ horizontal: "center", vertical: "center", animated: true });
+    });
   });
 
   /* -------------------------------------------------------------------------------------------

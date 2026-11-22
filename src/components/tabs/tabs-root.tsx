@@ -450,6 +450,22 @@ export function TabsRoot(props: TabsRootProps): JSX.Element {
 
   const bounds = (key: string) => frames().get(key);
 
+  // The tabs' `ViewRef`s, registered from each tab's `ref` callback. They are
+  // a plain map, not a signal: the consumers (`reveal` calls inside scroll
+  // effects) read a node when they already fire for another reason, so
+  // tracking the map would only re-run those effects on every mount.
+  const tabNodes = new Map<string, ViewRef>();
+
+  const registerTabRef = (key: string, node: ViewRef | undefined) => {
+    if (node == null) {
+      tabNodes.delete(key);
+    } else {
+      tabNodes.set(key, node);
+    }
+  };
+
+  const tabRef = (key: string) => tabNodes.get(key);
+
   /* -------------------------------------------------------------------------------------------
    * R-055: HeroUI waits one frame before letting the indicator animate, so a
    * first render (or a replayed layout effect) cannot keep an initial offset.
@@ -496,6 +512,8 @@ export function TabsRoot(props: TabsRootProps): JSX.Element {
     bounds,
     registerBounds,
     unregisterBounds,
+    tabRef,
+    registerTabRef,
     transitionSource,
     isIndicatorReady,
     contentSize,
