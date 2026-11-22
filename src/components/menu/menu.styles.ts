@@ -2,7 +2,11 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease } from "../../tokens/geometry";
+// `ease.outQuart` of `src/tokens/geometry.ts` written out: a `.styles.ts`
+// imports only `tailwind-variants` (the M2 class walker loads this file with
+// plain Node, which cannot resolve an extensionless relative import). Same
+// precedent as `EASE_SMOOTH` in switch/pagination styles.
+const EASE_OUT_QUART = "ease-[cubic-bezier(0.165,0.84,0.44,1)]";
 
 /**
  * The three Menu variant tables of `@heroui/styles` 3.2.7
@@ -54,7 +58,7 @@ export const menuItemVariants = tv({
     // sticky hover behind (web sticky hover, sheet §6).
     item: [
       "relative flex min-h-9 w-full items-center justify-start rounded-2xl text-foreground outline-none select-none",
-      `transition duration-[250ms] ${ease.outQuart} motion-reduce:transition-none cursor-pointer`,
+      `transition duration-[250ms] ${EASE_OUT_QUART} motion-reduce:transition-none cursor-pointer`,
     ].join(" "),
     // R-019: the indicator slot, pinned to `start-2` and vertically centered.
     // R-020: its 250ms transition (upstream's `duration-250` is not a standard
