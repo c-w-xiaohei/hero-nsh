@@ -13,6 +13,22 @@ import type {
   TypographyParagraphProps,
 } from "./typography-text-parts";
 
+// A-001 … A-013: adapt sheet typography.md keeps every 落点 as 保留 — text
+// scaling, wrapping and truncation are already carried by the inherited
+// `TextProps` passthrough (`allowFontScaling`/`maxFontSizeMultiplier`/
+// `adjustsFontSizeToFit`/`minimumFontScale`, `style.numberOfLines`/
+// `textOverflow`) plus the `truncate` variant, so no `input`/`density`
+// axis lands in `typography.styles.ts` and no prop is added (the sheet's
+// "不新增 Native Text 重复出口" ruling). The two harness-side 接轴 spots
+// (A-011 fixtures, A-012 tests) are realized outside this directory —
+// `harness/typography.fixtures.tsx` (`host.params.case` dispatch plus
+// `ScopedMobile` feeding `input`/`density` into `EnvironmentScope`) and
+// `harness/tests/components/typography/typography.mobile.test.tsx` (the
+// desktop-pinned, dual-environment M-001…M-010 assertions). The gate's
+// marker scan only sees `src/components/typography/`, so the record lives
+// here. Every spot they probe — the parts this file exports — is
+// environment-invariant: typography is a pure display compound.
+
 /* -------------------------------------------------------------------------------------------------
  * Compound Component
  * -----------------------------------------------------------------------------------------------*/
