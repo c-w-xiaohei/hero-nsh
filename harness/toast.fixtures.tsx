@@ -1,6 +1,8 @@
-import { host, mount, signal, Text, View } from "nsh";
+import { effect, host, mount, signal, Text, View } from "nsh";
 import type { Component, JSX } from "nsh";
-import { Button, Toast, ToastQueue, toast } from "@heroui/react";
+import { Button, EnvironmentScope, Toast, ToastQueue, toast } from "@heroui/react";
+import type { ToastPlacement } from "../src/components/toast/toast-context";
+import { ToastItemContext } from "../src/components/toast/toast-context";
 import { probe } from "@scenario/probe";
 
 /*
@@ -30,6 +32,27 @@ const TITLES = ["First", "Second", "Third"];
 
 function Frame(props: { children?: JSX.Element }) {
   return <View class="flex-1 items-start gap-4 bg-background p-6">{props.children}</View>;
+}
+
+/*
+ * `host.params.scope` wraps the mounted case in an `EnvironmentScope`, the
+ * same convention as `sheet.fixtures.tsx` / `environment.fixtures.tsx`:
+ * "touch" injects `input="touch"`, "pointer" injects `input="pointer"`, and an
+ * absent param leaves the host-derived environment — so the same case asserts
+ * both sides of the input gate.
+ */
+function Scoped(props: { children?: JSX.Element }) {
+  const scope = String(host.params.scope ?? "");
+
+  if (scope === "touch") {
+    return <EnvironmentScope input="touch">{props.children}</EnvironmentScope>;
+  }
+
+  if (scope === "pointer") {
+    return <EnvironmentScope input="pointer">{props.children}</EnvironmentScope>;
+  }
+
+  return <>{props.children}</>;
 }
 
 /* T-001: nothing is queued, so the region must not render at all. */
@@ -655,6 +678,93 @@ function PromiseReject() {
   );
 }
 
+/*
+ * A-003 / M-010: the swipe observation channel. `SwipeProbe` sits inside a
+ * toast, reads `ToastItemContext().swipe` — the pan's `panHandlers()` key
+ * count (0 when the environment mounted no listener at all), the claimed
+ * flag, the visual `dragY` offset and the drag-in-flight flag — and reports a
+ * snapshot to `probe("swipe")` on every change, so a drag's process values
+ * land in Storage frame by frame.
+ */
+function SwipeProbe() {
+  const item = ToastItemContext();
+  const report = probe("swipe");
+  const swipe = item.swipe;
+
+  effect(() => {
+    const handlers = swipe?.handlers() ?? {};
+
+    report({
+      key: item.toast?.().key ?? "",
+      keys: Object.keys(handlers).length,
+      active: swipe?.active() ?? false,
+      offset: swipe?.offset() ?? 0,
+      dragging: swipe?.dragging() ?? false,
+    });
+  });
+
+  return null;
+}
+
+/*
+ * The swipe cases (adapt sheet §4). One provider, a custom `Toast` per entry
+ * so the root carries the gesture and a `SwipeProbe` per row reports the
+ * channel; `onClose` probes disambiguate the close path by title.
+ *
+ *   "swipe"       placement from `host.params.placement` (default "bottom")
+ *   "swipe-top"   default placement "top" — the normalized-direction side
+ *   "swipe-hold"  default `timeout` 1000 — the drag-timer-suspension case
+ *
+ * `host.params.count` seeds that many toasts (default 1), `timeout` overrides
+ * their countdown (0 = persistent), `placement` / `itemPlacement` set the
+ * provider's and the row's placement, and `swipeable` / `itemSwipeable` ("0"
+ * or "false" for off) the provider's default and the row's own `isSwipeable`.
+ * Each toast root's testID is its title (`Swipe-0`, `Swipe-1`, …).
+ */
+function SwipeCase() {
+  const queue = new ToastQueue();
+  const count = Number(host.params.count ?? 1);
+  const caseName = String(host.params.case ?? "swipe");
+  const timeout = Number(host.params.timeout ?? (caseName === "swipe-hold" ? 1000 : 0));
+  const placement = String(
+    host.params.placement ?? (caseName === "swipe-top" ? "top" : "bottom"),
+  ) as ToastPlacement;
+  const itemPlacement =
+    host.params.itemPlacement === undefined
+      ? undefined
+      : (String(host.params.itemPlacement) as ToastPlacement);
+  const providerSwipeable = host.params.swipeable !== "0" && host.params.swipeable !== "false";
+  const itemSwipeable =
+    host.params.itemSwipeable === undefined
+      ? undefined
+      : host.params.itemSwipeable !== "0" && host.params.itemSwipeable !== "false";
+
+  for (let index = 0; index < count; index++) {
+    queue.add({ title: `Swipe-${index}` }, { onClose: probe(`onClose-${index}`), timeout });
+  }
+
+  return (
+    <Frame>
+      <Toast.Provider isSwipeable={providerSwipeable} placement={placement} queue={queue}>
+        {({ toast: item }) => (
+          <Toast
+            isSwipeable={itemSwipeable}
+            placement={itemPlacement}
+            testID={String(item.content.title ?? "toast")}
+            toast={item}
+          >
+            <Toast.Content>
+              <Toast.Title>{item.content.title}</Toast.Title>
+            </Toast.Content>
+            <Toast.CloseButton />
+            <SwipeProbe />
+          </Toast>
+        )}
+      </Toast.Provider>
+    </Frame>
+  );
+}
+
 const cases: Record<string, Component> = {
   empty: Empty,
   count: Count,
@@ -687,12 +797,19 @@ const cases: Record<string, Component> = {
   "update-text": UpdateText,
   "promise-resolve": PromiseResolve,
   "promise-reject": PromiseReject,
+  swipe: SwipeCase,
+  "swipe-top": SwipeCase,
+  "swipe-hold": SwipeCase,
 };
 
 function Fixture() {
   const Case = cases[String(host.params.case ?? "empty")] ?? Empty;
 
-  return <Case />;
+  return (
+    <Scoped>
+      <Case />
+    </Scoped>
+  );
 }
 
 mount(Fixture);
