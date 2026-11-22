@@ -24,6 +24,10 @@ export const colorInputGroupVariants = tv({
   defaultVariants: {
     fullWidth: false,
     variant: "primary",
+    // A-001: a bare `colorInputGroupVariants()` call resolves the pointer
+    // cell, so callers that never learned the axis render byte-for-byte the
+    // table they had before it existed.
+    input: "pointer",
   },
   slots: {
     /*
@@ -121,6 +125,16 @@ export const colorInputGroupVariants = tv({
       primary: {},
       secondary: {
         base: "shadow-none dark:shadow-none bg-default",
+      },
+    },
+    // A-001: the `input` axis of the encapsulation model. The group's 36 pt
+    // row is the input's hit area; `touch` lifts it to the 44 pt minimum a
+    // visible hit target needs, and `min-h` wins over the base's `h-9`. No
+    // `density` axis: the row height is hit geometry, not a spacing preset.
+    input: {
+      pointer: {},
+      touch: {
+        base: "min-h-11",
       },
     },
   },
