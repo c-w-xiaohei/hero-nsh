@@ -1,7 +1,16 @@
 import { host, mount, signal, Text, View } from "nsh";
+import type { JSX } from "nsh";
 import { Input } from "nsh/base";
-import { ColorField, Description, FieldError, Label, parseColor } from "@heroui/react";
+import {
+  ColorField,
+  Description,
+  EnvironmentScope,
+  FieldError,
+  Label,
+  parseColor,
+} from "@heroui/react";
 import type { ColorValue } from "@heroui/react";
+import type { ColorInputGroupEnterKeyHint } from "../src/components/color-input-group/context";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 
@@ -51,7 +60,41 @@ import { probe } from "@scenario/probe";
  *                      (T-004)
  *   focus-probe        onFocus / onBlur probes and the input's test id (T-012,
  *                      used by the `.web` file only)
+ *
+ * A-010's mobile cases (sheet §2):
+ *   layout         the `ColorField.Group` reports `onLayout` bounds; run once
+ *                  per `scope` (touch lifts the 36 pt row past 44 pt, pointer
+ *                  keeps 36). `host.params.ekh` feeds the Root's
+ *                  `enterKeyHint` so the hint rides along while bounds are
+ *                  read ("" = unset)
+ *   submit         onChange (Root) / onSubmit / blur / focus (Input) probes
+ *                  plus an `outside` blur target; `host.params.sb` feeds the
+ *                  Input's `submitBehavior` ("" = unset → the field's
+ *                  keep-focus `"submit"` default)
+ *   kbd            one field per Root `enterKeyHint` value (seven mounts)
+ *                  and one per Input `returnKeyType` value (five mounts) —
+ *                  mounting is the channel assertion (sheet §6)
+ *   hover          the Group's `isHovered` render-prop record plus
+ *                  `onHover*` / `onMouse*` probes on Group and Input, and
+ *                  `onPress` probes on the affixes for the no-press-channel
+ *                  contract (color-input-group's `hover` case precedent)
+ *
+ * `host.params.scope` wraps every case: "" = the host's default environment
+ * (pointer — the desktop-parity side), "touch" = `EnvironmentScope
+ * input="touch"`, the same convention switch/date-input-group use.
  */
+
+type Scope = "" | "touch";
+
+function Scoped(props: { children?: JSX.Element }) {
+  const scope = String(host.params.scope ?? "") as Scope;
+
+  return scope === "touch" ? (
+    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
 function BasicCase() {
   return (
     <Stage>
@@ -255,24 +298,157 @@ function FocusProbeCase() {
   );
 }
 
+/* A-010: the Group's `onLayout` bounds — M-001 reads `height` under both
+ * environments (the inherited `min-h-11` lifts the 36 pt row past 44 pt under
+ * touch). `ekh` carries the Root's `enterKeyHint` so the hint channel mounts
+ * on the same surface. */
+function LayoutCase() {
+  const reportLayout = probe("layout");
+  const ekh = String(host.params.ekh ?? "");
+
+  return (
+    <Stage>
+      <ColorField
+        name="color"
+        defaultValue={parseColor("#0485F7")}
+        enterKeyHint={ekh === "" ? undefined : (ekh as ColorInputGroupEnterKeyHint)}
+      >
+        <Label>Color</Label>
+        <ColorField.Group
+          testID="group"
+          onLayout={(e) =>
+            reportLayout({ width: e.bounds.size.width, height: e.bounds.size.height })
+          }
+        >
+          <ColorField.Input testID="color-input" />
+        </ColorField.Group>
+      </ColorField>
+    </Stage>
+  );
+}
+
+/* A-010: the field submit chain — Enter runs `field.onSubmit` →
+ * `handle.commit()` and keeps the focus (the field's `submitBehavior` default
+ * `"submit"`); `sb` feeds the Input's explicit `submitBehavior`, which wins
+ * (M-003, M-004). The `outside` input is the blur target. */
+function SubmitCase() {
+  const sb = String(host.params.sb ?? "");
+
+  return (
+    <Stage>
+      <ColorField
+        name="color"
+        defaultValue={parseColor("#0485F7")}
+        onChange={(color: ColorValue | null) =>
+          probe("onChange")(color ? color.toString("hex") : null)
+        }
+      >
+        <Label>Color</Label>
+        <ColorField.Group>
+          <ColorField.Input
+            testID="color-input"
+            submitBehavior={
+              sb === "" ? undefined : (sb as "submit" | "blurAndSubmit" | "newline")
+            }
+            onSubmit={probe("onSubmit")}
+            onBlur={probe("blur")}
+            onFocus={probe("focus")}
+          />
+        </ColorField.Group>
+      </ColorField>
+      <Input testID="outside" placeholder="outside" />
+    </Stage>
+  );
+}
+
+/* A-010: every Root `enterKeyHint` (the seven useTextField values) and Input
+ * `returnKeyType` value mounts — mounting is the channel assertion (M-005);
+ * what the soft keyboard labels with them is a real-device item (sheet §6). */
+function KbdCase() {
+  return (
+    <Stage>
+      <View class="flex-col gap-2">
+        {(["enter", "done", "go", "next", "previous", "search", "send"] as const).map(
+          (hint) => (
+            <ColorField name={`kh-${hint}`} enterKeyHint={hint}>
+              <ColorField.Group>
+                <ColorField.Input testID={`kh-${hint}`} />
+              </ColorField.Group>
+            </ColorField>
+          ),
+        )}
+        {(["done", "go", "next", "search", "send"] as const).map((kind) => (
+          <ColorField name={`kr-${kind}`}>
+            <ColorField.Group>
+              <ColorField.Input testID={`kr-${kind}`} returnKeyType={kind} />
+            </ColorField.Group>
+          </ColorField>
+        ))}
+      </View>
+    </Stage>
+  );
+}
+
+/* A-010: the inherited hover face — the Group's `isHovered` render-prop
+ * record and `onHover*` / `onMouse*` callbacks plus the Input's own pair;
+ * touch gates all of it (M-002). The affix `onPress` probes keep the
+ * no-press-channel contract visible: they record only what the caller wires,
+ * the component builds none (M-006's bare affixes live in prefix-suffix). */
+function HoverCase() {
+  const reportRoot = probe("root-class");
+
+  return (
+    <Stage>
+      <ColorField name="color" defaultValue={parseColor("#0485F7")}>
+        <Label>Color</Label>
+        <ColorField.Group
+          testID="group"
+          className={({ isHovered }) => {
+            reportRoot({ isHovered: isHovered() });
+            return "";
+          }}
+          onHoverStart={probe("root-hover-start")}
+          onHoverEnd={probe("root-hover-end")}
+          onHoverChange={probe("root-hover-change")}
+          onMouseEnter={probe("root-mouse-enter")}
+          onMouseLeave={probe("root-mouse-leave")}
+        >
+          <ColorField.Prefix onPress={probe("prefix-press")}>#</ColorField.Prefix>
+          <ColorField.Input
+            testID="color-input"
+            onHoverStart={probe("input-hover-start")}
+            onHoverEnd={probe("input-hover-end")}
+            onHoverChange={probe("input-hover-change")}
+          />
+          <ColorField.Suffix onPress={probe("suffix-press")}>%</ColorField.Suffix>
+        </ColorField.Group>
+      </ColorField>
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "basic");
 
-  if (name === "aria") return <AriaCase />;
-  if (name === "required-invalid") return <RequiredInvalidCase />;
-  if (name === "disabled") return <DisabledCase />;
-  if (name === "prefix-suffix") return <PrefixSuffixCase />;
-  if (name === "controlled") return <ControlledCase writes />;
-  if (name === "controlled-reject") return <ControlledCase writes={false} />;
-  if (name === "channel-hue") return <ChannelCase channel="hue" label="Hue" />;
+  if (name === "aria") return <Scoped><AriaCase /></Scoped>;
+  if (name === "required-invalid") return <Scoped><RequiredInvalidCase /></Scoped>;
+  if (name === "disabled") return <Scoped><DisabledCase /></Scoped>;
+  if (name === "prefix-suffix") return <Scoped><PrefixSuffixCase /></Scoped>;
+  if (name === "controlled") return <Scoped><ControlledCase writes /></Scoped>;
+  if (name === "controlled-reject") return <Scoped><ControlledCase writes={false} /></Scoped>;
+  if (name === "channel-hue") return <Scoped><ChannelCase channel="hue" label="Hue" /></Scoped>;
   if (name === "channel-saturation") {
-    return <ChannelCase channel="saturation" label="Saturation" controlled={false} />;
+    return <Scoped><ChannelCase channel="saturation" label="Saturation" controlled={false} /></Scoped>;
   }
-  if (name === "keys-hex") return <KeysHexCase />;
-  if (name === "full-width") return <FullWidthCase />;
-  if (name === "focus-probe") return <FocusProbeCase />;
+  if (name === "keys-hex") return <Scoped><KeysHexCase /></Scoped>;
+  if (name === "full-width") return <Scoped><FullWidthCase /></Scoped>;
+  if (name === "focus-probe") return <Scoped><FocusProbeCase /></Scoped>;
+  if (name === "layout") return <Scoped><LayoutCase /></Scoped>;
+  if (name === "submit") return <Scoped><SubmitCase /></Scoped>;
+  if (name === "kbd") return <Scoped><KbdCase /></Scoped>;
+  if (name === "hover") return <Scoped><HoverCase /></Scoped>;
 
-  return <BasicCase />;
+  return <Scoped><BasicCase /></Scoped>;
 }
 
 mount(Fixture);
