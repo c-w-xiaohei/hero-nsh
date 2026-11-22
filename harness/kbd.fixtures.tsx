@@ -1,6 +1,6 @@
 import { host, mount, platform, Text, View } from "nsh";
 import type { Component, JSX } from "nsh";
-import { EnvironmentScope, Kbd } from "@heroui/react";
+import { createInput, EnvironmentScope, Kbd } from "@heroui/react";
 import type { KbdKey } from "@heroui/react";
 import { probe } from "@scenario/probe";
 
@@ -215,10 +215,18 @@ function Fixture() {
   const name = String(host.params.case ?? "basic");
   const Case = cases[name] ?? BasicCase;
 
-  // The host's own platform report: M-007's desktop-pin assertion reads it —
-  // under the `platform:"windows"` pin `desktop` is true on both targets,
-  // while the unpinned headless engine would report the phone host.
-  probe("env")({ os: platform.os, desktop: platform.desktop });
+  // The host's own platform report plus the resolved default-environment
+  // `input`: M-007's desktop-pin assertion reads them — under the
+  // `platform:"windows"` pin `desktop`/`idiom` are desktop and `input`
+  // resolves `pointer` on both targets (headless reports os "windows", the
+  // web target always reports os "web" in the desktop idiom), while the
+  // unpinned headless engine would report the phone host.
+  probe("env")({
+    os: platform.os,
+    desktop: platform.desktop,
+    idiom: platform.idiom,
+    input: createInput()(),
+  });
 
   return (
     <View class="flex-1 items-start bg-background p-6">

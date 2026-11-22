@@ -16,7 +16,8 @@ import { callsOf } from "../../helpers/calls";
  * `input`/`density` feed `EnvironmentScope` (absent = the host default,
  * pointer — the desktop-parity baseline). Probes in `app.storage()`:
  * `layout` (each root's full bounds box) and `env` (the host's
- * `platform.os`/`platform.desktop`, which M-007's pin assertion reads).
+ * `platform.os`/`desktop`/`idiom` plus the resolved default `input`, which
+ * M-007's pin assertion reads).
  *
  * `open` keeps the w1 pin (`platform:"windows"`, 1024×768): without it the
  * headless engine lands on the phone host where `input` defaults to touch
@@ -47,6 +48,30 @@ function layouts(app: App): LayoutEntry[] {
   return callsOf(app, "layout").map((c) => c[0] as LayoutEntry);
 }
 
+/**
+ * name → sorted unique bounds boxes. `onLayout` can fire more than once per
+ * view; comparing the set of distinct boxes keeps repeat firings honest
+ * without depending on how many frames the layout took (the
+ * breadcrumbs.mobile.test.tsx `boxSet` convention).
+ */
+function layoutSet(app: App): Record<string, string[]> {
+  const groups: Record<string, Set<string>> = {};
+  for (const entry of layouts(app)) {
+    const key = JSON.stringify({
+      x: entry.x,
+      y: entry.y,
+      width: entry.width,
+      height: entry.height,
+    });
+    (groups[entry.name] ??= new Set()).add(key);
+  }
+  const out: Record<string, string[]> = {};
+  for (const [name, set] of Object.entries(groups)) {
+    out[name] = [...set].sort();
+  }
+  return out;
+}
+
 /** The bounds box a root's `onLayout` probe recorded, by probe name. */
 function rootBox(app: App, name: string): LayoutEntry {
   const box = layouts(app).find((e) => e.name === name);
@@ -58,7 +83,12 @@ function rootBox(app: App, name: string): LayoutEntry {
   return box;
 }
 
-type EnvReport = { os: string; desktop: boolean };
+type EnvReport = {
+  os: string;
+  desktop: boolean;
+  idiom: string;
+  input: string;
+};
 
 function envOf(app: App): EnvReport {
   return callsOf(app, "env").at(-1)?.[0] as EnvReport;
@@ -133,7 +163,7 @@ describe("kbd mobile", () => {
       const touch = await openKbd(caseName, { input: "touch" });
 
       expect(touch.texts()).toEqual(pointer.texts());
-      expect(layouts(touch)).toEqual(layouts(pointer));
+      expect(layoutSet(touch)).toEqual(layoutSet(pointer));
     }
 
     const touch = await openKbd("basic", { input: "touch" });
@@ -154,7 +184,7 @@ describe("kbd mobile", () => {
     });
 
     expect(compact.texts()).toEqual(baseline.texts());
-    expect(layouts(compact)).toEqual(layouts(baseline));
+    expect(layoutSet(compact)).toEqual(layoutSet(baseline));
     expect(rootBox(compact, "kbd-basic").height).toBe(24);
     expect(compact.spanStyle("id:content-basic >> text:K").fontSize).toBe(14);
   }, 120_000);
@@ -197,14 +227,20 @@ describe("kbd mobile", () => {
   }, 120_000);
 
   // adapt-sheets/kbd.md M-007 (A-006, A-007): the desktop pin holds — the
-  // fixture's `env` probe reports `platform.desktop === true`, so the
-  // default environment really is the pointer baseline and M-001/M-002's
-  // assertions mean the same thing on headless and web (the unpinned
-  // headless engine would report the phone host, `desktop === false`).
-  test("M-007 desktop pin: host reports a desktop platform in the default environment", async () => {
+  // fixture's `env` probe reports `platform.desktop === true`, the desktop
+  // idiom and a resolved `input` of `"pointer"`, so the default environment
+  // really is the pointer baseline and M-001/M-002's assertions mean the
+  // same thing on headless and web (the unpinned headless engine would
+  // report the phone host). `platform.os` is "windows" on the pinned
+  // headless engine; the web target always reports "web" — the desktop
+  // idiom the `platform` option forces is what the pin buys there.
+  test("M-007 desktop pin: host reports a desktop platform and pointer input in the default environment", async () => {
     const app = await openKbd("basic");
+    const env = envOf(app);
 
-    expect(envOf(app).desktop).toBe(true);
-    expect(envOf(app).os).toBe("windows");
+    expect(env.desktop).toBe(true);
+    expect(env.idiom).toBe("desktop");
+    expect(env.input).toBe("pointer");
+    expect(["windows", "web"]).toContain(env.os);
   }, 120_000);
 });
