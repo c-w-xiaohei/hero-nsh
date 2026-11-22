@@ -186,6 +186,10 @@ export function createPressFeedback(
 
   const pressed = createAnimatedValue(0);
   const scale = createAnimatedValue(1);
+  // The last target each channel armed a timing for (`null` = none yet);
+  // guards the no-change re-arm the comment below describes.
+  let armedScaleTarget: number | null = null;
+  let armedPressedTarget: number | null = null;
 
   // The coefficient mirrors upstream `pressable-feedback.animation.ts:87-93`:
   // containers narrower than 300 pt press deeper, wider ones shallower.
@@ -208,24 +212,46 @@ export function createPressFeedback(
   // upstream's `useDerivedValue` semantics, and the reason a mid-press resize
   // still lands on the adjusted scale. `pressed` shares the scale timing so
   // the channels consumers bind stay in step.
+  //
+  // An animation only arms while the seam is enabled and the target moved:
+  // a `timing()` call is a pending native animation even when the value
+  // already sits there, and a manual-clock test (`nsh test`
+  // `app.clock.runFor`) settles pending animations by moving the clock — a
+  // always-pending channel makes every `advance` overshoot by the 300 ms
+  // duration and pulls unrelated timeouts early (toast's auto-dismiss and
+  // exit hold both fired inside `advance(timeout)`, T-013/T-047). Reading
+  // `enabled`/`reduceMotion` inside the effect keeps a flip live: disabled
+  // pins both channels at rest, so nothing hangs pressed mid-flip.
   effect(() => {
-    const target = scaleTarget();
+    const target = options.enabled() ? scaleTarget() : 1;
 
-    if (reduceMotion()) {
+    if (reduceMotion() || !options.enabled()) {
       scale.set(target);
-    } else {
-      void scale.timing(target, scaleTiming).catch(() => undefined);
+      return;
     }
+
+    if (armedScaleTarget === target) {
+      return;
+    }
+
+    armedScaleTarget = target;
+    void scale.timing(target, scaleTiming).catch(() => undefined);
   });
 
   effect(() => {
-    const target = isPressed() ? 1 : 0;
+    const target = options.enabled() && isPressed() ? 1 : 0;
 
-    if (reduceMotion()) {
+    if (reduceMotion() || !options.enabled()) {
       pressed.set(target);
-    } else {
-      void pressed.timing(target, scaleTiming).catch(() => undefined);
+      return;
     }
+
+    if (armedPressedTarget === target) {
+      return;
+    }
+
+    armedPressedTarget = target;
+    void pressed.timing(target, scaleTiming).catch(() => undefined);
   });
 
   const hitSlop = computed<number | Partial<Edges> | undefined>(() => {
