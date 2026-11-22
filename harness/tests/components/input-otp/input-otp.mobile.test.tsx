@@ -214,7 +214,7 @@ describe("input-otp mobile", () => {
   // test ends, so the eight mounts otherwise stay live together on the web
   // target and exhaust its browser pool — the toast w3b M-008 failure mode
   // (mid-test `open(): the page did not connect in 60 s`).
-  test("M-008a default environment baseline: typing, complete, replace, pattern", async () => {
+  test("M-008 default environment baseline: typing, complete, replace, pattern", async () => {
     // T-003 dual: typing reports the whole code on every keystroke.
     const typing = await openScenario("input-otp/typing");
     await typing.type("id:input-otp-input", "12");
@@ -249,7 +249,7 @@ describe("input-otp mobile", () => {
     expect(pattern.count("id:input-otp-slot-value")).toBe(2);
   }, 180_000);
 
-  test("M-008b default environment baseline: controlled, invalid, disabled, enter", async () => {
+  test("M-008 default environment baseline: controlled, invalid, disabled, enter", async () => {
     // S-002 dual: a controlled value reports onChange but never writes back.
     const controlled = await openScenario("input-otp/controlled");
     await controlled.type("id:input-otp-input", "9");
