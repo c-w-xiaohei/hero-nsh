@@ -31,23 +31,7 @@ import type {
  * filled with `currentColor` inherited from the ancestor's `text-*` class
  * (R-006, §8).
  */
-/**
- * The `aria-*`/`data-*` pass-through members of `IconProps`. They live in a
- * separate object type rather than the interface body because template-literal
- * index signatures are the only `IconProps` members that are not named
- * props — the contract tooling (and this file's own readers) parses the
- * interface member by member. Extending an object type keeps the public type
- * identical: `IconProps` still accepts `aria-*` and `data-*` keys.
- */
-type IconAttributePassthrough = {
-  /** Every `aria-*` attribute, kept for API parity. */
-  [key: `aria-${string}`]: unknown;
-
-  /** Every `data-*` attribute: NSH projects none of them (D18). */
-  [key: `data-${string}`]: unknown;
-};
-
-export interface IconProps extends IconAttributePassthrough {
+export interface IconProps {
   /** Appended after the icon's default size classes; later classes win (R-013). */
   className?: string;
 
@@ -148,6 +132,11 @@ export interface IconProps extends IconAttributePassthrough {
   /** The host prop behind the hidden flag; defaults to hiding the subtree. */
   importantForAccessibility?: "auto" | "yes" | "no" | "no-hide-descendants";
 
+  /** Every `aria-*` attribute, kept for API parity. */
+  [key: `aria-${string}`]: unknown;
+
+  /** Every `data-*` attribute: NSH projects none of them (D18). */
+  [key: `data-${string}`]: unknown;
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -271,15 +260,6 @@ interface IconCanvasProps extends IconProps {
  * icon's path with the resolved paint. All fifteen icons are this component
  * with different data, so the shrinking, the prop merging and the hiding are
  * written once.
- *
- * Mobile 落点: the component itself carries no axis — a decorative Canvas has
- * no hit area, no hover dependence and no overlay container (adapt sheet
- * A-001…A-006, all 保留). The two `接轴` spots are realized outside this tree:
- * // A-007 — the `case === "mobile"` scope branch in
- * `harness/icons.fixtures.tsx` (EnvironmentScope fed from
- * `host.params.input`/`density`);
- * // A-008 — `harness/tests/components/icons/icons.mobile.test.tsx`, the
- * M-001…M-006 assertions running headless+web under the desktop pin.
  */
 export function IconCanvas(props: IconCanvasProps): JSX.Element {
   const [local] = split(props, [
