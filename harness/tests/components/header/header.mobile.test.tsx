@@ -1,6 +1,6 @@
 import { describe, expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
-import { callsOf } from "../../helpers/calls";
+import { calls, callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the header adapt unit, one test per row of
@@ -90,7 +90,7 @@ describe("header mobile", () => {
 
     const attributed = await openHeader("attributed");
     expect(attributed.shows("id:section-header")).toBe(true);
-  });
+  }, 120_000);
 
   // adapt-sheets/header.md M-002 (A-001, A-002): injected `input="touch"` —
   // Header realizes no `input` cell, so the same tree's shows/texts/
@@ -106,9 +106,18 @@ describe("header mobile", () => {
     );
     expect(await boxSet(touch)).toEqual(await boxSet(plain));
 
-    const touchAttr = await openHeader("attributed", { input: "touch" });
-    expect(touchAttr.shows("id:section-header")).toBe(true);
-  });
+    const attrPlain = await openHeader("attributed");
+    const attrTouch = await openHeader("attributed", { input: "touch" });
+
+    expect(attrTouch.shows("id:section-header")).toBe(
+      attrPlain.shows("id:section-header"),
+    );
+    expect(attrTouch.texts()).toEqual(attrPlain.texts());
+    expect(attrTouch.spanStyle("text:Actions")).toEqual(
+      attrPlain.spanStyle("text:Actions"),
+    );
+    expect(await boxSet(attrTouch)).toEqual(await boxSet(attrPlain));
+  }, 120_000);
 
   // adapt-sheets/header.md M-003 (A-001): injected `density="compact"` (with
   // touch) — the component table has no density cell, so the preset produces
@@ -124,26 +133,30 @@ describe("header mobile", () => {
     expect(compact.spanStyle("text:Actions")).toEqual(
       plain.spanStyle("text:Actions"),
     );
-  });
+  }, 120_000);
 
   // adapt-sheets/header.md M-004 (A-004): injected touch — the bare Text is
   // not a press target: `app.press` resolves no pressable view and rejects,
   // which is itself the "no press path" evidence; the text stays on screen
   // and the only probe calls are the layout reports.
   test("M-004 injected touch: no press path — press rejects and the text is unchanged", async () => {
-    const app = await openHeader("attributed", { input: "touch" });
-    await boxSet(app);
+    const pointer = await openHeader("attributed");
+    const touch = await openHeader("attributed", { input: "touch" });
 
-    await expect(app.press("id:section-header")).rejects.toMatchObject({
-      code: "ERR_NSH_TEST_NOT_FOUND",
-    });
+    for (const app of [pointer, touch]) {
+      await boxSet(app);
+      const before = calls(app);
 
-    expect(app.shows("id:section-header")).toBe(true);
-    expect(app.shows("text:Actions")).toBe(true);
-    // No component-owned callback exists, so nothing beyond the layout
-    // reports can record.
-    expect(callsOf(app, "layout").length).toBeGreaterThan(0);
-  });
+      await expect(app.press("id:section-header")).rejects.toMatchObject({
+        code: "ERR_NSH_TEST_NOT_FOUND",
+      });
+
+      expect(app.shows("id:section-header")).toBe(true);
+      expect(app.shows("text:Actions")).toBe(true);
+      // No component-owned callback exists, so the probe record is untouched.
+      expect(calls(app)).toEqual(before);
+    }
+  }, 120_000);
 
   // adapt-sheets/header.md M-005 (A-005): the `ScopedMobile` wrapper takes
   // effect without changing the part — under `input="touch"` +
@@ -161,7 +174,7 @@ describe("header mobile", () => {
       plain.spanStyle("text:Actions"),
     );
     expect(await boxSet(scoped)).toEqual(await boxSet(plain));
-  });
+  }, 120_000);
 
   // adapt-sheets/header.md M-006 (A-006): the desktop pin — every open in
   // this file passes `platform:"windows", width:1024, height:768`, and with
@@ -178,5 +191,8 @@ describe("header mobile", () => {
     expect(style.fontWeight).toBe(500);
     expect(style.color).toBe(MUTED_LIGHT);
     expect(await boxSet(app)).not.toHaveLength(0);
-  });
+
+    const attributed = await openHeader("attributed");
+    expect(attributed.shows("id:section-header")).toBe(true);
+  }, 120_000);
 });

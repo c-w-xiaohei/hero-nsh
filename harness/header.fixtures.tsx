@@ -18,8 +18,9 @@ import { Stage } from "@scenario/stage";
  * breadcrumbs.fixtures does (adapt-sheets/header.md A-005); an absent param
  * keeps the host-derived value, so a case opened without them is the
  * desktop-parity baseline. The root Text reports its laid-out box through
- * `onLayout` so the M-002/M-003/M-005 rows can diff environments bounds for
- * bounds — Header realizes no `input`/`density` cell, so the sets must match.
+ * `onLayout` so the M-002/M-003/M-005 rows can diff the bounds between
+ * environments — Header realizes no `input`/`density` cell, so the sets must
+ * match.
  *
  * It sits next to harness/nsh.json on purpose: NSH takes the entry's own
  * directory as the app root, so an entry under harness/tests/... finds no
