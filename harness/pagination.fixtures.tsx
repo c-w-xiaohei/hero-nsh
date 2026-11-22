@@ -47,6 +47,9 @@ import { probe } from "@scenario/probe";
  *                after the seam unwound.
  *   seam-edge    `{name, seam}` per `feedback.isPressed` edge — silent under
  *                pointer, true→false roundtrip under touch (M-002).
+ *   seam-hold    `{name, midHold, seamPressed, scale, hitSlop, enabled}`
+ *                sampled +300 ms and +1100 ms after each `isPressed` edge —
+ *                the mid-hold scale read and the settled return for M-003.
  *   seam-env     `{name, enabled, hitSlop}` on mount/layout change — the
  *                mount-time gate and computed slop (M-001/M-002/M-005).
  *   layout       `{name, x, y, width, height}` per part `onLayout` — M-007's
@@ -88,6 +91,30 @@ function layoutProbe(name: string) {
 /** The live `PressableFeedbackContext` of each wired part, by fixture name. */
 const seamContexts = new Map<string, PressableFeedbackContextValue>();
 
+/* Reads the seam channels while a press is still held and after it settles:
+ * the +300 ms sample lands inside `app.longPress`'s ~500 ms hold with the
+ * 300 ms scale timing complete (M-003's mid-press read); the +1100 ms sample
+ * lands after release plus the return animation — the settled read. Only a
+ * real `isPressed` edge schedules them, so the pointer environment records
+ * nothing here. */
+function sampleHold(name: string, midHold: boolean) {
+  const ctx = seamContexts.get(name);
+  if (!ctx) {
+    return;
+  }
+  const report = probe("seam-hold");
+  void ctx.scale.getValue().then((scale) => {
+    report({
+      name,
+      midHold,
+      seamPressed: ctx.isPressed(),
+      scale,
+      hitSlop: ctx.hitSlop() ?? null,
+      enabled: ctx.enabled(),
+    });
+  });
+}
+
 /* Sits inside a pressable part (the seam provider wraps its children), reads
  * `PressableFeedbackContext` and reports the gate/slop on mount plus every
  * `isPressed` edge. Under pointer the edge channel stays silent — that
@@ -110,7 +137,12 @@ function SeamProbe(props: { name: string }) {
   });
 
   effect(() => {
-    reportEdge({ name: props.name, seam: ctx.isPressed() });
+    const seam = ctx.isPressed();
+    reportEdge({ name: props.name, seam });
+    if (seam) {
+      setTimeout(() => sampleHold(props.name, true), 300);
+      setTimeout(() => sampleHold(props.name, false), 1100);
+    }
   });
 
   return null;
@@ -255,13 +287,16 @@ function OverflowCase() {
         Page 4 of 9
       </Pagination.Summary>
       <Pagination.Content onLayout={layoutProbe("content")}>
-        <Pagination.Item>
+        <Pagination.Item onLayout={layoutProbe("item-prev")}>
           <Pagination.Previous testID="prev" aria-label="prev" {...partHandlers("prev")}>
             <Text>Previous</Text>
           </Pagination.Previous>
         </Pagination.Item>
+        <Pagination.Item onLayout={layoutProbe("item-ellipsis-start")}>
+          <Pagination.Ellipsis testID="ellipsis-start" onLayout={layoutProbe("ellipsis-start")} />
+        </Pagination.Item>
         {pages.map((page) => (
-          <Pagination.Item>
+          <Pagination.Item onLayout={layoutProbe(`item-page-${page}`)}>
             <Pagination.Link
               testID={`page-${page}`}
               aria-label={`page-${page}`}
@@ -272,10 +307,10 @@ function OverflowCase() {
             </Pagination.Link>
           </Pagination.Item>
         ))}
-        <Pagination.Item>
+        <Pagination.Item onLayout={layoutProbe("item-ellipsis-end")}>
           <Pagination.Ellipsis testID="ellipsis-end" onLayout={layoutProbe("ellipsis-end")} />
         </Pagination.Item>
-        <Pagination.Item>
+        <Pagination.Item onLayout={layoutProbe("item-next")}>
           <Pagination.Next testID="next" aria-label="next" {...partHandlers("next")}>
             <Text>Next</Text>
           </Pagination.Next>
