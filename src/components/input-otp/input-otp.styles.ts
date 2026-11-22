@@ -19,6 +19,9 @@ import { ease, radius, shadow } from "../../tokens/geometry";
 export const inputOTPVariants = tv({
   defaultVariants: {
     variant: "primary",
+    // A-001: the environment's `input` accessor feeds the axis at resolve
+    // time; `pointer` is the desktop default so nothing changes there.
+    input: "pointer",
   },
   slots: {
     // R-001: `.input-otp` → `relative flex w-full items-center gap-2`.
@@ -84,6 +87,21 @@ export const inputOTPVariants = tv({
         // R-025: `background-color: var(--input-otp-slot-bg)` folded into its
         // value, `--default`. The focus fill is R-027's classList entry.
         slot: "bg-default shadow-none dark:shadow-none",
+      },
+    },
+    // A-001: the `input` axis owns the visible hit minimum (encapsulation.md
+    // §1). `pointer` is the desktop resolution — empty cells, so the default
+    // environment resolves verbatim. `touch` lifts each cell's visible height
+    // to the 44 pt hit minimum (`min-h-11` on top of the base's `h-10`; the
+    // container is an `items-center` flex, so it and the inset-0 input
+    // overlay grow with the cells). The cells' own width is untouched: one
+    // press target covers the whole field (A-005's overlay), so per-cell hit
+    // width is not a separate contract. No `density` axis: a cell's size is
+    // hit surface, not a spacing preset.
+    input: {
+      pointer: {},
+      touch: {
+        slot: "min-h-11",
       },
     },
   },
