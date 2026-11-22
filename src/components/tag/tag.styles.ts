@@ -65,10 +65,23 @@ export const tagVariants = tv({
       // variant (`hover:bg-surface-hover`, unselected only).
       surface: { base: "bg-surface text-surface-foreground" },
     },
+    // A-001: the `input` axis of the encapsulation model. A tag is a
+    // compact collection row (every size grade is pressable), so `touch`
+    // lifts the visible hit height to the 36 pt `min-h-9` and the seam's
+    // `hitSlop` closes the rest of the 44 pt target (adapt sheet §8: the
+    // sm/md/lg grades stay distinguishable rather than flattening to 44).
+    // `pointer` adds nothing — the desktop class set is byte-for-byte.
+    input: {
+      pointer: {},
+      touch: { base: "min-h-9" },
+    },
   },
   defaultVariants: {
     size: "md",
     variant: "default",
+    // A-001: a caller that resolves `tagVariants` without the axis gets the
+    // pre-axis output — the desktop-parity guarantee.
+    input: "pointer",
   },
 });
 
