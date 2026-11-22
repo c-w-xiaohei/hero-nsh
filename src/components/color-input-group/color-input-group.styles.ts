@@ -2,7 +2,16 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, radius, shadow } from "../../tokens/geometry";
+// `ease.smooth`, `radius.field` and `shadow.field.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker loads a
+// `.styles.ts` through Node ESM, which resolves neither an extensionless
+// relative import nor a `.ts` one, so a styles file imports only
+// `tailwind-variants` (same ruling as switch/toolbar). Keep in sync with
+// `SHADOW_VALUES.field`, `EASE_VALUES` and `radius`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const RADIUS_FIELD = "rounded-(--radius-field)";
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
 
 /**
  * ColorInputGroup's variant table, mirroring `@heroui/styles` 3.2.7
@@ -59,7 +68,7 @@ export const colorInputGroupVariants = tv({
      * R-008: `@apply motion-reduce:transition-none` →
      * `motion-reduce:transition-none`.
      */
-    base: `inline-flex flex-row h-9 items-center overflow-hidden ${radius.field} border-0 bg-field text-sm text-field-foreground ${shadow.field.both} outline-none transition duration-150 ${ease.smooth} motion-reduce:transition-none`,
+    base: `inline-flex flex-row h-9 items-center overflow-hidden ${RADIUS_FIELD} border-0 bg-field text-sm text-field-foreground ${SHADOW_FIELD_BOTH} outline-none transition duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     /*
      * R-015: `.color-input-group__input` → `flex h-full flex-1 cursor-text
      * items-center rounded-none border-0 bg-transparent px-3 py-2 text-base
