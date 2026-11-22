@@ -656,6 +656,7 @@ function MobileCase() {
           <Label>Volume</Label>
           <Slider.Output testID="output" />
           <Slider.Track
+            onHoverChange={probe("trackHoverChange")}
             onHoverEnd={probe("trackHoverEnd")}
             onHoverStart={probe("trackHoverStart")}
             onLayout={layoutProbe("track")}
@@ -668,6 +669,7 @@ function MobileCase() {
                   index={0}
                   onBlur={probe("onBlur")}
                   onFocus={probe("onFocus")}
+                  onHoverChange={probe("thumbHoverChange")}
                   onHoverEnd={probe("thumbHoverEnd")}
                   onHoverStart={probe("thumbHoverStart")}
                   onLayout={layoutProbe("thumb")}
