@@ -84,6 +84,33 @@ export const dateInputGroupVariants = tv({
       false: {},
       true: { base: "w-full" },
     },
+    // A-001: the `input` axis of the encapsulation model. `pointer` keeps the
+    // desktop table untouched, byte for byte; `touch` raises the row and the
+    // segments to the 44 pt touch target (`min-h-11` over `h-9` — the
+    // `size`-style dimensions are hit geometry, not a spacing preset, so no
+    // `density` axis is introduced). `relative` anchors the soft-keyboard
+    // channel A-005 mounts on each segment, `flex items-center` re-centres the
+    // text the raised segment box would leave at its top.
+    input: {
+      pointer: {},
+      touch: {
+        base: "min-h-11",
+        segment: "min-h-11 relative flex items-center",
+      },
+    },
+    // A-001: the `interactive` affix half, driven by `DateInputGroupAffixContext`
+    // (a DatePicker / DateRangePicker providing it). `true` replaces the affix
+    // slots' `pointer-events-none` with `pointer-events-auto` — the swap the
+    // Prefix and Suffix parts used to do as a string replace on the slot
+    // string, moved into the table so the touch compound below can see it.
+    // Non-interactive affixes are not targets and take no touch sizing.
+    interactive: {
+      false: {},
+      true: {
+        prefix: "pointer-events-auto",
+        suffix: "pointer-events-auto",
+      },
+    },
     // R-027: `.date-input-group--primary` is an empty block; the dimension is
     // kept with no class of its own.
     // R-028: `.date-input-group--secondary` → `@apply shadow-none` plus
@@ -95,9 +122,24 @@ export const dateInputGroupVariants = tv({
       secondary: { base: "shadow-none bg-default" },
     },
   },
+  compoundVariants: [
+    // A-001: the 44 pt hit area of an interactive affix (a picker's trigger
+    // target) — only under touch, and only on an affix that actually takes
+    // pointer events; a static affix keeps its content size.
+    {
+      input: "touch",
+      interactive: true,
+      class: {
+        prefix: "min-h-11 min-w-11 px-2",
+        suffix: "min-h-11 min-w-11 px-2",
+      },
+    },
+  ],
   defaultVariants: {
     fullWidth: false,
     variant: "primary",
+    input: "pointer",
+    interactive: false,
   },
 });
 

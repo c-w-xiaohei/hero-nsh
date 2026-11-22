@@ -1,10 +1,17 @@
+import type { JSX } from "nsh";
 import { cleanup, host, mount, signal, Text, View } from "nsh";
-import { DateInputGroup } from "@heroui/react";
+import {
+  DateInputGroup,
+  type DateInputGroupInputKeyboardType,
+  EnvironmentScope,
+} from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 import {
+  DateInputGroupAffixContext,
   DateInputGroupContext,
   DateInputGroupFieldContext,
+  DateInputGroupKeyboardContext,
 } from "../src/components/date-input-group/date-input-group-context";
 import { createDateFieldState } from "../src/components/date-input-group/create-date-field-state";
 
@@ -30,6 +37,14 @@ import { createDateFieldState } from "../src/components/date-input-group/create-
  *   disabled       a Root with isDisabled, its render props recorded
  *   invalid        a Root with isInvalid, its render props recorded
  *   prefix-suffix  Prefix "#", Suffix "%", both as raw strings
+ *   affix-interactive
+ *                  the default case under `DateInputGroupAffixContext(true)` —
+ *                  the picker's contract — with Prefix/Suffix around a
+ *                  pressable probe, an onLayout bounds probe per affix, and a
+ *                  press counter inside the prefix (A-011, M-002)
+ *   keyboard-type  the default case with `Input`'s `keyboardType` prop set to
+ *                  `host.params.kt` ("auto" when absent); a probe records the
+ *                  value the context hands each segment (A-007, M-007/M-009)
  *   range-slots    `slot="start"` / `slot="end"` Inputs around a fake range
  *                  separator (R-012). Each Input is wide enough that its middle
  *                  is padding, so a press there is the group's "press on the
@@ -39,6 +54,11 @@ import { createDateFieldState } from "../src/components/date-input-group/create-
  *                  trigger that calls `registerTriggerFocus` (R-006) and a view
  *                  outside the group, so a Return key, a trigger focus and the
  *                  commit on leaving the group are all observable.
+ *
+ * host.params.scope picks the environment wrapper (A-011): "touch" wraps the
+ * case in `EnvironmentScope(input="touch")` — the injected half of the mobile
+ * assertions; anything else mounts the case on the host-derived default
+ * (the pointer half on a desktop-pinned open).
  *
  * The two last cases import the unit's internal context by relative path, as
  * `harness/field-error.fixtures.tsx:4` does: it is an internal module, not a
@@ -171,6 +191,118 @@ function PrefixSuffixCase() {
         <DateInputGroup.Prefix>#</DateInputGroup.Prefix>
         <Segments />
         <DateInputGroup.Suffix>%</DateInputGroup.Suffix>
+      </DateInputGroup>
+    </Stage>
+  );
+}
+
+/*
+ * A-011: the affix half under a picker's contract. `DateInputGroupAffixContext`
+ * is imported by relative path like the group context above — an internal
+ * module a picker root provides (date-picker-root.tsx:598), never a public
+ * export; the fixture stands in for that provider, as the port sheet's fake
+ * separator and trigger already do. The affixes wrap a pressable probe, and
+ * each affix reports its own `onLayout` bounds, so the `interactive` axis's
+ * touch sizing and the press-through are both observable (`M-001` / `M-002`).
+ */
+function AffixInteractiveCase() {
+  const presses = probe("affix-presses");
+  const prefixBounds = probe("prefix-bounds");
+  const suffixBounds = probe("suffix-bounds");
+  const segmentProps = probe("segment-props");
+
+  return (
+    <Stage>
+      <DateInputGroupAffixContext.Provider value={() => true}>
+        <DateInputGroup aria-label="affix-date" className={RootClassProbe("root-props")}>
+          <DateInputGroup.InputContainer>
+            <DateInputGroup.Prefix
+              testID="affix-prefix"
+              onLayout={(event) => prefixBounds(event.bounds)}
+            >
+              <View
+                testID="affix-prefix-button"
+                role="button"
+                onPress={() => presses("prefix")}
+              >
+                <Text>prefix</Text>
+              </View>
+            </DateInputGroup.Prefix>
+            <DateInputGroup.Input>
+              {(segment) => (
+                <DateInputGroup.Segment
+                  segment={segment}
+                  className={(values) => {
+                    segmentProps({
+                      type: segment.type,
+                      isFocused: values.isFocused(),
+                      isHovered: values.isHovered(),
+                      isReadOnly: values.isReadOnly(),
+                      isInvalid: values.isInvalid(),
+                      isDisabled: values.isDisabled(),
+                    });
+
+                    return "";
+                  }}
+                />
+              )}
+            </DateInputGroup.Input>
+            <DateInputGroup.Suffix
+              testID="affix-suffix"
+              onLayout={(event) => suffixBounds(event.bounds)}
+            >
+              <View
+                testID="affix-suffix-button"
+                role="button"
+                onPress={() => presses("suffix")}
+              >
+                <Text>suffix</Text>
+              </View>
+            </DateInputGroup.Suffix>
+          </DateInputGroup.InputContainer>
+        </DateInputGroup>
+      </DateInputGroupAffixContext.Provider>
+    </Stage>
+  );
+}
+
+/*
+ * A-011: reads the `DateInputGroupKeyboardContext` the Input provides and
+ * records it, so the `keyboardType` prop's path to the segments is observable
+ * where the host's keyboard itself is not (sheet §6). It sits inside the
+ * Input's provider tree — placed as a segment child would put it under the
+ * same context, and a bare sibling reads it just as well.
+ */
+function KeyboardTypeProbe() {
+  const record = probe("keyboard-type");
+  const type = DateInputGroupKeyboardContext();
+
+  record(type());
+
+  return <></>;
+}
+
+function KeyboardTypeCase() {
+  const kt = host.params.kt;
+
+  return (
+    <Stage>
+      <DateInputGroup aria-label="date">
+        <DateInputGroup.InputContainer>
+          <DateInputGroup.Input
+            keyboardType={
+              typeof kt === "string" && kt !== ""
+                ? (kt as DateInputGroupInputKeyboardType)
+                : undefined
+            }
+          >
+            {(segment) => (
+              <DateInputGroup.Segment segment={segment}>
+                {() => <KeyboardTypeProbe />}
+              </DateInputGroup.Segment>
+            )}
+          </DateInputGroup.Input>
+        </DateInputGroup.InputContainer>
       </DateInputGroup>
     </Stage>
   );
@@ -355,17 +487,29 @@ function TriggerFocusCase() {
   );
 }
 
+/* A-011: the environment wrapper the mobile assertions drive — the same
+ * `Scoped` shape switch's fixture uses (harness/switch.fixtures.tsx:73). */
+function Scoped(props: { children?: JSX.Element }) {
+  return String(host.params.scope ?? "") === "touch" ? (
+    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "default");
 
-  if (name === "variants") return <VariantsCase />;
-  if (name === "disabled") return <DisabledCase />;
-  if (name === "invalid") return <InvalidCase />;
-  if (name === "prefix-suffix") return <PrefixSuffixCase />;
-  if (name === "range-slots") return <RangeSlotsCase />;
-  if (name === "trigger-focus") return <TriggerFocusCase />;
+  if (name === "variants") return <Scoped><VariantsCase /></Scoped>;
+  if (name === "disabled") return <Scoped><DisabledCase /></Scoped>;
+  if (name === "invalid") return <Scoped><InvalidCase /></Scoped>;
+  if (name === "prefix-suffix") return <Scoped><PrefixSuffixCase /></Scoped>;
+  if (name === "affix-interactive") return <Scoped><AffixInteractiveCase /></Scoped>;
+  if (name === "keyboard-type") return <Scoped><KeyboardTypeCase /></Scoped>;
+  if (name === "range-slots") return <Scoped><RangeSlotsCase /></Scoped>;
+  if (name === "trigger-focus") return <Scoped><TriggerFocusCase /></Scoped>;
 
-  return <DefaultCase />;
+  return <Scoped><DefaultCase /></Scoped>;
 }
 
 mount(Fixture);

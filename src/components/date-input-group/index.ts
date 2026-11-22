@@ -76,6 +76,11 @@ export type {
   DateInputGroupHoverEvent,
 };
 
+// A-007: the `keyboardType` prop's value domain — declared on the internal
+// context module so `DateInputGroupInputProps` and the segment's channel read
+// the same type without a cycle.
+export type { DateInputGroupInputKeyboardType } from "./date-input-group-context";
+
 /* -------------------------------------------------------------------------------------------------
  * Variants
  * -----------------------------------------------------------------------------------------------*/
