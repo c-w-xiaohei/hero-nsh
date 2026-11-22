@@ -98,6 +98,10 @@ export function FieldsetRoot(props: FieldsetRootProps): JSX.Element {
   // subtree remounting (upstream instead re-wraps or drops its `Provider`).
   // `density` is additive (adapt sheet A-004): the disabled contract above
   // is untouched (A-008).
+  // A-011: the dual-environment carrier and assertions for this tree are
+  // realized by the `mobile`/`mobile-disabled` cases in
+  // `harness/fieldset.fixtures.tsx` and `fieldset.mobile.test.tsx`
+  // (M-001..M-006).
   const contextValue: FieldsetContextValue = { isDisabled, density };
 
   // §2 derived: `<fieldset>`'s implicit role is `group`; an explicit `role`
