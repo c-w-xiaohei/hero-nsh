@@ -1,9 +1,10 @@
 import { effect, host, mount, signal, Text, View } from "nsh";
-import type { JSX } from "nsh";
+import type { JSX, ViewRef } from "nsh";
 import {
   EnvironmentScope,
   ToggleButton,
   ToggleButtonGroup,
+  Toolbar,
 } from "@heroui/react";
 import { PressableFeedbackContext } from "../src/primitives/pressable";
 import type { PressableFeedbackContextValue } from "../src/primitives/pressable";
@@ -44,6 +45,15 @@ import { probe } from "@scenario/probe";
  *   group-vertical  same group, vertical orientation
  *   group-detached  isDetached group (non-press-face half: gap presses hit
  *                the group's own box, M-010)
+ *   group-gap     detached + vertical two-member group: the root box's
+ *                center lands inside the 4pt gap, so `app.press("id:tb-group")
+ *                hit-tests the container itself — M-010's press-face half
+ *   group-excluded  single group whose middle member sets
+ *                `excludeFromTabOrder`; `focus-<id>` buttons call each
+ *                member's captured `ViewRef.focus()` and `focus` probes
+ *                record `onFocusChange` — M-013's unfocusable half
+ *   group-toolbar Toolbar wrapping a multiple group: members register with
+ *                the toolbar's arrow-key registry — M-007/M-008's keyboard half
  *
  * Mobile-layer params (adapt sheet §4):
  *   scope    "" = the host's default environment (pointer — the desktop
@@ -85,7 +95,10 @@ function probeOn() {
 // environment) still leave observable channel values.
 let buttonCtx: PressableFeedbackContextValue | null = null;
 
-function CtxProbe() {
+// `tag` distinguishes sibling probes (the icon-only case mounts one per
+// member); undefined members report the same payload shape as before — the
+// field drops out of the serialized call.
+function CtxProbe(props: { tag?: string }) {
   const ctx = PressableFeedbackContext();
   const reportPressed = probe("ctx-pressed");
   const reportState = probe("ctx-state");
@@ -101,6 +114,7 @@ function CtxProbe() {
   effect(() => {
     void ctx.bounds();
     reportEnv({
+      tag: props.tag,
       enabled: ctx.enabled(),
       hitSlop: ctx.hitSlop() ?? null,
       bounds: ctx.bounds(),
@@ -111,6 +125,7 @@ function CtxProbe() {
     void ctx.pressed.getValue().then((pressed) => {
       void ctx.scale.getValue().then((scale) => {
         reportState({
+          tag: props.tag,
           pressed,
           scale,
           isPressed: ctx.isPressed(),
@@ -149,8 +164,8 @@ function CtxProbe() {
 }
 
 /** Mounts `CtxProbe` inside the button only when `probe=1` asks for it. */
-function SeamProbe() {
-  return probeOn() ? <CtxProbe /> : null;
+function SeamProbe(props: { tag?: string }) {
+  return probeOn() ? <CtxProbe tag={props.tag} /> : null;
 }
 
 function SampleButton() {
@@ -320,7 +335,7 @@ function IconOnlyCase() {
           onLayout={layoutProbe("tb-sm")}
         >
           <Text>★</Text>
-          <SeamProbe />
+          <SeamProbe tag="sm" />
         </ToggleButton>
         <ToggleButton
           testID="tb-md"
@@ -329,6 +344,7 @@ function IconOnlyCase() {
           onLayout={layoutProbe("tb-md")}
         >
           <Text>★</Text>
+          <SeamProbe tag="md" />
         </ToggleButton>
         <ToggleButton
           testID="tb-lg"
@@ -338,6 +354,7 @@ function IconOnlyCase() {
           onLayout={layoutProbe("tb-lg")}
         >
           <Text>★</Text>
+          <SeamProbe tag="lg" />
         </ToggleButton>
       </View>
       <SampleButton />
@@ -352,15 +369,26 @@ function IconOnlyCase() {
 const reportSelection = (keys: Set<string>) =>
   probe("onSelectionChange")([...keys].sort().join(","));
 
-function member(id: string, label: string, extra?: { withoutId?: boolean }) {
+function member(
+  id: string,
+  label: string,
+  extra?: {
+    withoutId?: boolean;
+    excludeFromTabOrder?: boolean;
+    onRef?: (node: ViewRef) => void;
+  },
+) {
   const reportEvent = probe("events");
 
   return (
     <ToggleButton
       testID={`tb-${id}`}
       id={extra?.withoutId ? undefined : id}
+      excludeFromTabOrder={extra?.excludeFromTabOrder}
+      ref={extra?.onRef}
       onPress={() => reportEvent(`press:${id}`)}
       onChange={(isSelected) => probe("onChange")({ id, isSelected })}
+      onFocusChange={(focused) => probe("focus")({ id, focused })}
       onLayout={layoutProbe(`tb-${id}`)}
     >
       {({ isSelected }) => <Text>{`${label}:${isSelected() ? "on" : "off"}`}</Text>}
@@ -403,11 +431,120 @@ function GroupCase() {
   );
 }
 
+/**
+ * Two members, detached and vertical: the root box's center is the middle of
+ * the 4pt gap (equal member heights), so `app.press("id:tb-group")` hit-tests
+ * the container's own box — the non-press-face half of M-010. A pressable
+ * ancestor does not exist, so the step must find nothing to press.
+ */
+function GroupGapCase() {
+  return (
+    <Stage>
+      <ToggleButtonGroup
+        testID="tb-group"
+        isDetached
+        orientation="vertical"
+        onSelectionChange={(keys) => {
+          probe("events")("selection");
+          reportSelection(keys);
+        }}
+      >
+        {member("one", "One")}
+        {member("two", "Two")}
+      </ToggleButtonGroup>
+      <SampleButton />
+    </Stage>
+  );
+}
+
+/**
+ * A single-mode group whose middle member sets `excludeFromTabOrder` — its
+ * root View gets `focusable={false}` and the group's arrow walk skips it
+ * (toggle-button-root.tsx:635, toggle-button-group-root.tsx:251). The
+ * `focus-<id>` buttons call each member's captured `ViewRef.focus()`; a
+ * `focusable={false}` view stays unfocused, so only the `focus` probe on a
+ * normal member can report `focused: true` (M-013).
+ */
+function GroupExcludedCase() {
+  const refs = new Map<string, ViewRef>();
+  const keep = (id: string) => (node: ViewRef) => {
+    refs.set(id, node);
+  };
+  const focusButton = (id: string) => (
+    <View
+      testID={`focus-${id}`}
+      role="button"
+      class="px-3 py-1 bg-default"
+      onPress={() => refs.get(id)?.focus()}
+    >
+      <Text>{`focus ${id}`}</Text>
+    </View>
+  );
+
+  return (
+    <Stage>
+      <ToggleButtonGroup
+        testID="tb-group"
+        onSelectionChange={(keys) => {
+          probe("events")("selection");
+          reportSelection(keys);
+        }}
+      >
+        {member("one", "One", { onRef: keep("one") })}
+        <ToggleButtonGroup.Separator />
+        {member("two", "Two", { excludeFromTabOrder: true, onRef: keep("two") })}
+        <ToggleButtonGroup.Separator />
+        {member("three", "Three", { onRef: keep("three") })}
+      </ToggleButtonGroup>
+      <View class="flex-row gap-2">
+        {focusButton("one")}
+        {focusButton("two")}
+        {focusButton("three")}
+      </View>
+      <SampleButton />
+    </Stage>
+  );
+}
+
+/**
+ * A multiple group inside a `Toolbar`: the members register with the
+ * toolbar's arrow-key registry and the group yields its own keymap scopes to
+ * it (`if (!toolbar)` in toggle-button-group-root.tsx). On the web target
+ * Tab + arrows walk the members through that shared registry — M-007's
+ * "Toolbar 内箭头键注册不变" and M-008's idless-member order.
+ */
+function GroupToolbarCase() {
+  return (
+    <Stage>
+      <Toolbar aria-label="Formats">
+        <ToggleButtonGroup
+          testID="tb-group"
+          selectionMode="multiple"
+          onSelectionChange={(keys) => {
+            probe("events")("selection");
+            reportSelection(keys);
+          }}
+        >
+          {member("one", "One")}
+          <ToggleButtonGroup.Separator />
+          {member("two", "Two")}
+          <ToggleButtonGroup.Separator />
+          {member("three", "Three")}
+        </ToggleButtonGroup>
+      </Toolbar>
+      <SampleButton />
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "basic");
 
   if (name === "sizes") return <Scoped><SizesCase /></Scoped>;
   if (name === "icon-only") return <Scoped><IconOnlyCase /></Scoped>;
+  if (name === "group-gap") return <Scoped><GroupGapCase /></Scoped>;
+  if (name === "group-excluded") return <Scoped><GroupExcludedCase /></Scoped>;
+  if (name === "group-toolbar") return <Scoped><GroupToolbarCase /></Scoped>;
   if (name.startsWith("group")) return <Scoped><GroupCase /></Scoped>;
 
   return <Scoped><BasicCase /></Scoped>;
