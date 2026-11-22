@@ -8,7 +8,7 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, effect, reduceMotion, signal, View } from "nsh";
+import { cleanup, computed, createAnimatedValue, effect, reduceMotion, signal, View } from "nsh";
 import type { Accessor } from "nsh";
 
 import {
@@ -17,6 +17,12 @@ import {
   createToggleState,
   isKeyboardPress,
 } from "../../primitives";
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { FieldsetContext } from "../fieldset/context";
 import { ToolbarContext } from "../toolbar/context";
 import { renderChildren } from "./children";
@@ -66,7 +72,7 @@ export interface ToggleButtonRenderProps {
  * ---------------------------------------------------------------------------------------------- */
 
 export interface ToggleButtonRootProps
-  extends ToggleButtonVariants,
+  extends Omit<ToggleButtonVariants, "input">,
     AriaProps,
     DataProps,
     GlobalDomProps {
@@ -354,10 +360,15 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
       : "",
   );
 
+  // A-002: the `input` variant axis reads the environment, never a prop —
+  // `ToggleButtonRootProps` omits it from the caller's surface.
+  const input = createInput();
+
   const classes = computed(() =>
     [
       toggleButtonVariants({
         isIconOnly: isIconOnly(),
+        input: input(),
         size: size(),
         variant: variant(),
       }),
@@ -384,6 +395,42 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
   // --- Press, hover and focus -------------------------------------------------
   const isBlocked = () => isDisabled();
 
+  // A-003 / A-004: the touch-gated press-feedback seam. `enabled` folds
+  // `isBlocked()` in, so a disabled button expands nothing and drives no
+  // animation; under the default pointer environment every channel rests —
+  // `isPressed` stays down, `hitSlop()` answers `undefined`, `scale` is
+  // pinned to 1, which is the desktop-zero-change half. Upstream's held
+  // button presses to `scale(0.97)` (toggle-button.css `:active`), so the
+  // seam's scale channel takes that end value flat
+  // (`ignoreScaleCoefficient` — the size cells' own scale classes are gone
+  // under touch, where this channel is the single writer). The seam's
+  // `isPressed` is a private channel: the render-prop `isPressed` signal
+  // above keeps its own semantics and is not merged.
+  const feedbackEnabled = () => input() === "touch" && !isBlocked();
+  const feedback = createPressFeedback({
+    enabled: feedbackEnabled,
+    animation: { value: 0.97, ignoreScaleCoefficient: true },
+  });
+
+  // A-004: the seam's read half rides `PressableFeedbackContext` — the same
+  // context `PressableFeedback`'s own root provides — so a
+  // `PressableFeedback` part composed into the button's children, or a
+  // probe in `harness/toggle-button.fixtures.tsx`, reads the live channels.
+  // No overlay mounts by default: the scale channel is bound on the root
+  // View's style, the overlay channels stay at rest.
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: feedbackEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   // V4: Return and Space activation report `pagePosition { 0, 0 }`, a real
   // pointer press reports where it happened. Never infer the modality from
   // hover: a hovered button activated by Enter is still a keyboard interaction.
@@ -404,6 +451,9 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
     // RAC moves the toolbar to the pressed button. An NSH press does not focus
     // a view, so the selectable item records the focused key here instead.
     selectableItem?.onPressDown(event);
+    // A-003: the seam records the press at the same point the held flag is
+    // set — gated off under pointer it does nothing at all.
+    feedback.pressDown(event);
     isPressed.set(true);
     props.onPressStart?.(event);
     props.onPressDown?.(event);
@@ -412,6 +462,10 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
 
   const handlePressUp = (event: PressEvent) => {
     if (isPressed()) {
+      // A-003: cleared at the same point the held flag is — release and
+      // cancel share this path, and a gated press only forwards
+      // `onPressChange(false)` which this handler already fires itself.
+      feedback.pressUp(event);
       isPressed.set(false);
       props.onPressChange?.(false);
     }
@@ -499,6 +553,13 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
     props.onFocusChange?.(false);
   };
 
+  // A-003: the seam's `bounds` feed `hitSlop` and the scale coefficient; the
+  // caller's `onLayout` keeps its payload and position.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    feedback.layout(event);
+    props.onLayout?.(event);
+  };
+
   const handleRef = (next: ViewRef) => {
     node = next;
     props.ref?.(next);
@@ -560,36 +621,50 @@ export function ToggleButtonRoot(props: ToggleButtonRootProps) {
   };
 
   return (
-    <View
-      ref={handleRef}
-      testID={props.testID}
-      nativeID={nativeID()}
-      tooltip={props.tooltip}
-      role={role()}
-      disabled={isBlocked()}
-      focusable={props.excludeFromTabOrder === true || isBlocked() ? false : undefined}
-      accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel}
-      accessibilityState={accessibilityState()}
-      accessibilityElementsHidden={props["aria-hidden"] ?? props.accessibilityElementsHidden}
-      class={classes()}
-      // R-008 focus ring; R-039 an inset ring inside a group.
-      classList={{
-        "ring-2 ring-focus outline-none": isFocusVisible(),
-        "ring-offset-2 ring-offset-background": isFocusVisible() && !group,
-        "ring-inset ring-offset-0": isFocusVisible() && group != null,
-      }}
-      style={[{ transitionProperty: transitionProperty() }, resolvedStyle()]}
-      onPress={handlePress}
-      onPressDown={handlePressDown}
-      onPressUp={handlePressUp}
-      onLongPress={handleLongPress}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      onLayout={props.onLayout}
-    >
-      {renderContent(props.children)}
-    </View>
+    // A-004: the provider wraps the root View outright — a Provider nested
+    // inside the View leaves children outside its scope on the web host —
+    // and `props.children` is still read exactly once, at the placement.
+    <PressableFeedbackContext.Provider value={feedbackValue}>
+      <View
+        ref={handleRef}
+        testID={props.testID}
+        nativeID={nativeID()}
+        tooltip={props.tooltip}
+        role={role()}
+        disabled={isBlocked()}
+        focusable={props.excludeFromTabOrder === true || isBlocked() ? false : undefined}
+        accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel}
+        accessibilityState={accessibilityState()}
+        accessibilityElementsHidden={props["aria-hidden"] ?? props.accessibilityElementsHidden}
+        class={classes()}
+        // R-008 focus ring; R-039 an inset ring inside a group.
+        classList={{
+          "ring-2 ring-focus outline-none": isFocusVisible(),
+          "ring-offset-2 ring-offset-background": isFocusVisible() && !group,
+          "ring-inset ring-offset-0": isFocusVisible() && group != null,
+        }}
+        // A-004: the seam's `scale` channel is bound unconditionally — gated
+        // off it holds 1, so a pointer button renders the same box.
+        style={[
+          { transitionProperty: transitionProperty() },
+          { scale: feedback.scale },
+          resolvedStyle(),
+        ]}
+        // A-004: the seam's computed hitSlop is the only writer of this view
+        // prop — components never set a literal and never take a hitSlop prop.
+        hitSlop={feedback.hitSlop()}
+        onPress={handlePress}
+        onPressDown={handlePressDown}
+        onPressUp={handlePressUp}
+        onLongPress={handleLongPress}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onLayout={handleLayout}
+      >
+        {renderContent(props.children)}
+      </View>
+    </PressableFeedbackContext.Provider>
   );
 }
