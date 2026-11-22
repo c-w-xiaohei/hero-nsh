@@ -9,6 +9,7 @@ import type {
 } from "nsh";
 import { computed, signal, split, untracked, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { FieldsetContext } from "../fieldset/context";
 import { joinClassNames } from "./class-names";
 import {
@@ -182,6 +183,11 @@ export function ColorInputGroupRoot(props: ColorInputGroupRootProps): JSX.Elemen
   // context call (research 4.6).
   const field = ColorInputGroupFieldContext();
 
+  // A-002: the `input` variant axis reads the environment, never a prop —
+  // `ColorInputGroupRootProps` has no such member, and an `EnvironmentScope`
+  // remount re-resolves the table with the injected value.
+  const input = createInput();
+
   // --- Variant table --------------------------------------------------------
   // Re-resolved against the current props, and wrapped in a plain object whose
   // slot calls go through that computed: the context contract is HeroUI's
@@ -191,6 +197,7 @@ export function ColorInputGroupRoot(props: ColorInputGroupRootProps): JSX.Elemen
     colorInputGroupVariants({
       fullWidth: local.fullWidth,
       variant: local.variant,
+      input: input(),
     }),
   );
 
@@ -310,7 +317,12 @@ export function ColorInputGroupRoot(props: ColorInputGroupRootProps): JSX.Elemen
     local.onMouseEnter?.(event);
 
     // React Aria's `useHover({ isDisabled })`: a disabled group never hovers.
-    if (isDisabled() || hovered()) {
+    // A-003: under touch the group drops its hover dependence — the signal
+    // would only feed the `bg-field-hover` / `bg-default-hover` fills, and on
+    // web a sticky hover would leave one painted after a press — so the
+    // signal and the `onHover*` callbacks stay off. The host's
+    // `onMouseEnter` still reports the event itself.
+    if (input() === "touch" || isDisabled() || hovered()) {
       return;
     }
 
@@ -322,6 +334,8 @@ export function ColorInputGroupRoot(props: ColorInputGroupRootProps): JSX.Elemen
   const handleMouseLeave = (event: NshMouseEvent) => {
     local.onMouseLeave?.(event);
 
+    // A-003: a touch mount never set `hovered`, so the leave half needs no
+    // gate of its own — the `!hovered()` early return already covers it.
     if (!hovered()) {
       return;
     }

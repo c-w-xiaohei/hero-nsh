@@ -5,8 +5,10 @@ import {
   createInteractionModality,
   type InteractionModalityState,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
 import { FieldsetContext } from "../fieldset/context";
 import {
+  DateInputGroupAffixContext,
   DateInputGroupAnchorContext,
   DateInputGroupContext,
   type DateInputGroupContextValue,
@@ -184,10 +186,27 @@ export function DateInputGroupRoot(props: DateInputGroupRootProps): JSX.Element 
 
   cleanup(() => reportAnchor?.(undefined));
 
+  // A-001 / A-002: the `input` axis — it feeds the variant table's touch
+  // sizing and gates the hover writes below (touch has no hover semantics; a
+  // web sticky hover would otherwise pin `bg-field-hover` after a press).
+  const input = createInput();
+
+  // A-001: an enclosing picker provides `true` here (the affix context the
+  // Prefix / Suffix parts already read); it becomes the table's `interactive`
+  // axis so the affix slots take pointer events and their touch hit area.
+  const interactiveAffixes = DateInputGroupAffixContext();
+
   const variant = computed<DateInputGroupVariant>(() => local.variant ?? "primary");
   const fullWidth = computed(() => local.fullWidth ?? false);
 
-  const slots = computed(() => dateInputGroupVariants({ variant: variant(), fullWidth: fullWidth() }));
+  const slots = computed(() =>
+    dateInputGroupVariants({
+      variant: variant(),
+      fullWidth: fullWidth(),
+      input: input(),
+      interactive: interactiveAffixes(),
+    }),
+  );
 
   // Fieldset sheet §5.2: a disabled `Fieldset` comes first, ahead of the field
   // root and the `aria-disabled` fallback.
@@ -214,7 +233,9 @@ export function DateInputGroupRoot(props: DateInputGroupRootProps): JSX.Element 
   });
 
   const handleMouseEnter = () => {
-    if (isDisabled()) {
+    // A-002: the `input` axis owns hover independence — under touch the hover
+    // state and hover callbacks stay off entirely.
+    if (input() === "touch" || isDisabled()) {
       return;
     }
 
@@ -225,6 +246,11 @@ export function DateInputGroupRoot(props: DateInputGroupRootProps): JSX.Element 
 
   const handleMouseLeave = () => {
     hovered.set(false);
+
+    if (input() === "touch") {
+      return;
+    }
+
     local.onHoverEnd?.(hoverEvent("hoverend"));
     local.onHoverChange?.(false);
   };

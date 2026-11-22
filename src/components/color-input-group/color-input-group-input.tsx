@@ -10,8 +10,13 @@ import type {
 } from "nsh";
 import { cleanup, computed, signal, split } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { joinClassNames } from "./class-names";
-import { ColorInputGroupContext, ColorInputGroupFieldContext } from "./context";
+import {
+  ColorInputGroupContext,
+  type ColorInputGroupEnterKeyHint,
+  ColorInputGroupFieldContext,
+} from "./context";
 import {
   type AriaProps,
   type DataProps,
@@ -78,7 +83,12 @@ export interface ColorInputGroupInputDomProps {
   capture?: boolean | "user" | "environment";
   autoSave?: string;
   results?: number;
-  enterKeyHint?: "enter" | "done" | "go" | "next" | "previous" | "search" | "send";
+  /**
+   * The HTML `enterKeyHint`; mapped to the soft keyboard's return-key label
+   * (`"enter"` / `"previous"` → `"default"`). `returnKeyType` wins over it
+   * (A-005).
+   */
+  enterKeyHint?: ColorInputGroupEnterKeyHint;
   onBeforeInput?: unknown;
   onInput?: unknown;
   onCopy?: unknown;
@@ -122,6 +132,13 @@ export interface ColorInputGroupInputProps
       | "nativeID"
       | "masked"
       | "keyboardType"
+      | "onSubmit"
+      | "submitBehavior"
+      | "returnKeyType"
+      | "autoComplete"
+      | "autoCorrect"
+      | "autoCapitalize"
+      | "maxLength"
     >,
     AriaProps,
     DataProps,
@@ -180,6 +197,32 @@ export interface ColorInputGroupInputProps
 
   /** The keyboard layout; wins over the `type` / `inputMode` mapping. */
   keyboardType?: NshInputProps["keyboardType"];
+
+  /** Return in the input reports the text; the field's commit runs first. */
+  onSubmit?: (event: { text: string }) => void;
+
+  /**
+   * What Return does: `"submit"` reports `onSubmit` and keeps the focus,
+   * `"blurAndSubmit"` also unfocuses. Inside a field with a commit the
+   * default is `"submit"` (RAC's keep-focus); standalone the host's
+   * single-line default `"blurAndSubmit"` applies.
+   */
+  submitBehavior?: NshInputProps["submitBehavior"];
+
+  /** The soft keyboard's return key label; wins over `enterKeyHint`. */
+  returnKeyType?: NshInputProps["returnKeyType"];
+
+  /** The HTML attribute; only the values NSH knows reach the host. */
+  autoComplete?: string;
+
+  /** The HTML `"on"` / `"off"` string (an NSH boolean stays); `"off"` turns it off. */
+  autoCorrect?: string | boolean;
+
+  /** The HTML attribute; only the values NSH knows reach the host. */
+  autoCapitalize?: string;
+
+  /** The most characters the input accepts. */
+  maxLength?: number;
 
   /** The input's ref; a callback, as NSH forwards refs. */
   ref?: (node: InputRef) => void;
@@ -240,6 +283,13 @@ export function ColorInputGroupInput(props: ColorInputGroupInputProps): JSX.Elem
     "placeholder",
     "autoFocus",
     "onSubmit",
+    "submitBehavior",
+    "returnKeyType",
+    "enterKeyHint",
+    "autoComplete",
+    "autoCorrect",
+    "autoCapitalize",
+    "maxLength",
     "onMouseEnter",
     "onMouseLeave",
     "onHoverStart",
@@ -329,6 +379,57 @@ export function ColorInputGroupInput(props: ColorInputGroupInputProps): JSX.Elem
 
   const masked = computed(() => (local.type === "password" ? true : local.masked));
 
+  // A-004: the same environment axis the Root gates its hover on.
+  const input = createInput();
+
+  // --- Keyboard / submit chain (A-005) --------------------------------------
+  // An explicit `submitBehavior` wins — it used to be a host prop `rest`
+  // could carry until the line below overwrote it with `undefined`. With a
+  // field commit the RAC default keeps the focus (`"submit"`); standalone the
+  // host's single-line default (`"blurAndSubmit"`) applies.
+  const submitBehavior = computed<NshInputProps["submitBehavior"]>(
+    () => local.submitBehavior ?? (field?.onSubmit !== undefined ? "submit" : undefined),
+  );
+
+  const returnKeyType = computed<NshInputProps["returnKeyType"]>(() => {
+    if (local.returnKeyType !== undefined) {
+      return local.returnKeyType;
+    }
+
+    // A direct `enterKeyHint` wins over the field's, as upstream's input prop
+    // does. NSH has no "previous" key label; the platform default stands in
+    // (text-control's mapping, A-005).
+    switch (local.enterKeyHint ?? field?.enterKeyHint?.()) {
+      case "enter":
+      case "previous":
+        return "default";
+      case "done":
+        return "done";
+      case "go":
+        return "go";
+      case "next":
+        return "next";
+      case "search":
+        return "search";
+      case "send":
+        return "send";
+      default:
+        return undefined;
+    }
+  });
+
+  const autoComplete = computed(() => toAutoComplete(local.autoComplete));
+
+  const autoCorrect = computed(() => {
+    // Upstream's `autoCorrect` is the HTML string `"on"` / `"off"`; NSH's is a
+    // boolean. Only `"off"` / `false` turns it off.
+    const read = local.autoCorrect;
+
+    return read === undefined ? undefined : read !== "off" && read !== false;
+  });
+
+  const autoCapitalize = computed(() => toAutoCapitalize(local.autoCapitalize));
+
   // --- Local signals --------------------------------------------------------
   const hovered = signal(false);
   const focused = signal(false);
@@ -399,7 +500,10 @@ export function ColorInputGroupInput(props: ColorInputGroupInputProps): JSX.Elem
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
-    if (isDisabled() || hovered()) {
+    // A-004: the input's hover face is touch-gated the same way the Root's
+    // is — under touch the signal, `isHovered` render-prop value and the
+    // `onHover*` callbacks stay off; the host `onMouseEnter` still reports.
+    if (input() === "touch" || isDisabled() || hovered()) {
       return;
     }
 
@@ -459,7 +563,18 @@ export function ColorInputGroupInput(props: ColorInputGroupInputProps): JSX.Elem
       autoFocus={local.autoFocus ?? field?.autoFocus?.()}
       onChange={handleChange}
       onSubmit={handleSubmit}
-      submitBehavior={field?.onSubmit !== undefined ? "submit" : undefined}
+      // A-005 / A-006: the caller's explicit value wins; a field with a
+      // commit keeps Return in place (`"submit"`), and standalone keeps the
+      // host's single-line default.
+      submitBehavior={submitBehavior()}
+      // A-005: the keyboard-props chain of the G action — `returnKeyType`,
+      // the `enterKeyHint` mapping, and the HTML autofill attributes with
+      // NSH's own values still passing through unchanged.
+      returnKeyType={returnKeyType()}
+      autoComplete={autoComplete()}
+      autoCorrect={autoCorrect()}
+      autoCapitalize={autoCapitalize()}
+      maxLength={local.maxLength}
       disabled={isDisabled()}
       // A disabled text field accepts no edits upstream. NSH 0.4.0's `disabled`
       // host prop blocks presses and focus and sets the accessibility state but
@@ -489,4 +604,90 @@ export function ColorInputGroupInput(props: ColorInputGroupInputProps): JSX.Elem
       onBlur={handleBlur}
     />
   );
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Helpers (text-control.tsx's same mapping, A-005)
+ * -----------------------------------------------------------------------------------------------*/
+
+/**
+ * The `autoComplete` values the host understands: React Native's names plus
+ * iOS's `TextContentType` spellings. The prop takes HTML's attribute values,
+ * so anything outside both lists is dropped instead of reaching the host.
+ */
+const AUTO_COMPLETE_VALUES: readonly string[] = [
+  "off",
+  "username",
+  "password",
+  "current-password",
+  "new-password",
+  "one-time-code",
+  "sms-otp",
+  "email",
+  "tel",
+  "name",
+  "given-name",
+  "family-name",
+  "additional-name",
+  "nickname",
+  "organization",
+  "street-address",
+  "address-line1",
+  "address-line2",
+  "address-level1",
+  "address-level2",
+  "postal-code",
+  "country",
+  "cc-number",
+  "cc-exp",
+  "cc-csc",
+  "cc-name",
+  "url",
+  "birthdate-full",
+  // iOS's `TextContentType` spellings, which `NshInputProps["autoComplete"]`
+  // already accepted when the prop reached the host through `rest`.
+  "none",
+  "newPassword",
+  "oneTimeCode",
+  "emailAddress",
+  "telephoneNumber",
+  "givenName",
+  "middleName",
+  "familyName",
+  "organizationName",
+  "fullStreetAddress",
+  "streetAddressLine1",
+  "streetAddressLine2",
+  "addressCity",
+  "addressState",
+  "postalCode",
+  "countryName",
+  "creditCardNumber",
+  "creditCardExpiration",
+  "creditCardSecurityCode",
+  "creditCardName",
+  "URL",
+  "birthdate",
+];
+
+/** Passes an autofill value through when NSH knows it; drops the rest (`"on"`). */
+function toAutoComplete(value: string | undefined): NshInputProps["autoComplete"] {
+  if (value === undefined || !AUTO_COMPLETE_VALUES.includes(value)) {
+    return undefined;
+  }
+
+  return value as NshInputProps["autoComplete"];
+}
+
+/** Passes an HTML `autoCapitalize` through when NSH knows it. */
+function toAutoCapitalize(value: string | undefined): NshInputProps["autoCapitalize"] {
+  switch (value) {
+    case "none":
+    case "sentences":
+    case "words":
+    case "characters":
+      return value;
+    default:
+      return undefined;
+  }
 }

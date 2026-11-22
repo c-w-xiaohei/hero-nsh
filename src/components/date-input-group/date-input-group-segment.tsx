@@ -1,5 +1,15 @@
 import { DateFormatter } from "@internationalized/date";
-import type { Accessor, JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh";
+import { Input } from "nsh/base";
+import type {
+  Accessor,
+  InputRef,
+  JSX,
+  KeyboardType,
+  PressEvent,
+  StyleProp,
+  ViewRef,
+  ViewStyle,
+} from "nsh";
 import {
   cleanup,
   computed,
@@ -14,10 +24,12 @@ import {
 
 import { isKeyboardPress } from "../../primitives/create-interaction-modality";
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
+import { createInput } from "../../primitives/environment";
 import type { DateSegment } from "./date-field-utils";
 import {
   DateInputGroupContext,
   DateInputGroupFieldContext,
+  DateInputGroupKeyboardContext,
 } from "./date-input-group-context";
 import type { DateInputGroupHoverEvent } from "./date-input-group-root";
 import { renderChildren } from "./render-children";
@@ -108,6 +120,42 @@ const SEGMENT_NAMES: Record<string, string> = {
  */
 const EMPTY_SEGMENT_TEXT = "Empty";
 
+/**
+ * A-005: the named keys a soft-keyboard press can report that the channel does
+ * not bridge — Backspace / Delete route to `field.backspace` first, Enter is
+ * `submitBehavior`'s, and the rest (navigation, modifiers) have no segment
+ * editing meaning on the channel; the keymap still owns them on a real
+ * keyboard path.
+ */
+const CHANNEL_NAMED_KEYS: ReadonlySet<string> = new Set([
+  "enter",
+  "return",
+  "tab",
+  "escape",
+  "esc",
+  "arrowup",
+  "arrowdown",
+  "arrowleft",
+  "arrowright",
+  "up",
+  "down",
+  "left",
+  "right",
+  "pageup",
+  "pagedown",
+  "home",
+  "end",
+  "space",
+  "spacebar",
+  "shift",
+  "control",
+  "alt",
+  "meta",
+  "capslock",
+  "backspace",
+  "delete",
+]);
+
 function segmentName(type: string, locale: string): string | undefined {
   const fallback = SEGMENT_NAMES[type];
 
@@ -161,17 +209,33 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
   const group = DateInputGroupContext();
   const field = DateInputGroupFieldContext();
 
+  // A-004 / A-005: the `input` axis — it gates the hover writes and decides
+  // whether the soft-keyboard channel below mounts. The `keyboardType` the
+  // Input advertises (A-007) resolves per segment inside the channel.
+  const input = createInput();
+  const keyboardType = DateInputGroupKeyboardContext();
+
   const focused = signal(false);
   const hovered = signal(false);
 
   let node: ViewRef | undefined;
+  // A-005: the touch editing channel's input; stays `undefined` while the
+  // channel is unmounted (pointer environments, literals, disabled fields).
+  let channelNode: InputRef | undefined;
 
   // R-006: the group's ring follows the parts that can hold the focus.
   cleanup(group.registerFocusTarget(focused));
 
   // The element `focusAdjacent` focuses; re-registered when the row shows a
   // different segment type (a locale or granularity change rewrites the row).
-  effect(() => field?.registerSegmentElement(props.segment.type, () => node));
+  // A-006: the getter is environment-aware — under touch the registered target
+  // is the channel's input, so `focusAdjacent` / `focusLast` land on the
+  // soft-keyboard host instead of the (then unfocusable) segment view.
+  effect(() =>
+    field?.registerSegmentElement(props.segment.type, () =>
+      input() === "touch" ? channelNode : node,
+    ),
+  );
 
   const isLiteral = () => props.segment.type === "literal";
   const isDisabled = () => field?.isDisabled() ?? false;
@@ -220,7 +284,9 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
   });
 
   const handleMouseEnter = () => {
-    if (isLiteral() || !canFocus()) {
+    // A-004: the `input` axis owns hover independence — under touch the hover
+    // state and hover callbacks stay off entirely.
+    if (input() === "touch" || isLiteral() || !canFocus()) {
       return;
     }
 
@@ -231,6 +297,11 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
 
   const handleMouseLeave = () => {
     hovered.set(false);
+
+    if (input() === "touch") {
+      return;
+    }
+
     local.onHoverEnd?.(hoverEvent("hoverend"));
     local.onHoverChange?.(false);
   };
@@ -275,6 +346,102 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
 
     group.requestPointerFocus();
     node?.focus();
+  };
+
+  // --- The touch editing channel (A-005 / A-006) ------------------------------
+  // Under `input === "touch"` a hidden `nsh/base` `Input` covers the segment
+  // and hosts the soft keyboard: the segment view is not a text field, and a
+  // pointer press focuses a view on the desktop but an input needs a text
+  // field behind it to open a keyboard. The segment text still renders on the
+  // view; the channel keeps a controlled empty value and only reports keys.
+  // Focus, blur and the out-of-group commit boundary are the existing
+  // `handleFocus` / `handleBlur`, so `focused`, the `focusedSegment` record
+  // and the ring all see the same segment as before.
+
+  /**
+   * The channel's `keyboardType`: the Input's prop, or `"auto"` resolved per
+   * segment as React Aria's `useDateSegment` resolves `inputMode` — numeric
+   * segments get `"numeric"`, the lettered ones (`dayPeriod`, `era`,
+   * `timeZoneName`) `"default"`.
+   */
+  const channelKeyboardType = (): KeyboardType => {
+    const value = keyboardType();
+
+    if (value !== "auto") {
+      return value;
+    }
+
+    switch (props.segment.type) {
+      case "dayPeriod":
+      case "era":
+      case "timeZoneName":
+        return "default";
+      default:
+        return "numeric";
+    }
+  };
+
+  /**
+   * A press on the channel is the segment's `handlePress` pointer half on an
+   * input: it records the pointer modality, marks the focus it is about to
+   * take, and lets the host focus land on the channel (an input needs no
+   * explicit `focus()`, but calling it also serves hosts that do not move the
+   * focus on press).
+   */
+  const handleChannelPress = (event: PressEvent) => {
+    if (isKeyboardPress(event)) {
+      group.setKeyboardModality();
+
+      return;
+    }
+
+    group.setPointerModality();
+
+    if (focused()) {
+      return;
+    }
+
+    group.requestPointerFocus();
+    channelNode?.focus();
+  };
+
+  /**
+   * Keys arrive through `onKeyPress`, never `onChange` — the channel's value
+   * stays the controlled empty string. Single characters feed `field.type`
+   * with the same buffer / advance rules the keymap's digit and letter
+   * bindings drive; Backspace / Delete feed `field.backspace`; Enter is left
+   * to `submitBehavior="blurAndSubmit"` (the blur runs the group's existing
+   * commit boundary, so `onSubmit` would only duplicate it). Every key that
+   * reaches here is a keyboard interaction for the modality, exactly like a
+   * bound key.
+   */
+  const handleChannelKeyPress = (event: { key: string }) => {
+    group.setKeyboardModality();
+
+    const key = event.key;
+
+    if (key === "Backspace" || key === "Delete" || key === "backspace" || key === "delete") {
+      field?.backspace(props.segment);
+
+      return;
+    }
+
+    if (CHANNEL_NAMED_KEYS.has(key.toLowerCase())) {
+      return;
+    }
+
+    if (key.length === 1) {
+      field?.type(props.segment, key);
+
+      return;
+    }
+
+    // A `key` longer than one character that is not a named key is typed text
+    // (an IME commit, a `nsh/test` `app.type` batch): feed it a character at a
+    // time, as key-by-key typing would.
+    for (const character of key) {
+      field?.type(props.segment, character);
+    }
   };
 
   // --- Keys ------------------------------------------------------------------
@@ -466,7 +633,11 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
     return segmentName(props.segment.type, fieldLocale());
   };
 
-  const focusable = () => isInTabOrder();
+  // A-005: under touch the segment's focus stop is the channel's input, so the
+  // view itself leaves the Tab order (one stop per segment, as the pointer
+  // side has) and a `focusLast` / arrow move lands where the soft keyboard
+  // hosts. `isInTabOrder()` alone is the pointer half, byte-identical.
+  const focusable = () => isInTabOrder() && input() !== "touch";
 
   return (
     <View
@@ -494,6 +665,30 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
       onBlur={handleBlur}
     >
       {resolveSegmentChildren(local.children, createRenderProps)}
+      {/* A-005: the soft-keyboard channel — a hidden input covering the
+          segment, mounted only where a touch environment gives a non-literal
+          segment a Tab stop. Under `pointer` it does not exist at all (M-004's
+          negative assertion); the A-001 `relative` anchors it to the raised
+          segment box. A read-only or non-editable segment keeps the channel
+          focusable but `readonly`, so the soft keyboard stays closed. */}
+      <If when={isInTabOrder() && input() === "touch"}>
+        <Input
+          ref={(value) => {
+            channelNode = value;
+          }}
+          testID={`dig-seg-${props.segment.type}`}
+          value=""
+          caret={false}
+          readonly={!canEdit()}
+          keyboardType={channelKeyboardType()}
+          submitBehavior="blurAndSubmit"
+          class="absolute inset-0 opacity-0"
+          onPress={handleChannelPress}
+          onKeyPress={handleChannelKeyPress}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+        />
+      </If>
     </View>
   );
 }

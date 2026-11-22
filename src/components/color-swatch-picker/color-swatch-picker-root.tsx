@@ -28,6 +28,8 @@ import {
   type ListState,
   type SelectionModifiers,
 } from "../../primitives";
+import { createDensity } from "../../primitives/environment";
+import { createInput } from "../../primitives/environment";
 import type { Color } from "../color-swatch";
 import { joinClassNames } from "../color-picker/class-names";
 import type { ColorPickerColorValue } from "../color-picker/create-color-picker-state";
@@ -347,11 +349,19 @@ export function ColorSwatchPickerRoot(
     state: list,
   };
 
+  // A-001: the environment axes — `input` carries the item's 44pt touch
+  // minimum (the root itself is no press target, the axis belongs to its
+  // options), `density` the row gap.
+  const input = createInput();
+  const density = createDensity();
+
   const slots = computed(() =>
     colorSwatchPickerVariants({
       layout: layout(),
       size: size(),
       variant: variant(),
+      input: input(),
+      density: density(),
     }),
   );
 
