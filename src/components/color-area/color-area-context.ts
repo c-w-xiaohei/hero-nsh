@@ -16,6 +16,7 @@ import type { Accessor, ViewRef } from "nsh";
 import { context } from "nsh";
 
 import type { InteractionModalityState } from "../../primitives";
+import type { PressFeedback } from "../../primitives/pressable";
 import type { Color } from "./colors";
 import type { ColorAreaIntlTranslations } from "./color-area.intl";
 import type { colorAreaVariants } from "./color-area.styles";
@@ -23,6 +24,22 @@ import type { ColorAreaState } from "./create-color-area-state";
 
 /** The slot functions of the variant table, for the resolved variant. */
 export type ColorAreaSlots = ReturnType<typeof colorAreaVariants>;
+
+/**
+ * A-001: the thumb's touch-gated `createPressFeedback` seam, as the parts see
+ * it — the full channel set plus the seam's effective gate. `nsh/test` can
+ * read neither a view's `hitSlop` prop nor an `AnimatedValue`-bound style, so
+ * these channels are the seam's only observable surface (sheet §4 M-001 /
+ * M-002). The Thumb uses only `hitSlop` and `layout`: its interaction face is
+ * the existing pan responder, so the press trio (`pressDown`/`pressUp`) is
+ * deliberately left off this type — binding them would create a second press
+ * path with its own pressed state.
+ */
+export interface ColorAreaThumbFeedback
+  extends Omit<PressFeedback, "pressDown" | "pressUp"> {
+  /** The seam's effective gate (`input() === "touch"` and not `isDisabled`). */
+  enabled: Accessor<boolean>;
+}
 
 /** What the Root hands every part (port sheet §2). */
 export interface ColorAreaContextValue {
@@ -49,6 +66,9 @@ export interface ColorAreaContextValue {
 
   /** The interaction modality, which decides whether the focus ring shows. */
   modality: InteractionModalityState;
+
+  /** A-001: the invisible-hit-area seam the Root owns for the Thumb. */
+  thumbFeedback: ColorAreaThumbFeedback;
 
   /** Whether the Thumb has the keyboard focus (the root also needs it). */
   isFocused: Accessor<boolean>;
