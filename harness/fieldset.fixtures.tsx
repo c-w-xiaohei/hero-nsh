@@ -1,6 +1,8 @@
-import { host, mount } from "nsh";
-import { Fieldset } from "@heroui/react";
+import { host, mount, Text, View } from "nsh";
+import type { JSX } from "nsh";
+import { Button, EnvironmentScope, Fieldset } from "@heroui/react";
 import { Stage } from "@scenario/stage";
+import { probe } from "@scenario/probe";
 
 /*
  * NSH-only Fieldset fixture (port sheet 4b, T-003 and regression X-001).
@@ -18,6 +20,12 @@ import { Stage } from "@scenario/stage";
  * - `attributed`: upstream's own case, a bare string child plus `testID`.
  * - `children`: the child shapes HeroUI accepts (`ReactNode`), a bare string,
  *   a number and an array of strings, kept separate so each is visible.
+ * - `mobile`: the adapt sheet's measurement tree (§4 M-001…M-006) — a
+ *   Root+Legend+Group(two members)+Actions fieldset whose blocks report
+ *   their bounds through `onLayout`, mounted under an `EnvironmentScope`
+ *   fed by `host.params.input` / `host.params.density`.
+ * - `mobile-disabled`: the same tree with `disabled` on, for the context
+ *   propagation half of M-002/M-005.
  */
 
 function AttributedCase() {
@@ -40,10 +48,128 @@ function ChildrenCase() {
   );
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * Mobile-environment cases (adapt-sheets/fieldset.md §4 M-001…M-006)
+ * -----------------------------------------------------------------------------------------------*/
+
+type LayoutEvent = {
+  bounds: {
+    origin: { x: number; y: number };
+    size: { width: number; height: number };
+  };
+};
+
+/** A full bounds box for every measured block. */
+function boxProbe(name: string) {
+  return (event: LayoutEvent) =>
+    probe("layout")({
+      name,
+      x: event.bounds.origin.x,
+      y: event.bounds.origin.y,
+      width: event.bounds.size.width,
+      height: event.bounds.size.height,
+    });
+}
+
+/**
+ * The tree the mobile assertions drive: a Legend over a two-member Group and
+ * an Actions row, so every spacing literal the density axis owns is
+ * measurable — legend→group, member→member, group→actions, action→action
+ * and the actions' top padding (a filler View's y inside the slot).
+ *
+ * `member-two` is a real Button — the `FieldsetContext` consumer (OR merge,
+ * sheet A-008) M-002/M-005 read `enabled` and the press refusal from. Its
+ * own `input` adaptation (a taller touch row) is the button unit's claim,
+ * so M-003 compares fieldset-owned spacing around it rather than its box.
+ * Everything else is a plain View/Text block. `disabled` is fixed by the
+ * case name.
+ */
+function MobileCase(props: { disabled?: boolean }) {
+  return (
+    <View class="p-6">
+      <Fieldset
+        disabled={props.disabled}
+        testID="fieldset-root"
+        role="group"
+        aria-label="Mobile fieldset"
+        onLayout={boxProbe("root")}
+      >
+        <Fieldset.Legend testID="legend" onLayout={boxProbe("legend")}>
+          Settings
+        </Fieldset.Legend>
+        <Fieldset.Group testID="group" onLayout={boxProbe("group")}>
+          <View
+            class="px-2 py-1 bg-default"
+            testID="member-one"
+            onLayout={boxProbe("member-one")}
+          >
+            <Text>Username</Text>
+          </View>
+          <Button
+            testID="member-two"
+            onPress={probe("member-press")}
+            onLayout={boxProbe("member-two")}
+          >
+            Password
+          </Button>
+        </Fieldset.Group>
+        <Fieldset.Actions testID="actions" onLayout={boxProbe("actions")}>
+          <View
+            class="h-full"
+            testID="actions-filler"
+            onLayout={boxProbe("actions-filler")}
+          />
+          <View
+            class="px-2 py-1 bg-default"
+            testID="action-apply"
+            onLayout={boxProbe("action-apply")}
+          >
+            <Text>Apply</Text>
+          </View>
+          <View
+            class="px-2 py-1 bg-default"
+            testID="action-cancel"
+            onLayout={boxProbe("action-cancel")}
+          >
+            <Text>Cancel</Text>
+          </View>
+        </Fieldset.Actions>
+      </Fieldset>
+    </View>
+  );
+}
+
+/**
+ * `host.params.input` / `host.params.density` feed `EnvironmentScope`; an
+ * absent param keeps the host-derived value, so a case opened without them
+ * is the desktop-parity baseline.
+ */
+function ScopedMobile(props: { children?: JSX.Element }) {
+  const input = String(host.params.input ?? "");
+  const density = String(host.params.density ?? "");
+
+  return (
+    <EnvironmentScope
+      input={input === "touch" || input === "pointer" ? input : undefined}
+      density={density === "compact" || density === "default" ? density : undefined}
+    >
+      {props.children}
+    </EnvironmentScope>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "attributed");
 
   if (name === "children") return <ChildrenCase />;
+
+  if (name === "mobile" || name === "mobile-disabled") {
+    return (
+      <ScopedMobile>
+        <MobileCase disabled={name === "mobile-disabled"} />
+      </ScopedMobile>
+    );
+  }
 
   return <AttributedCase />;
 }
