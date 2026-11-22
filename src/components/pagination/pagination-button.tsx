@@ -11,6 +11,7 @@ import { renderChildren } from "./pagination-children";
 import { PaginationContext } from "./pagination-context";
 import type { PaginationButtonProps } from "./pagination-button-props";
 import { createPaginationPressable } from "./create-pagination-pressable";
+import type { PaginationRenderProps } from "./create-pagination-pressable";
 import { toAccessibilityRole } from "./pagination-roles";
 import { paginationNavClasses } from "./pagination.styles";
 
@@ -153,25 +154,6 @@ export function PaginationButtonRoot(props: PaginationButtonRootProps): JSX.Elem
     };
   });
 
-  // The single read of `props.children`, through a computed, rendered at the
-  // placement so a signal inside a child keeps updating (research 4.1 / 4.6).
-  const children = computed(() => props.children);
-
-  const renderContent = () => {
-    const content = children();
-
-    // D17: a function that takes arguments is the HeroUI render prop; the
-    // parameter object holds accessors. A zero-argument function is NSH's
-    // reactive child and goes through `renderChildren`.
-    if (typeof content === "function" && content.length >= 1) {
-      return renderChildren(
-        (content as (values: typeof renderProps) => JSX.Element)(renderProps),
-      );
-    }
-
-    return renderChildren(content as JSX.Element);
-  };
-
   // A-002: the seam hooks the host's press-down behind the pressable's chain
   // (a blocked press early-returns inside `handlePressDown`, and the gated
   // seam records nothing either way) and its press-up at the chain's head —
@@ -242,8 +224,42 @@ export function PaginationButtonRoot(props: PaginationButtonRootProps): JSX.Elem
       onLayout={handleLayout}
     >
       <PressableFeedbackContext.Provider value={feedbackValue}>
-        {renderContent()}
+        <PaginationButtonContent renderProps={renderProps}>
+          {props.children}
+        </PaginationButtonContent>
       </PressableFeedbackContext.Provider>
     </View>
   );
+}
+
+/**
+ * The children half of `PaginationButtonRoot`, mounted inside
+ * `PressableFeedbackContext.Provider`. `props.children` is a lazy accessor:
+ * whichever component invokes it owns the scope its descendants are created
+ * in. Resolving it here — under the provider — is what lets a child reading
+ * `PressableFeedbackContext` (a seam probe, a `PressableFeedback.Scale` /
+ * `Highlight` / `Ripple` overlay part) see the live seam value instead of
+ * `RESTING_PRESS_FEEDBACK`; resolving it in `PaginationButtonRoot`'s own
+ * scope, above the provider, binds every child to the default.
+ */
+function PaginationButtonContent(props: {
+  children?: JSX.Element | ((values: PaginationRenderProps) => JSX.Element);
+  renderProps: PaginationRenderProps;
+}): JSX.Element {
+  // The single read of `props.children`, through a computed, rendered at the
+  // placement so a signal inside a child keeps updating (research 4.1 / 4.6).
+  const children = computed(() => props.children);
+
+  const content = children();
+
+  // D17: a function that takes arguments is the HeroUI render prop; the
+  // parameter object holds accessors. A zero-argument function is NSH's
+  // reactive child and goes through `renderChildren`.
+  if (typeof content === "function" && content.length >= 1) {
+    return renderChildren(
+      (content as (values: PaginationRenderProps) => JSX.Element)(props.renderProps),
+    );
+  }
+
+  return renderChildren(content as JSX.Element);
 }
