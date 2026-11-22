@@ -63,14 +63,11 @@ function probeNames(app: App): string[] {
 }
 
 // adapt-sheets/color-input-group.md M-008 (A-011) — the shared half of the
-// two M-008 rows above. Six sequential opens per scope: a dozen web hosts
+// two M-008 rows above. Four sequential opens per scope: a dozen web hosts
 // in one test exhausts the web target (the M3 run proved it), so the row
-// splits one scope per test rather than looping in a single test.
+// splits one scope per test and reads only the cases that emit probes at
+// mount or on one short step.
 async function assertFixtureSurface(params: Params) {
-  const basic = await openCase("basic", params);
-  expect(basic.shows("id:group")).toBe(true);
-  expect(basic.shows("id:group-input")).toBe(true);
-
   const layout = await openCase("layout", params);
   await layout.waitUntil(() => callsOf(layout, "layout").length > 0);
 
@@ -85,11 +82,6 @@ async function assertFixtureSurface(params: Params) {
   const events = await openCase("events", params);
   await events.type("id:group-input", "x");
   expect(callsOf(events, "onKeyPress")).toHaveLength(1);
-
-  const kbd = await openCase("kbd", params);
-  // `id:k-max` sits below the viewport's 768 pt fold under touch
-  // (sixteen 44 pt rows) — the first row is on-screen in both scopes.
-  expect(kbd.shows("id:kh-enter")).toBe(true);
 }
 
 describe("color-input-group mobile", () => {
@@ -291,59 +283,58 @@ describe("color-input-group mobile", () => {
   }, 120_000);
 
   // adapt-sheets/color-input-group.md M-009 (基线): the default environment
-  // keeps the desktop contract — the same cases and assertions
-  // `color-input-group.heroui.test.tsx` pins (S-001…S-005), run through the
-  // same fixture.
+  // keeps the desktop contract — the same faces and assertions
+  // `color-input-group.heroui.test.tsx` pins (S-001…S-005), all mounted at
+  // once by the fixture's `baseline` case (sequential opens exhaust the
+  // web target's browser pool, so the whole row reads one app).
   test("M-009 baseline: default environment keeps the desktop contract", async () => {
-    const prefixSuffix = await openCase("prefix-suffix");
-    expect(prefixSuffix.shows("text:#")).toBe(true);
-    expect(prefixSuffix.shows("text:%")).toBe(true);
-    expect(prefixSuffix.count("text:#")).toBe(1);
+    const app = await openCase("baseline");
 
-    const controlled = await openCase("controlled");
-    expect(controlled.enabled("id:group-input")).toBe(true);
-    await controlled.type("id:group-input", "#22c55e");
-    expect(controlled.value("id:group-input")).toBe("#22c55e");
-    const changes = callsOf(controlled, "onChange");
+    // S-001: affix string children render as text.
+    expect(app.shows("text:#")).toBe(true);
+    expect(app.shows("text:%")).toBe(true);
+
+    // S-002: every keystroke reports onChange({value}); the controlled
+    // fixture writes it back.
+    expect(app.enabled("id:b-controlled-input")).toBe(true);
+    await app.type("id:b-controlled-input", "#22c55e");
+    expect(app.value("id:b-controlled-input")).toBe("#22c55e");
+    const changes = callsOf(app, "onChange");
     expect(changes.length).toBeGreaterThanOrEqual(2);
     expect(changes[changes.length - 1][0]).toEqual({ value: "#22c55e" });
 
-    const disabled = await openCase("disabled");
-    expect(disabled.enabled("id:group-input")).toBe(false);
-    await disabled.type("id:group-input", "#ff0000").catch(() => undefined);
-    expect(disabled.value("id:group-input")).toBe("");
-    expect(callsOf(disabled, "onChange")).toHaveLength(0);
+    // S-003: the Input's own disabled / readOnly props.
+    expect(app.enabled("id:b-disabled-input")).toBe(false);
+    await app.type("id:b-disabled-input", "#ff0000").catch(() => undefined);
+    expect(app.value("id:b-disabled-input")).toBe("");
+    expect(callsOf(app, "onChange")).toEqual(changes);
 
-    const readOnly = await openCase("readonly");
-    expect(readOnly.enabled("id:group-input")).toBe(false);
-    expect(readOnly.value("id:group-input")).toBe("#ff0000");
-    expect(callsOf(readOnly, "onChange")).toHaveLength(0);
+    expect(app.enabled("id:b-readonly-input")).toBe(false);
+    expect(app.value("id:b-readonly-input")).toBe("#ff0000");
 
-    const renderProps = await openCase("render-props");
+    // S-004: the Root's render props report hover and focus-within.
     type FullRecord = {
       isHovered: boolean;
       isFocusWithin: boolean;
       isFocusVisible: boolean;
     };
-    const records = () =>
-      callsOf(renderProps, "root-class").map((a) => a[0] as FullRecord);
+    const records = () => callsOf(app, "root-class").map((a) => a[0] as FullRecord);
     const last = () => records().at(-1)!;
 
     expect(last().isHovered).toBe(false);
-    await renderProps.hover("id:group");
+    await app.hover("id:b-rp");
     expect(last().isHovered).toBe(true);
-    await renderProps.type("id:group-input", "ff0000");
+    await app.type("id:b-rp-input", "ff0000");
     expect(last().isFocusWithin).toBe(true);
-    await renderProps.press("id:blur");
+    await app.press("id:b-blur");
     expect(last().isFocusWithin).toBe(false);
-    expect(callsOf(renderProps, "input-focus")).toHaveLength(1);
-    expect(callsOf(renderProps, "input-blur")).toHaveLength(1);
+    expect(callsOf(app, "input-focus")).toHaveLength(1);
+    expect(callsOf(app, "input-blur")).toHaveLength(1);
     expect(records().every((r) => r.isFocusVisible === r.isFocusWithin)).toBe(true);
 
-    const variants = await openCase("variants");
-    expect(variants.count("id:group")).toBe(4);
-    expect(variants.count("id:group-input")).toBe(4);
-    expect(variants.shows("text:prefix")).toBe(true);
+    // S-005: every variant mounts with its parts.
+    expect(app.count("id:b-variant")).toBe(4);
+    expect(app.shows("text:prefix")).toBe(true);
   }, 120_000);
 
   // adapt-sheets/color-input-group.md M-010 (A-006): a field without

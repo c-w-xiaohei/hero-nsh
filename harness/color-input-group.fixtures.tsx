@@ -52,6 +52,11 @@ import { probe } from "@scenario/probe";
  *                  assertion needs probes absent, not just silent
  *   events         the `rest` pass-through probes (`onPaste`, `onKeyPress`,
  *                  `onCompositionChange`) M-007 reads in both environments
+ *   baseline       every default-environment contract face in one mount —
+ *                  affix text, controlled value, disabled, read-only, the
+ *                  render-prop hover / focus-within group and the variant
+ *                  row — so M-009 needs a single open (sequential web hosts
+ *                  exhaust the target)
  *
  * `host.params.scope` wraps any case: "" = the host's default environment
  * (pointer — the desktop-parity side), "touch" = `EnvironmentScope
@@ -387,6 +392,91 @@ function EventsCase() {
   );
 }
 
+/* A-011: M-009's whole default-environment surface in ONE app — a dozen
+ * sequential web hosts in a single test exhausts the `--target web`
+ * browser pool, so the baseline row mounts every face it reads at once.
+ * Probe names stay the per-case ones (`onChange`, `root-class`,
+ * `input-focus`/`input-blur`); only `b-`-prefixed testIDs distinguish the
+ * groups. `Stage` wraps nothing: the scroll is part of the mount cost
+ * the single open buys. */
+function BaselineCase() {
+  const value = signal("");
+  const record = probe("root-class");
+  let input: InputRef | undefined;
+
+  return (
+    <View class="flex-col gap-3 p-4">
+      <ColorInputGroup testID="b-affix">
+        <ColorInputGroup.Prefix>#</ColorInputGroup.Prefix>
+        <ColorInputGroup.Input testID="b-affix-input" placeholder="#000000" />
+        <ColorInputGroup.Suffix>%</ColorInputGroup.Suffix>
+      </ColorInputGroup>
+
+      <ColorInputGroup testID="b-controlled">
+        <ColorInputGroup.Input
+          testID="b-controlled-input"
+          value={value()}
+          onChange={(event) => {
+            probe("onChange")(event);
+            value.set(event.value);
+          }}
+        />
+      </ColorInputGroup>
+
+      <ColorInputGroup testID="b-disabled">
+        <ColorInputGroup.Input testID="b-disabled-input" disabled />
+      </ColorInputGroup>
+
+      <ColorInputGroup testID="b-readonly">
+        <ColorInputGroup.Input
+          testID="b-readonly-input"
+          readOnly
+          defaultValue="#ff0000"
+        />
+      </ColorInputGroup>
+
+      <ColorInputGroup
+        testID="b-rp"
+        className={({ isHovered, isFocusWithin, isFocusVisible }) => {
+          record({
+            isHovered: isHovered(),
+            isFocusWithin: isFocusWithin(),
+            isFocusVisible: isFocusVisible(),
+          });
+
+          return "";
+        }}
+      >
+        <ColorInputGroup.Input
+          testID="b-rp-input"
+          ref={(node) => {
+            input = node;
+          }}
+          onFocus={probe("input-focus")}
+          onBlur={probe("input-blur")}
+        />
+      </ColorInputGroup>
+      <View testID="b-blur" role="button" class="px-3 py-1 bg-default" onPress={() => input?.blur()}>
+        <Text>blur</Text>
+      </View>
+
+      <ColorInputGroup testID="b-variant" variant="primary">
+        <ColorInputGroup.Input />
+      </ColorInputGroup>
+      <ColorInputGroup testID="b-variant" variant="secondary">
+        <ColorInputGroup.Input />
+      </ColorInputGroup>
+      <ColorInputGroup testID="b-variant" fullWidth>
+        <ColorInputGroup.Input />
+      </ColorInputGroup>
+      <ColorInputGroup testID="b-variant">
+        <ColorInputGroup.Prefix>prefix</ColorInputGroup.Prefix>
+        <ColorInputGroup.Input />
+      </ColorInputGroup>
+    </View>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "basic");
 
@@ -404,6 +494,7 @@ function Fixture() {
   if (name === "kbd") return <Scoped><KbdCase /></Scoped>;
   if (name === "press") return <Scoped><PressCase /></Scoped>;
   if (name === "events") return <Scoped><EventsCase /></Scoped>;
+  if (name === "baseline") return <Scoped><BaselineCase /></Scoped>;
 
   return <Scoped><BasicCase /></Scoped>;
 }
