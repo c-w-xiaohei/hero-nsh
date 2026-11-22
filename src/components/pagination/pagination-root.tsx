@@ -1,6 +1,7 @@
 import type { JSX } from "nsh";
 import { computed, split, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { renderChildren } from "./pagination-children";
 import { PaginationContext, type PaginationContextValue } from "./pagination-context";
 import { PaginationDomPartProps, viewProps } from "./pagination-dom-props";
@@ -48,9 +49,15 @@ export function PaginationRoot(props: PaginationRootProps): JSX.Element {
     "render",
   ] as const);
 
+  // A-003: the `input` variant axis reads the environment here, in the root's
+  // owner scope — never a prop, never `platform` (sheet §3).
+  const input = createInput();
+
   // R-001: the `base` slot. R-031: the default lives in the table's
   // `defaultVariants`, so the raw prop goes in.
-  const slots = computed(() => paginationVariants({ size: props.size }));
+  const slots = computed(() =>
+    paginationVariants({ size: props.size, input: input() }),
+  );
 
   const contextValue: PaginationContextValue = {
     slots,

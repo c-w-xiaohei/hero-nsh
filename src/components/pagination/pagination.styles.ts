@@ -2,7 +2,12 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
-import { ease } from "../../tokens/geometry";
+// `ease.smooth` of `src/tokens/geometry.ts` written out: the M2 class walker
+// imports this file through Node ESM, which does not resolve extensionless
+// relative specifiers, so the geometry module cannot be imported from a
+// `.styles.ts`. Same pattern as `switch.styles.ts` / `button.styles.ts`; keep
+// in sync with `EASE_VALUES.smooth`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
 
 /**
  * Pagination's variant table, mirroring `@heroui/styles` 3.2.7
@@ -56,11 +61,17 @@ export const paginationVariants = tv({
      * `--pagination-link-fg: var(--default-foreground)` →
      * `bg-transparent text-default-foreground`.
      * R-013: the `@media (hover: hover)` block →
-     * `hover:bg-default-hover`.
+     * `hover:bg-default-hover`. A-001: it moved into the `input: "pointer"`
+     * cell — under `touch` a press must not leave the sticky-hover color
+     * behind (web keeps `hover:` styles after a tap).
      * R-014: the pressed block → `active:bg-default-hover
-     * active:scale-[0.97]`.
+     * active:scale-[0.97]`. A-001: under `input: "touch"` only the background
+     * stays; the `active:scale-*` classes belong to the `input: "pointer"`
+     * cell and the per-size pointer compounds, because the transform channel
+     * under touch is the A-002 `createPressFeedback` `scale` AnimatedValue's
+     * alone (the two-writers ban).
      */
-    link: `relative inline-flex size-9 origin-center items-center justify-center rounded-3xl text-sm font-medium whitespace-nowrap outline-none select-none bg-transparent text-default-foreground cursor-pointer duration-[250ms] ${ease.smooth} hover:bg-default-hover active:bg-default-hover active:scale-[0.97] md:size-8`,
+    link: `relative inline-flex size-9 origin-center items-center justify-center rounded-3xl text-sm font-medium whitespace-nowrap outline-none select-none bg-transparent text-default-foreground cursor-pointer duration-[250ms] ${EASE_SMOOTH} md:size-8`,
     // R-016: `.pagination__ellipsis` → `inline-flex size-9 items-center
     // justify-center text-sm text-muted select-none md:size-8`.
     ellipsis:
@@ -75,7 +86,7 @@ export const paginationVariants = tv({
       // md:size-7`.
       // R-023: `.pagination--sm .pagination__summary` → `text-xs`.
       sm: {
-        link: "size-8 text-xs md:size-7 active:scale-[0.98]",
+        link: "size-8 text-xs md:size-7",
         ellipsis: "size-8 text-xs md:size-7",
         summary: "text-xs",
       },
@@ -84,22 +95,46 @@ export const paginationVariants = tv({
       md: {},
       // R-025: `.pagination--lg .pagination__link` → `size-10 text-base
       // md:size-9`.
-      // R-026: `.pagination--lg .pagination__link:active` → `scale(0.96)`.
+      // R-026: `.pagination--lg .pagination__link:active` → `scale(0.96)`
+      // (A-001: pointer-only now, in the size × input compounds below).
       // R-028: `.pagination--lg .pagination__ellipsis` → `size-10 text-base
       // md:size-9`.
       // R-029: `.pagination--lg .pagination__summary` → `text-base`.
       lg: {
-        link: "size-10 text-base md:size-9 active:scale-[0.96]",
+        link: "size-10 text-base md:size-9",
         ellipsis: "size-10 text-base md:size-9",
         summary: "text-base",
       },
     },
+    // A-001: the `input` axis of the encapsulation model. `pointer` reproduces
+    // the pre-axis classes byte-for-byte — `hover:` + `active:` in the same
+    // positions variant order gives — and the per-size scale overrides of
+    // R-020 / R-026 live in the size × pointer compounds below (declared after
+    // `size`, so a plain `active:scale-[0.97]` cell still loses to them under
+    // sm/lg, exactly as the base class lost to the size cell before). `touch`
+    // keeps one press color and no transform: the scale is the A-002 seam's.
+    input: {
+      pointer: {
+        link: "hover:bg-default-hover active:bg-default-hover active:scale-[0.97]",
+      },
+      touch: {
+        link: "active:bg-default-hover",
+      },
+    },
   },
+  compoundVariants: [
+    // A-001: R-020 / R-026 — the per-size `active:scale-*` are pointer-only.
+    { size: "sm", input: "pointer", class: { link: "active:scale-[0.98]" } },
+    { size: "lg", input: "pointer", class: { link: "active:scale-[0.96]" } },
+  ],
   // R-031: the `pagination--sm/md/lg` modifier classes are deleted; the `size`
   // dimension and its default stay, and the declarations of R-019 … R-029 live
   // in the same-named slot values above.
   defaultVariants: {
     size: "md",
+    // A-001: a caller that resolves `paginationVariants` without the axis gets
+    // the pre-axis output — the desktop-parity guarantee.
+    input: "pointer",
   },
 });
 
