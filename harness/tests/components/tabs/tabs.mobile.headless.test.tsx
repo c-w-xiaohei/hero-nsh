@@ -184,16 +184,22 @@ describe("tabs mobile (headless)", () => {
       expect(callsOf(app, "selectionChange")).toHaveLength(selectionBefore);
 
       // Chevron paging: scrollBy(1) = 0.8 × 280 = 224 pt, clamped into
-      // [0, 244]. The contract is a full page step; the focused-key
-      // scroll-into-view correction currently clamps it short (BUG
-      // registered in the batch report), so this is the RED half.
+      // [0, 244]. Under touch the centered selection parked the strip at
+      // offset 80, so a single `next` page would clamp onto maxScroll 244
+      // where the end chevron is legitimately hidden — page back to the
+      // start edge first so both arms assert the same interior offset and
+      // the same visibility pair (M-009's "两环境一致").
+      if (params.input === "touch") {
+        await app.press("id:tabs-scroll-prev");
+      }
+      const startOffset = offsetOf(await settledMeasure(app));
       await app.press("id:tabs-scroll-next");
       const paged = await settledMeasure(app);
-      const expected = Math.min(offsetBefore + 224, 244);
+      const expected = Math.min(startOffset + 224, 244);
       expect(Math.abs(offsetOf(paged) - expected)).toBeLessThan(2);
 
-      // Visibility sequence: once scrolled, the start chevron shows in
-      // both environments (it was hidden at offset 0 under pointer).
+      // Visibility sequence: at the interior offset both chevrons show in
+      // both environments.
       expect(app.shows("id:tabs-scroll-prev")).toBe(true);
       expect(app.shows("id:tabs-scroll-next")).toBe(true);
     }

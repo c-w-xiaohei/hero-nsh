@@ -1,4 +1,4 @@
-import { effect, host, mount, signal, Text, View } from "nsh";
+import { effect, host, mount, platform, signal, Text, View } from "nsh";
 import type { JSX, ViewRef } from "nsh";
 import { Tabs } from "@heroui/react";
 import { EnvironmentScope, PressableFeedbackContext } from "@heroui/react";
@@ -607,6 +607,11 @@ function MobileTabs() {
 
 function Fixture() {
   const name = String(host.params.case ?? "heroui");
+
+  // The host OS as the app sees it — `"web"` on `--target web` even when the
+  // test opens with a desktop `platform` — so tests can tell which gesture
+  // tails the host actually delivers (the web chain gap, sheet §6).
+  probe("platform")(platform.os);
 
   // Every case mounts inside `ScopedMobile` through `Case`: NSH context
   // reaches a subtree only for elements created under the provider, so the
