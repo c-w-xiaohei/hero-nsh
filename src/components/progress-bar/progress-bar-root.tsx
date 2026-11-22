@@ -323,6 +323,17 @@ export function ProgressBarRoot(props: ProgressBarRootProps): JSX.Element {
   // A-005 (adapt sheet §2, 保留): there is no overlay container — the
   // `presentation` seam applies to panel/sheet hosts only; an inline display
   // block renders inline on every environment.
+  //
+  // A-006 / A-007 (adapt sheet §2, 接轴): both 落点 are realized outside this
+  // file — `harness/progress-bar.fixtures.tsx` (`ScopedMobile` feeds
+  // `host.params.input`/`density` into `EnvironmentScope`; `host.params.case`
+  // dispatches geometry/sizes/colors/value-label/custom-format/disabled/
+  // render-prop, `onLayout` bounds probes via `app.storage()`) and
+  // `progress-bar.mobile.test.tsx` (both-environment assertions under a
+  // desktop-pinned `open`). What they probe — this `View`'s bounds, the
+  // `role="progressbar"`/`accessibilityValue`/`accessibilityState` mapping and
+  // the `value`/`minValue`/`maxValue`/`isIndeterminate`/`valueLabel`/`format`
+  // contract — is environment-invariant, so nothing here changes.
   return (
     <ProgressBarContext.Provider value={contextValue}>
       <FieldContext.Provider value={fieldState}>
