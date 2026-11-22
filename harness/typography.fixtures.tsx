@@ -1,4 +1,4 @@
-import { host, mount, platform, Text, View } from "nsh";
+import { host, mount, platform, View } from "nsh";
 import type { Component, JSX } from "nsh";
 import { createInput, EnvironmentScope, Typography } from "@heroui/react";
 import { Stage } from "@scenario/stage";
@@ -218,6 +218,7 @@ function ScalingCase() {
         allowFontScaling={false}
         maxFontSizeMultiplier={1.5}
         testID="ty-noscale"
+        onLayout={layoutProbe("ty-noscale")}
       >
         {NOSCALE_COPY}
       </Typography.Paragraph>
@@ -225,6 +226,7 @@ function ScalingCase() {
         adjustsFontSizeToFit
         minimumFontScale={0.5}
         testID="ty-fit"
+        onLayout={layoutProbe("ty-fit")}
       >
         {FIT_COPY}
       </Typography.Paragraph>

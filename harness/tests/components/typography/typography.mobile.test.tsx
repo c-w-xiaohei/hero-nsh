@@ -38,12 +38,14 @@ import { calls, callsOf } from "../../helpers/calls";
 
 type Env = { input?: "touch"; density?: "compact" };
 
-function openTypo(caseName: string, env: Env = {}): Promise<App> {
+function openTypo(caseName?: string, env: Env = {}): Promise<App> {
   return open("../../../typography.fixtures.tsx", {
     platform: "windows",
     width: 1024,
     height: 768,
-    host: { params: { case: caseName, ...env } },
+    host: {
+      params: { ...(caseName === undefined ? {} : { case: caseName }), ...env },
+    },
   });
 }
 
@@ -138,7 +140,7 @@ const VARIANT_LAYOUTS = ["ty-body"];
 const VARIANT_LINES = ["ty-align"];
 const TRUNCATE_LAYOUTS = ["ty-truncate", "ty-wrap"];
 const TRUNCATE_LINES = ["ty-truncate", "ty-wrap"];
-const SCALING_LAYOUTS = ["ty-clamp", "ty-uncapped"];
+const SCALING_LAYOUTS = ["ty-noscale", "ty-fit", "ty-clamp", "ty-uncapped"];
 const SCALING_LINES = ["ty-clamp", "ty-uncapped"];
 const PROSE_LAYOUTS = ["prose"];
 
@@ -387,7 +389,7 @@ describe("typography mobile", () => {
   // headless engine; the web target always reports "web" — the desktop
   // idiom the `platform` option forces is what the pin buys there).
   test("M-010 fixture: default case is the lines probe, dispatch and env injection work", async () => {
-    const plain = await openTypo("does-not-exist");
+    const plain = await openTypo();
     await settleLines(plain, ["plain-sm", "code-sm", "base-span"]);
 
     const lines = linesOf(plain);
