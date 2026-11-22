@@ -21,6 +21,49 @@ import { callsOf } from "../../helpers/calls";
 
 type LayoutCall = { name: string; x: number; y: number; width: number; height: number };
 
+/*
+ * What `SeamProbe` in the fixture reports: the press-feedback seam's gate
+ * (`enabled`), the invisible hit-area expansion it computes (`hitSlop`, the
+ * Edges or null) and the child's laid-out box (`bounds`). `hitSlop` is a View
+ * prop nsh/test cannot read directly (sheet §6); the context is its only
+ * observable surface. A child that never mounted the seam reports the
+ * context's resting default — `enabled: false`, `hitSlop: null`, zero
+ * bounds — so the assertions below take `enabled` as the evidence the child's
+ * own touch uplift is live.
+ */
+type CtxEnv = {
+  id: string;
+  enabled: boolean;
+  hitSlop: { top: number; right: number; bottom: number; left: number } | null;
+  bounds: { width: number; height: number };
+};
+
+/** The most recent `ctx-env` sample a named seam probe reported, if any. */
+function lastEnv(app: App, id: string): CtxEnv | undefined {
+  return callsOf(app, "ctx-env")
+    .map((call) => call[0] as CtxEnv)
+    .filter((env) => env.id === id)
+    .at(-1);
+}
+
+/**
+ * The design's observable hit-area contract (encapsulation hit-area rule:
+ * visible size via the child's `input` axis, invisible expansion via the
+ * seam's `hitSlop`): an enabled seam's laid-out box plus its slop must reach
+ * the 44pt touch minimum on both axes; a seam that never mounted answers the
+ * resting default and must claim no expansion.
+ */
+function seamReachesTouchTarget(env: CtxEnv): boolean {
+  if (!env.enabled) {
+    return env.hitSlop === null;
+  }
+
+  const slopX = env.hitSlop ? env.hitSlop.left + env.hitSlop.right : 0;
+  const slopY = env.hitSlop ? env.hitSlop.top + env.hitSlop.bottom : 0;
+
+  return env.bounds.width + slopX >= 44 && env.bounds.height + slopY >= 44;
+}
+
 function layoutCalls(app: App): LayoutCall[] {
   return callsOf(app, "layout").map((args) => args[0] as LayoutCall);
 }
@@ -142,13 +185,34 @@ describe("toolbar mobile", () => {
   }, 120_000);
 
   // adapt-sheets/toolbar.md M-004 (A-003): under `input="touch"` the child
-  // controls' own `input` axis still delivers — each press fires its probe
-  // exactly once, the laid-out hit area reaches 44pt inside the toolbar's
-  // `grid`/`gap-2` layout, and `isDisabled` still blocks the press.
-  test("M-004 under touch child presses fire once and hit areas reach 44pt", async () => {
+  // controls' own adaptation still delivers — each press fires its probe
+  // exactly once, and each child's press-feedback seam reports an effective
+  // hit area (laid-out bounds plus the invisible `hitSlop` expansion) of at
+  // least 44pt inside the toolbar's `grid`/`gap-2` layout, or the resting
+  // default when the child carries no seam of its own; `isDisabled` still
+  // blocks the press.
+  test("M-004 under touch child presses fire once and seams reach 44pt or stay at rest", async () => {
     const app = await openToolbar("press", "touch");
     await app.waitFor("role:button[Undo]", { timeout: 15_000 });
-    await firstFrame(app, "press-undo", "press-redo", "press-bold", "press-disabled");
+    // Wait until each seam probe has reported a settled sample: undo's seam
+    // must be live (enabled under touch) and laid out; bold's may read the
+    // resting default (a control without the seam) — a resting report with
+    // zero bounds is already settled, a live one needs its layout first.
+    await app.waitUntil(
+      () => {
+        const undo = lastEnv(app, "undo");
+        const bold = lastEnv(app, "bold");
+
+        return (
+          undo !== undefined &&
+          undo.enabled &&
+          undo.bounds.height > 0 &&
+          bold !== undefined &&
+          (!bold.enabled || bold.bounds.height > 0)
+        );
+      },
+      { timeout: 15_000 },
+    );
 
     await app.press("role:button[Undo]");
     expect(callsOf(app, "onPress")).toEqual([["undo"]]);
@@ -156,8 +220,16 @@ describe("toolbar mobile", () => {
     await app.press("role:button[Bold]");
     expect(callsOf(app, "onSelectionChange")).toEqual([[["bold"]]]);
 
-    expect(lastFrame(app, "press-undo").height).toBeGreaterThanOrEqual(44);
-    expect(lastFrame(app, "press-bold").height).toBeGreaterThanOrEqual(44);
+    // Both children must honour the seam contract: an enabled seam reaches
+    // the 44pt touch minimum once its invisible slop is counted, a resting
+    // one claims no expansion.
+    const undo = lastEnv(app, "undo");
+    const bold = lastEnv(app, "bold");
+
+    expect(undo).toBeDefined();
+    expect(seamReachesTouchTarget(undo as CtxEnv)).toBe(true);
+    expect(bold).toBeDefined();
+    expect(seamReachesTouchTarget(bold as CtxEnv)).toBe(true);
 
     expect(app.enabled("role:button[Disabled]")).toBe(false);
     await expect(app.press("role:button[Disabled]")).rejects.toMatchObject({

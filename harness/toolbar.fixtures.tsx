@@ -1,8 +1,9 @@
-import { host, mount, View } from "nsh";
+import { effect, host, mount, View } from "nsh";
 import type { Component, JSX } from "nsh";
 import {
   Button,
   EnvironmentScope,
+  PressableFeedbackContext,
   ToggleButton,
   ToggleButtonGroup,
   Toolbar,
@@ -66,6 +67,37 @@ function selectionChanged(keys: Set<string>) {
   probe("onSelectionChange")([...keys].sort());
 }
 
+/*
+ * The hit-area a child control reaches under `input="touch"` is split in two
+ * by the encapsulation model: the visible side comes from the child's own
+ * tv() `input` axis, the invisible expansion from the press-feedback seam's
+ * `hitSlop` — a View prop nsh/test cannot read (sheet §6). The seam's read
+ * half rides `PressableFeedbackContext`, so a probe placed inside the control
+ * reports the only observable surface: `enabled` (the seam's gate, live under
+ * touch), `hitSlop` (the Edges or null) and `bounds` (the laid-out box).
+ *
+ * A control that never mounted the seam answers the context's resting
+ * default (`enabled: false`, `hitSlop: undefined`, zero bounds) — the same
+ * value a desktop mount reports, so the test asserts the contract, not the
+ * snapshot: an enabled seam's bounds plus its slop must reach 44pt, a resting
+ * one must claim no slop.
+ */
+function SeamProbe(props: { id: string }) {
+  const ctx = PressableFeedbackContext();
+  const reportEnv = probe("ctx-env");
+
+  effect(() => {
+    reportEnv({
+      id: props.id,
+      enabled: ctx.enabled(),
+      hitSlop: ctx.hitSlop() ?? null,
+      bounds: ctx.bounds(),
+    });
+  });
+
+  return null;
+}
+
 /* -------------------------------------------------------------------------------------------------
  * press / press-root (M-001 … M-004, M-008)
  * -----------------------------------------------------------------------------------------------*/
@@ -80,6 +112,7 @@ function PressCase(props: { rootPress?: boolean }) {
         }
       >
         <Button onPress={() => probe("onPress")("undo")} onLayout={frame("press-undo")}>
+          <SeamProbe id="undo" />
           Undo
         </Button>
         <Button onPress={() => probe("onPress")("redo")} onLayout={frame("press-redo")}>
@@ -98,6 +131,7 @@ function PressCase(props: { rootPress?: boolean }) {
           onSelectionChange={selectionChanged}
         >
           <ToggleButton id="bold" onLayout={frame("press-bold")}>
+            <SeamProbe id="bold" />
             Bold
           </ToggleButton>
         </ToggleButtonGroup>
