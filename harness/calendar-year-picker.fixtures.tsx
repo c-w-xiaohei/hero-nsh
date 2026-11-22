@@ -151,7 +151,15 @@ function MobileCase() {
           <Calendar.YearPickerTrigger
             testID="trigger"
             isDisabled={disabled}
-            style={compact ? { width: 24, height: 24 } : undefined}
+            // `flex-1` in the trigger slot would otherwise win over a bare
+            // width (flex-basis 0% + grow), so compact pins the flex terms
+            // inline too — the sheet's "24×24 trigger" has to be real bounds
+            // for `hitSlop` to compute.
+            style={
+              compact
+                ? { width: 24, height: 24, flexGrow: 0, flexShrink: 0, flexBasis: 24 }
+                : undefined
+            }
             onPressDown={() => probe("events")("down")}
             onPressUp={() => probe("events")("up")}
             onPress={() => probe("events")("press")}
