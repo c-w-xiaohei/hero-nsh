@@ -2,12 +2,17 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { shadow } from "../../tokens/geometry";
-
 /**
  * ColorSlider's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/color-slider/color-slider.styles.ts` plus the
  * declarations of `packages/styles/components/color-slider.css`.
+ *
+ * The shadow classes are written out instead of being imported from
+ * `src/tokens/geometry.ts`: the G2/M2 class check loads this file with plain
+ * Node, which resolves neither an extensionless relative import nor a `.ts`
+ * one, so a `.styles.ts` imports only `tailwind-variants` (same rule as
+ * `card.styles.ts`). The pair in `thumb` is exactly `shadow.overlay.both` of
+ * that file; keep it in step with it.
  *
  * Upstream's table only names the four BEM blocks; NSH has no BEM CSS and no
  * descendant selectors (D18), so the stylesheet's rules are expanded against
@@ -72,7 +77,7 @@ export const colorSliderVariants = tv({
     // R-025: `.color-slider__thumb` → `motion-reduce:transition-none` →
     // `motion-reduce:transition-none`.
     thumb:
-      `absolute flex items-center justify-center rounded-2xl cursor-grab border-3 border-white ${shadow.overlay.both} z-10 transition-shadow duration-150 ease-out motion-reduce:transition-none`,
+      "absolute flex items-center justify-center rounded-2xl cursor-grab border-3 border-white shadow-[0_2px_8px_0_rgba(0,0,0,0.06),0_-6px_12px_0_rgba(0,0,0,0.03),0_14px_28px_0_rgba(0,0,0,0.08)] dark:shadow-[0_0_1px_0_rgba(255,255,255,0.3)_inset] z-10 transition-shadow duration-150 ease-out motion-reduce:transition-none",
   },
 });
 

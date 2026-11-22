@@ -1,6 +1,8 @@
 import type { JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
 import { computed, split, View } from "nsh";
 
+import { createDensity } from "../../primitives/environment";
+import { createInput } from "../../primitives/environment";
 import { joinClassNames } from "../color-picker/class-names";
 import { IconCheck } from "../icons";
 import type { AriaProps, DataProps, DomEventProps, GlobalDomProps } from "../color-picker/dom-props";
@@ -125,11 +127,20 @@ export function ColorSwatchPickerIndicator(
   const item = ColorSwatchPickerItemContext();
   const root = ColorSwatchPickerContext();
 
+  // A-001: the same environment axes the other parts read — the indicator
+  // slot itself carries no `input`/`density` cell (it is decoration, never
+  // a hit target), so feeding them changes nothing here and keeps every
+  // part's variant call the same shape.
+  const input = createInput();
+  const density = createDensity();
+
   const slots = computed(() =>
     colorSwatchPickerVariants({
       layout: root?.layout() ?? "grid",
       size: root?.size() ?? "md",
       variant: root?.variant() ?? "circle",
+      input: input(),
+      density: density(),
     }),
   );
 

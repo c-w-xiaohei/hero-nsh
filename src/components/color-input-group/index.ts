@@ -44,6 +44,9 @@ export type {
   ColorInputGroupRootProps as ColorInputGroupProps,
 } from "./color-input-group-root";
 export type { ColorInputGroupInputProps } from "./color-input-group-input";
+// A-005: the `enterKeyHint` value domain, shared by the input prop and the
+// field context's read port.
+export type { ColorInputGroupEnterKeyHint } from "./context";
 export type { ColorInputGroupPrefixProps } from "./color-input-group-prefix";
 export type { ColorInputGroupSuffixProps } from "./color-input-group-suffix";
 
