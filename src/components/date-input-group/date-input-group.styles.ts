@@ -2,7 +2,16 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, radius, shadow } from "../../tokens/geometry";
+// `ease.smooth`, `radius.field` and `shadow.field.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker imports this file
+// through Node ESM, which does not resolve extensionless relative specifiers,
+// so the geometry module cannot be imported from a `.styles.ts`. Same pattern
+// as `switch.styles.ts` / `pagination.styles.ts`; keep in sync with
+// `SHADOW_VALUES.field`, `EASE_VALUES` and `radius.field`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const RADIUS_FIELD = "rounded-(--radius-field)";
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
 
 /**
  * DateInputGroup's variant table, mirroring `@heroui/styles` 3.2.7
@@ -21,7 +30,7 @@ export const dateInputGroupVariants = tv({
     // R-001: `.date-input-group` → `inline-flex h-9 items-center overflow-hidden
     // rounded-field bg-field text-sm text-field-foreground shadow-field
     // outline-none`; the shadow's dark half comes from `shadow.field` in
-    // `src/tokens/geometry.ts`.
+    // `src/tokens/geometry.ts` (written out as `SHADOW_FIELD_BOTH`).
     // R-002: the stylesheet's `border-width: var(--border-width-field)` plus
     // `border-color: var(--field-border)` are deleted: the default theme fixes
     // the width at 0 with a transparent colour, and NSH has neither token, so
@@ -34,9 +43,9 @@ export const dateInputGroupVariants = tv({
     // `ease-out` becomes `ease-smooth`; registered in the port sheet §8).
     // R-004: `@apply motion-reduce:transition-none`.
     base: [
-      `inline-flex h-9 items-center overflow-hidden ${radius.field} border-0 bg-field`,
-      `text-sm text-field-foreground ${shadow.field.both} outline-none`,
-      `duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `inline-flex h-9 items-center overflow-hidden ${RADIUS_FIELD} border-0 bg-field`,
+      `text-sm text-field-foreground ${SHADOW_FIELD_BOTH} outline-none`,
+      `duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     ].join(" "),
 
     // R-009: `.date-input-group__input` → the full upstream declaration list.
