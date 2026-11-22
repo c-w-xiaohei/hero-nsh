@@ -428,6 +428,11 @@ describe("accordion mobile (web)", () => {
     const controlled = await openAccordion("kobalte-controlled", {
       scope: "touch",
     });
+    // The panel is already open at mount; synchronize on its first painted
+    // frame before reading presence (web first-paint race, ruling r1).
+    await controlled.waitUntil(() =>
+      panelText(controlled, KOBALTE_CONTENT_ONE),
+    );
     expect(panelText(controlled, KOBALTE_CONTENT_ONE)).toBe(true);
     expect(panelText(controlled, KOBALTE_CONTENT_TWO)).toBe(false);
     await trigger(controlled, KOBALTE_TRIGGER_TWO);
@@ -442,6 +447,9 @@ describe("accordion mobile (web)", () => {
     const collapse = await openAccordion("kobalte-multiple-default", {
       scope: "touch",
     });
+    await collapse.waitUntil(() =>
+      panelText(collapse, KOBALTE_CONTENT_ONE),
+    );
     expect(panelText(collapse, KOBALTE_CONTENT_ONE)).toBe(true);
     await trigger(collapse, KOBALTE_TRIGGER_ONE);
     await collapse.waitUntil(() => expandedCalls(collapse).length === 1);
@@ -505,6 +513,9 @@ describe("accordion mobile (web)", () => {
     // `kobalte-controlled` case: the held set wins, the press only reports
     // (T-018).
     const controlled = await openAccordion("kobalte-controlled");
+    await controlled.waitUntil(() =>
+      panelText(controlled, KOBALTE_CONTENT_ONE),
+    );
     expect(panelText(controlled, KOBALTE_CONTENT_ONE)).toBe(true);
     await trigger(controlled, KOBALTE_TRIGGER_TWO);
     await controlled.waitUntil(() => expandedCalls(controlled).length === 1);
