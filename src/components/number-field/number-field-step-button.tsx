@@ -353,7 +353,9 @@ function createStepButton(direction: StepDirection) {
     };
 
     // The timer belongs to the component: unmounting a held button must not
-    // leave it stepping a field that no longer exists.
+    // leave it stepping a field that no longer exists. Web pages also die
+    // between `open()` calls without an unmount, so a timer bound here can
+    // never outlive its page.
     cleanup(clearHold);
 
     // --- Events ------------------------------------------------------------
