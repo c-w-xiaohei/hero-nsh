@@ -10,6 +10,7 @@ import type {
 import { computed, effect, Overlay, signal } from "nsh";
 
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
+import { createInput } from "../../primitives/environment";
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
 import { HoverTriggerContext } from "../../primitives/create-overlay-trigger";
 import { renderChildren } from "./children";
@@ -131,6 +132,10 @@ export interface TooltipContentProps {
 export function TooltipContent(props: TooltipContentProps) {
   const rootTrigger = HoverTriggerContext();
   const tooltip = TooltipContext();
+
+  // A-002 / A-003 share one read of the `input` axis: touch adds an
+  // outside-press close and drops the content-hover keep-alive.
+  const input = createInput();
 
   const slots = tooltip?.slots ?? tooltipVariants();
 
@@ -362,15 +367,17 @@ export function TooltipContent(props: TooltipContentProps) {
   };
 
   // Content hover: React Aria's `useTooltip` keeps the tip while the pointer is
-  // on the content, and closes after `closeDelay` when it leaves.
+  // on the content, and closes after `closeDelay` when it leaves. A-003 gates
+  // the same channel under touch — with hover opening suppressed on the
+  // trigger, synthesized hover here would only leak the tip open.
   const handleMouseEnter = () => {
-    if (!ownsState()) {
+    if (!ownsState() && input() !== "touch") {
       tooltip?.contentHoverStart();
     }
   };
 
   const handleMouseLeave = () => {
-    if (!ownsState()) {
+    if (!ownsState() && input() !== "touch") {
       tooltip?.contentHoverEnd();
     }
   };
@@ -391,6 +398,11 @@ export function TooltipContent(props: TooltipContentProps) {
       classList={classList()}
       style={style()}
       onCancel={handleCancel}
+      // A-002: under touch a press anywhere outside the tip closes it (the
+      // ownsState branch closes through `setOpen`, not around it); under
+      // pointer the prop is absent, keeping "pressing elsewhere leaves the
+      // tip alone" exactly as React Aria has it.
+      onPressOutside={input() === "touch" ? handleCancel : undefined}
       onPosition={handlePosition}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}

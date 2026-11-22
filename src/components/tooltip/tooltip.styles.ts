@@ -11,6 +11,10 @@ import { ease, shadow } from "../../tokens/geometry";
  *
  * HeroUI has no variant axis here, so the table is the two slots its CSS
  * carries and nothing else.
+ *
+ * A-005: no `input` / `density` axis either — the tip is not a press target
+ * (the hit area belongs to the element it wraps) and its `p-2 text-xs`
+ * density comes from the token layer + the app's density preset.
  */
 export const tooltipVariants = tv({
   slots: {
