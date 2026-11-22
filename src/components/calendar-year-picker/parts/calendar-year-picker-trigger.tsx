@@ -73,8 +73,10 @@ export function CalendarYearPickerTrigger(props: CalendarYearPickerTriggerProps)
   });
 
   // A-005: the seam's read half for consumers — the canonical channels plus
-  // the computed hitSlop, sampled by the fixture's `CtxProbe`. No
-  // Highlight/Ripple/Scale overlay mounts by default (sheet §8: upstream's
+  // the computed hitSlop, sampled by the fixture's `CtxProbe` (A-008:
+  // `harness/calendar-year-picker.fixtures.tsx` mounts this seam under the
+  // `Scoped`/`mobile` case, A-009: the two `.mobile.` test files drive it).
+  // No Highlight/Ripple/Scale overlay mounts by default (sheet §8: upstream's
   // year panel has no press-visual contract); a caller that wants one
   // composes `<PressableFeedback.Highlight/>` into the trigger's children.
   const feedbackValue: PressableFeedbackContextValue = {
