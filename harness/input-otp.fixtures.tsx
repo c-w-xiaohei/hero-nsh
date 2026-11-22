@@ -21,8 +21,9 @@ import { probe } from "@scenario/probe";
  *                  opt-in path the sheet's §8 difference registers (M-004)
  *   keyboard-type  `inputMode="tel"` + `keyboardType="default"` — explicit
  *                  keyboardType winning over the inputMode tier (M-004)
- *   return-key     `maxLength={4}` + `returnKeyType="done"` with onComplete
- *                  and onSubmit probes (M-003's enter half)
+ *   return-key     `maxLength={4}` + `returnKeyType="done"` with onComplete,
+ *                  onSubmit and onBlur probes (M-003's enter half; a silent
+ *                  onBlur is the kept-focus half)
  *
  * `host.params.scope` picks the environment: "" leaves the host's default
  * (pointer on headless/web — the desktop-parity half); "touch" wraps the
@@ -170,6 +171,7 @@ function Fixture() {
             onSubmit={probe("onSubmit")}
             onComplete={probe("onComplete")}
             onChange={probe("onChange")}
+            onBlur={probe("onBlur")}
           >
             <InputOTP.Group>
               <InputOTP.Slot index={0} />
