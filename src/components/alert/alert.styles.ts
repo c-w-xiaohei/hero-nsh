@@ -2,7 +2,13 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { shadow } from "../../tokens/geometry";
+// `shadow.surface.both` of `src/tokens/geometry.ts` written out: the M2 class
+// walker imports this file through Node ESM, which does not resolve
+// extensionless relative specifiers, so the geometry module cannot be
+// imported from a `.styles.ts`. Same pattern as `switch.styles.ts` /
+// `radio.styles.ts`; keep in sync with `SHADOW_VALUES.surface`.
+const SHADOW_SURFACE_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
 
 /**
  * Alert's variant table, mirroring `@heroui/styles` 3.2.7
@@ -44,7 +50,7 @@ export const alertVariants = tv({
     // theme's `radius.3xl` is 24, so `min(32, 24)` is 24 and `rounded-3xl`
     // matches. A theme that raised 3xl above 32 would exceed upstream's cap
     // (port sheet §8).
-    base: `flex w-full flex-row items-start justify-start bg-surface ${shadow.surface.both} rounded-3xl`,
+    base: `flex w-full flex-row items-start justify-start bg-surface ${SHADOW_SURFACE_BOTH} rounded-3xl`,
     // R-006: `.alert__content` → `flex h-full grow flex-col items-start`.
     // NSH's `grow` leaves `flex-shrink` at 0; upstream keeps CSS's default 1, so
     // an Alert with a trailing action could not give the text any room at
