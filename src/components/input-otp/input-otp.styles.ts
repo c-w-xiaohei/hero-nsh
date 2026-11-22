@@ -2,7 +2,16 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, radius, shadow } from "../../tokens/geometry";
+// `ease.smooth`, `radius.field` and `shadow.field.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker imports this file
+// through Node ESM, which does not resolve extensionless relative specifiers,
+// so the geometry module cannot be imported from a `.styles.ts`. Same pattern
+// as `switch.styles.ts` / `card.styles.ts`; keep in sync with
+// `SHADOW_VALUES.field` and `EASE_VALUES`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const RADIUS_FIELD = "rounded-(--radius-field)";
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
 
 /**
  * InputOTP's slot table, HeroUI 3.2.7
@@ -68,7 +77,7 @@ export const inputOTPVariants = tv({
     // R-010: `transition: … 150ms var(--ease-smooth)` → `transition
     // duration-150 ease-smooth motion-reduce:transition-none`; R-011 writes the
     // three transitioned properties inline.
-    slot: `relative flex h-10 w-[2.375rem] min-w-0 flex-1 items-center justify-center border-0 ${radius.field} bg-field dark:bg-default text-field-foreground text-sm font-semibold ${shadow.field.both} outline-none transition duration-150 ${ease.smooth} motion-reduce:transition-none`,
+    slot: `relative flex h-10 w-[2.375rem] min-w-0 flex-1 items-center justify-center border-0 ${RADIUS_FIELD} bg-field dark:bg-default text-field-foreground text-sm font-semibold ${SHADOW_FIELD_BOTH} outline-none transition duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
 
     // R-017: `.input-otp__slot-value` → `text-lg leading-6
     // tracking-[-0.27px]`.
