@@ -262,6 +262,10 @@ function BasicCase() {
         isAnimatedStyleActive={animatedStyle ? false : undefined}
         isPending={pending}
         isDisabled={disabled}
+        // 2500 ms: ButtonCtxProbe samples the channels 600 ms into the hold;
+        // web runs several times slower than headless, so the hold must stay
+        // comfortably wider than the sample delay plus timer drift.
+        delayLongPress={2500}
         onPress={() => reportEvent({ kind: "press" })}
         onPressDown={onEvent("down")}
         onPressUp={onEvent("up")}
