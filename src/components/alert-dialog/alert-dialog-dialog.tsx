@@ -152,7 +152,9 @@ export function AlertDialogDialog(props: AlertDialogDialogProps): JSX.Element {
         // names. `role` and `aria-label` are mapped above and are therefore not
         // in `rest`.
         {...viewProps(rest)}
-        // A-004: the swipe-dismiss responder spreads here. Under any gated
+        // A-004: the swipe-dismiss responder spreads here; the `createPan`
+        // seam that produces it lives in `alert-dialog-backdrop.tsx` and
+        // crosses through the context's `swipe` channel. Under any gated
         // configuration (pointer input, `isDismissable`/`isSwipeable` unset,
         // or a panel presentation) `panHandlers()` resolves to `{}` and no
         // listener exists — the gesture path is physically absent, not

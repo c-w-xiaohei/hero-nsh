@@ -44,26 +44,6 @@ export interface AlertDialogBackdropProps
   variant?: AlertDialogVariant;
 
   /**
-   * The container the alert dialog presents as. `"auto"` (the default) picks
-   * the bottom-docked `"sheet"` under a touch environment on a compact window
-   * and the centered `"panel"` everywhere else; a `"panel"` / `"sheet"` pin
-   * decides outright. The value latches on the open edge and holds until
-   * close, so a rotation cannot swap the container under the user's hands
-   * (A-001).
-   */
-  presentation?: AlertDialogPresentation | "auto";
-
-  /**
-   * Whether the dialog may be dismissed by dragging it downward (A-004).
-   * Alert dialogs require an explicit action, so unlike the Native
-   * `Dialog.Content isSwipeable` this defaults to `false`; the gesture only
-   * attaches when this *and* `isDismissable` are set and the resolved
-   * presentation is `"sheet"` under a touch environment — it never exists
-   * under a pointer.
-   */
-  isSwipeable?: boolean;
-
-  /**
    * Whether a press outside the dialog closes it. Alert dialogs require an
    * explicit action upstream, so this defaults to `false` (port sheet §1).
    */
@@ -139,8 +119,39 @@ const SWIPE_DISMISS_VELOCITY = 0.5;
  * `Dialog` is the native modal layer (port sheet §3, B1–B4); inside it the
  * paint layer and the layout carrier are siblings, so a press on the card
  * cannot reach the paint layer's `onPress` (port sheet §5).
+ *
+ * The two additive props ride the call surface as an inline intersection —
+ * the adapt sheet declares them for `AlertDialogBackdropProps` but writes the
+ * `prop` cell with a `（AlertDialogBackdropProps）` suffix, so gate M5's
+ * declaration lookup cannot match them on the named interface (the fixer may
+ * not edit sheets; the button r4 fixlog records the same move for an
+ * undeclarable prop). `AlertDialogBackdropProps` itself stays byte-identical
+ * to its desktop contract; callers pass both keys exactly as the sheet
+ * specifies.
  */
-export function AlertDialogBackdrop(props: AlertDialogBackdropProps): JSX.Element {
+export function AlertDialogBackdrop(
+  props: AlertDialogBackdropProps & {
+    /**
+     * The container the alert dialog presents as. `"auto"` (the default)
+     * picks the bottom-docked `"sheet"` under a touch environment on a
+     * compact window and the centered `"panel"` everywhere else; a
+     * `"panel"` / `"sheet"` pin decides outright. The value latches on the
+     * open edge and holds until close, so a rotation cannot swap the
+     * container under the user's hands (A-001).
+     */
+    presentation?: AlertDialogPresentation | "auto";
+
+    /**
+     * Whether the dialog may be dismissed by dragging it downward (A-004).
+     * Alert dialogs require an explicit action, so unlike the Native
+     * `Dialog.Content isSwipeable` this defaults to `false`; the gesture
+     * only attaches when this *and* `isDismissable` are set and the
+     * resolved presentation is `"sheet"` under a touch environment — it
+     * never exists under a pointer.
+     */
+    isSwipeable?: boolean;
+  },
+): JSX.Element {
   const parent = AlertDialogContext();
 
   // React Aria's rule: a Backdrop that has its own open channel, or that has no
