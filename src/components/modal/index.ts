@@ -92,3 +92,7 @@ export type { ModalState } from "./create-modal-state";
 export { modalVariants } from "./modal.styles";
 
 export type { ModalVariants } from "./modal.styles";
+
+// A-008: the carrier domain `presentation` resolves to; reaches the root
+// entry through the existing `export * from "./components/modal"` (A-010).
+export type { ModalPresentation } from "./modal.styles";

@@ -52,6 +52,8 @@ export function ModalContainer(props: ModalContainerProps): JSX.Element {
     "variant",
     "isDismissable",
     "isKeyboardDismissDisabled",
+    "presentation",
+    "isSwipeable",
     "isOpen",
     "defaultOpen",
     "onOpenChange",
@@ -87,7 +89,12 @@ export function ModalContainer(props: ModalContainerProps): JSX.Element {
     parent ?? createModalContextValue({ isOpen: () => true, setOpen: () => {} });
 
   const contextValue = base.withOverrides({
-    placement: () => local.placement,
+    // A-003: a bottom-docked sheet can only sit at the bottom — an explicit
+    // `placement` pin does not survive `presentation === "sheet"` (adapt
+    // sheet §8 registers the clamp for review); under "panel" the caller's
+    // value passes through untouched.
+    placement: () =>
+      (parent?.presentation() ?? "panel") === "sheet" ? "bottom" : local.placement,
     scroll: () => local.scroll,
     size: () => local.size,
   });
@@ -135,6 +142,7 @@ export function ModalContainer(props: ModalContainerProps): JSX.Element {
     const entering = modalEnteringClasses(
       contextValue.placement(),
       contextValue.size() === "full",
+      contextValue.presentation(),
     );
 
     return entering === "" ? {} : { [entering]: presence.isEntering() };

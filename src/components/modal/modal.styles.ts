@@ -25,6 +25,7 @@ export const modalVariants = tv({
     scroll: "inside",
     size: "md",
     variant: "opaque",
+    presentation: "panel",
   },
   slots: {
     // R-013 `.modal__backdrop--transparent` → `bg-transparent`; R-014
@@ -155,6 +156,21 @@ export const modalVariants = tv({
         backdrop: "bg-transparent",
       },
     },
+    // A-003: the presentation axis is fed from the Backdrop's
+    // `createPresentation` accessor (seam ③), not from the caller. A sheet is
+    // bottom-docked and spans the viewport edge to edge, so the container's
+    // `p-4 sm:p-10` inset and `sm:w-fit` shrink-to-content clear (both must
+    // carry the `sm:` prefix to override — a later unprefixed class could not),
+    // and the size axis's `max-w-*` cap releases so `w-full` reaches the
+    // viewport width (M-001; adapt sheet §8 registers the size question for
+    // review). `panel` adds nothing — every panel output stays byte-identical.
+    presentation: {
+      panel: {},
+      sheet: {
+        container: "p-0 sm:p-0 w-full sm:w-full",
+        dialog: "max-w-none",
+      },
+    },
   },
 });
 
@@ -167,15 +183,32 @@ export type ModalSlots = ReturnType<typeof modalVariants>;
 export type ModalPlacement = "auto" | "top" | "center" | "bottom";
 
 /**
+ * The containers a Modal can present as (adapt sheet A-001 / A-008): the
+ * latched `createPresentation` value, narrowed to the two carriers this
+ * component allows — `"fullscreen"` stays out, Modal has no three-state
+ * contract (action-list §4).
+ */
+export type ModalPresentation = "panel" | "sheet";
+
+/**
  * The carrier view's classes: the flex box the container sits in.
  *
  * R-008 `.modal__backdrop` → `flex flex-row items-center justify-center`;
  * R-009 → `h-(--visual-viewport-height) w-full` → `flex-1 w-full` (the height
  * is the hosting layer's); R-029 `.modal__backdrop:has(...)` puts `items-start`
  * on it while the container scrolls outside.
+ *
+ * A-002: `presentation === "sheet"` docks the carrier to the bottom
+ * (`items-end`, `justify-center` kept) — but only for the non-Scroll carrier:
+ * `scroll="outside"` wins over the presentation and keeps `items-start`, so
+ * the scrolling semantics are never taken away (sheet §8 registers the call).
  */
-export function modalBackdropLayoutClasses(scroll: ModalVariants["scroll"]): string {
-  const alignItems = scroll === "outside" ? "items-start" : "items-center";
+export function modalBackdropLayoutClasses(
+  scroll: ModalVariants["scroll"],
+  presentation: ModalPresentation = "panel",
+): string {
+  const alignItems =
+    scroll === "outside" ? "items-start" : presentation === "sheet" ? "items-end" : "items-center";
 
   return ["flex flex-row", alignItems, "justify-center flex-1 w-full"].join(" ");
 }
@@ -223,8 +256,20 @@ export const modalPlacementClasses: Record<ModalPlacement, string> = {
  * R-023 `top` → `-translate-y-1`; R-024 `center` → no translation;
  * R-025 `bottom` → `translate-y-1`; R-031 `full` swaps the 105 series for the
  * 100 one: the same offsets with no scale.
+ *
+ * A-003: a sheet slides in from the edge it is docked to — `translate-y-full`
+ * replaces the whole `scale-105` offset family (the fade stays, matching the
+ * backdrop's own fade). Every `panel` output stays byte-identical.
  */
-export function modalEnteringClasses(placement: ModalPlacement, full = false): string {
+export function modalEnteringClasses(
+  placement: ModalPlacement,
+  full = false,
+  presentation: ModalPresentation = "panel",
+): string {
+  if (presentation === "sheet") {
+    return "opacity-0 translate-y-full";
+  }
+
   const offset =
     placement === "top"
       ? "-translate-y-1"
