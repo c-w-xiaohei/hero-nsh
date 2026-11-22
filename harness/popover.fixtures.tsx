@@ -31,9 +31,12 @@ import { probe } from "@scenario/probe";
  *   mobile         the mobile layer's shape (adapt sheet §4): a real
  *                  `Popover.Trigger` (testID `pop-trigger`) plus a Content
  *                  parameterized by `presentation` / `isNonModal` / `narrow`
- *                  (see below), probed `onOpenChange`, and a `pop-close`
+ *                  / `kbDismiss` (see below), a `Popover.Heading` in the
+ *                  Dialog, probed `onOpenChange`, and a `pop-close`
  *                  pressable exercising the Dialog `{close}` render-prop
- *                  inside the same popover.
+ *                  inside the same popover;
+ *   standalone     `Popover.Content` with `defaultOpen` and no Root — the
+ *                  `ownsState` half of the baseline sample (M-011).
  *
  * The counter is a component of its own so that its signal lives only while
  * the content subtree is mounted: if closing and reopening rebuild that
@@ -54,8 +57,11 @@ import { probe } from "@scenario/probe";
  *
  * `host.params.presentation` ∈ "auto"|"panel"|"sheet" pins `Popover.Content`'s
  * carrier (absent = auto). `host.params.isNonModal`="1" mounts the non-modal
- * chain. `host.params.narrow`="1" shrinks the trigger's child to `w-10` (a
- * <44pt hit target); absent, the child carries `p-3` and stays ≥44pt.
+ * chain. `host.params.kbDismiss`="1" sets `isKeyboardDismissDisabled`.
+ * `host.params.narrow`="1" shrinks the trigger's child to `w-10` (a
+ * <44pt hit target); absent, the child carries `p-3` and stays ≥44pt. Both
+ * children report their `onLayout` box as a `layout` probe named
+ * `trigger-box` (M-008's only observable input to the hitSlop formula).
  *
  * The content carrier probe (adapt sheet §2 A-010): `testID="pop"` forwards to
  * the carrier root, which derives `id:pop-panel` on the anchored overlay and
@@ -103,6 +109,27 @@ function Scoped(props: { children?: JSX.Element }) {
  * mobile case: the parameterized trigger + carrier shape
  * -----------------------------------------------------------------------------------------------*/
 
+type LayoutEvent = {
+  bounds: {
+    origin: { x: number; y: number };
+    size: { width: number; height: number };
+  };
+};
+
+/* The trigger child's own `onLayout` box (adapt sheet M-008): the trigger
+ * root is `inline-block w-fit`, so the child's bounds are the content size
+ * the shrink-wrap trigger reports — the only layout reading `nsh/test` can
+ * take of the hitSlop seam's input (`hitSlop` itself is a view prop with no
+ * read channel, sheet §6). */
+function boxProbe(name: string) {
+  return (event: LayoutEvent) =>
+    probe("layout")({
+      name,
+      width: event.bounds.size.width,
+      height: event.bounds.size.height,
+    });
+}
+
 function MobileCase() {
   const open = signal(false);
   const onChange = probe("openChange");
@@ -116,6 +143,7 @@ function MobileCase() {
 
   const narrow = String(host.params.narrow ?? "") === "1";
   const nonModal = String(host.params.isNonModal ?? "") === "1";
+  const kbDismiss = String(host.params.kbDismiss ?? "") === "1";
   const presentation = String(host.params.presentation ?? "");
 
   return (
@@ -131,11 +159,11 @@ function MobileCase() {
         onPress={() => press("trigger")}
       >
         {narrow ? (
-          <View class="w-10 items-center">
+          <View class="w-10 items-center" onLayout={boxProbe("trigger-box")}>
             <Text>+</Text>
           </View>
         ) : (
-          <View class="p-3">
+          <View class="min-h-11 p-3" onLayout={boxProbe("trigger-box")}>
             <Text>Toggle popover</Text>
           </View>
         )}
@@ -146,10 +174,12 @@ function MobileCase() {
           presentation === "" ? undefined : (presentation as "auto" | "panel" | "sheet")
         }
         isNonModal={nonModal || undefined}
+        isKeyboardDismissDisabled={kbDismiss || undefined}
       >
         <Popover.Dialog>
           {(values: { close: () => void }) => (
             <View>
+              <Popover.Heading>Mobile heading</Popover.Heading>
               <Text>Mobile content</Text>
               <View
                 testID="pop-close"
@@ -166,6 +196,44 @@ function MobileCase() {
         </Popover.Dialog>
       </Popover.Content>
     </Popover>
+  );
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * standalone case: Popover.Content owning its own open state (M-011's
+ * `ownsState` half) — no Root above it, so `defaultOpen`/`onOpenChange`
+ * land on the Content itself.
+ * -----------------------------------------------------------------------------------------------*/
+
+function StandaloneCase() {
+  const onChange = probe("openChange");
+  const close = probe("dialogClose");
+
+  return (
+    <Popover.Content
+      testID="pop"
+      defaultOpen
+      onOpenChange={(next: boolean) => onChange(next)}
+    >
+      <Popover.Dialog>
+        {(values: { close: () => void }) => (
+          <View>
+            <Popover.Heading>Standalone heading</Popover.Heading>
+            <Text>Standalone content</Text>
+            <View
+              testID="pop-close"
+              role="button"
+              onPress={() => {
+                close("dialog");
+                values.close();
+              }}
+            >
+              <Text>Close popover</Text>
+            </View>
+          </View>
+        )}
+      </Popover.Dialog>
+    </Popover.Content>
   );
 }
 
@@ -196,6 +264,16 @@ function Fixture() {
       <View class="flex-1 items-start gap-4 bg-background p-6">
         <Scoped>
           <MobileCase />
+        </Scoped>
+      </View>
+    );
+  }
+
+  if (name === "standalone") {
+    return (
+      <View class="flex-1 items-start gap-4 bg-background p-6">
+        <Scoped>
+          <StandaloneCase />
         </Scoped>
       </View>
     );
