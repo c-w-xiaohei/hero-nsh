@@ -330,6 +330,16 @@ export function ToastRoot<T extends object = ToastContentValue>(
   /** R-020: `--toast-enter`, expressed as a height instead of `-100%`. */
   const enterOffset = computed(() => (entering() ? -measuredHeight() : 0));
 
+  /*
+   * A-001: the swipe's two signals are declared here — before `translateY`
+   * and `transitionStyle` below read them — because NSH evaluates a
+   * `computed`'s function eagerly at creation, so a `const` declared further
+   * down would still be uninitialized ("dragY is not initialized" at mount).
+   * The gesture that writes them is set up in the swipe section further down.
+   */
+  const dragY = signal(0);
+  const swiping = signal(false);
+
   /** R-015: `transform: translateY(dir * (y + enter)) scale(scale)`; A-001's `dragY` rides the same transform. */
   const translateY = computed(() => {
     // R-029: the frontmost exiting toast leaves the way it arrived, one height
@@ -551,11 +561,9 @@ export function ToastRoot<T extends object = ToastContentValue>(
    * style channel the swipe writes (M-009's stacking owner stays this file's
    * `translateY`). `swiping` gates the transform out of the transition's
    * property list while the gesture owns it, so the toast follows the finger
-   * instead of trailing the 350ms transition.
+   * instead of trailing the 350ms transition. Both signals are declared
+   * above `translateY`, before the computeds that read them.
    */
-  const dragY = signal(0);
-  const swiping = signal(false);
-
   const pan = createPan({
     enabled: () => input() === "touch" && swipeable(),
     // Claim on the first vertically-dominant move and never lock the

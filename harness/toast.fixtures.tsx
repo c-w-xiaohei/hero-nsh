@@ -706,6 +706,28 @@ function SwipeProbe() {
   return null;
 }
 
+type LayoutEvent = {
+  bounds: {
+    origin: { x: number; y: number };
+    size: { width: number; height: number };
+  };
+};
+
+/*
+ * M-009's stacking witness: each swipe-case toast reports its laid-out frame.
+ * A collapsed non-front row's box is forced to the front row's height
+ * (toast-root's measure comment), so the per-title heights are exactly the
+ * stacking rule's observable half — the drag's transform never reaches them.
+ */
+function toastFrame(title: string) {
+  return (event: LayoutEvent) =>
+    probe("toast-layout")({
+      title,
+      width: event.bounds.size.width,
+      height: event.bounds.size.height,
+    });
+}
+
 /*
  * The swipe cases (adapt sheet §4). One provider, a custom `Toast` per entry
  * so the root carries the gesture and a `SwipeProbe` per row reports the
@@ -749,6 +771,7 @@ function SwipeCase() {
         {({ toast: item }) => (
           <Toast
             isSwipeable={itemSwipeable}
+            onLayout={toastFrame(String(item.content.title ?? "toast"))}
             placement={itemPlacement}
             testID={String(item.content.title ?? "toast")}
             toast={item}
