@@ -759,7 +759,7 @@ function PromiseReject() {
  * snapshot to `probe("swipe")` on every change, so a drag's process values
  * land in Storage frame by frame.
  */
-function SwipeProbe() {
+function SwipeProbe(props: { tag?: string }) {
   const item = ToastItemContext();
   const report = probe("swipe");
   const swipe = item.swipe;
@@ -773,6 +773,7 @@ function SwipeProbe() {
       active: swipe?.active() ?? false,
       offset: swipe?.offset() ?? 0,
       dragging: swipe?.dragging() ?? false,
+      tag: props.tag ?? "",
     });
   });
 
@@ -817,7 +818,6 @@ function toastFrame(title: string) {
  * Each toast root's testID is its title (`Swipe-0`, `Swipe-1`, …).
  */
 function SwipeCase() {
-  const queue = new ToastQueue();
   const count = Number(host.params.count ?? 1);
   const caseName = String(host.params.case ?? "swipe");
   const timeout = Number(host.params.timeout ?? (caseName === "swipe-hold" ? 1000 : 0));
@@ -834,29 +834,233 @@ function SwipeCase() {
       ? undefined
       : host.params.itemSwipeable !== "0" && host.params.itemSwipeable !== "false";
 
-  for (let index = 0; index < count; index++) {
-    queue.add({ title: `Swipe-${index}` }, { onClose: probe(`onClose-${index}`), timeout });
+  return (
+    <SwipeStack
+      count={count}
+      isSwipeable={itemSwipeable}
+      itemPlacement={itemPlacement}
+      placement={placement}
+      providerSwipeable={providerSwipeable}
+      timeout={timeout}
+      titlePrefix="Swipe"
+    />
+  );
+}
+
+/*
+ * One provider-mounted swipe stack, the piece every multi-stack case below is
+ * built from. `titlePrefix` names each toast (`<prefix>-<index>` — also its
+ * testID and `toast-layout` title) and `onClose` probes report as
+ * `onClose<closeLabel>-<index>` so two stacks in one mount stay unambiguous;
+ * `tag` rides on every `SwipeProbe` record for the same reason. `scope`
+ * ("touch" / "pointer") wraps this stack alone in an `EnvironmentScope`, so a
+ * dual case puts two environments in one page. All of that exists because the
+ * web target's browser pool fails under many sequential `open()`s (M3 r1,
+ * r2): the mobile rows that would open one app per variant mount their
+ * variants as sibling stacks in a single page instead.
+ *
+ * The split into `SwipeStackInner` is load-bearing: an NSH element invokes
+ * its component where the element is CREATED, and a Provider's children
+ * expression only runs inside the Provider. A `const stack = <Toast.Provider
+ * …/>` hoisted above `<EnvironmentScope>{stack}</EnvironmentScope>` mounts
+ * the provider under the caller's environment — the scope never reaches the
+ * rows (the M3 r2 rewrite measured exactly that: `keys: 0` under `input
+ * ="touch"`). The scope must therefore wrap the ELEMENT, so `SwipeStack`
+ * returns `<EnvironmentScope><SwipeStackInner/></EnvironmentScope>` and the
+ * inner component body runs inside it.
+ */
+function SwipeStackInner(props: {
+  closeLabel?: string;
+  count: number;
+  isSwipeable?: boolean;
+  itemPlacement?: ToastPlacement;
+  placement: ToastPlacement;
+  providerSwipeable: boolean;
+  scope?: "touch" | "pointer";
+  tag?: string;
+  timeout: number;
+  titlePrefix: string;
+}) {
+  const queue = new ToastQueue();
+  const closeLabel = props.closeLabel ?? "";
+
+  for (let index = 0; index < props.count; index++) {
+    queue.add(
+      { title: `${props.titlePrefix}-${index}` },
+      { onClose: probe(`onClose${closeLabel}-${index}`), timeout: props.timeout },
+    );
   }
 
   return (
+    <Toast.Provider
+      isSwipeable={props.providerSwipeable}
+      placement={props.placement}
+      queue={queue}
+    >
+      {({ toast: item }) => (
+        <Toast
+          isSwipeable={props.isSwipeable}
+          onLayout={toastFrame(String(item.content.title ?? "toast"))}
+          placement={props.itemPlacement}
+          testID={String(item.content.title ?? "toast")}
+          toast={item}
+        >
+          <Toast.Content>
+            <Toast.Title>{item.content.title}</Toast.Title>
+          </Toast.Content>
+          <Toast.CloseButton />
+          <SwipeProbe tag={props.tag} />
+        </Toast>
+      )}
+    </Toast.Provider>
+  );
+}
+
+function SwipeStack(props: {
+  closeLabel?: string;
+  count: number;
+  isSwipeable?: boolean;
+  itemPlacement?: ToastPlacement;
+  placement: ToastPlacement;
+  providerSwipeable: boolean;
+  scope?: "touch" | "pointer";
+  tag?: string;
+  timeout: number;
+  titlePrefix: string;
+}) {
+  if (props.scope === "touch") {
+    return (
+      <EnvironmentScope input="touch">
+        <SwipeStackInner {...props} />
+      </EnvironmentScope>
+    );
+  }
+
+  if (props.scope === "pointer") {
+    return (
+      <EnvironmentScope input="pointer">
+        <SwipeStackInner {...props} />
+      </EnvironmentScope>
+    );
+  }
+
+  return <SwipeStackInner {...props} />;
+}
+
+/* M-001: the inert swipe stack and the timed `swipe-hold` stack in one mount. */
+function SwipeMixed() {
+  return (
     <Frame>
-      <Toast.Provider isSwipeable={providerSwipeable} placement={placement} queue={queue}>
-        {({ toast: item }) => (
-          <Toast
-            isSwipeable={itemSwipeable}
-            onLayout={toastFrame(String(item.content.title ?? "toast"))}
-            placement={itemPlacement}
-            testID={String(item.content.title ?? "toast")}
-            toast={item}
-          >
-            <Toast.Content>
-              <Toast.Title>{item.content.title}</Toast.Title>
-            </Toast.Content>
-            <Toast.CloseButton />
-            <SwipeProbe />
-          </Toast>
-        )}
-      </Toast.Provider>
+      <SwipeStack
+        count={1}
+        placement="bottom"
+        providerSwipeable
+        tag="base"
+        timeout={0}
+        titlePrefix="Base"
+      />
+      <SwipeStack
+        closeLabel="H"
+        count={1}
+        placement="bottom"
+        providerSwipeable
+        tag="hold"
+        timeout={1000}
+        titlePrefix="Hold"
+      />
+    </Frame>
+  );
+}
+
+/* M-004: the "top" and "top start" placements as sibling touch stacks. */
+function SwipeTopDual() {
+  return (
+    <Frame>
+      <SwipeStack
+        count={1}
+        placement="top"
+        providerSwipeable
+        scope="touch"
+        tag="top"
+        timeout={0}
+        titlePrefix="Top"
+      />
+      <SwipeStack
+        closeLabel="S"
+        count={1}
+        placement="top start"
+        providerSwipeable
+        scope="touch"
+        tag="ts"
+        timeout={0}
+        titlePrefix="TS"
+      />
+    </Frame>
+  );
+}
+
+/* M-007: row-level and provider-level `isSwipeable={false}` as sibling touch stacks. */
+function SwipeOff() {
+  return (
+    <Frame>
+      <SwipeStack
+        count={1}
+        isSwipeable={false}
+        placement="bottom"
+        providerSwipeable
+        scope="touch"
+        tag="item"
+        timeout={0}
+        titlePrefix="Item"
+      />
+      <SwipeStack
+        closeLabel="P"
+        count={1}
+        placement="bottom"
+        providerSwipeable={false}
+        scope="touch"
+        tag="provider"
+        timeout={0}
+        titlePrefix="Prov"
+      />
+    </Frame>
+  );
+}
+
+/*
+ * M-010: the three environments as sibling stacks — host default, an
+ * explicit pointer scope and a touch scope — so the SwipeProbe's mount-state
+ * report is read back for all three in a single open.
+ */
+function SwipeTri() {
+  return (
+    <Frame>
+      <SwipeStack
+        count={1}
+        placement="bottom"
+        providerSwipeable
+        tag="default"
+        timeout={0}
+        titlePrefix="Def"
+      />
+      <SwipeStack
+        count={1}
+        placement="bottom"
+        providerSwipeable
+        scope="pointer"
+        tag="pointer"
+        timeout={0}
+        titlePrefix="Ptr"
+      />
+      <SwipeStack
+        count={1}
+        placement="bottom"
+        providerSwipeable
+        scope="touch"
+        tag="touch"
+        timeout={0}
+        titlePrefix="Tch"
+      />
     </Frame>
   );
 }
@@ -897,6 +1101,10 @@ const cases: Record<string, Component> = {
   swipe: SwipeCase,
   "swipe-top": SwipeCase,
   "swipe-hold": SwipeCase,
+  "swipe-mixed": SwipeMixed,
+  "swipe-top-dual": SwipeTopDual,
+  "swipe-off": SwipeOff,
+  "swipe-tri": SwipeTri,
 };
 
 function Fixture() {

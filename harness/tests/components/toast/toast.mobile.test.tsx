@@ -22,16 +22,28 @@ import {
  *
  * The fixture is `harness/toast.fixtures.tsx`, opened by `host.params`:
  * `case` (`swipe` bottom stack, `swipe-top` top-placed, `swipe-hold` a
- * 1000 ms toast, plus the existing behaviour cases the baseline row
- * replays), `scope` ("" host default, "touch"/"pointer" through
- * `EnvironmentScope` — the fixture wraps every case), `count`,
- * `placement`, `timeout`, `swipeable` / `itemSwipeable` ("0"/"false" for
- * off). Every swipe case mounts a `SwipeProbe` inside each toast that
- * reports the internal `ToastItemContext.swipe` channel — `{key, keys,
- * active, offset, dragging}` — to `probe("swipe")`; `keys === 0` is the
- * direct evidence the gesture path is physically absent (M-001/M-007/
- * M-010). `probe("toast-layout")` records each root's onLayout frame for
- * M-009's stacking witness.
+ * 1000 ms toast, the multi-stack variants below, plus the existing
+ * behaviour cases the baseline row replays), `scope` ("" host default,
+ * "touch"/"pointer" through `EnvironmentScope` — the fixture wraps every
+ * case), `count`, `placement`, `timeout`, `swipeable` / `itemSwipeable`
+ * ("0"/"false" for off). Every swipe case mounts a `SwipeProbe` inside
+ * each toast that reports the internal `ToastItemContext.swipe` channel —
+ * `{key, keys, active, offset, dragging, tag}` — to `probe("swipe")`;
+ * `keys === 0` is the direct evidence the gesture path is physically
+ * absent (M-001/M-007/M-010) and `tag` namespaces a record to its stack.
+ * `probe("toast-layout")` records each root's onLayout frame for M-009's
+ * stacking witness.
+ *
+ * Sequential `open()`s exhaust the web target's browser pool (the M3
+ * gate proved it twice — M-008's per-case opens in r1, a connect timeout
+ * on the next `platform:"web"` open in r2), so every row that would open
+ * an app per variant mounts its variants as sibling stacks in ONE page:
+ * `swipe-mixed` (inert + timed), `swipe-top-dual` ("top" + "top start"),
+ * `swipe-off` (row + provider opt-out), `swipe-tri` (default / pointer /
+ * touch environments) and `focus-dual` (unscoped + touch). Each stack's
+ * toasts carry a `titlePrefix` (also the testID and layout title), the
+ * `onClose` probes take a `closeLabel`, and the SwipeProbe records carry
+ * the `tag`.
  *
  * Entry keys are `toast-<n>` assigned in `queue.add` order on a fresh
  * queue per mount, so `toast-1` is `Swipe-0` and `toast-2` is `Swipe-1`.
@@ -39,7 +51,7 @@ import {
  * which tells the tests which toast a gesture closed.
  *
  * The desktop pin is `platform: "windows"` (pointer input, 1024×768), the
- * w1 convention `openToast` supplies. Keyboard-focus baseline halves open
+ * w1 convention `openToast` supplies. The keyboard-focus baseline opens
  * `platform: "web"` — the focus-capable host — the same channel
  * tabs.mobile.test.tsx uses inside a dual-target file.
  */
@@ -50,10 +62,14 @@ type SwipeRecord = {
   active: boolean;
   offset: number;
   dragging: boolean;
+  /** The stack this record came from in a multi-stack case; "" for `swipe`. */
+  tag?: string;
 };
 
-function swipeCalls(app: App): SwipeRecord[] {
-  return callsOf(app, "swipe").map((args) => args[0] as SwipeRecord);
+function swipeCalls(app: App, tag?: string): SwipeRecord[] {
+  const records = callsOf(app, "swipe").map((args) => args[0] as SwipeRecord);
+
+  return tag === undefined ? records : records.filter((record) => record.tag === tag);
 }
 
 type LayoutRecord = { title: string; width: number; height: number };
@@ -85,37 +101,40 @@ describe("toast mobile", () => {
   // is untouched: a timed toast still auto-closes after the same drag,
   // proving no `"drag"` suspension leaked.
   test("M-001 default pointer environment: no swipe path, drag inert, timers unaffected", async () => {
-    const app = await openToast("swipe");
+    // `swipe-mixed` mounts the inert stack ("Base", timeout 0) and the
+    // timed stack ("Hold", timeout 1000) side by side — one open, both
+    // halves of the row.
+    const app = await openToast("swipe-mixed");
 
-    await app.waitUntil(() => callsOf(app, "swipe").length > 0);
-    const initial = swipeCalls(app)[0]!;
+    await app.waitUntil(() => swipeCalls(app, "base").length > 0);
+    const initial = swipeCalls(app, "base")[0]!;
     expect(initial.keys).toBe(0);
     expect(initial.active).toBe(false);
     expect(initial.offset).toBe(0);
     expect(initial.dragging).toBe(false);
 
-    await app.drag("id:Swipe-0", { x: 0, y: 120 });
+    await app.drag("id:Base-0", { x: 0, y: 120 });
     await settle(app);
 
-    for (const record of swipeCalls(app)) {
+    for (const record of swipeCalls(app, "base")) {
       expect(record.keys).toBe(0);
       expect(record.active).toBe(false);
       expect(record.dragging).toBe(false);
       expect(record.offset).toBe(0);
     }
     expect(callsOf(app, "onClose-0")).toHaveLength(0);
-    expect(app.shows("role:alert")).toBe(true);
-    expect(app.count("role:alert")).toBe(1);
+    expect(app.shows("text:Base-0")).toBe(true);
+    expect(app.count("role:alert")).toBe(2);
 
-    // The timer half: `swipe-hold` carries `timeout: 1000`; under pointer
-    // the drag never claimed, so the countdown fires on schedule.
-    const timed = await openToast("swipe-hold");
-    await timed.waitUntil(() => callsOf(timed, "swipe").length > 0);
-    await timed.drag("id:Swipe-0", { x: 0, y: 120 });
-    await advance(timed, 1500);
-    expect(callsOf(timed, "onClose-0").length).toBeGreaterThanOrEqual(1);
-    await advance(timed, 400);
-    expect(timed.count("role:alert")).toBe(0);
+    // The timer half: the Hold stack carries `timeout: 1000`; under
+    // pointer the drag never claimed, so its countdown fires on schedule
+    // and no `"drag"` suspension leaked into the sibling stack.
+    await app.waitUntil(() => swipeCalls(app, "hold").length > 0);
+    await advance(app, 1500);
+    expect(callsOf(app, "onCloseH-0").length).toBeGreaterThanOrEqual(1);
+    await advance(app, 400);
+    expect(app.count("role:alert")).toBe(1);
+    expect(app.shows("text:Base-0")).toBe(true);
   }, 120_000);
 
   // adapt-sheets/toast.md M-002 (A-001): touch + `placement:"bottom"` — a
@@ -157,24 +176,29 @@ describe("toast mobile", () => {
   // so an upward drag past the threshold closes; the horizontal alignment
   // changes nothing.
   test("M-004 touch + top placements: an upward drag dismisses, alignment normalized", async () => {
-    for (const placement of ["top", "top start"] as const) {
-      const app = await openToast("swipe-top", {
-        params: { placement, scope: "touch" },
-      });
+    // `swipe-top-dual` mounts the "top" and "top start" stacks (tags
+    // "top"/"ts", close probes `onClose-0`/`onCloseS-0`) under one open.
+    const app = await openToast("swipe-top-dual");
 
-      await app.waitUntil(() => callsOf(app, "swipe").length > 0);
-      expect(app.count("role:alert")).toBe(1);
+    await app.waitUntil(() => swipeCalls(app, "top").length > 0);
+    await app.waitUntil(() => swipeCalls(app, "ts").length > 0);
+    expect(app.count("role:alert")).toBe(2);
 
-      await app.drag("id:Swipe-0", { x: 0, y: -120 });
-      await settle(app);
+    await app.drag("id:Top-0", { x: 0, y: -120 });
+    await settle(app);
 
-      // The drag engaged upward: the offset channel went negative.
-      expect(swipeCalls(app).some((record) => record.offset < -50)).toBe(true);
-      expect(callsOf(app, "onClose-0")).toHaveLength(1);
+    // The drag engaged upward: the offset channel went negative.
+    expect(swipeCalls(app, "top").some((record) => record.offset < -50)).toBe(true);
+    expect(callsOf(app, "onClose-0")).toHaveLength(1);
 
-      await settleExit(app);
-      expect(app.count("role:alert")).toBe(0);
-    }
+    await app.drag("id:TS-0", { x: 0, y: -120 });
+    await settle(app);
+
+    expect(swipeCalls(app, "ts").some((record) => record.offset < -50)).toBe(true);
+    expect(callsOf(app, "onCloseS-0")).toHaveLength(1);
+
+    await settleExit(app);
+    expect(app.count("role:alert")).toBe(0);
   }, 120_000);
 
   // adapt-sheets/toast.md M-005 (A-001): touch + `placement:"bottom"` — a
@@ -207,37 +231,35 @@ describe("toast mobile", () => {
   // empty object even under touch (`keys === 0`), the drag moves nothing,
   // and nothing closes.
   test("M-007 touch + isSwipeable=false: the gesture path never mounts", async () => {
-    const optOuts: Record<string, string>[] = [
-      { itemSwipeable: "0" },
-      { swipeable: "0" },
-    ];
+    // `swipe-off` mounts the row-level opt-out ("Item",
+    // `itemSwipeable` → `isSwipeable={false}` on the Toast) and the
+    // provider-default opt-out ("Prov", provider `isSwipeable={false}`)
+    // as sibling touch stacks under one open.
+    const app = await openToast("swipe-off");
 
-    for (const optOut of optOuts) {
-      const app = await openToast("swipe", {
-        params: { scope: "touch", ...optOut },
-      });
+    await app.waitUntil(() => swipeCalls(app, "item").length > 0);
+    await app.waitUntil(() => swipeCalls(app, "provider").length > 0);
 
-      await app.waitUntil(() => callsOf(app, "swipe").length > 0);
-
-      for (const record of swipeCalls(app)) {
-        expect(record.keys).toBe(0);
-        expect(record.active).toBe(false);
-        expect(record.dragging).toBe(false);
-        expect(record.offset).toBe(0);
-      }
-
-      await app.drag("id:Swipe-0", { x: 0, y: 120 });
-      await settle(app);
-
-      for (const record of swipeCalls(app)) {
-        expect(record.keys).toBe(0);
-        expect(record.active).toBe(false);
-        expect(record.dragging).toBe(false);
-        expect(record.offset).toBe(0);
-      }
-      expect(callsOf(app, "onClose-0")).toHaveLength(0);
-      expect(app.shows("role:alert")).toBe(true);
+    for (const record of swipeCalls(app)) {
+      expect(record.keys).toBe(0);
+      expect(record.active).toBe(false);
+      expect(record.dragging).toBe(false);
+      expect(record.offset).toBe(0);
     }
+
+    await app.drag("id:Item-0", { x: 0, y: 120 });
+    await app.drag("id:Prov-0", { x: 0, y: 120 });
+    await settle(app);
+
+    for (const record of swipeCalls(app)) {
+      expect(record.keys).toBe(0);
+      expect(record.active).toBe(false);
+      expect(record.dragging).toBe(false);
+      expect(record.offset).toBe(0);
+    }
+    expect(callsOf(app, "onClose-0")).toHaveLength(0);
+    expect(callsOf(app, "onCloseP-0")).toHaveLength(0);
+    expect(app.count("role:alert")).toBe(2);
   }, 120_000);
 
   // adapt-sheets/toast.md M-008 (基线): the existing behaviours are
@@ -308,7 +330,12 @@ describe("toast mobile", () => {
   // closing the focused toast moves focus to the remaining one.
   // `platform: "web"` is the focus-capable host (the same channel
   // tabs.mobile.test.tsx uses); `scope` still injects the environment, so
-  // the touch half runs the identical keyboard path.
+  // the touch half runs the identical keyboard path. Each environment gets
+  // its own page, NOT one mount for both: on the web host the keyboard's
+  // focus record dies with the provider's programmatic handoff once the
+  // tree around it changes (measured on `focus-dual`: every Tab after the
+  // unmount produced nothing), so a second environment can only ever be
+  // asserted in a fresh page.
   test("M-008 baseline: focus handoff holds in both environments", async () => {
     for (const scope of [undefined, "touch"] as const) {
       const app = await openToast("focus-stack", {
@@ -381,18 +408,19 @@ describe("toast mobile", () => {
   // listener mounts (host-default pointer and explicit pointer), >0 under
   // the injected touch environment.
   test("M-010 observation channel: SwipeProbe reports mount state under every scope", async () => {
-    for (const scope of [undefined, "pointer", "touch"] as const) {
-      const app = await openToast("swipe", {
-        params: scope ? { scope } : {},
-      });
+    // `swipe-tri` mounts all three environments as sibling stacks — the
+    // host default (tag "default"), an explicit pointer scope ("pointer")
+    // and a touch scope ("touch") — under one open.
+    const app = await openToast("swipe-tri");
 
-      await app.waitUntil(() => callsOf(app, "swipe").length > 0);
-      const initial = swipeCalls(app)[0]!;
+    for (const tag of ["default", "pointer", "touch"] as const) {
+      await app.waitUntil(() => swipeCalls(app, tag).length > 0);
+      const initial = swipeCalls(app, tag)[0]!;
       expect(initial.active).toBe(false);
       expect(initial.offset).toBe(0);
       expect(initial.dragging).toBe(false);
 
-      if (scope === "touch") {
+      if (tag === "touch") {
         expect(initial.keys).toBeGreaterThan(0);
       } else {
         expect(initial.keys).toBe(0);
