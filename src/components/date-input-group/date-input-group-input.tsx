@@ -2,10 +2,13 @@ import type { Accessor, JSX, PressEvent, StyleProp, ViewStyle } from "nsh";
 import { computed, effect, signal, split, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
 import { createDateFieldState, type DateFieldState } from "./create-date-field-state";
 import {
   DateInputGroupContext,
   DateInputGroupFieldContext,
+  DateInputGroupKeyboardContext,
+  type DateInputGroupInputKeyboardType,
 } from "./date-input-group-context";
 import { createLiveSegment, type DateSegment } from "./date-field-utils";
 
@@ -44,6 +47,15 @@ export interface DateInputGroupInputProps {
    * for R-012's inner padding.
    */
   slot?: string;
+
+  /**
+   * The soft keyboard layout the segments' editing channel asks for on a touch
+   * environment (A-007). `"auto"` (the default) resolves per segment —
+   * `"numeric"` for the numeric ones, `"default"` for `dayPeriod`, `era` and
+   * `timeZoneName` — an explicit value applies to every segment. A pointer
+   * environment mounts no channel and never reads it.
+   */
+  keyboardType?: DateInputGroupInputKeyboardType;
 
   /** An identifier for UI tests. */
   testID?: string;
@@ -91,6 +103,7 @@ export function DateInputGroupInput(props: DateInputGroupInputProps): JSX.Elemen
     "className",
     "style",
     "slot",
+    "keyboardType",
     "testID",
     "id",
     "nativeID",
@@ -101,6 +114,15 @@ export function DateInputGroupInput(props: DateInputGroupInputProps): JSX.Elemen
 
   const group = DateInputGroupContext();
   const inheritedField = DateInputGroupFieldContext();
+
+  // A-003: the `input` axis, for the hover gate below — the slot classes this
+  // part paints already follow it through the root's `group.slots()` (A-001).
+  const input = createInput();
+
+  // A-007: the `keyboardType` prop the segments' touch editing channel reads.
+  // `"auto"` is both the default and the context's resting value.
+  const keyboardType: Accessor<DateInputGroupInputKeyboardType> = () =>
+    local.keyboardType ?? "auto";
 
   // A standalone Input owns its field state, as React Aria's `DateInput` does
   // when no DateField provides one; a provided state wins.
@@ -245,30 +267,46 @@ export function DateInputGroupInput(props: DateInputGroupInputProps): JSX.Elemen
     }
   };
 
+  // A-003: under touch the Input's own hover state stays off (the same `input`
+  // gate as the root's, A-002); `isHovered` already masks it while disabled.
+  const handleMouseEnter = () => {
+    if (input() === "touch") {
+      return;
+    }
+
+    hovered.set(true);
+  };
+
+  const handleMouseLeave = () => {
+    hovered.set(false);
+  };
+
   return (
     <DateInputGroupFieldContext.Provider value={boundField()}>
-      <View
-        role={role()}
-        focusable={false}
-        nativeID={local.id ?? local.nativeID}
-        testID={local.testID}
-        accessibilityState={isDisabled() ? { disabled: true } : undefined}
-        class={classes()}
-        style={resolvedStyle()}
-        onMouseEnter={() => hovered.set(true)}
-        onMouseLeave={() => hovered.set(false)}
-        onPress={handlePress}
-      >
-        <Each of={boundField().segments()} key="index">
-          {(segment) => {
-            const render = renderSegment();
+      <DateInputGroupKeyboardContext.Provider value={keyboardType}>
+        <View
+          role={role()}
+          focusable={false}
+          nativeID={local.id ?? local.nativeID}
+          testID={local.testID}
+          accessibilityState={isDisabled() ? { disabled: true } : undefined}
+          class={classes()}
+          style={resolvedStyle()}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onPress={handlePress}
+        >
+          <Each of={boundField().segments()} key="index">
+            {(segment) => {
+              const render = renderSegment();
 
-            return typeof render === "function"
-              ? (render as (value: DateSegment) => JSX.Element)(createLiveSegment(segment))
-              : null;
-          }}
-        </Each>
-      </View>
+              return typeof render === "function"
+                ? (render as (value: DateSegment) => JSX.Element)(createLiveSegment(segment))
+                : null;
+            }}
+          </Each>
+        </View>
+      </DateInputGroupKeyboardContext.Provider>
     </DateInputGroupFieldContext.Provider>
   );
 }

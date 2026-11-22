@@ -50,6 +50,16 @@ export interface ColorInputGroupContextValue {
   setFocusWithin: (value: boolean) => void;
 }
 
+/** React Aria's `enterKeyHint` values, as `useTextField` accepts them. */
+export type ColorInputGroupEnterKeyHint =
+  | "enter"
+  | "done"
+  | "go"
+  | "next"
+  | "previous"
+  | "search"
+  | "send";
+
 /**
  * What a field root (`ColorField`, a later unit) tells the group and its
  * input. Upstream this is React Aria's `InputContext` (value, change, disabled,
@@ -114,6 +124,16 @@ export interface ColorInputGroupFieldValue {
 
   /** Return in the input: the field commits in place (React Aria's Enter). */
   onSubmit?: (event: { text: string }) => void;
+
+  /**
+   * The field's `enterKeyHint` for the soft keyboard's return-key label.
+   * Read-port reserved for the ColorField unit (sheet §5): `undefined` when
+   * the field root exposes no hint, and the Input's own `enterKeyHint`
+   * wins. A-011: this channel is also what the `field-mock` fixture drives
+   * through a `ColorInputGroupFieldContext.Provider` — the same fixture
+   * privilege checkbox's `CtxProbe` uses.
+   */
+  enterKeyHint?: () => ColorInputGroupEnterKeyHint | undefined;
 
   /**
    * Registers the input's focus handle, standing in for the DOM's
