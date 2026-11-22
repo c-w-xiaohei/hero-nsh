@@ -1,6 +1,8 @@
 import { computed, split, Text, View } from "nsh";
 import type { AccessibilityState, JSX, ViewProps } from "nsh";
 
+import { createDensity } from "../../primitives/environment";
+import { densityKey } from "../../tokens/density";
 import type { AriaProps, DataProps, GlobalDomProps } from "./dom-props";
 import { viewProps } from "./dom-props";
 import { emptyStateVariants } from "./empty-state.styles";
@@ -110,10 +112,24 @@ export function EmptyStateRoot(props: EmptyStateRootProps): JSX.Element {
     "aria-activedescendant",
   ] as const);
 
+  // The environment's `density` variant axis (encapsulation.md §1, 样式管线,
+  // adapt sheet A-001): the padding literal in the table resolves from the
+  // mounted preset. The accessor returns the environment's own accessor, so
+  // the single read here stays consistent with the scope the Root mounted
+  // under; `densityKey` folds an unmounted name back to `"default"`. The
+  // table has no `input` axis to feed (sheet A-003): a display container
+  // carries no hover or hit-area cell.
+  const density = createDensity();
+
   // R-001 / R-002 / R-003 in `empty-state.styles.ts`, then the caller's class:
   // HeroUI merges them through `emptyStateVariants({ className })` in the same
   // order, so the later class wins on a conflict.
-  const classes = computed(() => emptyStateVariants({ className: local.className }));
+  const classes = computed(() =>
+    emptyStateVariants({
+      density: densityKey(density()),
+      className: local.className,
+    }),
+  );
 
   // The single read of `children`, shared through a computed as the common
   // rules require. A zero-argument function is NSH's reactive child and is
