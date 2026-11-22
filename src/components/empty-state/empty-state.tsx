@@ -118,7 +118,11 @@ export function EmptyStateRoot(props: EmptyStateRootProps): JSX.Element {
   // the single read here stays consistent with the scope the Root mounted
   // under; `densityKey` folds an unmounted name back to `"default"`. The
   // table has no `input` axis to feed (sheet A-003): a display container
-  // carries no hover or hit-area cell.
+  // carries no hover or hit-area cell. The harness-side 接轴 spots (sheet
+  // A-006 fixture scope, A-007 mobile test file) are realized in
+  // `harness/empty-state.fixtures.tsx` and `empty-state.mobile.test.tsx`;
+  // both probe exactly this mount — the `rest` pass-through above keeps the
+  // `onPress`/`onLayout` surface they assert environment-invariant.
   const density = createDensity();
 
   // R-001 / R-002 / R-003 in `empty-state.styles.ts`, then the caller's class:
