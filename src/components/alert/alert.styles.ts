@@ -33,17 +33,18 @@ export const alertVariants = tv({
     // R-001: `.alert` → `flex w-full flex-row items-start justify-start gap-4`
     // (16 points). NSH's `View` defaults to a column flex container, so the
     // explicit `flex-row` is what keeps the indicator and the content side by
-    // side.
+    // side; the `gap-4` itself lives in the `density` axis (A-001).
     // R-002: `.alert` → `bg-surface`; the semantic token switches with the
     // appearance by itself.
-    // R-003: `.alert` → `px-4 py-3` (16 / 12 points).
+    // R-003: `.alert` → `px-4 py-3` (16 / 12 points), also in the `density`
+    // axis (A-001).
     // R-004: `.alert` → `shadow-surface`; shadows cannot switch with the
     // appearance, so the dark pair is written next to it (theme notes).
     // R-005: `.alert` → `border-radius: min(32px, var(--radius-3xl))`; this
     // theme's `radius.3xl` is 24, so `min(32, 24)` is 24 and `rounded-3xl`
     // matches. A theme that raised 3xl above 32 would exceed upstream's cap
     // (port sheet §8).
-    base: `flex w-full flex-row items-start justify-start gap-4 bg-surface px-4 py-3 ${shadow.surface.both} rounded-3xl`,
+    base: `flex w-full flex-row items-start justify-start bg-surface ${shadow.surface.both} rounded-3xl`,
     // R-006: `.alert__content` → `flex h-full grow flex-col items-start`.
     // NSH's `grow` leaves `flex-shrink` at 0; upstream keeps CSS's default 1, so
     // an Alert with a trailing action could not give the text any room at
@@ -51,13 +52,13 @@ export const alertVariants = tv({
     // and shrink together and keeps the automatic basis (skill §1.2).
     content: "flex h-full flex-auto flex-col items-start",
     // R-007: `.alert__indicator` → `flex items-center justify-center p-1
-    // select-none` (padding 4; `select-none` is NSH's `userSelect: "none"` and
-    // reaches the texts inside).
+    // select-none` (padding 4, in the `density` axis per A-001; `select-none`
+    // is NSH's `userSelect: "none"` and reaches the texts inside).
     // R-008 is a structural rewrite, not a class here: upstream styles the
     // default `svg` with `box-content size-4`. The default icon is now an icon
     // component whose `h-4 w-4` is already `size-4`, and it has no padding or
     // border, so `box-content` has nothing to change (port sheet §4).
-    indicator: "flex items-center justify-center p-1 select-none",
+    indicator: "flex items-center justify-center select-none",
     // R-009: `.alert__title` → `text-sm leading-6 font-medium` (14 / 24 /
     // 500). The status foreground below lands on the same view and the text
     // inside inherits it (twref "Text styles inherit").
@@ -99,9 +100,31 @@ export const alertVariants = tv({
         title: "text-danger-soft-foreground",
       },
     },
+    // A-001: the `density` axis carries the spacing literals of the base and
+    // indicator slots (adapt-sheets/alert.md). `default` is byte-identical to
+    // the ported values (gap 16, padding 16/12, indicator padding 4); `compact`
+    // tightens each one step (gap-3, px-3.5 py-2.5, p-0.5). The axis lives in
+    // this table, not in `src/tokens/density.ts`, because these are slot class
+    // literals with no token-mapping exit — `densityKey` normalizes the preset
+    // name and the cells below are the mapping, authored next to the slots
+    // they vary. No `input` axis (A-003): none of the five parts is pressable,
+    // so interaction usability has nothing to vary; and no text-/leading-
+    // cell (A-002): the title/description sizes are a fixed upstream
+    // contract, not spacing.
+    density: {
+      default: {
+        base: "gap-4 px-4 py-3",
+        indicator: "p-1",
+      },
+      compact: {
+        base: "gap-3 px-3.5 py-2.5",
+        indicator: "p-0.5",
+      },
+    },
   },
   defaultVariants: {
     status: "default",
+    density: "default",
   },
 });
 
