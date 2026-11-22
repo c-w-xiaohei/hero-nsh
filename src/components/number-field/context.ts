@@ -1,6 +1,7 @@
 import { context } from "nsh";
 import type { Accessor } from "nsh";
 
+import type { EnvironmentInput } from "../../primitives/environment";
 import type { NumberFieldState } from "./create-number-field-state";
 import type { NumberFieldSlots } from "./number-field.styles";
 
@@ -15,6 +16,14 @@ import type { NumberFieldSlots } from "./number-field.styles";
 export interface NumberFieldContextValue {
   /** The root's variant table; each part calls its own slot. */
   slots: NumberFieldSlots;
+
+  /**
+   * The `input` environment axis the root resolved once (A-002): the group's
+   * column width comes through `slots.groupCols()`, and the step buttons read
+   * this single accessor for their seam gate and hold timings, so no part
+   * reads the environment itself.
+   */
+  input: Accessor<EnvironmentInput>;
 
   /** The resolved fill flavor; the group's state classes depend on it. */
   variant: Accessor<"primary" | "secondary">;

@@ -8,6 +8,7 @@ import type {
 } from "nsh";
 import { computed, signal, split, untracked, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { DescriptionContext } from "../description/context";
 import type { DescriptionContextValue } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
@@ -269,8 +270,19 @@ export function NumberFieldRoot(props: NumberFieldRootProps): JSX.Element {
     local.variant === "secondary" ? "secondary" : "primary",
   );
 
+  // A-002: the `input` environment axis, resolved in this owner scope — it
+  // feeds the variant table's `input` variant and travels on the context so
+  // the group's column width and the step buttons' seam gate read one source
+  // and never read the environment themselves. An `EnvironmentScope` remount
+  // re-creates the part, re-resolving the accessor.
+  const input = createInput();
+
   const resolvedSlots = computed(() =>
-    numberFieldVariants({ fullWidth: local.fullWidth, variant: local.variant }),
+    numberFieldVariants({
+      fullWidth: local.fullWidth,
+      variant: local.variant,
+      input: input(),
+    }),
   );
 
   // Re-wrapped so each slot call goes through the computed: the context shape is
@@ -281,6 +293,7 @@ export function NumberFieldRoot(props: NumberFieldRootProps): JSX.Element {
     input: () => resolvedSlots().input(),
     incrementButton: () => resolvedSlots().incrementButton(),
     decrementButton: () => resolvedSlots().decrementButton(),
+    groupCols: () => resolvedSlots().groupCols(),
   } as NumberFieldContextValue["slots"];
 
   // --- Effective state ------------------------------------------------------
@@ -434,6 +447,7 @@ export function NumberFieldRoot(props: NumberFieldRootProps): JSX.Element {
 
   const contextValue: NumberFieldContextValue = {
     slots,
+    input,
     variant,
     isDisabled,
     isReadOnly,

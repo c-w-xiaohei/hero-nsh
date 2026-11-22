@@ -37,6 +37,9 @@ export interface GlobalDomProps {
  * DOM events that do have an NSH channel on an input (`onKeyDown`, `onKeyUp`,
  * `onKeyPress`, `onPaste`, `onSelectionChange`, `onCompositionChange`,
  * `onCaretMove`) are absent from this list on purpose: they reach the host.
+ * A-007: `enterKeyHint` left the list the same way — it maps onto the host's
+ * `returnKeyType` in `number-field-input.tsx` now, though the split keeps it
+ * out of `rest` either way.
  */
 const DOM_ONLY_PROPS = new Set([
   "render",
@@ -63,7 +66,6 @@ const DOM_ONLY_PROPS = new Set([
   "capture",
   "autoSave",
   "results",
-  "enterKeyHint",
   "formAction",
   "formEncType",
   "formMethod",

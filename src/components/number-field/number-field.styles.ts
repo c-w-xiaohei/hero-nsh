@@ -18,14 +18,21 @@ import { ease, radius, shadow } from "../../tokens/geometry";
  * three `:has()` column rules are registrations the buttons report to the root
  * (port sheet §4, §5).
  *
- * The slot names and the two variant dimensions stay exactly upstream's:
+ * The slot names and the two upstream variant dimensions stay upstream's:
  * `base` / `group` / `input` / `incrementButton` / `decrementButton`,
- * `fullWidth` and `variant`.
+ * `fullWidth` and `variant`. A-001 adds the encapsulation model's `input`
+ * axis and one internal slot, `groupCols`: the step-column width the group
+ * interpolates into its `grid-cols-[…]` template (40 px pointer, 44 px
+ * touch). It carries a length, not a class — the template stays the class —
+ * so `input` is its only axis and it has no base value.
  */
 export const numberFieldVariants = tv({
   defaultVariants: {
     fullWidth: false,
     variant: "primary",
+    // A-001: a bare `numberFieldVariants()` call keeps producing exactly the
+    // pointer output the table made before the axis existed.
+    input: "pointer",
   },
   slots: {
     /*
@@ -96,6 +103,10 @@ export const numberFieldVariants = tv({
      * R-027: `cursor: var(--cursor-interactive)` → `cursor-pointer`.
      * R-028: `:active` / `[data-pressed=true]` → `bg-field-foreground/10` and
      * `scale(0.97)`; the pressed state is also mirrored in the render props.
+     * A-001: the `active:*` pair moves into the `input: "pointer"` cell
+     * below — under touch the press-feedback seam's `scale` owns the
+     * transform and its press overlay the feedback, and two writers may not
+     * share the channel.
      * R-031: increment-only `rounded-s-none rounded-e-field border-s
      * border-field-placeholder/15`, after `rounded-none` so it wins.
      * R-032: decrement-only `rounded-s-field rounded-e-none border-e
@@ -104,16 +115,21 @@ export const numberFieldVariants = tv({
     incrementButton: [
       "flex h-full w-10 items-center justify-center rounded-none bg-transparent",
       `text-field-foreground outline-none duration-150 ${ease.smooth} motion-reduce:transition-none`,
-      "cursor-pointer active:bg-field-foreground/10 active:scale-[0.97]",
+      "cursor-pointer",
       `rounded-s-none ${radius.fieldEnd} border-s border-field-placeholder/15`,
     ].join(" "),
 
     decrementButton: [
       "flex h-full w-10 items-center justify-center rounded-none bg-transparent",
       `text-field-foreground outline-none duration-150 ${ease.smooth} motion-reduce:transition-none`,
-      "cursor-pointer active:bg-field-foreground/10 active:scale-[0.97]",
+      "cursor-pointer",
       `${radius.fieldStart} rounded-e-none border-e border-field-placeholder/15`,
     ].join(" "),
+
+    // A-001: the step-column width the group reads through
+    // `slots.groupCols()` and interpolates into its `grid-cols-[…]` template.
+    // A length, not a class — there is no base cell and no other axis feeds it.
+    groupCols: "",
   },
   variants: {
     // R-039 / R-040: both the root and the group stretch.
@@ -134,6 +150,28 @@ export const numberFieldVariants = tv({
       secondary: {
         base: "",
         group: "shadow-none dark:shadow-none bg-default",
+      },
+    },
+    // A-001: the `input` axis of the encapsulation model — it owns
+    // interaction usability (the min hit size, no hover dependence, the
+    // touch feedback channels). `pointer` holds the desktop table
+    // byte-for-byte, R-028's `active:` pair included; `touch` raises the row
+    // to the 44 pt target (`min-h-11` over `h-9`, the date-input-group A-001
+    // value), widens the step columns to 44 pt (`w-11` over `w-10`, and
+    // `groupCols` so the grid template follows), and carries no `active:` —
+    // the seam presses instead. No `density` axis: the row height and column
+    // width are hit geometry, not a spacing preset.
+    input: {
+      pointer: {
+        incrementButton: "active:bg-field-foreground/10 active:scale-[0.97]",
+        decrementButton: "active:bg-field-foreground/10 active:scale-[0.97]",
+        groupCols: "40px",
+      },
+      touch: {
+        group: "min-h-11",
+        incrementButton: "w-11",
+        decrementButton: "w-11",
+        groupCols: "44px",
       },
     },
   },

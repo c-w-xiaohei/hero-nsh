@@ -1,5 +1,18 @@
-import { host, mount, signal, Text, View } from "nsh";
-import { Description, FieldError, Label, NumberField } from "@heroui/react";
+import { effect, host, mount, signal, Text, View } from "nsh";
+import type { JSX } from "nsh";
+import {
+  Description,
+  EnvironmentScope,
+  FieldError,
+  Label,
+  NumberField,
+  PressableFeedbackContext,
+} from "@heroui/react";
+import type {
+  NumberFieldInputProps,
+  PressableFeedbackContextValue,
+} from "@heroui/react";
+import { NumberFieldContext } from "../src/components/number-field/context";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 
@@ -51,6 +64,39 @@ import { probe } from "@scenario/probe";
  *                      with minValue / maxValue / step / percent /
  *                      commitBehavior params and an onChange probe: the
  *                      initial snap in render (X-002)
+ *
+ * Mobile-layer cases and params (adapt sheet §2 A-012, §4):
+ *   scope    "" = the host's default environment (pointer — the desktop-parity
+ *            side); "touch" wraps the case in EnvironmentScope(input="touch"),
+ *            the injected environment the assertions drive. Every case,
+ *            existing and new, mounts under it — an untouched param keeps the
+ *            host default.
+ *   probe    "1" mounts the seam surface: a `StepButtonProbe` inside each step
+ *            button (reads `PressableFeedbackContext`, reachable only inside
+ *            the provider the button mounts, so the fixture imports the context
+ *            directly the way pagination's fixture does) plus a `FieldProbe`
+ *            inside the field root (reads `NumberFieldContext` for the `input`
+ *            axis and `groupCols` channel). Reports: `seam-env` (mount-time
+ *            gate/slop), `seam-edge` (isPressed edges), `seam-hold` (+300 ms
+ *            mid-hold / +1100 ms settled scale·slop), `seam-sample` (channels
+ *            after each `press`), `field-env` (the axis through the root's
+ *            single read channel). Off by default so the desktop-port cases' surface
+ *            is unchanged.
+ *   press    both buttons wired to the `events` sequence probe (down/up/
+ *            changeT/changeF/press) plus `onPress`/`onChange` channels and the
+ *            seam probes — the carrier for M-001/M-002/M-007's press round-trip.
+ *   layout   Group + both buttons + Input report `onLayout` bounds — M-003's
+ *            44 pt row / column read against the desktop baseline.
+ *   hover    Group + both buttons + Input report `isHovered` through a
+ *            className probe and the `onHover*` callbacks — M-004's
+ *            touch-suppression / pointer-parity read.
+ *   hold     `onChange` counts steps and `hold` samples the count at
+ *            450/550/700/1100 ms after the first step — M-005's 400/600 ms
+ *            first-repeat windows on the two axes.
+ *   submit   `onSubmit`/`onBlur`/`onChange` probes plus an `events` sequence
+ *            channel and `submitBehavior`/`enterKeyHint`/`returnKeyType`/
+ *            `autoCapitalize` params — M-006's commit-before-submit read; an
+ *            `away` press target checks the blur half.
  */
 
 type FieldProps = {
@@ -427,30 +473,398 @@ function SnapCase() {
   );
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * Mobile layer: environment injection + seam/axis probes (adapt sheet A-012)
+ * -----------------------------------------------------------------------------------------------*/
+
+/** `host.params.scope = "touch"` injects `input="touch"`; "" keeps the host. */
+function Scoped(props: { children?: JSX.Element }) {
+  return String(host.params.scope ?? "") === "touch" ? (
+    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
+
+function probeOn() {
+  return String(host.params.probe ?? "") === "1";
+}
+
+type LayoutEvent = {
+  bounds: {
+    origin: { x: number; y: number };
+    size: { width: number; height: number };
+  };
+};
+
+function layoutProbe(name: string) {
+  return (event: LayoutEvent) =>
+    probe("layout")({
+      name,
+      x: event.bounds.origin.x,
+      y: event.bounds.origin.y,
+      width: event.bounds.size.width,
+      height: event.bounds.size.height,
+    });
+}
+
+/** The live `PressableFeedbackContext` of each step button, by fixture name. */
+const seamContexts = new Map<string, PressableFeedbackContextValue>();
+
+/* Samples the seam channels while a press is still held and after it settles:
+ * the +300 ms sample lands inside `app.longPress`'s hold with the scale
+ * timing complete (the mid-press read); the +1100 ms sample lands after
+ * release plus the return animation. Only a real `isPressed` edge schedules
+ * them, so the pointer environment records nothing here. */
+function sampleHold(name: string, midHold: boolean) {
+  const ctx = seamContexts.get(name);
+  if (!ctx) {
+    return;
+  }
+  const report = probe("seam-hold");
+  void ctx.scale.getValue().then((scale) => {
+    report({
+      name,
+      midHold,
+      seamPressed: ctx.isPressed(),
+      scale,
+      hitSlop: ctx.hitSlop() ?? null,
+      enabled: ctx.enabled(),
+    });
+  });
+}
+
+/* Reads the seam channels after the press chain finished: under pointer the
+ * press fires but `isPressed`/`scale`/`hitSlop` rest (M-001's negative half);
+ * under touch the sample lands post-release. Called from the `press` event so
+ * storage order is press → seam-sample. */
+function sampleSeam(name: string) {
+  const ctx = seamContexts.get(name);
+  if (!ctx) {
+    return;
+  }
+  const report = probe("seam-sample");
+  void ctx.scale.getValue().then((scale) => {
+    report({
+      name,
+      seamPressed: ctx.isPressed(),
+      scale,
+      hitSlop: ctx.hitSlop() ?? null,
+      enabled: ctx.enabled(),
+    });
+  });
+}
+
+/* Sits inside a step button (the seam provider wraps its children), reads
+ * `PressableFeedbackContext` and reports the gate/slop on mount plus every
+ * `isPressed` edge. Under pointer the edge channel stays silent — that
+ * silence is the negative assertion (pagination's carrier). */
+function StepButtonProbe(props: { name: string }) {
+  const ctx = PressableFeedbackContext();
+  const reportEnv = probe("seam-env");
+  const reportEdge = probe("seam-edge");
+
+  effect(() => {
+    seamContexts.set(props.name, ctx);
+  });
+
+  effect(() => {
+    reportEnv({
+      name: props.name,
+      enabled: ctx.enabled(),
+      hitSlop: ctx.hitSlop() ?? null,
+    });
+  });
+
+  effect(() => {
+    const seam = ctx.isPressed();
+    reportEdge({ name: props.name, seam });
+    if (seam) {
+      setTimeout(() => sampleHold(props.name, true), 300);
+      setTimeout(() => sampleHold(props.name, false), 1100);
+    }
+  });
+
+  return null;
+}
+
+/* Sits inside the field root and reads `NumberFieldContext`: the `input` axis
+ * the root resolved and the `groupCols` the group's template interpolates —
+ * M-013's single-read-channel read. Reports on mount and on every change. */
+function FieldProbe() {
+  const field = NumberFieldContext();
+  const report = probe("field-env");
+
+  effect(() => {
+    report({
+      input: field?.input() ?? null,
+      groupCols: field?.slots.groupCols() ?? null,
+      hasDecrement: field?.hasDecrement() ?? null,
+      hasIncrement: field?.hasIncrement() ?? null,
+    });
+  });
+
+  return null;
+}
+
+/** Mounts both probe surfaces only when `probe=1` asks for them. */
+function FieldProbeIf() {
+  return probeOn() ? <FieldProbe /> : null;
+}
+
+function StepProbe(props: { name: string }) {
+  return probeOn() ? <StepButtonProbe name={props.name} /> : null;
+}
+
+/* The `events` sequence + caller-side channels one step button needs:
+ * down/changeT/up/changeF/end/press in firing order, `onPress` for the
+ * caller half, `onLayout` for M-003, and the `onHover*` group for M-004. */
+function stepButtonHandlers(name: string) {
+  const events = probe("events");
+
+  return {
+    onPressDown: () => events(name, "down"),
+    onPressStart: () => events(name, "start"),
+    onPressChange: (pressed: boolean) => events(name, pressed ? "changeT" : "changeF"),
+    onPressUp: () => events(name, "up"),
+    onPressEnd: () => events(name, "end"),
+    onPress: () => {
+      events(name, "press");
+      probe("onPress")(name);
+      sampleSeam(name);
+    },
+    onLayout: layoutProbe(name),
+    onHoverStart: () => probe("hover")(name, "start"),
+    onHoverEnd: () => probe("hover")(name, "end"),
+    onHoverChange: (h: boolean) => probe("hover")(name, "change", h),
+  };
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Mobile cases
+ * -----------------------------------------------------------------------------------------------*/
+
+/* Both step buttons fully probed (press chain, events, seam, layout, hover)
+ * plus the field-axis probe: the carrier for M-001/M-002/M-007/M-013. */
+function PressCase() {
+  return (
+    <Stage>
+      <NumberField defaultValue={0} name="width" onChange={() => probe("events")("onChange")}>
+        <Label>Width</Label>
+        <FieldProbeIf />
+        <NumberField.Group testID="nf-group" onLayout={layoutProbe("group")}>
+          <NumberField.DecrementButton testID="nf-dec" {...stepButtonHandlers("dec")}>
+            <StepProbe name="dec" />
+          </NumberField.DecrementButton>
+          <NumberField.Input testID="nf-input" />
+          <NumberField.IncrementButton testID="nf-inc" {...stepButtonHandlers("inc")}>
+            <StepProbe name="inc" />
+          </NumberField.IncrementButton>
+        </NumberField.Group>
+      </NumberField>
+    </Stage>
+  );
+}
+
+/* `onLayout` bounds of the row, both step columns and the input — M-003's
+ * 44 pt row/column assertion under touch against the desktop baseline. */
+function LayoutCase() {
+  return (
+    <Stage>
+      <NumberField defaultValue={0} name="width">
+        <Label>Width</Label>
+        <FieldProbeIf />
+        <NumberField.Group testID="nf-group" onLayout={layoutProbe("group")}>
+          <NumberField.DecrementButton testID="nf-dec" onLayout={layoutProbe("dec")} />
+          <NumberField.Input testID="nf-input" onLayout={layoutProbe("input")} />
+          <NumberField.IncrementButton testID="nf-inc" onLayout={layoutProbe("inc")} />
+        </NumberField.Group>
+      </NumberField>
+    </Stage>
+  );
+}
+
+/* `isHovered` through each part's className function plus the `onHover*`
+ * callback group on every hoverable part — M-004 reads `hover-state` records
+ * and the `hover` channel under both environments. */
+function HoverCase() {
+  const recordGroup = probe("hover-state");
+  const recordDec = probe("hover-state");
+  const recordInput = probe("hover-state");
+  const recordInc = probe("hover-state");
+  const hover = probe("hover");
+
+  return (
+    <Stage>
+      <NumberField defaultValue={0} name="width">
+        <Label>Width</Label>
+        <NumberField.Group
+          testID="nf-group"
+          className={(v) => {
+            recordGroup({ part: "group", isHovered: v.isHovered(), isFocusWithin: v.isFocusWithin() });
+
+            return "";
+          }}
+          onHoverStart={() => hover("group", "start")}
+          onHoverEnd={() => hover("group", "end")}
+          onHoverChange={(h) => hover("group", "change", h)}
+        >
+          <NumberField.DecrementButton
+            testID="nf-dec"
+            className={(v) => {
+              recordDec({ part: "dec", isHovered: v.isHovered(), isPressed: v.isPressed() });
+
+              return "";
+            }}
+            onHoverStart={() => hover("dec", "start")}
+            onHoverEnd={() => hover("dec", "end")}
+            onHoverChange={(h) => hover("dec", "change", h)}
+          />
+          <NumberField.Input
+            testID="nf-input"
+            className={(v) => {
+              recordInput({ part: "input", isHovered: v.isHovered(), isFocused: v.isFocused() });
+
+              return "";
+            }}
+            onHoverStart={() => hover("input", "start")}
+            onHoverEnd={() => hover("input", "end")}
+            onHoverChange={(h) => hover("input", "change", h)}
+          />
+          <NumberField.IncrementButton
+            testID="nf-inc"
+            className={(v) => {
+              recordInc({ part: "inc", isHovered: v.isHovered(), isPressed: v.isPressed() });
+
+              return "";
+            }}
+            onHoverStart={() => hover("inc", "start")}
+            onHoverEnd={() => hover("inc", "end")}
+            onHoverChange={(h) => hover("inc", "change", h)}
+          />
+        </NumberField.Group>
+      </NumberField>
+    </Stage>
+  );
+}
+
+/* The press-down step starts the count and schedules the `hold` samples; the
+ * tests hold the button past each mark and compare the counts with the
+ * axis's first-repeat window — pointer 400 ms, touch 600 ms, one 60 ms
+ * cadence after that (M-005). */
+function HoldCase() {
+  let steps = 0;
+  let armed = false;
+  const report = probe("hold");
+
+  const arm = () => {
+    armed = true;
+    for (const at of [450, 550, 700, 1100]) {
+      setTimeout(() => report({ at, steps }), at);
+    }
+  };
+
+  return (
+    <Stage>
+      <NumberField
+        defaultValue={0}
+        name="width"
+        onChange={(value) => {
+          steps += 1;
+          probe("onChange")(value);
+          if (!armed) {
+            arm();
+          }
+        }}
+      >
+        <Label>Width</Label>
+        <NumberField.Group testID="nf-group">
+          <NumberField.DecrementButton testID="nf-dec" />
+          <NumberField.Input testID="nf-input" />
+          <NumberField.IncrementButton testID="nf-inc" />
+        </NumberField.Group>
+      </NumberField>
+    </Stage>
+  );
+}
+
+function submitParam<K extends keyof NumberFieldInputProps>(
+  name: K,
+): NumberFieldInputProps[K] {
+  const value = host.params[name as string];
+
+  return (value === undefined ? undefined : value) as NumberFieldInputProps[K];
+}
+
+/* The edit → submit chain: `onSubmit`/`onBlur`/`onChange` channels plus an
+ * `events` sequence (change lands inside `field.commit()`, which runs before
+ * `onSubmit` reports) — M-006 reads the order and the `blur` channel's
+ * silence under `submitBehavior="submit"`. The `away` view is the focus
+ * target a press moves to. `enterKeyHint`/`returnKeyType`/`submitBehavior`/
+ * `autoCapitalize` params drive the new prop mouths. */
+function SubmitCase() {
+  const events = probe("events");
+
+  return (
+    <Stage>
+      <NumberField defaultValue={0} name="width" onChange={(v) => probe("onChange")(v)}>
+        <Label>Width</Label>
+        <NumberField.Group testID="nf-group">
+          <NumberField.Input
+            testID="nf-input"
+            autoCapitalize={submitParam("autoCapitalize")}
+            enterKeyHint={submitParam("enterKeyHint")}
+            returnKeyType={submitParam("returnKeyType")}
+            submitBehavior={submitParam("submitBehavior")}
+            onBlur={() => {
+              probe("blur")("blur");
+              events("blur");
+            }}
+            onSubmit={(e) => {
+              probe("onSubmit")(e);
+              events("submit");
+            }}
+          />
+        </NumberField.Group>
+      </NumberField>
+      <View testID="away" role="button" class="size-8 bg-default" />
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "parts");
 
-  if (name === "label") return <LabelCase />;
-  if (name === "aria-label") return <AriaLabelCase />;
-  if (name === "composition") return <CompositionCase />;
-  if (name === "log") return <LogCase />;
-  if (name === "controlled") return <ControlledCase />;
-  if (name === "invalid") return <InvalidCase />;
-  if (name === "disabled") return <DisabledCase />;
-  if (name === "readonly") return <ReadonlyCase />;
-  if (name === "required") return <RequiredCase />;
-  if (name === "description") return <DescriptionCase />;
-  if (name === "description-error") return <DescriptionErrorCase />;
-  if (name === "valid-error") return <ValidErrorCase />;
-  if (name === "focus") return <FocusCase />;
-  if (name === "format") return <FormatCase />;
-  if (name === "step") return <StepCase />;
-  if (name === "bounds") return <BoundsCase />;
-  if (name === "decimal") return <DecimalCase />;
-  if (name === "cleared") return <ClearedCase />;
-  if (name === "snap") return <SnapCase />;
+  // A-012: every case mounts inside `Scoped` — `scope="touch"` injects the
+  // mobile environment, an absent param keeps the host default, so the
+  // existing cases' surface is unchanged.
+  if (name === "label") return <Scoped><LabelCase /></Scoped>;
+  if (name === "aria-label") return <Scoped><AriaLabelCase /></Scoped>;
+  if (name === "composition") return <Scoped><CompositionCase /></Scoped>;
+  if (name === "log") return <Scoped><LogCase /></Scoped>;
+  if (name === "controlled") return <Scoped><ControlledCase /></Scoped>;
+  if (name === "invalid") return <Scoped><InvalidCase /></Scoped>;
+  if (name === "disabled") return <Scoped><DisabledCase /></Scoped>;
+  if (name === "readonly") return <Scoped><ReadonlyCase /></Scoped>;
+  if (name === "required") return <Scoped><RequiredCase /></Scoped>;
+  if (name === "description") return <Scoped><DescriptionCase /></Scoped>;
+  if (name === "description-error") return <Scoped><DescriptionErrorCase /></Scoped>;
+  if (name === "valid-error") return <Scoped><ValidErrorCase /></Scoped>;
+  if (name === "focus") return <Scoped><FocusCase /></Scoped>;
+  if (name === "format") return <Scoped><FormatCase /></Scoped>;
+  if (name === "step") return <Scoped><StepCase /></Scoped>;
+  if (name === "bounds") return <Scoped><BoundsCase /></Scoped>;
+  if (name === "decimal") return <Scoped><DecimalCase /></Scoped>;
+  if (name === "cleared") return <Scoped><ClearedCase /></Scoped>;
+  if (name === "snap") return <Scoped><SnapCase /></Scoped>;
 
-  return <PartsCase />;
+  if (name === "press") return <Scoped><PressCase /></Scoped>;
+  if (name === "layout") return <Scoped><LayoutCase /></Scoped>;
+  if (name === "hover") return <Scoped><HoverCase /></Scoped>;
+  if (name === "hold") return <Scoped><HoldCase /></Scoped>;
+  if (name === "submit") return <Scoped><SubmitCase /></Scoped>;
+
+  return <Scoped><PartsCase /></Scoped>;
 }
 
 mount(Fixture);

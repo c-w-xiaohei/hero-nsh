@@ -11,6 +11,7 @@ import type {
 } from "nsh";
 import { cleanup, computed, effect, keymap, signal, split } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { joinClassNames } from "./class-names";
 import { NumberFieldContext } from "./context";
 import {
@@ -124,6 +125,7 @@ export interface NumberFieldInputProps
       | "keyboardType"
       | "autoComplete"
       | "autoCorrect"
+      | "autoCapitalize"
       | "submitBehavior"
     >,
     AriaProps,
@@ -150,6 +152,27 @@ export interface NumberFieldInputProps
 
   /** The system's corrections; upstream forces `false`. */
   autoCorrect?: boolean;
+
+  /**
+   * The HTML `autoCapitalize` attribute. The values NSH's host knows
+   * (`none` / `sentences` / `words` / `characters`) reach the input verbatim;
+   * any other value is forwarded unchanged and the host decides it (A-007).
+   */
+  autoCapitalize?: string;
+
+  /**
+   * What Return does in the input: `"submit"` reports `onSubmit` and keeps
+   * the focus (the default — RAC's Enter does not blur); `"blurAndSubmit"`
+   * also unfocuses; `"newline"` inserts a break. The existing fixed
+   * `"submit"` promoted to an overridable prop (A-007).
+   */
+  submitBehavior?: NshInputProps["submitBehavior"];
+
+  /**
+   * The soft keyboard's return-key label; an explicit value wins over the
+   * `enterKeyHint` mapping (A-007).
+   */
+  returnKeyType?: NshInputProps["returnKeyType"];
 
   /** The HTML input type; drives the keyboard layout only. Upstream forces `"text"`. */
   type?:
@@ -261,6 +284,10 @@ export function NumberFieldInput(props: NumberFieldInputProps): JSX.Element {
     "autoFocus",
     "autoComplete",
     "autoCorrect",
+    "autoCapitalize",
+    "submitBehavior",
+    "returnKeyType",
+    "enterKeyHint",
     "placeholder",
     "maxLength",
     "onFocus",
@@ -287,6 +314,11 @@ export function NumberFieldInput(props: NumberFieldInputProps): JSX.Element {
 
   // Read once in the body (research 4.6); every closure below keeps this value.
   const field = NumberFieldContext();
+
+  // A-005: the `input` axis — the field's accessor inside a root, the
+  // environment's own standalone. It gates the hover writes below.
+  const envInput = createInput();
+  const input = () => field?.input() ?? envInput();
 
   // --- Effective state ------------------------------------------------------
   const isDisabled = computed(() => local.disabled ?? field?.isDisabled() ?? false);
@@ -344,6 +376,30 @@ export function NumberFieldInput(props: NumberFieldInputProps): JSX.Element {
         return "url";
       default:
         return "default";
+    }
+  });
+
+  // A-007: the return-key channel. An explicit `returnKeyType` wins;
+  // otherwise `enterKeyHint` maps onto the host labels (`"enter"` and
+  // `"previous"` have no host value and become `"default"`, the search-field /
+  // text-control mapping). Neither prop present means the host default.
+  const returnKeyType = computed<NshInputProps["returnKeyType"]>(() => {
+    if (local.returnKeyType !== undefined) {
+      return local.returnKeyType;
+    }
+
+    switch (local.enterKeyHint) {
+      case "enter":
+      case "previous":
+        return "default";
+      case "done":
+      case "go":
+      case "next":
+      case "search":
+      case "send":
+        return local.enterKeyHint;
+      default:
+        return undefined;
     }
   });
 
@@ -436,6 +492,12 @@ export function NumberFieldInput(props: NumberFieldInputProps): JSX.Element {
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
+    // A-005: under touch the hover state and the `onHover*` callbacks stay
+    // off entirely; the host's own `onMouseEnter` still forwards.
+    if (input() === "touch") {
+      return;
+    }
+
     if (isDisabled() || hovered()) {
       return;
     }
@@ -447,6 +509,10 @@ export function NumberFieldInput(props: NumberFieldInputProps): JSX.Element {
 
   const handleMouseLeave = (event: NshMouseEvent) => {
     local.onMouseLeave?.(event);
+
+    if (input() === "touch") {
+      return;
+    }
 
     if (!hovered()) {
       return;
@@ -535,8 +601,14 @@ export function NumberFieldInput(props: NumberFieldInputProps): JSX.Element {
       disabled={isDisabled()}
       readonly={isReadOnly() || isDisabled()}
       // RAC keeps the focus on Enter; NSH's default `blurAndSubmit` would move
-      // it away, so return submits in place (port sheet §5).
-      submitBehavior="submit"
+      // it away, so return submits in place (port sheet §5). A-007 promotes
+      // the fixed value to a prop — an explicit `submitBehavior` wins.
+      submitBehavior={local.submitBehavior ?? "submit"}
+      // A-007: the return-key label and capitalization channels. `returnKeyType`
+      // resolves the explicit prop over the `enterKeyHint` map;
+      // `autoCapitalize` forwards its string as the host's union type.
+      returnKeyType={returnKeyType()}
+      autoCapitalize={local.autoCapitalize as NshInputProps["autoCapitalize"]}
       autoFocus={local.autoFocus ?? field?.autoFocus() ?? false}
       autoComplete={local.autoComplete ?? "off"}
       autoCorrect={local.autoCorrect ?? false}
