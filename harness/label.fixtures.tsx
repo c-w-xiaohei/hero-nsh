@@ -29,6 +29,11 @@ import type { FieldState } from "../src/components/label/context";
  *   no-field A bare Label with caller `onPress*`/`onFocus`/`onBlur` probes and
  *            a `focusable` sibling View, for the context-free press path and
  *            the `focusable ?? false` contract (M-007).
+ *   all      Every case tree mounted together in one scope — the M-009
+ *            delivery sweep's aggregate form, so the web target pays three
+ *            `open()` calls (one per scope) instead of twelve. Only landmark
+ *            `shows` assertions read it; the per-case probes it also fires
+ *            are ignored there.
  *
  * `host.params.scope` picks the environment ("" = host default, "touch" =
  * `EnvironmentScope input="touch"`, "density" = `EnvironmentScope
@@ -240,11 +245,24 @@ function NoFieldCase() {
   );
 }
 
+/** All four case trees under one scope — M-009's aggregate mount check. */
+function AllCases() {
+  return (
+    <View class="flex-col gap-4">
+      <BasicCase />
+      <StatesCase />
+      <FieldCase />
+      <NoFieldCase />
+    </View>
+  );
+}
+
 const cases: Record<string, () => JSX.Element> = {
   basic: BasicCase,
   states: StatesCase,
   field: FieldCase,
   "no-field": NoFieldCase,
+  all: AllCases,
 };
 
 function Fixture() {

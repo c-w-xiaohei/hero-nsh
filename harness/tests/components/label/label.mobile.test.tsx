@@ -7,7 +7,8 @@ import { calls, callsOf } from "../../helpers/calls";
  * adapt-sheets/label.md §4 (M-001…M-009).
  *
  * The fixture is `harness/label.fixtures.tsx`, opened by `host.params`:
- * `case` (basic / states / field / no-field), `scope` ("" = host default,
+ * `case` (basic / states / field / no-field / all), `scope` ("" = host
+ * default,
  * "touch" = `EnvironmentScope input="touch"`, "density" = `EnvironmentScope
  * density="compact"`), and the field case's `fieldRequired` / `fieldDisabled`
  * / `fieldInvalid` flags (M-008). Every open pins `platform:"windows"`,
@@ -277,6 +278,12 @@ describe("label mobile", () => {
   // case dispatches on `host.params.case`, the `scope` param mounts an
   // `EnvironmentScope` ("" behaves as no wrapper), and the file pins
   // windows/1024×768 so all of the above runs headless and web.
+  //
+  // The sweep opens the aggregate `all` case once per scope (3 opens, not
+  // 12): it mounts every case tree under one EnvironmentScope, and each of
+  // the four landmarks below still gets its own `shows` assertion per
+  // scope — the same 12 case×scope mount checks, delivered through fewer
+  // web dev-client connections (the batch-wide connect-timeout gap).
   test("M-009 every fixture case mounts under default and injected scopes", async () => {
     const landmarks: Record<string, string> = {
       basic: "Mobile label",
@@ -287,9 +294,9 @@ describe("label mobile", () => {
       "no-field": "Plain label",
     };
 
-    for (const [caseName, text] of Object.entries(landmarks)) {
-      for (const scope of ["", "touch", "density"]) {
-        const app = await openLabel(caseName, { scope });
+    for (const scope of ["", "touch", "density"]) {
+      const app = await openLabel("all", { scope });
+      for (const text of Object.values(landmarks)) {
         expect(app.shows(`text:${text}`)).toBe(true);
       }
     }
