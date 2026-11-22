@@ -1,7 +1,8 @@
-import type { JSX, PressEvent } from "nsh";
+import type { JSX, MouseEvent as NshMouseEvent, PressEvent } from "nsh";
 import { cleanup, signal } from "nsh";
 
 import { isKeyboardPress } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
 import { renderTextControl } from "../textfield/text-control";
 import type { TextAreaRootProps } from "../textfield/textarea";
 import { joinClassNames } from "./class-names";
@@ -33,6 +34,9 @@ export type InputGroupTextAreaProps = Omit<TextAreaRootProps, "variant" | "fullW
 export function InputGroupTextArea(props: InputGroupTextAreaProps): JSX.Element {
   const group = InputGroupContext();
   const focused = signal(false);
+  // A-004: the hover callbacks read the environment's input axis at call
+  // time, as the single-line input's do.
+  const input = createInput();
 
   cleanup(group.registerFocusTarget(focused));
   // R-008 / R-024 / R-029: the root aligns to the top and the affixes gain
@@ -62,6 +66,23 @@ export function InputGroupTextArea(props: InputGroupTextAreaProps): JSX.Element 
         }
 
         props.onPress?.(event);
+      },
+      // A-004: under `input === "touch"` the hover callbacks stay silent;
+      // `onMouseEnter` / `onMouseLeave` still pass through.
+      onHoverStart: () => (event: NshMouseEvent) => {
+        if (input() !== "touch") {
+          props.onHoverStart?.(event);
+        }
+      },
+      onHoverEnd: () => (event: NshMouseEvent) => {
+        if (input() !== "touch") {
+          props.onHoverEnd?.(event);
+        }
+      },
+      onHoverChange: () => (value: boolean) => {
+        if (input() !== "touch") {
+          props.onHoverChange?.(value);
+        }
       },
     }),
     {
