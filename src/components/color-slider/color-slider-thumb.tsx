@@ -27,6 +27,7 @@ import {
 import {
   claimSliderTouch,
   releaseSliderTouch,
+  setThumbHitArea,
   sliderTouchClaimed,
 } from "./color-slider-pan-state";
 import { renderRenderPropChildren } from "./render-children";
@@ -131,6 +132,7 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
     "onHoverStart",
     "onHoverEnd",
     "onHoverChange",
+    "onTouchStart",
     "onTouchEnd",
     "onTouchCancel",
     "onFocus",
@@ -352,6 +354,33 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
     active: pan.active,
   };
 
+  // The one handler that always runs at finger-down, before any move-frame
+  // claim: it publishes the thumb's slop-expanded hit area in surface
+  // coordinates (`pageX - locationX` is the border-box origin for a touch on
+  // the thumb itself, and goes negative inside the slop). The track's
+  // capture claim — asked before the target's own, on every move frame —
+  // consults the frame to defer drags that went down on the thumb. The
+  // ledger's reused-identifier cleanup also lives here, before the gesture.
+  const handleTouchStart = (event: GestureResponderEvent) => {
+    const rawSlop = feedback.hitSlop();
+    // The seam answers a `Partial<Edges>` here, but the prop type also takes a
+    // bare number (equal on all four sides) — normalize before reading.
+    const slop =
+      typeof rawSlop === "number"
+        ? { top: rawSlop, right: rawSlop, bottom: rawSlop, left: rawSlop }
+        : (rawSlop ?? {});
+    const size = feedback.bounds();
+
+    setThumbHitArea({
+      x: event.pageX - event.locationX - (slop.left ?? 0),
+      y: event.pageY - event.locationY - (slop.top ?? 0),
+      width: size.width + (slop.left ?? 0) + (slop.right ?? 0),
+      height: size.height + (slop.top ?? 0) + (slop.bottom ?? 0),
+    });
+    releaseSliderTouch(event.identifier);
+    local.onTouchStart?.(event);
+  };
+
   // A touch tap never produces a move frame, so `shouldClaim` is never asked
   // and the gated bare chain never runs; `onTouchEnd` commits the tap instead.
   // A touch the pan claimed (or one the Scroll took) is skipped by the claim
@@ -438,7 +467,10 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
     local.ref?.(next);
   };
 
-  cleanup(() => slider?.registerThumb(undefined));
+  cleanup(() => {
+    slider?.registerThumb(undefined);
+    setThumbHitArea(null);
+  });
 
   // --- Keyboard --------------------------------------------------------------
   /**
@@ -529,10 +561,6 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
   return (
     <View
       {...hostProps(rest)}
-      // A-003: the touch-gated pan. Under the default environment the spread
-      // is an empty object — no listener mounts; under touch its responders
-      // own the gesture while the bare chain below stays gated off.
-      {...pan.panHandlers()}
       ref={handleRef}
       nativeID={local.id ?? local.nativeID}
       // R-083: the transport of React Aria's `role="slider"` on the hidden
@@ -579,6 +607,20 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
       onResponderMove={handleMove}
       onResponderRelease={handleRelease}
       onResponderTerminate={handleRelease}
+      // A-003: the touch-gated pan spreads after the bare chain — JSX's
+      // last-prop-wins hands the responder lane to the pan's emitted props
+      // under touch (the ShouldSet pairs, grant/move/release/terminate, the
+      // termination request and the native block), so `shouldClaim` runs and
+      // `onPanResponderGrant` drives `onDragStart`/`active`. Under the
+      // pointer environment `panHandlers()` resolves to `{}` — the spread
+      // mounts nothing and the gated bare chain above keeps the desktop
+      // path. Spread first instead, these own props would shadow the pan's
+      // emitted keys and its whole lifecycle would never run.
+      {...pan.panHandlers()}
+      // The part's own raw touch handlers stay bound after the spread: the
+      // pan emits none, and the hit-area publish plus the tap compensation
+      // below need them.
+      onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchCancel}
       onMouseEnter={handleMouseEnter}

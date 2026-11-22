@@ -26,6 +26,7 @@ import {
 } from "./color-slider-context";
 import {
   claimSliderTouch,
+  insideThumbHitArea,
   releaseSliderTouch,
   sliderTouchClaimed,
 } from "./color-slider-pan-state";
@@ -443,8 +444,23 @@ export function ColorSliderTrack(props: ColorSliderTrackProps): JSX.Element {
   // taking them back.
   const pan = createPan({
     enabled: () => input() === "touch",
-    shouldClaim: (_event, gesture) => {
+    shouldClaim: (event, gesture) => {
       if (slider === undefined || isDisabled()) {
+        return false;
+      }
+
+      // The move negotiation asks this ancestor's capture predicate before
+      // the thumb's own, on every move frame — a touch that went down inside
+      // the thumb's slop-expanded hit area is the thumb's drag (the delta
+      // path), so the track defers. `pageX - gesture.dx` is where the finger
+      // went down in surface coordinates (the claim event's `locationX` is
+      // target-local, useless to an ancestor).
+      if (
+        insideThumbHitArea(
+          event.pageX - gesture.dx,
+          event.pageY - gesture.dy,
+        )
+      ) {
         return false;
       }
 
@@ -537,10 +553,6 @@ export function ColorSliderTrack(props: ColorSliderTrackProps): JSX.Element {
   return (
     <View
       {...hostProps(rest)}
-      // A-004: the touch-gated pan. Under the default environment the spread
-      // is an empty object — no listener mounts; under touch its responders
-      // own the gesture while the bare chain below stays gated off.
-      {...pan.panHandlers()}
       ref={(node) => local.ref?.(node)}
       nativeID={local.id ?? local.nativeID}
       // R-020: the track takes presses (the responder) but is not a focus stop;
@@ -558,6 +570,19 @@ export function ColorSliderTrack(props: ColorSliderTrackProps): JSX.Element {
       onResponderMove={handleMove}
       onResponderRelease={handleRelease}
       onResponderTerminate={handleRelease}
+      // A-004: the touch-gated pan spreads after the bare chain — JSX's
+      // last-prop-wins hands the responder lane to the pan's emitted props
+      // under touch (the ShouldSet pairs, grant/move/release/terminate, the
+      // termination request and the native block), so `shouldClaim` runs and
+      // `onPanResponderGrant` drives `onDragStart`/`active`. Under the
+      // pointer environment `panHandlers()` resolves to `{}` — the spread
+      // mounts nothing and the gated bare chain above keeps the desktop
+      // path. Spread first instead, these own props would shadow the pan's
+      // emitted keys and its whole lifecycle would never run.
+      {...pan.panHandlers()}
+      // The part's own raw touch handlers stay bound after the spread: the
+      // pan emits none, and the tap-jump compensation below needs
+      // `onTouchEnd`.
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchCancel}
       onMouseEnter={handleMouseEnter}
