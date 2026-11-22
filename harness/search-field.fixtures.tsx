@@ -82,6 +82,10 @@ type InputValues = {
   isInvalid: () => boolean;
 };
 
+// A-011: the NSH-only fixture this unit's mobile assertions mount —
+// `host.params.scope="touch"` injects `EnvironmentScope input="touch"` so the
+// same case bodies run under the default (pointer) and the injected (touch)
+// environment (close-button / date-input-group / number-field convention).
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "") as Scope;
 
