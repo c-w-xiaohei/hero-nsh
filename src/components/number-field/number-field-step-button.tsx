@@ -292,8 +292,9 @@ function createStepButton(direction: StepDirection) {
       animation: { value: 0.97, ignoreScaleCoefficient: true },
     });
 
-    // The seam's read half for probes and overlay parts: the provider wraps
-    // the button's children so a probe mounted there sees the live channels
+    // The seam's read half for probes and overlay parts (the A-012 fixture
+    // probes mount `StepButtonProbe` here): the provider wraps the button's
+    // children so a probe mounted there sees the live channels
     // instead of `RESTING_PRESS_FEEDBACK` (pagination's carrier). No
     // Highlight / Ripple mounts by default.
     const feedbackValue: PressableFeedbackContextValue = {
