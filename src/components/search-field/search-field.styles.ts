@@ -93,6 +93,17 @@ export const searchFieldVariants = tv({
     clearButton: "me-2 size-5 shrink-0",
   },
   variants: {
+    // A-001: the `input` axis — `pointer` is empty so the default resolution
+    // stays byte-identical; `touch` lifts the group's 36pt row to the 44pt
+    // touch hit height (`min-h` overrides `h`, as in date-input-group /
+    // number-field A-001). No `density` axis: the row height is a hit-area
+    // concern, not a spacing preset.
+    input: {
+      pointer: {},
+      touch: {
+        group: "min-h-11",
+      },
+    },
     // R-033: `.search-field--full-width` → `@apply w-full`.
     // R-034: `.search-field__group--full-width` → `@apply w-full`.
     fullWidth: {
@@ -121,6 +132,7 @@ export const searchFieldVariants = tv({
     },
   },
   defaultVariants: {
+    input: "pointer",
     fullWidth: false,
     variant: "primary",
   },
