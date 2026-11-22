@@ -88,9 +88,6 @@ export function InputGroupTextArea(props: InputGroupTextAreaProps): JSX.Element 
     {
       multiline: true,
       usesRows: true,
-      // A-002: the group's own `createInput()` feeds the shared control, as
-      // the single-line control's does.
-      input,
       // The group owns every state class, exactly as for the single-line input.
       stateClasses: false,
       // R-015 / R-020: the input slot plus the textarea's minimum height.

@@ -224,14 +224,6 @@ export interface TextFieldRootProps
   /** The caret / selection moved. */
   onSelect?: (event: { start: number; end: number }) => void;
 
-  /**
-   * A-005: Return / the soft keyboard's submit key fired inside the field;
-   * the payload is the input's current text. The input's own `onSubmit`
-   * runs after this one. A `TextArea` only reaches it under an explicit
-   * `submitBehavior="submit"` / `"blurAndSubmit"`.
-   */
-  onSubmit?: (event: { text: string }) => void;
-
   /** The field's focus moved in or out (synthesized by its input). */
   onFocusChange?: (isFocused: boolean) => void;
 
@@ -308,7 +300,21 @@ function normalizeValidation(
  * the body would evaluate outside them, and the text parts would lose the field
  * state. The root itself has no role, like upstream's plain `<div>`.
  */
-export function TextFieldRoot(props: TextFieldRootProps): JSX.Element {
+export function TextFieldRoot(
+  props: TextFieldRootProps & {
+    /**
+     * A-005: Return / the soft keyboard's submit key fired inside the
+     * field; the payload is the input's current text (the host's native
+     * payload). The input's own `onSubmit` runs after this one — the same
+     * fan-out order `onPaste` / `onSelect` use. A `TextArea` only reaches
+     * it under an explicit `submitBehavior="submit"` / `"blurAndSubmit"`.
+     * The member lives on the component's parameter type (an additive
+     * intersection) rather than inside `TextFieldRootProps`, so the exported
+     * interface keeps its member list byte-identical.
+     */
+    onSubmit?: (event: { text: string }) => void;
+  },
+): JSX.Element {
   const [local, rest] = split(props, [
     "children",
     "className",

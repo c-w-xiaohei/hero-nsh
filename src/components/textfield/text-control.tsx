@@ -197,24 +197,15 @@ export interface TextControlCommonProps
    */
   onChange?: (event: { value: string }) => void;
 
-  /**
-   * Return / the soft keyboard's submit key fired; the payload is the
-   * current text (the host's native payload). Inside a field the root's
-   * `onSubmit` runs first, this one after it. The behavior that makes it
-   * reachable is `submitBehavior`: a `TextArea` only reports it under an
-   * explicit `"submit"` / `"blurAndSubmit"`, its `"newline"` default keeps
-   * inserting line breaks.
-   */
-  onSubmit?: (event: { text: string }) => void;
-
-  /**
-   * What Return does: `"submit"` reports `onSubmit` and keeps the focus (as
-   * React Aria's Enter), `"blurAndSubmit"` also unfocuses, `"newline"`
-   * inserts a line break. Default: `"submit"` for `Input`, `"newline"` for
-   * `TextArea` — the host's own single-line default would unfocus, which RAC
-   * never does.
-   */
-  submitBehavior?: NshInputProps["submitBehavior"];
+  // A-004: `onSubmit` and `submitBehavior` stay inherited members of
+  // `NshInputProps` — `onSubmit` was dropped from the Omit list above so the
+  // host's submit channel is on this surface unchanged ({ text } payload,
+  // field's `onSubmit` runs first, the local one after it), and
+  // `submitBehavior` becomes a live prop: an explicit value wins, otherwise
+  // `"submit"` for a single-line control and `"newline"` for a `TextArea`.
+  // They are not redeclared as members so the public interface keeps its
+  // inherited members verbatim (number-field's explicit redeclaration is
+  // identical only because its sheet declares the prop unannotated).
 
   /** The control cannot be edited but stays focusable and selectable. */
   readOnly?: boolean;
@@ -385,9 +376,12 @@ export interface TextControlConfig {
    * component (`createInput()`) and handed down. `baseClass` gets the
    * current value so the touch cells resolve, and the hover path below
    * reads the accessor so a touch host's sticky hover never sets the
-   * signal (the mobile layer's "no hover dependence" seam).
+   * signal (the mobile layer's "no hover dependence" seam). Optional: the
+   * InputGroup controls share this renderer and their own unit owns the
+   * hand-down — without it every read falls back to the pointer defaults,
+   * which is exactly the desktop baseline.
    */
-  input: Accessor<EnvironmentInput>;
+  input?: Accessor<EnvironmentInput>;
 
   /** `rows` maps to a height (`TextArea` only). */
   usesRows: boolean;
@@ -528,8 +522,10 @@ export function renderTextControl(
 
   const fullWidth = computed(() => local.fullWidth === true || field?.fullWidth() === true);
 
+  const envInput = computed<EnvironmentInput>(() => config.input?.() ?? "pointer");
+
   const baseClass = computed(() =>
-    config.baseClass({ fullWidth: fullWidth(), variant: variant(), input: config.input() }),
+    config.baseClass({ fullWidth: fullWidth(), variant: variant(), input: envInput() }),
   );
 
   // --- Value ----------------------------------------------------------------
@@ -748,7 +744,7 @@ export function renderTextControl(
     // would otherwise paint the hover fill until the next pointer move.
     // `isHovered` stays false and the `onHover*` callbacks stay silent;
     // the `onMouseEnter` / `onMouseLeave` pass-throughs above are unaffected.
-    if (config.input() === "touch" || isDisabled() || hovered()) {
+    if (envInput() === "touch" || isDisabled() || hovered()) {
       return;
     }
 
