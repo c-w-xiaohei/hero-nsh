@@ -147,16 +147,17 @@ describe("input-otp mobile", () => {
     }
   }, 120_000);
 
-  // adapt-sheets/input-otp.md M-006 (A-007): disabled refuses the edit at the
-  // host (`ERR_NSH_TEST_DISABLED`, no `onChange`, no slot characters);
+  // adapt-sheets/input-otp.md M-006 (A-007): disabled refuses the edit — the
+  // typed keys never land, no `onChange` fires and no slot characters appear;
   // `readOnly` blocks edits the same way while the default value stays put —
   // asserted under the injected touch environment.
   test("M-006 disabled refuses typing, readonly keeps its value, under touch", async () => {
     const disabled = await openOtp("disabled", { scope: "touch" });
-    // `app.type` refuses a non-editable input with a plain rejection (the
-    // `ERR_NSH_TEST_DISABLED` code belongs to press-style steps); the effect
-    // assertions below are the contract either way.
-    await expect(disabled.type("id:input-otp-input", "1")).rejects.toThrow("not editable");
+    // The headless host rejects `app.type` on a non-editable input with
+    // `not editable`, but a real browser drops the keys silently so the step
+    // resolves — tolerated rather than required (the color-field T-010 /
+    // X-001 pattern); the effect assertions below are the contract either way.
+    await disabled.type("id:input-otp-input", "1").catch(() => undefined);
     expect(callsOf(disabled, "onChange")).toHaveLength(0);
     expect(disabled.count("id:input-otp-slot-value")).toBe(0);
 
