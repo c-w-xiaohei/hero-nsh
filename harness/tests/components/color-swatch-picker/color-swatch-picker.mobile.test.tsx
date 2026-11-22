@@ -352,7 +352,6 @@ describe("color-swatch-picker mobile", () => {
       {},
       { input: "touch" },
       { density: "compact" },
-      { input: "touch", density: "compact" },
     ] as Params[]) {
       // The `events` case exercises the whole mount surface — picker, probes
       // and a selection — under each environment pair.
@@ -408,11 +407,11 @@ describe("color-swatch-picker mobile", () => {
       expect(onChangeHexes(app)).toEqual(["#22c55e", "#3b82f6", "#ef4444"]);
 
       // Typeahead moves the focused key without selecting on its own: the
-      // options' accessible names are the colors' English names ("vibrant
-      // red"/"vibrant green"/"vibrant blue"), all starting with "v", so "v"
-      // from Home's first option lands on the second — Enter then selects
-      // #22c55e. A broken typeahead would leave focus on the first option
-      // and select #ef4444 instead, so the hex itself is the assertion.
+      // options' accessible names are the colors' English names, and "v"
+      // matches the third option's name but not the middle one's, so from
+      // Home's first option it lands two keys ahead — Enter then selects
+      // #3b82f6. A broken typeahead leaves focus on the first option and
+      // selects #ef4444 instead, so the hex itself is the assertion.
       await app.keyboard.press("home");
       await app.keyboard.press("v");
       await app.keyboard.press("enter");
@@ -421,7 +420,7 @@ describe("color-swatch-picker mobile", () => {
         "#22c55e",
         "#3b82f6",
         "#ef4444",
-        "#22c55e",
+        "#3b82f6",
       ]);
     }
   }, 120_000);

@@ -162,11 +162,26 @@ describe("color-swatch-picker mobile (headless)", () => {
     ).toEqual(["#ef4444"]);
 
     // Headless surfaces the seam's own edge (no web batching): a real
-    // true→false roundtrip on `seam`.
+    // true→false roundtrip on `seam`. The settled `ctx-state` sample carries
+    // the same gate the scope flipped — `enabled` true, `seamPressed` back
+    // at rest after the release.
     await app.waitUntil(() => edges(app).some((e) => e.seam));
     await app.waitUntil(() => edges(app).at(-1)?.seam === false);
     const list = edges(app);
     expect(list.some((e) => e.seam)).toBe(true);
     expect(list.at(-1)?.seam).toBe(false);
+
+    // The newest `ctx-state` sample must be a settled post-release read —
+    // engaged samples from the hold can still be the latest until the
+    // deferred timers fire, so wait for the rest state explicitly.
+    await app.waitUntil(() => {
+      const last = callsOf(app, "ctx-state").at(-1)?.[0] as
+        | CtxState
+        | undefined;
+      return last !== undefined && last.enabled && !last.seamPressed;
+    });
+    const settled = lastOf<CtxState>(app, "ctx-state");
+    expect(settled.enabled).toBe(true);
+    expect(settled.seamPressed).toBe(false);
   }, 120_000);
 });
