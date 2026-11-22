@@ -34,6 +34,8 @@ import {
 } from "nsh";
 
 import { createInteractionModality } from "../../primitives";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { ColorPickerColorContext } from "../color-picker/color-picker-context";
 import { joinClassNames } from "./class-names";
 import { ColorAreaBackground } from "./color-area-background";
@@ -248,6 +250,19 @@ export function ColorAreaRoot(props: ColorAreaRootProps): JSX.Element {
 
   const modality = createInteractionModality();
 
+  // A-001 / A-002: the environment seam, read once in the body — it gates the
+  // thumb's invisible hit area and the panel responder's deferred press.
+  const input = createInput();
+
+  // A-001: the thumb's invisible-hit-area path. The visible 16/20 pt size is a
+  // precision channel (a bigger thumb would lie about the value's resolution),
+  // so the 44 pt target is reached through `hitSlop`, the view-prop half of the
+  // hit-area path that tv() cannot produce; the primitive computes it. The
+  // press channels are never wired — the thumb's interaction face is its
+  // existing pan responder (sheet §2 A-001).
+  const thumbFeedbackEnabled = () => input() === "touch" && !isDisabled();
+  const thumbFeedback = createPressFeedback({ enabled: thumbFeedbackEnabled });
+
   const isFocused = signal(false);
   const pointerFocusPending = signal(false);
   const thumbRef = signal<ViewRef | undefined>(undefined);
@@ -301,6 +316,16 @@ export function ColorAreaRoot(props: ColorAreaRootProps): JSX.Element {
   // The value fractions a drag started from; null when no drag is in flight.
   const dragOrigin = signal<ColorAreaThumbValue | null>(null);
 
+  // A-002: the scroll arbitration's deferred press. Under touch the grant only
+  // records where the finger landed — writing the value immediately would fire
+  // `onChange` for a gesture that turns out to be a scroll (or that never
+  // moves). `pendingPress` holds that landing point; a zero-move release
+  // commits it as the tap-to-jump the pointer contract already has, any move
+  // makes the first `moveDrag` write from `dragOrigin` instead, and a
+  // terminate drops it. Under pointer nothing is deferred.
+  let pendingPress: ColorAreaThumbValue | null = null;
+  let didMove = false;
+
   function requestThumbFocus() {
     const node = thumbRef();
 
@@ -330,6 +355,18 @@ export function ColorAreaRoot(props: ColorAreaRootProps): JSX.Element {
   }
 
   function moveDrag(dx: number, dy: number) {
+    // A-002: the first real move turns the touch press into a drag — the
+    // pending landing point is dropped and the write goes through
+    // `dragOrigin`, which the grant stored, so the first frame is identical
+    // to pointer's. A zero-delta move event (hosts emit one while a held
+    // finger rests) writes nothing and does not count as a move, or a hold
+    // would fire `onChange` for a value the finger never chose.
+    if (dx === 0 && dy === 0) {
+      return;
+    }
+
+    didMove = true;
+
     const origin = dragOrigin();
 
     if (origin === null || isDisabled()) {
@@ -397,11 +434,35 @@ export function ColorAreaRoot(props: ColorAreaRootProps): JSX.Element {
       };
 
       beginDrag(origin);
-      state.setThumbPercent(origin);
+      pendingPress = null;
+      didMove = false;
+
+      // A-002: pointer keeps the write-at-grant contract (zero drift); touch
+      // defers the landing point — a release with no move commits it once, a
+      // move writes from `dragOrigin` per frame, a terminate drops it.
+      if (input() === "touch") {
+        pendingPress = origin;
+      } else {
+        state.setThumbPercent(origin);
+      }
     },
     onPanResponderMove: (_event, gesture) => moveDrag(gesture.dx, gesture.dy),
-    onPanResponderRelease: () => endDrag(),
-    onPanResponderTerminate: () => endDrag(),
+    onPanResponderRelease: () => {
+      // A-002: a release that never moved is the touch tap-to-jump: the
+      // deferred landing point commits once, while `isDragging` still holds,
+      // then the interaction ends with its one `onChangeEnd`.
+      if (pendingPress !== null && !didMove) {
+        state.setThumbPercent(pendingPress);
+      }
+      pendingPress = null;
+      endDrag();
+    },
+    onPanResponderTerminate: () => {
+      // A-002: a scroll (or the host) taking the touches drops the deferred
+      // press — termination never commits a value the finger did not choose.
+      pendingPress = null;
+      endDrag();
+    },
   });
 
   function handleThumbGrant() {
@@ -442,6 +503,19 @@ export function ColorAreaRoot(props: ColorAreaRootProps): JSX.Element {
     ariaLabel,
     displayColor,
     modality,
+    // A-001: the seam's observable half; the Thumb wires `layout` and binds
+    // `hitSlop`, the press trio never reaches it.
+    thumbFeedback: {
+      isPressed: thumbFeedback.isPressed,
+      pressed: thumbFeedback.pressed,
+      scale: thumbFeedback.scale,
+      highlightOpacity: thumbFeedback.highlightOpacity,
+      hitSlop: thumbFeedback.hitSlop,
+      pressOrigin: thumbFeedback.pressOrigin,
+      bounds: thumbFeedback.bounds,
+      layout: thumbFeedback.layout,
+      enabled: thumbFeedbackEnabled,
+    },
     isFocused,
     setFocused: (focused) => {
       isFocused.set(focused);
