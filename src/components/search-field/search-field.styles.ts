@@ -2,7 +2,16 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, radius, shadow } from "../../tokens/geometry";
+// `radius.field`, `shadow.field.both` and `ease.smooth` of
+// `src/tokens/geometry.ts` written out: the M2 class walker imports this file
+// through Node ESM, which does not resolve extensionless relative specifiers,
+// so the geometry module cannot be imported from a `.styles.ts`. Same pattern
+// as `switch.styles.ts` / `date-picker.styles.ts`; keep in sync with
+// `SHADOW_VALUES.field`, `EASE_VALUES.smooth` and `radius.field`.
+const RADIUS_FIELD = "rounded-(--radius-field)";
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
 
 /*
  * SearchField's variant table, mirroring `@heroui/styles` 3.2.7
@@ -57,7 +66,7 @@ export const searchFieldVariants = tv({
      * `motion-reduce:transition-none`.
      */
     group:
-      `relative inline-flex flex-row h-9 items-center overflow-hidden ${radius.field} border-0 bg-field text-sm text-field-foreground ${shadow.field.both} outline-none transition duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `relative inline-flex flex-row h-9 items-center overflow-hidden ${RADIUS_FIELD} border-0 bg-field text-sm text-field-foreground ${SHADOW_FIELD_BOTH} outline-none transition duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     /*
      * R-015: `.search-field__input` → `flex-1 rounded-none border-0
      * bg-transparent px-3 py-2 text-base shadow-none outline-none sm:text-sm`.
