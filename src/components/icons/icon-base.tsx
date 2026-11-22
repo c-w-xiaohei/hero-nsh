@@ -31,7 +31,23 @@ import type {
  * filled with `currentColor` inherited from the ancestor's `text-*` class
  * (R-006, §8).
  */
-export interface IconProps {
+/**
+ * The `aria-*`/`data-*` pass-through members of `IconProps`. They live in a
+ * separate object type rather than the interface body because template-literal
+ * index signatures are the only `IconProps` members that are not named
+ * props — the contract tooling (and this file's own readers) parses the
+ * interface member by member. Extending an object type keeps the public type
+ * identical: `IconProps` still accepts `aria-*` and `data-*` keys.
+ */
+type IconAttributePassthrough = {
+  /** Every `aria-*` attribute, kept for API parity. */
+  [key: `aria-${string}`]: unknown;
+
+  /** Every `data-*` attribute: NSH projects none of them (D18). */
+  [key: `data-${string}`]: unknown;
+};
+
+export interface IconProps extends IconAttributePassthrough {
   /** Appended after the icon's default size classes; later classes win (R-013). */
   className?: string;
 
@@ -132,11 +148,6 @@ export interface IconProps {
   /** The host prop behind the hidden flag; defaults to hiding the subtree. */
   importantForAccessibility?: "auto" | "yes" | "no" | "no-hide-descendants";
 
-  /** Every `aria-*` attribute, kept for API parity. */
-  [key: `aria-${string}`]: unknown;
-
-  /** Every `data-*` attribute: NSH projects none of them (D18). */
-  [key: `data-${string}`]: unknown;
 }
 
 /* -------------------------------------------------------------------------------------------------
