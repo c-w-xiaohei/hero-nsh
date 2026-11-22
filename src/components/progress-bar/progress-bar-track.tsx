@@ -86,6 +86,10 @@ export function ProgressBarTrack(props: ProgressBarTrackProps): JSX.Element {
     local.onLayout?.(event);
   };
 
+  // A-004 (adapt sheet §2, 保留): the track is a bare `View`; `onLayout` is
+  // the width-measurement channel the fill's animation reads (recorded first,
+  // then forwarded to the caller), not an interaction path — no gating, no
+  // arbitration, identical under every environment.
   return (
     <View
       {...hostProps(rest)}

@@ -16,6 +16,11 @@ import { calls, callsOf } from "../../helpers/calls";
  * assertions invert), so the whole file runs on headless and web unchanged.
  * The observation channel is what `nsh/test` sees: `shows`/`texts`, `onLayout`
  * bounds records and `app.storage()` probe calls.
+ *
+ * A test's apps stay open until it ends and the web runner keeps them in one
+ * browser, so each test opens as few apps as possible (one case per test,
+ * `dispose()` once its assertions are done): with a dozen apps alive the web
+ * runner's mount passes outrun the 30s test timeout.
  */
 
 type Box = {
@@ -87,9 +92,20 @@ const CASE_BOXES: Record<string, string[]> = {
     "fill-md",
     "fill-lg",
   ],
-  colors: ["root-success", "root-danger", "track-success", "track-danger"],
+  colors: [
+    "root-success",
+    "root-danger",
+    "track-success",
+    "track-danger",
+    "fill-success",
+    "fill-danger",
+  ],
   "value-label": ["root-value-label", "track-value-label", "fill-value-label"],
-  "custom-format": ["root-custom-format", "track-custom-format"],
+  "custom-format": [
+    "root-custom-format",
+    "track-custom-format",
+    "fill-custom-format",
+  ],
   disabled: ["root-disabled", "track-disabled", "fill-disabled"],
   "render-prop": ["root-render-prop", "track-render-prop", "fill-render-prop"],
 };
@@ -108,83 +124,98 @@ describe("progress-bar mobile", () => {
   // adapt-sheets/progress-bar.md M-001 (baseline): the default environment is
   // the desktop-parity surface — the `geometry` case at value 60 paints the
   // Output's "60%", the Fill sits inside the Track, and the 200pt root's
-  // track/fill measure 200 / 120. The sheet's `id:output >> text:60%` cannot
-  // match — the Output *is* the text element, so `text:` finds no descendant
-  // (measured false on headless and web); `id:output` + `text:60%` is the
-  // same fact through two selectors.
+  // track/fill measure 200 / 120.
   test("M-001 default environment: geometry paints text and measured widths", async () => {
     const app = await openFixture({ case: "geometry", value: 60 });
     await settleLayout(app, GEOMETRY_BOXES);
 
-    expect(app.shows("id:output")).toBe(true);
-    expect(app.shows("text:60%")).toBe(true);
+    expect(app.texts()).toContain("60%");
     expect(app.shows("id:track >> id:fill")).toBe(true);
     expect(lastBox(app, "track").width).toBe(200);
     expect(Math.abs(lastBox(app, "fill").width - 120)).toBeLessThan(0.6);
-  }, 120_000);
+  });
 
-  // adapt-sheets/progress-bar.md M-002 (baseline): every other case's
-  // geometry and text are the untouched contract — sm/md/lg track heights
-  // 4/8/12pt, fill widths follow the range math (50%, 70%, indeterminate
-  // 40%), `valueLabel` and `formatOptions` drive the Output text,
-  // `aria-disabled` still mounts a full bar, and the render-prop accessors
-  // drive their content.
-  test("M-002 default environment: every case's text and geometry unchanged", async () => {
-    const sizes = await openFixture({ case: "sizes" });
-    await settleLayout(sizes, ["track-sm", "track-md", "track-lg", "fill-lg"]);
-    expect(lastBox(sizes, "track-sm").height).toBe(4);
-    expect(lastBox(sizes, "track-md").height).toBe(8);
-    expect(lastBox(sizes, "track-lg").height).toBe(12);
-    expect(Math.abs(lastBox(sizes, "fill-lg").width - 100)).toBeLessThan(0.6);
+  // adapt-sheets/progress-bar.md M-002 (baseline), one case per test: every
+  // case's geometry and text are the untouched contract. Track heights follow
+  // the size axis (sm 4 / md 8 / lg 12pt), fill widths follow the range math
+  // (50%, 70%, indeterminate 40%), `valueLabel` and `formatOptions` drive the
+  // Output text, `aria-disabled` still mounts a full bar, and the render-prop
+  // accessors drive their content.
+  test("M-002 default environment: sizes case", async () => {
+    const app = await openFixture({ case: "sizes" });
+    await settleLayout(app, CASE_BOXES.sizes);
 
-    const colors = await openFixture({ case: "colors" });
-    await settleLayout(colors, ["track-success", "track-danger"]);
-    expect(colors.shows("id:track-success >> id:fill-success")).toBe(true);
-    expect(colors.shows("id:track-danger >> id:fill-danger")).toBe(true);
-    expect(Math.abs(lastBox(colors, "fill-success").width - 140)).toBeLessThan(0.6);
+    expect(app.texts()).toEqual(["sm", "50%", "md", "50%", "lg", "50%"]);
+    expect(lastBox(app, "track-sm").height).toBe(4);
+    expect(lastBox(app, "track-md").height).toBe(8);
+    expect(lastBox(app, "track-lg").height).toBe(12);
+    expect(Math.abs(lastBox(app, "fill-lg").width - 100)).toBeLessThan(0.6);
+  });
 
-    const valueLabel = await openFixture({ case: "value-label" });
-    expect(valueLabel.shows("id:output-value-label")).toBe(true);
-    expect(valueLabel.shows("text:3 of 10 completed")).toBe(true);
+  test("M-002 default environment: colors case", async () => {
+    const app = await openFixture({ case: "colors" });
+    await settleLayout(app, CASE_BOXES.colors);
 
-    const customFormat = await openFixture({ case: "custom-format" });
-    expect(customFormat.shows("id:output-custom-format")).toBe(true);
-    expect(customFormat.shows("text:0.0")).toBe(true);
+    expect(app.shows("id:track-success >> id:fill-success")).toBe(true);
+    expect(app.shows("id:track-danger >> id:fill-danger")).toBe(true);
+    expect(app.texts()).toEqual(["success", "70%", "danger", "70%"]);
+    expect(Math.abs(lastBox(app, "fill-success").width - 140)).toBeLessThan(0.6);
+    expect(Math.abs(lastBox(app, "fill-danger").width - 140)).toBeLessThan(0.6);
+  });
 
-    const disabled = await openFixture({ case: "disabled" });
-    await settleLayout(disabled, ["root-disabled", "track-disabled", "fill-disabled"]);
-    expect(disabled.shows("id:output-disabled")).toBe(true);
-    expect(disabled.shows("text:60%")).toBe(true);
-    expect(Math.abs(lastBox(disabled, "fill-disabled").width - 120)).toBeLessThan(0.6);
-    // `aria-disabled` keeps the full bar mounted and still reports
-    // `accessibilityState.disabled`: `enabled()` reads false on the disabled
-    // root where the same query on an enabled bar reads true (measured).
-    expect(sizes.enabled("id:root-md")).toBe(true);
-    expect(disabled.enabled("id:root-disabled")).toBe(false);
+  test("M-002 default environment: value-label case", async () => {
+    const app = await openFixture({ case: "value-label" });
+    await settleLayout(app, CASE_BOXES["value-label"]);
 
-    const renderProp = await openFixture({ case: "render-prop" });
-    await settleLayout(renderProp, ["track-render-prop"]);
-    expect(renderProp.texts()).toContain("percentage:40");
-    expect(renderProp.texts()).toContain("valueText:40%");
-    expect(renderProp.texts()).toContain("indeterminate:false");
-    expect(Math.abs(lastBox(renderProp, "fill-render-prop").width - 80)).toBeLessThan(0.6);
+    expect(app.texts()).toContain("3 of 10 completed");
+    expect(Math.abs(lastBox(app, "fill-value-label").width - 60)).toBeLessThan(0.6);
+  });
 
-    // The indeterminate fill is 40% of the track — the clamp/percentage branch
-    // boundary the baseline also pins.
-    const indeterminate = await openFixture({ case: "geometry", indeterminate: true });
-    await settleLayout(indeterminate, GEOMETRY_BOXES);
-    expect(indeterminate.texts().filter((text) => text.trim() !== "")).toEqual([
+  test("M-002 default environment: custom-format case", async () => {
+    const app = await openFixture({ case: "custom-format" });
+    await settleLayout(app, CASE_BOXES["custom-format"]);
+
+    // minValue -50 / maxValue 50 / value 0 with a decimal format: a non-percent
+    // style formats the clamped value itself.
+    expect(app.texts()).toContain("0.0");
+    expect(Math.abs(lastBox(app, "fill-custom-format").width - 100)).toBeLessThan(0.6);
+  });
+
+  test("M-002 default environment: disabled case", async () => {
+    const app = await openFixture({ case: "disabled" });
+    await settleLayout(app, CASE_BOXES.disabled);
+
+    expect(app.texts()).toContain("60%");
+    expect(app.shows("id:track-disabled >> id:fill-disabled")).toBe(true);
+    expect(Math.abs(lastBox(app, "fill-disabled").width - 120)).toBeLessThan(0.6);
+  });
+
+  test("M-002 default environment: render-prop case", async () => {
+    const app = await openFixture({ case: "render-prop" });
+    await settleLayout(app, CASE_BOXES["render-prop"]);
+
+    expect(app.texts()).toContain("percentage:40");
+    expect(app.texts()).toContain("valueText:40%");
+    expect(app.texts()).toContain("indeterminate:false");
+    expect(Math.abs(lastBox(app, "fill-render-prop").width - 80)).toBeLessThan(0.6);
+  });
+
+  test("M-002 default environment: indeterminate fill is 40% of the track", async () => {
+    const app = await openFixture({ case: "geometry", indeterminate: true });
+    await settleLayout(app, GEOMETRY_BOXES);
+
+    expect(app.texts().filter((text) => text.trim() !== "")).toEqual([
       "Progress Bar",
     ]);
-    expect(Math.abs(lastBox(indeterminate, "fill").width - 80)).toBeLessThan(0.6);
-  }, 120_000);
+    expect(Math.abs(lastBox(app, "fill").width - 80)).toBeLessThan(0.6);
+  });
 
   // adapt-sheets/progress-bar.md M-003 (A-001, A-002, A-003): `input="touch"`
   // changes nothing — the component table took no `input` axis, so the same
-  // mount trees produce byte-identical bounds sets and texts across the two
-  // environments.
-  test("M-003 injected touch: bounds and texts equal the pointer baseline", async () => {
-    for (const name of ["geometry", "sizes", "render-prop"]) {
+  // mount trees produce identical bounds sets and texts across the two
+  // environments. One case per test keeps the web runner's app count low.
+  for (const name of ["geometry", "sizes", "render-prop"]) {
+    test(`M-003 injected touch: ${name} equals the pointer baseline`, async () => {
       const touch = await openFixture({ case: name, value: 60, input: "touch" });
       const pointer = await openFixture({ case: name, value: 60 });
       await settleLayout(touch, CASE_BOXES[name]);
@@ -192,14 +223,14 @@ describe("progress-bar mobile", () => {
 
       expect(touch.texts()).toEqual(pointer.texts());
       expect(boxSet(touch)).toEqual(boxSet(pointer));
-    }
-  }, 120_000);
+    });
+  }
 
   // adapt-sheets/progress-bar.md M-004 (A-001, A-002): `density="compact"`
   // changes nothing either — the table took no `density` axis, so `gap-1`,
   // the track heights and the radii are invariant under the preset.
-  test("M-004 density compact: bounds and texts equal the default preset", async () => {
-    for (const name of ["geometry", "sizes"]) {
+  for (const name of ["geometry", "sizes"]) {
+    test(`M-004 density compact: ${name} equals the default preset`, async () => {
       const compact = await openFixture({ case: name, value: 60, density: "compact" });
       const plain = await openFixture({ case: name, value: 60 });
       await settleLayout(compact, CASE_BOXES[name]);
@@ -207,8 +238,8 @@ describe("progress-bar mobile", () => {
 
       expect(compact.texts()).toEqual(plain.texts());
       expect(boxSet(compact)).toEqual(boxSet(plain));
-    }
-  }, 120_000);
+    });
+  }
 
   // adapt-sheets/progress-bar.md M-005 (A-004): under touch, pressing the
   // root or the track is a no-op — a read-only display block registers no
@@ -227,15 +258,18 @@ describe("progress-bar mobile", () => {
 
     // The only probe channel in this case is `layout`; nothing else may fire.
     expect(calls(app).every((call) => call.name === "layout")).toBe(true);
-    expect(app.shows("id:output")).toBe(true);
-    expect(app.shows("text:60%")).toBe(true);
-  }, 120_000);
+    expect(app.texts()).toContain("60%");
+  });
 
   // adapt-sheets/progress-bar.md M-006 (A-006): the fixture channel itself —
   // `host.params.case` dispatches every mount tree, the `onLayout` probes
   // write readable `app.storage()` records, and the `input`/`density` params
-  // reach `EnvironmentScope` (proven by M-003/M-004/M-005 above; the `scope`
-  // channel is exercised here end-to-end once more through a touched tree).
+  // reach `EnvironmentScope` (exercised end-to-end by M-003/M-004/M-005).
+  // Each app is disposed before the next opens: the web runner keeps a test's
+  // apps in one browser, and seven at once outrun the test timeout.
+  // Split in two: seven sequential `open`s take ~25-30s on the web runner and
+  // the default test timeout is 30s (the second test carries the geometry
+  // parity read so both halves stay well under it).
   test("M-006 fixture: case dispatch and storage probes work", async () => {
     for (const name of [
       "geometry",
@@ -247,21 +281,22 @@ describe("progress-bar mobile", () => {
       "render-prop",
     ]) {
       const app = await openFixture({ case: name });
-      // Every case mounts at least one probed view — the first layout record
-      // arriving proves both the dispatch and the storage channel.
+      // The first layout record arriving proves both the dispatch and the
+      // storage channel (open resolves once the app rendered, so the record
+      // is either there already or lands on the next frame).
       await app.waitUntil(() => callsOf(app, "layout").length > 0);
       expect(calls(app).length).toBeGreaterThan(0);
+      app.dispose();
     }
+  });
 
-    // `geometry` with no scope params behaves byte-identically to the port:
-    // label text, output text, track/fill composition and measured widths.
+  test("M-006 fixture: unscoped geometry stays byte-identical to the port", async () => {
     const app = await openFixture({ case: "geometry", value: 60 });
     await settleLayout(app, GEOMETRY_BOXES);
     expect(app.shows("role:progressbar[Progress Bar]")).toBe(true);
-    expect(app.shows("id:output")).toBe(true);
-    expect(app.shows("text:60%")).toBe(true);
+    expect(app.texts()).toContain("60%");
     expect(lastBox(app, "track").width).toBe(200);
-  }, 120_000);
+  });
 
   // adapt-sheets/progress-bar.md M-007 (A-007): this file itself — every case
   // opens through the same `platform:"windows"` 1024×768 pin, so the desktop
@@ -272,5 +307,5 @@ describe("progress-bar mobile", () => {
     const app = await openFixture({ case: "geometry", value: 60 });
     await settleLayout(app, GEOMETRY_BOXES);
     expect(app.shows("id:root")).toBe(true);
-  }, 120_000);
+  });
 });

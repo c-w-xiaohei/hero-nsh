@@ -314,6 +314,15 @@ export function ProgressBarRoot(props: ProgressBarRootProps): JSX.Element {
     return renderChildren(children as JSX.Element);
   };
 
+  // A-004 (adapt sheet §2, 保留): the root is a bare `View` — a read-only
+  // display block owns no `onPress`, no `createPan` and no existing desktop
+  // drag to arbitrate, so action A needs zero gating. The `role="progressbar"`
+  // / `accessibilityValue` / `accessibilityState` mapping and the `hostProps`
+  // event pass-through stay byte-identical under every environment.
+  //
+  // A-005 (adapt sheet §2, 保留): there is no overlay container — the
+  // `presentation` seam applies to panel/sheet hosts only; an inline display
+  // block renders inline on every environment.
   return (
     <ProgressBarContext.Provider value={contextValue}>
       <FieldContext.Provider value={fieldState}>

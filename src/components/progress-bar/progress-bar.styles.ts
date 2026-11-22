@@ -19,6 +19,13 @@ import { tv } from "tailwind-variants";
  */
 export const progressBarVariants = tv({
   slots: {
+    // A-001 (adapt sheet §2, 保留): `gap-1` is the table's only spacing
+    // literal and already at the typographic floor — `compact` registers
+    // tighter, and 4pt is the last non-overlapping row gap, so no `density`
+    // cell could hold it; `grid`/`w-full`/`grid-cols-[1fr_auto]`/
+    // `justify-items-start` are the upstream grid-layout contract, not
+    // spacing. The `input` axis' hit-area/de-hover duties do not apply to a
+    // read-only display block.
     // R-001: `.progress-bar` → `@apply grid w-full gap-1`.
     // R-002 / R-005 / R-006: `grid-template-areas` has no NSH counterpart, so
     // the areas become explicit placement. `justify-items-start` gives the one
@@ -31,6 +38,11 @@ export const progressBarVariants = tv({
     // tabular-nums`.
     // R-008: `.progress-bar__output` → `grid-area: output`, written as
     // row 1 / column 2.
+    // A-003 (adapt sheet §2, 保留): `text-sm`/`font-medium`/`tabular-nums` are
+    // the upstream metered-value typography contract and `text-foreground` a
+    // semantic color that follows the theme — `density` cells never carry
+    // text-/leading- classes (description A-001 same ruling); the grid
+    // placement classes are layout contract, no spacing enters an axis.
     output: "text-sm font-medium text-foreground tabular-nums col-start-2 row-start-1",
     // R-009: `.progress-bar__track` → `@apply relative overflow-hidden
     // rounded-sm bg-default`. The clip is what makes the fill's overshoot in
@@ -40,6 +52,11 @@ export const progressBarVariants = tv({
     // `justify-items-start` so the track still fills the root's width.
     // R-011: `.progress-bar__track` → `@apply h-2`, the default (`md`) height;
     // the size variants below restate it.
+    // A-002 (adapt sheet §2, 保留): track height and corner radius all hang
+    // on the existing `size` variant axis — they are the size contract itself
+    // (badge A-001 same ruling). ProgressBar is not a touch target, so hit
+    // size does not apply (no hitSlop prop either), and there is no spacing
+    // literal a `density` cell could take.
     track:
       "relative overflow-hidden rounded-sm bg-default col-start-1 row-start-2 col-span-2 justify-self-stretch h-2",
     // R-012: `.progress-bar__fill` → `@apply absolute start-0 top-0 h-full
