@@ -1,6 +1,6 @@
-import { effect, host, mount, Text, View } from "nsh";
+import { effect, host, mount, platform, Text, View } from "nsh";
 import type { Component, JSX } from "nsh";
-import { EnvironmentScope, Skeleton, SkeletonGroup, SkeletonGroupContext } from "@heroui/react";
+import { createInput, EnvironmentScope, Skeleton, SkeletonGroup, SkeletonGroupContext } from "@heroui/react";
 import type { SkeletonRootAnimation } from "@heroui/react";
 import { probe } from "@scenario/probe";
 
@@ -32,23 +32,53 @@ import { probe } from "@scenario/probe";
  *            overrides with isLoading), `itemvariant` (the second item's
  *            animationType override).
  *
- * `host.params.scope` picks the `EnvironmentScope` wrapper ("" = host
- * default, "touch" = `input="touch"`), same convention as
- * `pressable.fixtures.tsx`. It sits next to harness/nsh.json on purpose:
- * NSH takes the entry's own directory as the app root, so an entry under
- * harness/tests/... finds no nsh.json and loses the `@heroui/react` alias
- * and the theme.
+ * `host.params.scope` picks the `input` override ("" = host default,
+ * "touch" = `input="touch"`), same convention as `pressable.fixtures.tsx`;
+ * `host.params.density` feeds `EnvironmentScope.density` ("compact" /
+ * "default", absent = host-derived), the `ScopedMobile` convention of
+ * `kbd.fixtures.tsx` — the adapt unit adds it for M-006's density-invariant
+ * bounds compare (adapt-sheets/skeleton.md A-010). It sits next to
+ * harness/nsh.json on purpose: NSH takes the entry's own directory as the
+ * app root, so an entry under harness/tests/... finds no nsh.json and loses
+ * the `@heroui/react` alias and the theme.
  */
+
+type LayoutEvent = {
+  bounds: {
+    origin: { x: number; y: number };
+    size: { width: number; height: number };
+  };
+};
+
+/**
+ * A full bounds box per skeleton root (`layout` probe): M-001 pins the
+ * caller-supplied 120×20 box and M-005/M-006 diff the set across
+ * environments (`kbd.fixtures.tsx` convention).
+ */
+function layoutProbe(name: string) {
+  return (event: LayoutEvent) =>
+    probe("layout")({
+      name,
+      x: event.bounds.origin.x,
+      y: event.bounds.origin.y,
+      width: event.bounds.size.width,
+      height: event.bounds.size.height,
+    });
+}
 
 type Scope = "" | "touch";
 
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "") as Scope;
+  const density = String(host.params.density ?? "");
 
-  return scope === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
-  ) : (
-    <>{props.children}</>
+  return (
+    <EnvironmentScope
+      input={scope === "touch" ? "touch" : undefined}
+      density={density === "compact" || density === "default" ? density : undefined}
+    >
+      {props.children}
+    </EnvironmentScope>
   );
 }
 
@@ -105,6 +135,7 @@ function SingleCase() {
       variant={typeParam("variant")}
       animationType={typeParam("atype")}
       animation={animParam()}
+      onLayout={layoutProbe("skel")}
       className="rounded-md"
       style={{ width: 120, height: 20 }}
     >
@@ -123,7 +154,12 @@ function FlipCase() {
   return (
     <>
       <If when={!flip}>
-        <Skeleton testID="skel" className="rounded-md" style={{ width: 120, height: 20 }}>
+        <Skeleton
+          testID="skel"
+          onLayout={layoutProbe("skel")}
+          className="rounded-md"
+          style={{ width: 120, height: 20 }}
+        >
           <Text>Loaded content</Text>
         </Skeleton>
       </If>
@@ -181,19 +217,30 @@ function GroupCase() {
       className="flex flex-col gap-2"
     >
       <GroupCtxProbe />
-      <SkeletonGroup.Item testID="skel-item-1" className="rounded-md" style={{ width: 120, height: 20 }}>
+      <SkeletonGroup.Item
+        testID="skel-item-1"
+        onLayout={layoutProbe("skel-item-1")}
+        className="rounded-md"
+        style={{ width: 120, height: 20 }}
+      >
         <Text>First content</Text>
       </SkeletonGroup.Item>
       <SkeletonGroup.Item
         testID="skel-item-2"
         isLoading={itemLoading ? true : undefined}
         variant={typeParam("itemvariant")}
+        onLayout={layoutProbe("skel-item-2")}
         className="rounded-md"
         style={{ width: 120, height: 20 }}
       >
         <Text>Second content</Text>
       </SkeletonGroup.Item>
-      <SkeletonGroup.Item testID="skel-item-3" className="rounded-md" style={{ width: 120, height: 20 }}>
+      <SkeletonGroup.Item
+        testID="skel-item-3"
+        onLayout={layoutProbe("skel-item-3")}
+        className="rounded-md"
+        style={{ width: 120, height: 20 }}
+      >
         <Text>Third content</Text>
       </SkeletonGroup.Item>
     </SkeletonGroup>
@@ -213,6 +260,19 @@ const cases: Record<string, Component> = {
 function Fixture() {
   const name = String(host.params.case ?? "single");
   const Case = cases[name] ?? SingleCase;
+
+  // The host's own platform report plus the resolved default-environment
+  // `input`: M-007's desktop-pin assertion reads them — under the
+  // `platform:"windows"` pin `desktop`/`idiom` are desktop and `input`
+  // resolves `pointer` on both targets (headless reports os "windows", the
+  // web target always reports os "web" in the desktop idiom), while the
+  // unpinned headless engine would report the phone host.
+  probe("env")({
+    os: platform.os,
+    desktop: platform.desktop,
+    idiom: platform.idiom,
+    input: createInput()(),
+  });
 
   return (
     <Frame>
