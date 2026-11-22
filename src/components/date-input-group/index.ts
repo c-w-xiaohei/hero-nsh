@@ -21,6 +21,14 @@ import {
 } from "./date-input-group-segment";
 import { DateInputGroupSuffix, type DateInputGroupSuffixProps } from "./date-input-group-suffix";
 
+// A-011: this harness-side 接轴 spot of adapt sheet date-input-group.md is
+// realized outside this directory — `harness/date-input-group.fixtures.tsx`
+// (the `Scoped` wrapper feeding `host.params.scope` into `EnvironmentScope`,
+// and the `affix-interactive`/`keyboard-type` cases with their onLayout,
+// press and context probes the M-001…M-014 assertions read). The gate's
+// marker scan only sees `src/components/date-input-group/`, so the record
+// lives here. The fixture carries its own A-011 annotations at each site.
+
 /* -------------------------------------------------------------------------------------------------
  * Compound component
  * -----------------------------------------------------------------------------------------------*/
