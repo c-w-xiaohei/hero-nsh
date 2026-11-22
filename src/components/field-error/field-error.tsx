@@ -131,7 +131,11 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
   ] as const);
 
   // A-002: the `density` variant axis is the environment's, fed here — the
-  // props surface gains nothing (A-003).
+  // props surface gains nothing (A-003). The unit's harness-side seams are
+  // realized outside this file and recorded here: A-007 — the
+  // `EnvironmentScope` wrap and `partClass` probe channel live in
+  // `harness/field-error.fixtures.tsx`; A-008 — the dual pinned mobile
+  // assertion files live under `harness/tests/components/field-error/`.
   const density = createDensity();
 
   // Read once, in the body: a field root's validation state, when an error is
