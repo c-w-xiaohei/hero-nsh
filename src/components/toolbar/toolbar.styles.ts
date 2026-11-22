@@ -2,7 +2,13 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { shadow } from "../../tokens/geometry";
+// `shadow.overlay.both` of `src/tokens/geometry.ts` written out: the M2 class
+// walker loads a `.styles.ts` through Node ESM, which resolves neither an
+// extensionless relative import nor a `.ts` one, so a styles file imports only
+// `tailwind-variants` (same ruling as sheet/list-box/date-picker/switch). Keep
+// in sync with `SHADOW_VALUES.overlay`.
+const SHADOW_OVERLAY_BOTH =
+  "shadow-[0_2px_8px_0_rgba(0,0,0,0.06),0_-6px_12px_0_rgba(0,0,0,0.03),0_14px_28px_0_rgba(0,0,0,0.08)] dark:shadow-[0_0_1px_0_rgba(255,255,255,0.3)_inset]";
 
 /**
  * Toolbar's variant table, mirroring `@heroui/styles` 3.2.7
@@ -57,9 +63,10 @@ export const toolbarVariants = tv({
       // has a light and a dark value, so it follows the appearance by itself.
       // R-018: `.toolbar--attached` → `padding: 0.25rem` (4 points).
       // R-019: `.toolbar--attached` → `box-shadow: var(--overlay-shadow)`.
-      // A shadow cannot switch with the appearance here, so both halves come
-      // from `shadow.overlay` in `src/tokens/geometry.ts`.
-      true: `rounded-3xl bg-surface p-1 ${shadow.overlay.both}`,
+      // A shadow cannot switch with the appearance here, so both halves are
+      // written out as `SHADOW_OVERLAY_BOTH` (= `shadow.overlay.both` of
+      // `src/tokens/geometry.ts`).
+      true: `rounded-3xl bg-surface p-1 ${SHADOW_OVERLAY_BOTH}`,
     },
   },
   defaultVariants: {
