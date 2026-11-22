@@ -4,7 +4,10 @@ import { AlertDialog, Button, EnvironmentScope } from "@heroui/react";
 import { probe } from "@scenario/probe";
 
 import { AlertDialogContext } from "../src/components/alert-dialog/alert-dialog-context";
-import type { AlertDialogPresentation } from "../src/components/alert-dialog/alert-dialog.styles";
+import type {
+  AlertDialogPlacement,
+  AlertDialogPresentation,
+} from "../src/components/alert-dialog/alert-dialog.styles";
 
 /*
  * NSH-only AlertDialog fixture (port sheet 4c, G-001), not a shared scenario.
@@ -30,6 +33,12 @@ import type { AlertDialogPresentation } from "../src/components/alert-dialog/ale
  *                 the prop's own default ("auto").
  *   dismissable   "1" / "true" → `isDismissable={true}` (default false).
  *   swipeable     "1" / "true" → `isSwipeable={true}` (default false).
+ *   open          "0" → the Root starts closed so `ad-trigger` opens it
+ *                 (the press-chain assertions); absent/other → `defaultOpen`.
+ *   placement     "auto" | "top" | "center" | "bottom" — the Container's
+ *                 placement axis (the baseline placement rows and the
+ *                 outside-press geometry, where `top` leaves the backdrop's
+ *                 middle uncovered).
  *
  * Observable surface for the assertions: `ad-trigger` / `ad-card` /
  * `ad-backdrop` testIDs, the `layout` probe (container/dialog bounds), the
@@ -49,7 +58,7 @@ type LayoutEvent = {
   };
 };
 
-type LayoutName = "container" | "dialog" | "header" | "body" | "footer";
+type LayoutName = "container" | "dialog" | "header" | "body" | "footer" | "trigger";
 
 function layoutProbe(name: LayoutName) {
   return (event: LayoutEvent) =>
@@ -87,7 +96,9 @@ function Scoped(props: { children?: JSX.Element }) {
 
   switch (scope) {
     case "touch":
-      return <EnvironmentScope input="touch">{props.children}</EnvironmentScope>;
+      return (
+        <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+      );
     case "touch-compact":
       return (
         <EnvironmentScope input="touch" width="compact">
@@ -106,7 +117,11 @@ function Scoped(props: { children?: JSX.Element }) {
         <EnvironmentScope input="pointer">{props.children}</EnvironmentScope>
       );
     default:
-      return <>{props.children}</>;
+      // No fragment here: a `<>` boundary between the mount root and the
+      // tree breaks the presented Dialog's runtime open (measured — the
+      // trigger's openChange fires but the layer never mounts). Returning
+      // the child directly keeps the owner chain intact.
+      return props.children;
   }
 }
 
@@ -122,13 +137,18 @@ function Geometry() {
     | AlertDialogPresentation
     | "auto"
     | "";
+  const placement = String(host.params.placement ?? "") as
+    | AlertDialogPlacement
+    | "";
+  const startsOpen = String(host.params.open ?? "1") !== "0";
 
   return (
-    <AlertDialog defaultOpen onOpenChange={probe("openChange")}>
+    <AlertDialog defaultOpen={startsOpen} onOpenChange={probe("openChange")}>
       {/* A-005: the part the press-feedback seam lands on; its press chain is
           the `events` probe, asserted in the desktop order. */}
       <AlertDialog.Trigger
         testID="ad-trigger"
+        onLayout={layoutProbe("trigger")}
         onPressDown={() => events("pressDown")}
         onPress={() => events("press")}
         onPressUp={() => events("pressUp")}
@@ -141,10 +161,18 @@ function Geometry() {
         isDismissable={paramFlag("dismissable")}
         isSwipeable={paramFlag("swipeable")}
       >
-        <AlertDialog.Container onLayout={layoutProbe("container")}>
+        <AlertDialog.Container
+          placement={placement === "" ? undefined : placement}
+          onLayout={layoutProbe("container")}
+        >
           <AlertDialog.Dialog testID="ad-card" onLayout={layoutProbe("dialog")}>
             <SwipeProbe />
-            <AlertDialog.CloseTrigger />
+            {/* A-006/M-009: the close→onPress order is read off the merged
+                probe stream (`openChange` before `closePress`). */}
+            <AlertDialog.CloseTrigger
+              testID="ad-close"
+              onPress={() => events("closePress")}
+            />
             <AlertDialog.Header onLayout={layoutProbe("header")}>
               <AlertDialog.Icon status="danger" />
               <AlertDialog.Heading>Delete project permanently?</AlertDialog.Heading>
