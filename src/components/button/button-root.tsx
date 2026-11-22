@@ -301,9 +301,10 @@ export function ButtonRoot(props: ButtonRootProps) {
 
   // A-005: the seam's read half for the Highlight / Ripple parts (and for
   // probes — the channels are the only observable surface `nsh/test` can
-  // reach). The root keeps the writers; the parts only ever animate the
-  // root-owned `highlightOpacity` / `rippleProgress`, matching the
-  // `PressableFeedback` root's own context value.
+  // reach; A-009's harness/button.fixtures.tsx probe reads them through
+  // `PressableFeedbackContext`). The root keeps the writers; the parts only
+  // ever animate the root-owned `highlightOpacity` / `rippleProgress`,
+  // matching the `PressableFeedback` root's own context value.
   const feedbackContextValue: PressableFeedbackContextValue = {
     isPressed: feedback.isPressed,
     pressed: feedback.pressed,
