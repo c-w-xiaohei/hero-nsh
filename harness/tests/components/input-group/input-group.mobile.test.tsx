@@ -38,6 +38,7 @@ function openCase(name: string, params: Params = {}): Promise<App> {
     platform: "windows",
     width: 1024,
     height: 768,
+    locale: "en-US",
     host: { params: { case: name, ...params } },
   });
 }
@@ -148,7 +149,9 @@ describe("input-group mobile", () => {
 
     const disabled = await openCase("disabled");
     expect(disabled.enabled("label:Amount")).toBe(false);
-    await disabled.press("id:ig-prefix").catch(() => undefined);
+    await expect(disabled.press("id:ig-prefix")).rejects.toMatchObject({
+      code: "ERR_NSH_TEST_DISABLED",
+    });
     expect(focusedRecords(disabled)).toHaveLength(0);
   }, 120_000);
 
@@ -259,6 +262,10 @@ describe("input-group mobile", () => {
 
     const disabled = await openCase("disabled");
     expect(disabled.enabled("label:Amount")).toBe(false);
+    await expect(disabled.press("id:ig-prefix")).rejects.toMatchObject({
+      code: "ERR_NSH_TEST_DISABLED",
+    });
+    expect(focusedRecords(disabled)).toHaveLength(0);
     await disabled.type("label:Amount", "x").catch(() => undefined);
     expect(disabled.value("label:Amount")).toBe("10");
 

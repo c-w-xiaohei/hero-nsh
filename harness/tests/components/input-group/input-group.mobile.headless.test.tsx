@@ -33,6 +33,7 @@ describe("input-group mobile (headless)", () => {
       platform: "ios",
       width: 390,
       height: 844,
+      locale: "en-US",
       host: { params: { case: "layout" } },
     });
 
