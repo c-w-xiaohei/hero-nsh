@@ -102,35 +102,71 @@ function segmentTestID(type: string): string | undefined {
 /**
  * The group's input, one Segment per part. `record` is the Segment className
  * render prop: the only channel `nsh/test` can read a segment's focus state
- * through (port sheet 4b.3 `focus`).
+ * through (port sheet 4b.3 `focus`). `recordSegments` / `recordBounds` are the
+ * mobile layer's text and geometry probes (adapt sheet A-007): Segment takes
+ * no `onLayout`, so bounds come from a shrink-wrapping View.
  */
-function Segments(props: { record?: (values: unknown) => void }) {
+function Segments(props: {
+  record?: (values: unknown) => void;
+  recordSegments?: (entry: {
+    type: string;
+    text: string;
+    isPlaceholder: boolean;
+    isEditable: boolean;
+  }) => void;
+  recordBounds?: (entry: { type: string; bounds: unknown }) => void;
+}) {
   return (
     <TimeField.Input testID="tf-input">
-      {(segment) => (
-        <TimeField.Segment
-          segment={segment}
-          testID={segmentTestID(segment.type)}
-          className={
-            props.record
-              ? (values) => {
-                  props.record!({
-                    type: segment.type,
-                    isFocused: values.isFocused(),
-                    isFocusVisible: values.isFocusVisible(),
-                  });
+      {(segment) => {
+        const className =
+          props.record || props.recordSegments
+            ? (values: {
+                isFocused: () => boolean;
+                isFocusVisible: () => boolean;
+              }) => {
+                props.record?.({
+                  type: segment.type,
+                  isFocused: values.isFocused(),
+                  isFocusVisible: values.isFocusVisible(),
+                });
+                props.recordSegments?.({
+                  type: segment.type,
+                  text: segment.text,
+                  isPlaceholder: segment.isPlaceholder,
+                  isEditable: segment.isEditable,
+                });
 
-                  return "";
-                }
-              : undefined
-          }
-        />
-      )}
+                return "";
+              }
+            : undefined;
+        const rendered = (
+          <TimeField.Segment
+            segment={segment}
+            testID={segmentTestID(segment.type)}
+            className={className}
+          />
+        );
+
+        return props.recordBounds ? (
+          <View
+            onLayout={(event) =>
+              props.recordBounds!({ type: segment.type, bounds: event.bounds })
+            }
+          >
+            {rendered}
+          </View>
+        ) : (
+          rendered
+        );
+      }}
     </TimeField.Input>
   );
 }
 
 function DefaultCase() {
+  const groupBounds = probe("group-bounds");
+
   return (
     <Stage>
       <TimeField
@@ -141,8 +177,14 @@ function DefaultCase() {
         testID="tf-root"
       >
         <Label>Time</Label>
-        <TimeField.Group testID="tf-group">
-          <Segments />
+        <TimeField.Group
+          testID="tf-group"
+          onLayout={(event) => groupBounds(event.bounds)}
+        >
+          <Segments
+            recordSegments={probe("segments")}
+            recordBounds={probe("segment-bounds")}
+          />
         </TimeField.Group>
       </TimeField>
     </Stage>
@@ -353,7 +395,7 @@ function GranularityCase() {
       >
         <Label>Time</Label>
         <TimeField.Group testID="tf-group">
-          <Segments />
+          <Segments recordSegments={probe("segments")} />
         </TimeField.Group>
       </TimeField>
     </Stage>
@@ -379,7 +421,7 @@ function ReadOnlyCase() {
       >
         <Label>Time</Label>
         <TimeField.Group testID="tf-group">
-          <Segments />
+          <Segments record={probe("segment-props")} recordSegments={probe("segments")} />
         </TimeField.Group>
       </TimeField>
     </Stage>
