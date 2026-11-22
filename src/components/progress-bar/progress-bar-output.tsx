@@ -81,6 +81,9 @@ export function ProgressBarOutput(props: ProgressBarOutputProps): JSX.Element {
     joinClassNames(bar?.slots().output(), local.className),
   );
 
+  // A-004 (adapt sheet §2, 保留): the output is a bare `Text` with no press or
+  // gesture path; only its default `valueText` content and the `hostProps`
+  // pass-through reach the host, unchanged on every environment.
   return (
     <Text
       {...hostProps(rest)}

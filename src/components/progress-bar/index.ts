@@ -17,6 +17,9 @@ import type { ProgressBarTrackProps } from "./progress-bar-track";
  * root's context and can be arranged freely inside it (and, like upstream,
  * rendered on their own with no slot classes).
  */
+// A-008 (adapt sheet §2, 保留): the export face is contract-constant — no
+// prop added or removed, no event signature changed, no state owner moved,
+// `src/index.ts`'s `export *` line already exists and stays untouched.
 export const ProgressBar = Object.assign(ProgressBarRoot, {
   Root: ProgressBarRoot,
   Output: ProgressBarOutput,

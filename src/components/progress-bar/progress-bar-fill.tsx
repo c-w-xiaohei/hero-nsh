@@ -172,6 +172,10 @@ export function ProgressBarFill(props: ProgressBarFillProps): JSX.Element {
     };
   });
 
+  // A-004 (adapt sheet §2, 保留): the fill is a bare `View` whose width and
+  // translate are owned by the bar (`LayoutAnimation` width + keyframes
+  // translate); it carries no interaction path, so nothing is gated and the
+  // animation contract stays identical under every environment.
   return (
     <View
       {...hostProps(rest)}
