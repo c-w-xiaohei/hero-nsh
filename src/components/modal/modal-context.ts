@@ -59,7 +59,11 @@ export interface ModalContextValue {
   /**
    * The Backdrop's swipe-to-dismiss channel (A-004), `null` where no
    * Backdrop mounted. A resting channel still answers `offset() === 0` and
-   * empty `panHandlers()`.
+   * empty `panHandlers()`. With `scrollAtTop`, `reportScrollOffset` and
+   * `presentation` it is also the read surface the A-009 fixture's probes
+   * report back through `app.storage()` — the mobile assertions' only
+   * window into the gesture's guts, which is why they travel the context
+   * instead of a part-local signal.
    */
   swipe: ModalSwipe | null;
 
