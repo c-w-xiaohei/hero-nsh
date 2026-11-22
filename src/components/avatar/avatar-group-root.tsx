@@ -117,6 +117,9 @@ export function AvatarGroupRoot(props: AvatarGroupRootProps): JSX.Element {
   // A-002: the environment's `density` axis feeds the grid's gap compounds.
   // `createDensity()` returns the environment's own accessor, so the single
   // read here stays consistent with whatever scope the Root mounted under.
+  // A-007: that scope is what `harness/avatar.fixtures.tsx`'s `ScopedMobile`
+  // wrapper injects (`host.params.density`/`host.params.scope`) — this read
+  // is the consumer end of the fixture's `EnvironmentScope` carrier.
   const density = createDensity();
   const slots = computed(() =>
     avatarGroupVariants({
