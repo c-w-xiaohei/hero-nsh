@@ -2,7 +2,18 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, radius, shadow } from "../../tokens/geometry";
+// `ease.smooth`, `radius.*` and `shadow.field.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker imports this file
+// through Node ESM, which does not resolve extensionless relative specifiers,
+// so the geometry module cannot be imported from a `.styles.ts`. Same pattern
+// as `input-group.styles.ts`; keep in sync with `EASE_VALUES.smooth`, `radius`
+// and `SHADOW_VALUES.field`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const RADIUS_FIELD = "rounded-(--radius-field)";
+const RADIUS_FIELD_START = "rounded-s-(--radius-field)";
+const RADIUS_FIELD_END = "rounded-e-(--radius-field)";
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
 
 /**
  * NumberField's variant table, mirroring `@heroui/styles` 3.2.7
@@ -65,9 +76,9 @@ export const numberFieldVariants = tv({
      * R-040: `.number-field__group--full-width` → `@apply w-full`.
      */
     group: [
-      `grid grid-cols-1 h-9 items-center overflow-hidden ${radius.field} border-0 bg-field`,
-      `text-sm text-field-foreground ${shadow.field.both} outline-none`,
-      `duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `grid grid-cols-1 h-9 items-center overflow-hidden ${RADIUS_FIELD} border-0 bg-field`,
+      `text-sm text-field-foreground ${SHADOW_FIELD_BOTH} outline-none`,
+      `duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     ].join(" "),
 
     /*
@@ -114,16 +125,16 @@ export const numberFieldVariants = tv({
      */
     incrementButton: [
       "flex h-full w-10 items-center justify-center rounded-none bg-transparent",
-      `text-field-foreground outline-none duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `text-field-foreground outline-none duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
       "cursor-pointer",
-      `rounded-s-none ${radius.fieldEnd} border-s border-field-placeholder/15`,
+      `rounded-s-none ${RADIUS_FIELD_END} border-s border-field-placeholder/15`,
     ].join(" "),
 
     decrementButton: [
       "flex h-full w-10 items-center justify-center rounded-none bg-transparent",
-      `text-field-foreground outline-none duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `text-field-foreground outline-none duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
       "cursor-pointer",
-      `${radius.fieldStart} rounded-e-none border-e border-field-placeholder/15`,
+      `${RADIUS_FIELD_START} rounded-e-none border-e border-field-placeholder/15`,
     ].join(" "),
 
     // A-001: the step-column width the group reads through
