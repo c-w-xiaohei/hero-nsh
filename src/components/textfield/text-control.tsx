@@ -22,6 +22,7 @@ import {
   untracked,
 } from "nsh";
 
+import type { EnvironmentInput } from "../../primitives/environment";
 import { joinClassNames } from "./class-names";
 import {
   type AriaProps,
@@ -152,7 +153,6 @@ export interface TextControlCommonProps
       | "value"
       | "defaultValue"
       | "onChange"
-      | "onSubmit"
       | "onFocus"
       | "onBlur"
       | "onMouseEnter"
@@ -196,6 +196,25 @@ export interface TextControlCommonProps
    * callback after it.
    */
   onChange?: (event: { value: string }) => void;
+
+  /**
+   * Return / the soft keyboard's submit key fired; the payload is the
+   * current text (the host's native payload). Inside a field the root's
+   * `onSubmit` runs first, this one after it. The behavior that makes it
+   * reachable is `submitBehavior`: a `TextArea` only reports it under an
+   * explicit `"submit"` / `"blurAndSubmit"`, its `"newline"` default keeps
+   * inserting line breaks.
+   */
+  onSubmit?: (event: { text: string }) => void;
+
+  /**
+   * What Return does: `"submit"` reports `onSubmit` and keeps the focus (as
+   * React Aria's Enter), `"blurAndSubmit"` also unfocuses, `"newline"`
+   * inserts a line break. Default: `"submit"` for `Input`, `"newline"` for
+   * `TextArea` — the host's own single-line default would unfocus, which RAC
+   * never does.
+   */
+  submitBehavior?: NshInputProps["submitBehavior"];
 
   /** The control cannot be edited but stays focusable and selectable. */
   readOnly?: boolean;
@@ -355,7 +374,20 @@ export interface TextControlConfig {
   multiline: boolean;
 
   /** The part's variant table resolved for the effective dimensions. */
-  baseClass: (dimensions: { fullWidth: boolean; variant: TextFieldVariant }) => string;
+  baseClass: (dimensions: {
+    fullWidth: boolean;
+    variant: TextFieldVariant;
+    input: EnvironmentInput;
+  }) => string;
+
+  /**
+   * A-002 / A-003: the environment's `input` axis, read once by the public
+   * component (`createInput()`) and handed down. `baseClass` gets the
+   * current value so the touch cells resolve, and the hover path below
+   * reads the accessor so a touch host's sticky hover never sets the
+   * signal (the mobile layer's "no hover dependence" seam).
+   */
+  input: Accessor<EnvironmentInput>;
 
   /** `rows` maps to a height (`TextArea` only). */
   usesRows: boolean;
@@ -398,6 +430,8 @@ export function renderTextControl(
     "value",
     "defaultValue",
     "onChange",
+    "onSubmit",
+    "submitBehavior",
     "disabled",
     "readOnly",
     "required",
@@ -495,7 +529,7 @@ export function renderTextControl(
   const fullWidth = computed(() => local.fullWidth === true || field?.fullWidth() === true);
 
   const baseClass = computed(() =>
-    config.baseClass({ fullWidth: fullWidth(), variant: variant() }),
+    config.baseClass({ fullWidth: fullWidth(), variant: variant(), input: config.input() }),
   );
 
   // --- Value ----------------------------------------------------------------
@@ -630,6 +664,16 @@ export function renderTextControl(
 
   const autoFocus = computed(() => local.autoFocus ?? field?.autoFocus() ?? false);
 
+  // A-004: an explicit `submitBehavior` wins — it rode `rest` to the host
+  // until the binding below overwrote it. A single-line control defaults to
+  // `"submit"` so Return reports `onSubmit` and keeps the focus (RAC's Enter
+  // never moves it; the host's own single-line default would unfocus); a
+  // multiline one keeps `"newline"`, and a caller's explicit `"submit"` /
+  // `"blurAndSubmit"` opens the submit channel on it.
+  const submitBehavior = computed<NshInputProps["submitBehavior"]>(
+    () => local.submitBehavior ?? (config.multiline ? "newline" : "submit"),
+  );
+
   // --- Local signals --------------------------------------------------------
   const hovered = signal(false);
   const focused = signal(false);
@@ -699,7 +743,12 @@ export function renderTextControl(
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
-    if (isDisabled() || hovered()) {
+    // A-003: under `input === "touch"` the hover signal never sets — a
+    // touch host has no hover, and on web the sticky hover left by a tap
+    // would otherwise paint the hover fill until the next pointer move.
+    // `isHovered` stays false and the `onHover*` callbacks stay silent;
+    // the `onMouseEnter` / `onMouseLeave` pass-throughs above are unaffected.
+    if (config.input() === "touch" || isDisabled() || hovered()) {
       return;
     }
 
@@ -755,6 +804,14 @@ export function renderTextControl(
   const handleKeyPress = (event: { key: string }) => {
     local.onKeyPress?.(event);
     field?.onKeyPress?.(event);
+  };
+
+  // A-004 / A-005: Return reported by the host. Inside a field the root's
+  // `onSubmit` runs first, the caller's after it — the same fan-out order
+  // `handlePaste` / `handleSelectionChange` use.
+  const handleSubmit = (event: { text: string }) => {
+    field?.onSubmit?.(event);
+    local.onSubmit?.(event);
   };
 
   // --- Render props and classes --------------------------------------------
@@ -874,9 +931,11 @@ export function renderTextControl(
       placeholder={local.placeholder}
       multiline={config.multiline}
       onChange={handleChange}
-      // Return submits in place, as RAC keeps the focus; a multiline control
-      // still inserts a line break (port sheet §1.3 / §1.4).
-      submitBehavior={config.multiline ? "newline" : "submit"}
+      // A-004: Return submits in place, as RAC keeps the focus; a multiline
+      // control still inserts a line break, and an explicit `submitBehavior`
+      // can re-open the submit channel on it (the computed above).
+      onSubmit={handleSubmit}
+      submitBehavior={submitBehavior()}
       disabled={isDisabled()}
       // NSH 0.4.0's `disabled` host prop blocks presses and focus and sets the
       // accessibility state but leaves the native field editable in the

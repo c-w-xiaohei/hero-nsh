@@ -224,6 +224,14 @@ export interface TextFieldRootProps
   /** The caret / selection moved. */
   onSelect?: (event: { start: number; end: number }) => void;
 
+  /**
+   * A-005: Return / the soft keyboard's submit key fired inside the field;
+   * the payload is the input's current text. The input's own `onSubmit`
+   * runs after this one. A `TextArea` only reaches it under an explicit
+   * `submitBehavior="submit"` / `"blurAndSubmit"`.
+   */
+  onSubmit?: (event: { text: string }) => void;
+
   /** The field's focus moved in or out (synthesized by its input). */
   onFocusChange?: (isFocused: boolean) => void;
 
@@ -337,6 +345,7 @@ export function TextFieldRoot(props: TextFieldRootProps): JSX.Element {
     "onCompositionUpdate",
     "onCompositionEnd",
     "onSelect",
+    "onSubmit",
     "onFocusChange",
     "onFocus",
     "onBlur",
@@ -547,6 +556,11 @@ export function TextFieldRoot(props: TextFieldRootProps): JSX.Element {
       local.onCompositionUpdate?.(event);
     },
     onSelectionChange: (event) => local.onSelect?.(event),
+    // A-005: the field's `onSubmit`, fanned out like `onPaste` /
+    // `onSelectionChange` — the input calls it before its own. Validation
+    // is deliberately not committed here: the field's only commit point is
+    // the blur (port sheet §2), so a submit keeps that semantics.
+    onSubmit: (event) => local.onSubmit?.(event),
   };
 
   const fieldState: FieldState = {

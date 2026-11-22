@@ -1,5 +1,7 @@
 import { host, mount, signal, Text, View } from "nsh";
-import { Description, FieldError, Input, Label, TextArea, TextField, TextFieldContext } from "@heroui/react";
+import type { JSX } from "nsh";
+import { Description, EnvironmentScope, FieldError, Input, Label, TextArea, TextField, TextFieldContext } from "@heroui/react";
+import type { InputProps, TextFieldEnterKeyHint, TextFieldInputMode } from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 
@@ -44,7 +46,38 @@ import { probe } from "@scenario/probe";
  *   render-children.split  the children function reading `isRequired()`
  *                      (T-013)
  *   multiline          a TextArea for T-019's line break
+ *
+ * A-008's mobile cases (sheet §2):
+ *   submit         TextField + Label + Input; root `onSubmit` and input
+ *                  `onSubmit` / `onBlur` / `onChange` probes, `submitBehavior`
+ *                  / `enterKeyHint` / `returnKeyType` from host.params
+ *   submit-standalone  a bare Input with the same submit probes
+ *   submit-textarea  a TextArea with `onSubmit` / `onChange` probes and the
+ *                  `submitBehavior` param ("" = the "newline" default)
+ *   hover          Input `isHovered` render-prop record plus `onHover*` /
+ *                  `onMouseEnter` / `onMouseLeave` probes
+ *   layout         Input and TextArea `onLayout` bounds (M-001, one run per
+ *                  scope)
+ *   keyboard       Input with `keyboardType` / `inputMode` / `enterKeyHint`
+ *                  / `autoComplete` / `autoCorrect` / `autoCapitalize` /
+ *                  `maxLength` params and an `onChange` probe
+ *
+ * `host.params.scope` wraps the mobile cases: "" = the host's default
+ * environment (pointer — the desktop-parity side), "touch" =
+ * `EnvironmentScope input="touch"`, the same convention toggle-button uses.
  */
+
+type Scope = "" | "touch";
+
+function Scoped(props: { children?: JSX.Element }) {
+  const scope = String(host.params.scope ?? "") as Scope;
+
+  return scope === "touch" ? (
+    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
 
 /* Label + input; the shapes the rows above share. */
 function Field(props: {
@@ -347,6 +380,169 @@ function RenderChildrenCase() {
   );
 }
 
+/* A-008: the field submit chain — Return reports the root's `onSubmit`
+ * first, then the input's (M-003). `submitBehavior` stays unset unless the
+ * param asks for "blurAndSubmit"; `enterKeyHint` / `returnKeyType` feed the
+ * return-key mapping. */
+function SubmitCase() {
+  const submitBehavior = String(host.params.submitBehavior ?? "");
+  const enterKeyHint = String(host.params.enterKeyHint ?? "");
+  const returnKeyType = String(host.params.returnKeyType ?? "");
+
+  return (
+    <Stage>
+      <TextField name="name" onSubmit={probe("field-submit")}>
+        <Label>Your name</Label>
+        <Input
+          testID="name"
+          submitBehavior={
+            submitBehavior === ""
+              ? undefined
+              : (submitBehavior as "submit" | "blurAndSubmit" | "newline")
+          }
+          enterKeyHint={enterKeyHint === "" ? undefined : (enterKeyHint as TextFieldEnterKeyHint)}
+          returnKeyType={
+            returnKeyType === "" ? undefined : (returnKeyType as InputProps["returnKeyType"])
+          }
+          onSubmit={probe("onSubmit")}
+          onChange={probe("onChange")}
+          onBlur={probe("onBlur")}
+          onFocus={probe("onFocus")}
+        />
+      </TextField>
+    </Stage>
+  );
+}
+
+/* A-008: the standalone half — a bare Input, no field, so only the local
+ * `onSubmit` can fire. */
+function SubmitStandaloneCase() {
+  const submitBehavior = String(host.params.submitBehavior ?? "");
+
+  return (
+    <Stage>
+      <Input
+        aria-label="Name"
+        testID="name"
+        submitBehavior={
+          submitBehavior === ""
+            ? undefined
+            : (submitBehavior as "submit" | "blurAndSubmit" | "newline")
+        }
+        onSubmit={probe("onSubmit")}
+        onChange={probe("onChange")}
+        onBlur={probe("onBlur")}
+        onFocus={probe("onFocus")}
+      />
+    </Stage>
+  );
+}
+
+/* A-008: the TextArea's two submit modes (M-004) — the "newline" default
+ * inserts a line break and never fires `onSubmit`; an explicit "submit" /
+ * "blurAndSubmit" opens the channel. */
+function SubmitTextAreaCase() {
+  const submitBehavior = String(host.params.submitBehavior ?? "");
+
+  return (
+    <Stage>
+      <TextArea
+        aria-label="Bio"
+        testID="bio"
+        submitBehavior={
+          submitBehavior === ""
+            ? undefined
+            : (submitBehavior as "submit" | "blurAndSubmit" | "newline")
+        }
+        onSubmit={probe("onSubmit")}
+        onChange={probe("onChange")}
+        onBlur={probe("onBlur")}
+      />
+    </Stage>
+  );
+}
+
+/* A-008: the hover face (M-002) — the `isHovered` render-prop record plus
+ * the `onHover*` and `onMouseEnter` / `onMouseLeave` probes, in both
+ * environments. */
+function HoverCase() {
+  const reportInput = probe("input-class");
+
+  return (
+    <Stage>
+      <Input
+        aria-label="Name"
+        testID="name"
+        className={({ isHovered }) => {
+          reportInput({ isHovered: isHovered() });
+          return "";
+        }}
+        onHoverStart={probe("onHoverStart")}
+        onHoverEnd={probe("onHoverEnd")}
+        onHoverChange={probe("onHoverChange")}
+        onMouseEnter={probe("onMouseEnter")}
+        onMouseLeave={probe("onMouseLeave")}
+      />
+    </Stage>
+  );
+}
+
+/* A-008: `onLayout` bounds on both controls (M-001) — the Input's height
+ * proves the `input` axis's `min-h-11` under touch and the 40 pt pointer
+ * baseline; the TextArea's rows height stays put in both. */
+function LayoutCase() {
+  return (
+    <Stage>
+      <View class="flex-col gap-2 w-64">
+        <Input
+          aria-label="Name"
+          testID="name"
+          onLayout={(e) =>
+            probe("input-layout")({ width: e.bounds.size.width, height: e.bounds.size.height })
+          }
+        />
+        <TextArea
+          aria-label="Bio"
+          testID="bio"
+          onLayout={(e) =>
+            probe("textarea-layout")({ width: e.bounds.size.width, height: e.bounds.size.height })
+          }
+        />
+      </View>
+    </Stage>
+  );
+}
+
+/* A-008: the keyboard-props channel mounts (M-005) — each param reaches the
+ * host or stays unset; what the soft keyboard shows for them is a
+ * real-device acceptance item (sheet §6). */
+function KeyboardCase() {
+  const keyboardType = String(host.params.keyboardType ?? "");
+  const inputMode = String(host.params.inputMode ?? "");
+  const enterKeyHint = String(host.params.enterKeyHint ?? "");
+  const autoComplete = String(host.params.autoComplete ?? "");
+  const autoCorrect = String(host.params.autoCorrect ?? "");
+  const autoCapitalize = String(host.params.autoCapitalize ?? "");
+  const maxLength = String(host.params.maxLength ?? "");
+
+  return (
+    <Stage>
+      <Input
+        aria-label="Name"
+        testID="name"
+        keyboardType={keyboardType === "" ? undefined : (keyboardType as InputProps["keyboardType"])}
+        inputMode={inputMode === "" ? undefined : (inputMode as TextFieldInputMode)}
+        enterKeyHint={enterKeyHint === "" ? undefined : (enterKeyHint as TextFieldEnterKeyHint)}
+        autoComplete={autoComplete === "" ? undefined : autoComplete}
+        autoCorrect={autoCorrect === "" ? undefined : autoCorrect}
+        autoCapitalize={autoCapitalize === "" ? undefined : autoCapitalize}
+        maxLength={maxLength === "" ? undefined : Number(maxLength)}
+        onChange={probe("onChange")}
+      />
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "log");
 
@@ -369,6 +565,12 @@ function Fixture() {
   if (name === "focus") return <FocusCase />;
   if (name === "render-children") return <RenderChildrenCase />;
   if (name === "multiline") return <TextAreaCase />;
+  if (name === "submit") return <Scoped><SubmitCase /></Scoped>;
+  if (name === "submit-standalone") return <Scoped><SubmitStandaloneCase /></Scoped>;
+  if (name === "submit-textarea") return <Scoped><SubmitTextAreaCase /></Scoped>;
+  if (name === "hover") return <Scoped><HoverCase /></Scoped>;
+  if (name === "layout") return <Scoped><LayoutCase /></Scoped>;
+  if (name === "keyboard") return <Scoped><KeyboardCase /></Scoped>;
 
   return <LogCase />;
 }

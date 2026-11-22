@@ -112,6 +112,10 @@ export function InputGroupInput(props: InputGroupInputProps): JSX.Element {
     {
       multiline: false,
       usesRows: false,
+      // A-002: the group's own `createInput()` feeds the shared control —
+      // with `stateClasses: false` the axis only gates the hover signal
+      // (A-003), the variant table is the group's slot, not this callback's.
+      input,
       // The group owns every state class (R-011 … R-014, R-033 … R-036).
       stateClasses: false,
       // R-015 plus the two `:has()` rules the affixes report: R-016 drops the
