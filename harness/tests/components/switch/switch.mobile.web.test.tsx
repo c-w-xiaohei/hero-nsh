@@ -21,7 +21,14 @@ import { callsOf } from "../../helpers/calls";
 type Params = Record<string, string>;
 
 function openSwitch(caseName: string, params: Params = {}): Promise<App> {
+  // `platform: "web"` pins the pointer host: without it a suite run opens the
+  // app on the phone-sized headless engine (`platform.desktop` false), so the
+  // environment's input defaults to touch and every pointer-default
+  // assertion in this file inverts (suite-only M-001/M-003/M-004 failures).
   return open("../../../switch.fixtures.tsx", {
+    platform: "web",
+    width: 1024,
+    height: 768,
     host: { params: { case: caseName, ...params } },
   });
 }
