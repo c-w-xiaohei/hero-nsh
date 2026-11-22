@@ -98,6 +98,7 @@ export { alertDialogVariants } from "./alert-dialog.styles";
 
 export type {
   AlertDialogPlacement,
+  AlertDialogPresentation,
   AlertDialogSize,
   AlertDialogSlots,
   AlertDialogStatus,

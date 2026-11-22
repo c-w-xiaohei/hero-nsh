@@ -1,7 +1,10 @@
-import { host, mount, Text } from "nsh";
+import { effect, host, mount, Text } from "nsh";
 import type { JSX } from "nsh";
-import { AlertDialog, Button } from "@heroui/react";
+import { AlertDialog, Button, EnvironmentScope } from "@heroui/react";
 import { probe } from "@scenario/probe";
+
+import { AlertDialogContext } from "../src/components/alert-dialog/alert-dialog-context";
+import type { AlertDialogPresentation } from "../src/components/alert-dialog/alert-dialog.styles";
 
 /*
  * NSH-only AlertDialog fixture (port sheet 4c, G-001), not a shared scenario.
@@ -15,6 +18,24 @@ import { probe } from "@scenario/probe";
  *   header     the heading row, above the body
  *   body       the content column, above the footer
  *   footer     the action row, never above the body
+ *
+ * The mobile layer adds the `host.params` the adapt sheet's §4 assertions
+ * drive (A-008):
+ *
+ *   scope         "" (host default) | "touch" | "touch-compact" |
+ *                 "touch-regular" / "regular" | "pointer" — the
+ *                 `EnvironmentScope` override; the host-derived environment
+ *                 stands when it is absent.
+ *   presentation  "auto" | "panel" | "sheet" — the Backdrop prop; absent is
+ *                 the prop's own default ("auto").
+ *   dismissable   "1" / "true" → `isDismissable={true}` (default false).
+ *   swipeable     "1" / "true" → `isSwipeable={true}` (default false).
+ *
+ * Observable surface for the assertions: `ad-trigger` / `ad-card` /
+ * `ad-backdrop` testIDs, the `layout` probe (container/dialog bounds), the
+ * `events` probe (the trigger's press chain, in order), `openChange`, and the
+ * `drag` probe — panKeys (0 when the swipe gesture is gated off: the path is
+ * physically absent) plus every offset the gesture writes.
  *
  * It sits next to harness/nsh.json on purpose: NSH takes the entry's own
  * directory as the app root, so a fixture under harness/tests/... would find no
@@ -41,13 +62,88 @@ function layoutProbe(name: LayoutName) {
     });
 }
 
+/**
+ * Reports the Backdrop's swipe channel on every change: `panKeys` is the
+ * count of props `panHandlers()` resolves to — 0 while the gesture is gated
+ * off (the listeners are physically absent, the sheet's M-003/M-004
+ * assertion) — and `offset` is the drag displacement the card translates by.
+ */
+function SwipeProbe() {
+  const report = probe("drag");
+  const swipe = AlertDialogContext()?.swipe() ?? null;
+
+  effect(() => {
+    report({
+      panKeys: swipe ? Object.keys(swipe.panHandlers()).length : -1,
+      offset: swipe?.offset() ?? 0,
+    });
+  });
+
+  return null;
+}
+
+function Scoped(props: { children?: JSX.Element }) {
+  const scope = String(host.params.scope ?? "");
+
+  switch (scope) {
+    case "touch":
+      return <EnvironmentScope input="touch">{props.children}</EnvironmentScope>;
+    case "touch-compact":
+      return (
+        <EnvironmentScope input="touch" width="compact">
+          {props.children}
+        </EnvironmentScope>
+      );
+    case "touch-regular":
+    case "regular":
+      return (
+        <EnvironmentScope input="touch" width="regular">
+          {props.children}
+        </EnvironmentScope>
+      );
+    case "pointer":
+      return (
+        <EnvironmentScope input="pointer">{props.children}</EnvironmentScope>
+      );
+    default:
+      return <>{props.children}</>;
+  }
+}
+
+function paramFlag(name: string): boolean {
+  const value = String(host.params[name] ?? "");
+
+  return value === "1" || value === "true";
+}
+
 function Geometry() {
+  const events = probe("events");
+  const presentation = String(host.params.presentation ?? "") as
+    | AlertDialogPresentation
+    | "auto"
+    | "";
+
   return (
     <AlertDialog defaultOpen onOpenChange={probe("openChange")}>
-      <Button>Delete Project</Button>
-      <AlertDialog.Backdrop>
+      {/* A-005: the part the press-feedback seam lands on; its press chain is
+          the `events` probe, asserted in the desktop order. */}
+      <AlertDialog.Trigger
+        testID="ad-trigger"
+        onPressDown={() => events("pressDown")}
+        onPress={() => events("press")}
+        onPressUp={() => events("pressUp")}
+      >
+        Delete Project
+      </AlertDialog.Trigger>
+      <AlertDialog.Backdrop
+        testID="ad-backdrop"
+        presentation={presentation === "" ? undefined : presentation}
+        isDismissable={paramFlag("dismissable")}
+        isSwipeable={paramFlag("swipeable")}
+      >
         <AlertDialog.Container onLayout={layoutProbe("container")}>
-          <AlertDialog.Dialog onLayout={layoutProbe("dialog")}>
+          <AlertDialog.Dialog testID="ad-card" onLayout={layoutProbe("dialog")}>
+            <SwipeProbe />
             <AlertDialog.CloseTrigger />
             <AlertDialog.Header onLayout={layoutProbe("header")}>
               <AlertDialog.Icon status="danger" />
@@ -82,7 +178,11 @@ function Fixture() {
 
   if (!Entry) return <Text>{`unknown fixture: ${name}`}</Text>;
 
-  return <Entry />;
+  return (
+    <Scoped>
+      <Entry />
+    </Scoped>
+  );
 }
 
 mount(Fixture);

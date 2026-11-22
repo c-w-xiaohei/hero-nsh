@@ -1,21 +1,24 @@
 import type { Accessor, JSX, PressEvent, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
-import { reduceMotion, View } from "nsh";
+import { effect, reduceMotion, signal, View } from "nsh";
 import { Dialog } from "nsh/base";
 
+import { createInput } from "../../primitives/environment";
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
 import type { OverlayTriggerContextValue } from "../../primitives/create-overlay-trigger";
 import {
   createOverlayTrigger,
   OverlayTriggerContext,
 } from "../../primitives/create-overlay-trigger";
-import type { AlertDialogContextValue } from "./alert-dialog-context";
+import { createPan } from "../../primitives/pan";
+import { createPresentation } from "../../primitives/presentation";
+import type { AlertDialogContextValue, AlertDialogSwipe } from "./alert-dialog-context";
 import {
   AlertDialogContext,
   createAlertDialogContextValue,
   deriveAlertDialogState,
 } from "./alert-dialog-context";
 import type { AlertDialogRenderValues } from "./alert-dialog-render-values";
-import type { AlertDialogVariant } from "./alert-dialog.styles";
+import type { AlertDialogPresentation, AlertDialogVariant } from "./alert-dialog.styles";
 import { alertDialogBackdropCarrierClasses } from "./alert-dialog.styles";
 
 /**
@@ -39,6 +42,26 @@ export interface AlertDialogBackdropProps
 
   /** The backdrop's paint. @default "opaque" */
   variant?: AlertDialogVariant;
+
+  /**
+   * The container the alert dialog presents as. `"auto"` (the default) picks
+   * the bottom-docked `"sheet"` under a touch environment on a compact window
+   * and the centered `"panel"` everywhere else; a `"panel"` / `"sheet"` pin
+   * decides outright. The value latches on the open edge and holds until
+   * close, so a rotation cannot swap the container under the user's hands
+   * (A-001).
+   */
+  presentation?: AlertDialogPresentation | "auto";
+
+  /**
+   * Whether the dialog may be dismissed by dragging it downward (A-004).
+   * Alert dialogs require an explicit action, so unlike the Native
+   * `Dialog.Content isSwipeable` this defaults to `false`; the gesture only
+   * attaches when this *and* `isDismissable` are set and the resolved
+   * presentation is `"sheet"` under a touch environment — it never exists
+   * under a pointer.
+   */
+  isSwipeable?: boolean;
 
   /**
    * Whether a press outside the dialog closes it. Alert dialogs require an
@@ -99,6 +122,14 @@ export interface AlertDialogBackdropProps
   [key: `data-${string}`]: unknown;
 }
 
+/**
+ * The fling threshold of the swipe-dismiss release, in points per millisecond
+ * — the same family as `sheetDismissTarget`'s 0.4 (`sheet.utils.ts`), kept
+ * component-local because the sheet's helper is not a shared primitive
+ * (adapt sheet §5 registers this with the controller).
+ */
+const SWIPE_DISMISS_VELOCITY = 0.5;
+
 /* -------------------------------------------------------------------------------------------------
  * Backdrop
  * -----------------------------------------------------------------------------------------------*/
@@ -144,18 +175,102 @@ export function AlertDialogBackdrop(props: AlertDialogBackdropProps): JSX.Elemen
         variant: () => props.variant,
       });
 
-  const contextValue: AlertDialogContextValue =
+  // `stage` is the context value before the presentation / swipe channels
+  // join below: it exists this early so `createPresentation` can latch on the
+  // open edge the subtree will read (`withOverrides` preserves `isOpen` and
+  // `close`, so the staged accessors are the final ones).
+  const stage: AlertDialogContextValue =
     parent !== null && ownsState()
       ? deriveAlertDialogState(base, state.isOpen, state.setIsOpen)
       : base;
 
-  const isOpen = contextValue.isOpen;
-  const close = () => contextValue.close();
+  const isOpen = stage.isOpen;
+  const close = () => stage.close();
 
   // AlertDialog's defaults are the opposite of Modal's: an outside press and
   // Escape do nothing unless the caller turns them on (port sheet §1).
   const isDismissable = () => props.isDismissable ?? false;
   const isKeyboardDismissDisabled = () => props.isKeyboardDismissDisabled ?? true;
+
+  // A-001: the presentation seam. `"auto"` defers to the environment rule
+  // (touch + compact → sheet), a pin wins outright, and the value latches on
+  // the open edge; the domain is narrowed to the two containers this
+  // component ships, so a `"fullscreen"` pin is a type error rather than a
+  // runtime branch.
+  const presentation = createPresentation<AlertDialogPresentation>({
+    pin: () => props.presentation,
+    isOpen,
+    allowed: () => ["panel", "sheet"],
+  });
+
+  // A-004: the swipe-dismiss gesture (the D half of the action, gated to
+  // "explicitly allowed only"). All four conditions must hold — touch input,
+  // `isDismissable`, `isSwipeable === true`, and a sheet presentation — so
+  // under the default pointer environment, or with AlertDialog's stock
+  // `isDismissable={false}` / `isSwipeable={false}` defaults, `panHandlers()`
+  // resolves to `{}` and no listener exists at all.
+  const input = createInput();
+  const swipeOffset = signal(0);
+  const cardHeight = signal(0);
+
+  const pan = createPan({
+    enabled: () =>
+      input() === "touch" &&
+      isDismissable() &&
+      props.isSwipeable === true &&
+      presentation() === "sheet",
+    // The claim is the first dominant downward move, with no displacement
+    // floor: the sheet-handoff measurements showed a late claim is granted to
+    // no one, and `shouldClaim` runs on the capture pair so a Body `Scroll`
+    // cannot take a downward pull first.
+    shouldClaim: (_event, gesture) =>
+      gesture.dy > 0 && Math.abs(gesture.dx) < gesture.dy,
+    // The card follows the finger downward only — an upward frame (the
+    // gesture cannot claim one, but drag callbacks can still report dy < 0
+    // after overshoot) never lifts it above the docked edge.
+    onDrag: (_event, gesture) => {
+      swipeOffset.set(Math.max(0, gesture.dy));
+    },
+    // The release settles one of two ways: past half the card height, or a
+    // fast enough fling (`vy` arrives in points per second; the threshold is
+    // the sheet family's 0.5 points per millisecond), it dismisses; anything
+    // else — and every terminate — snaps back to rest.
+    onDragEnd: (_event, gesture, terminated) => {
+      swipeOffset.set(0);
+
+      if (terminated) {
+        return;
+      }
+
+      if (
+        gesture.dy >= cardHeight() / 2 ||
+        gesture.vy / 1000 >= SWIPE_DISMISS_VELOCITY
+      ) {
+        close();
+      }
+    },
+  });
+
+  // The Dialog is the view that holds the responder and moves; the channel it
+  // consumes travels on the context (see `AlertDialogSwipe`).
+  const swipeChannel: AlertDialogSwipe = {
+    panHandlers: pan.panHandlers,
+    offset: swipeOffset,
+    reportCardHeight: (height) => cardHeight.set(height),
+  };
+
+  // A close by any other path (trigger, close trigger, backdrop) also drops
+  // the offset, so a card released mid-drag by the host leaves at rest.
+  effect(() => {
+    if (!isOpen()) {
+      swipeOffset.set(0);
+    }
+  });
+
+  const contextValue = stage.withOverrides({
+    presentation,
+    swipe: () => swipeChannel,
+  });
 
   // The entering and exiting phases the render values report, and the exit hold
   // below. HeroUI keeps the overlay mounted until the container's 100ms exit
@@ -214,7 +329,11 @@ export function AlertDialogBackdrop(props: AlertDialogBackdropProps): JSX.Elemen
       return node as JSX.Element;
     };
 
-    return <View class={alertDialogBackdropCarrierClasses}>{content()}</View>;
+    return (
+      // A-002: the carrier class set follows the latched presentation; the
+      // panel branch is the constant this accessor replaced, byte-identical.
+      <View class={alertDialogBackdropCarrierClasses(presentation())}>{content()}</View>
+    );
   };
 
   // Inside the layer a Button must not toggle the alert dialog or register

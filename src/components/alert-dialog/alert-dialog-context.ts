@@ -1,8 +1,10 @@
 import type { Accessor } from "nsh";
 import { computed, context } from "nsh";
 
+import type { PanHandlers } from "../../primitives/pan";
 import type {
   AlertDialogPlacement,
+  AlertDialogPresentation,
   AlertDialogSize,
   AlertDialogSlots,
   AlertDialogVariant,
@@ -25,6 +27,24 @@ import { alertDialogVariants } from "./alert-dialog.styles";
  * root's slots for the same reason. The status axis is not here: the Icon owns
  * it and builds its own table, as upstream does.
  */
+/**
+ * The swipe-dismiss channel the Backdrop builds and the Dialog consumes
+ * (A-004). The Backdrop owns the `createPan` gesture — the dismiss decision
+ * and the offset signal — while the Dialog is the view that moves and hosts
+ * the responder props, so the channel crosses the context rather than a prop.
+ * `null` outside a Backdrop subtree.
+ */
+export interface AlertDialogSwipe {
+  /** Spread onto the Dialog's view; `{}` whenever the gesture is gated off. */
+  panHandlers: Accessor<PanHandlers>;
+
+  /** The downward displacement the current drag has reached (0 at rest). */
+  offset: Accessor<number>;
+
+  /** The Dialog reports its card height, the half-height release threshold. */
+  reportCardHeight: (height: number) => void;
+}
+
 export interface AlertDialogContextValue {
   /** The resolved `alertDialogVariants()` for this subtree. */
   slots: Accessor<AlertDialogSlots>;
@@ -37,6 +57,16 @@ export interface AlertDialogContextValue {
 
   /** The Container's `placement`, which the Dialog turns into classes. */
   placement: Accessor<AlertDialogPlacement | undefined>;
+
+  /**
+   * The Backdrop's resolved presentation (`createPresentation`, A-001): the
+   * carrier, Container and Dialog branch their layout on it; `"panel"` outside
+   * a Backdrop.
+   */
+  presentation: Accessor<AlertDialogPresentation>;
+
+  /** The Backdrop's swipe-dismiss channel (A-004); `null` outside a Backdrop. */
+  swipe: Accessor<AlertDialogSwipe | null>;
 
   /** The open state the Backdrop renders and the Dialog's `close()` writes. */
   isOpen: Accessor<boolean>;
@@ -65,6 +95,8 @@ export interface AlertDialogOverrides {
   variant?: Accessor<AlertDialogVariant | undefined>;
   size?: Accessor<AlertDialogSize | undefined>;
   placement?: Accessor<AlertDialogPlacement | undefined>;
+  presentation?: Accessor<AlertDialogPresentation>;
+  swipe?: Accessor<AlertDialogSwipe | null>;
 }
 
 /** What `createAlertDialogContextValue` takes: the state plus any initial dimensions. */
@@ -87,6 +119,8 @@ export function createAlertDialogContextValue(
   const variant = () => options.variant?.();
   const size = () => options.size?.();
   const placement = () => options.placement?.();
+  const presentation = () => options.presentation?.() ?? "panel";
+  const swipe = () => options.swipe?.() ?? null;
 
   const value: AlertDialogContextValue = {
     // A single call with both axes is the same string HeroUI gets by spreading
@@ -96,6 +130,8 @@ export function createAlertDialogContextValue(
     variant,
     size,
     placement,
+    presentation,
+    swipe,
     isOpen: options.isOpen,
     setOpen: (next) => options.setOpen(next),
     open: () => options.setOpen(true),
@@ -143,12 +179,16 @@ export function deriveAlertDialogContext(
   const variant = () => overrides.variant?.() ?? base.variant();
   const size = () => overrides.size?.() ?? base.size();
   const placement = () => overrides.placement?.() ?? base.placement();
+  const presentation = () => overrides.presentation?.() ?? base.presentation();
+  const swipe = () => overrides.swipe?.() ?? base.swipe();
 
   const value: AlertDialogContextValue = {
     slots: computed(() => alertDialogVariants({ size: size(), variant: variant() })),
     variant,
     size,
     placement,
+    presentation,
+    swipe,
     isOpen: base.isOpen,
     setOpen: base.setOpen,
     open: base.open,

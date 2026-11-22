@@ -175,6 +175,15 @@ export type AlertDialogSize = "xs" | "sm" | "md" | "lg" | "cover";
 /** HeroUI's `AlertDialogPlacement`, the Dialog's `data-placement`. */
 export type AlertDialogPlacement = "auto" | "top" | "center" | "bottom";
 
+/**
+ * The container the alert dialog presents as (A-001): the centered panel, or
+ * the bottom-docked sheet the touch + compact environment picks under
+ * `presentation="auto"`. `"auto"` is the prop's default and never reaches the
+ * resolved value — `createPresentation` always answers a member of this
+ * domain.
+ */
+export type AlertDialogPresentation = "panel" | "sheet";
+
 /** HeroUI's `AlertDialogStatus`, the Icon's semantic status. */
 export type AlertDialogStatus = "default" | "accent" | "success" | "warning" | "danger";
 
@@ -186,9 +195,45 @@ export type AlertDialogStatus = "default" | "accent" | "success" | "warning" | "
  * `flex-1 w-full` (the height is the hosting layer's). `pointer-events-none`
  * keeps the empty area falling through to the paint layer, while the Dialog's
  * `pointer-events-auto` (R-034) keeps the card itself a target.
+ *
+ * A-002: under `presentation === "sheet"` the same box docks the card at the
+ * bottom edge (`items-end`) while keeping it horizontally centered; the
+ * vertical breathing room the Container's `p-4`/`sm:p-10` used to give comes
+ * off there instead. The `"panel"` output is byte-identical to the constant
+ * this function replaces.
  */
-export const alertDialogBackdropCarrierClasses =
-  "flex flex-row items-center justify-center flex-1 w-full pointer-events-none";
+export function alertDialogBackdropCarrierClasses(
+  presentation: AlertDialogPresentation,
+): string {
+  return presentation === "sheet"
+    ? "flex flex-row items-end justify-center flex-1 w-full pointer-events-none"
+    : "flex flex-row items-center justify-center flex-1 w-full pointer-events-none";
+}
+
+/**
+ * A-003: the classes the Container slot gains under
+ * `presentation === "sheet"` — appended after the slot, so the later member
+ * wins over `p-4`/`sm:p-10`/`sm:w-fit` exactly as the cascade resolved them.
+ * The padding between card and window edge is gone (the card already sits
+ * against the bottom edge), and the width stays full rather than shrinking
+ * to the card at `sm`.
+ */
+export const alertDialogSheetContainerClasses = "p-0 sm:p-0 w-full sm:w-full";
+
+/**
+ * A-003: the Container's first-frame classes under a sheet presentation: the
+ * card slides up from below (`translate-y-full`) instead of the panel's
+ * scale pop, as the native bottom-anchored dialog enters.
+ */
+export const alertDialogSheetEnteringClasses = "opacity-0 translate-y-full";
+
+/**
+ * A-003: the Dialog classes under a sheet presentation — full width with the
+ * `size` axis's `max-w-*` cap released (`max-w-none` beats `max-w-md` as the
+ * later member), the `rounded-3xl` the slot already carries kept as the
+ * bottom-line shape of a native alert.
+ */
+export const alertDialogSheetDialogClasses = "w-full max-w-none";
 
 /**
  * The Dialog's placement classes, HeroUI's `[data-placement=…]` rules:
