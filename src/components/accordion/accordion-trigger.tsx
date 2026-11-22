@@ -9,14 +9,21 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { computed, effect, reduceMotion, signal, split, untracked, View } from "nsh";
+import { computed, createAnimatedValue, effect, reduceMotion, signal, split, untracked, View } from "nsh";
 
 import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+} from "../../primitives/pressable";
+import type { PressableFeedbackContextValue } from "../../primitives/pressable";
 import { renderChildren } from "./children";
 import { AccordionContext, AccordionItemContext } from "./accordion-context";
+import type { AriaProps, DataProps } from "./dom-props";
 
 /** The live state HeroUI hands a Trigger's render props (React Aria's `ButtonRenderProps`). */
 export interface AccordionTriggerRenderProps {
@@ -37,7 +44,7 @@ export interface AccordionTriggerRenderProps {
  * keeps compiling; NSH has no form submission, no key events on a view and no
  * replaceable element (port sheet §1, §8).
  */
-export interface AccordionTriggerProps {
+export interface AccordionTriggerProps extends AriaProps, DataProps {
   /** The title and the Indicator, or a render prop called once (D17). */
   children?:
     | JSX.Element
@@ -179,11 +186,8 @@ export interface AccordionTriggerProps {
   /** Accepted, no effect: NSH has no slot collection. */
   slot?: string;
 
-  /** Accepted, no effect (D18). */
-  [key: `aria-${string}`]: unknown;
-
-  /** Accepted, no effect (D18). */
-  [key: `data-${string}`]: unknown;
+  // The `aria-*` / `data-*` index families sit on the `AriaProps` / `DataProps`
+  // parents (dom-props.ts), for API parity (D18).
 
   /** The trigger view; a callback, as NSH forwards refs. */
   ref?: (node: ViewRef) => void;
@@ -275,6 +279,38 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
   const isSurface = computed(() => accordion.variant() === "surface");
   const isDisabled = computed(() => item.isDisabled() || local.isDisabled === true);
   const isPending = computed(() => local.isPending ?? false);
+  const isBlocked = () => isDisabled() || isPending();
+
+  // A-002: the press-feedback seam, gated on `input() === "touch"` and the
+  // blocked flags — under a pointer environment it is a physical no-op, so
+  // the desktop event chain below is untouched. `feedback.isPressed` is its
+  // own canonical channel and never merges into the render-prop `isPressed`.
+  const input = createInput();
+  const enabled = () => input() === "touch" && !isBlocked();
+  const feedback = createPressFeedback({ enabled });
+
+  // A-004: the seam's read half for consumers. `AccordionTriggerRenderProps.
+  // isPressed` is a bare boolean accessor, so a part or a probe that needs
+  // the animated channels reads this context (the e-parts ControlField /
+  // ListGroup split). No Highlight/Ripple/Scale overlay mounts by default —
+  // a caller that wants a press visual composes
+  // `<PressableFeedback.Highlight/>` into the trigger's children.
+  // A-008: this context and `feedback` are sampled by the `Scoped`/`mobile`
+  // cases in `harness/accordion.fixtures.tsx` (the dual-environment carrier).
+  // A-009: asserted by `accordion.mobile.headless.test.tsx` /
+  // `accordion.mobile.web.test.tsx` (M-001..M-010).
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
 
   const renderProps: AccordionTriggerRenderProps = {
     isHovered: hovered,
@@ -372,10 +408,13 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
   };
 
   const handlePressDown = (event: PressEvent) => {
-    if (isDisabled()) {
+    if (isBlocked()) {
       return;
     }
 
+    // A-002: after the blocked early-out, before the channel's own notes —
+    // a gated (pointer) call is a no-op inside.
+    feedback.pressDown(event);
     notePress(event);
     pressed.set(true);
     local.onPressStart?.(event);
@@ -389,7 +428,12 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
       local.onPressChange?.(false);
     }
 
-    if (isDisabled()) {
+    // A-002: end and cancel share `onPressUp`; the seam resets here, before
+    // the blocked early-out, so a press a disable flip stranded still
+    // completes its round-trip.
+    feedback.pressUp(event);
+
+    if (isBlocked()) {
       return;
     }
 
@@ -398,7 +442,7 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
   };
 
   const handlePress = (event: PressEvent) => {
-    if (isDisabled()) {
+    if (isBlocked()) {
       return;
     }
 
@@ -414,7 +458,7 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
   };
 
   const handleLongPress = (event: PressEvent) => {
-    if (isDisabled()) {
+    if (isBlocked()) {
       return;
     }
 
@@ -424,7 +468,7 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
-    if (isDisabled() || hovered()) {
+    if (isBlocked() || hovered()) {
       return;
     }
 
@@ -528,9 +572,20 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
       onBlur={handleBlur}
-      onLayout={local.onLayout}
+      // A-003: the view-prop half of the hit area — the seam's computed
+      // slop, undefined while gated off or the view is already at target.
+      hitSlop={feedback.hitSlop()}
+      onLayout={(event) => {
+        // A-002: `bounds` feeds `hitSlop` and `scale`, so the seam reads
+        // the layout first.
+        feedback.layout(event);
+        local.onLayout?.(event);
+      }}
     >
-      {content()}
+      {/* A-004: children resolve exactly once, inside the provider. */}
+      <PressableFeedbackContext.Provider value={feedbackValue}>
+        {content()}
+      </PressableFeedbackContext.Provider>
     </View>
   );
 }
