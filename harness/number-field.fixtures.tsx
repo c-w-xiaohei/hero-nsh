@@ -778,10 +778,14 @@ function HoldCase() {
         }}
       >
         <Label>Width</Label>
+        {/* delayLongPress 1400: `app.longPress` holds only the view's
+            delayLongPress (500 ms default), which ends before the touch
+            axis's 600 ms first repeat — the +1100 ms sample needs the
+            press still held (adapt sheet M-005). */}
         <NumberField.Group testID="nf-group">
-          <NumberField.DecrementButton testID="nf-dec" />
+          <NumberField.DecrementButton testID="nf-dec" delayLongPress={1400} />
           <NumberField.Input testID="nf-input" />
-          <NumberField.IncrementButton testID="nf-inc" />
+          <NumberField.IncrementButton testID="nf-inc" delayLongPress={1400} />
         </NumberField.Group>
       </NumberField>
     </Stage>
