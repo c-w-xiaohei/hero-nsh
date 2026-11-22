@@ -48,6 +48,8 @@ const DOM_ONLY_PROPS = new Set([
   "inert",
   "translate",
   // `<input>`-only attributes, accepted with no effect (port sheet §1.3, §8).
+  // `enterKeyHint` is no longer in this list: A-005 maps it onto
+  // `returnKeyType`, so the Input splits it into `local` and reads it.
   "name",
   "form",
   "list",
@@ -64,7 +66,6 @@ const DOM_ONLY_PROPS = new Set([
   "capture",
   "autoSave",
   "results",
-  "enterKeyHint",
   "onBeforeInput",
   "onInput",
   "onCopy",

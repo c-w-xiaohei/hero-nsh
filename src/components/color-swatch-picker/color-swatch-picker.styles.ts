@@ -19,8 +19,9 @@ import { tv } from "tailwind-variants";
 export const colorSwatchPickerVariants = tv({
   slots: {
     /* R-001: `.color-swatch-picker` → `flex flex-wrap items-center gap-2`
-       (8pt gap). NSH defaults a View to a column, so `flex` here is a row. */
-    base: "flex flex-wrap items-center gap-2",
+       (8pt gap). NSH defaults a View to a column, so `flex` here is a row.
+       The gap literal moved into the `density` axis (A-001). */
+    base: "flex flex-wrap items-center",
     /* R-002: `.color-swatch-picker__item` → `relative flex size-8
        items-center justify-center rounded-2xl border-2 border-transparent
        outline-none` (32pt box, 16pt radius, 2pt border; md is the default).
@@ -68,6 +69,33 @@ export const colorSwatchPickerVariants = tv({
     variant: {
       circle: "",
       square: "",
+    },
+    /* A-001: the `input` axis of the encapsulation model — `input` owns
+       interaction usability, and the visible half of the hit-area path is
+       the item's 44pt touch minimum (`hitSlop`, the other half, is a view
+       prop the seam computes — it never reaches this table). `pointer`
+       keeps the xs 16pt / sm 24pt / md 32pt content sizes; `touch` adds
+       `min-h-11 min-w-11` on the item slot, which under
+       `items-center justify-center` expands the target without enlarging
+       the swatch inside it. */
+    input: {
+      pointer: {},
+      touch: {
+        item: "min-h-11 min-w-11",
+      },
+    },
+    /* A-001: the `density` axis carries the `gap-2` literal that left the
+       base slot — a slot-class spacing literal with no spacing-token exit
+       in `src/tokens/density.ts` (the axis's one-line reason; the
+       breadcrumbs A-002 precedent). `default` keeps the 8pt gap, `compact`
+       tightens it one step to 6pt. */
+    density: {
+      default: {
+        base: "gap-2",
+      },
+      compact: {
+        base: "gap-1.5",
+      },
     },
   },
   compoundVariants: [
@@ -133,6 +161,8 @@ export const colorSwatchPickerVariants = tv({
     layout: "grid",
     size: "md",
     variant: "circle",
+    input: "pointer",
+    density: "default",
   },
 });
 
