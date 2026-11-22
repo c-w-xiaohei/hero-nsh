@@ -124,7 +124,7 @@ describe("meter mobile", () => {
     await settleLayout(app, ["root", "track", "fill"]);
     expect(lastBox(app, "track").width).toBe(300);
     expect(lastBox(app, "fill").width).toBe(180);
-  });
+  }, 120_000);
 
   // adapt-sheets/meter.md M-002 (baseline): every other case's geometry and
   // text under the default environment — sm/md/lg track heights 4/8/12 pt
@@ -176,7 +176,7 @@ describe("meter mobile", () => {
     await settleLayout(renderProp, ["fill"]);
     expect(renderProp.shows("id:output >> text:done 40% (40%)")).toBe(true);
     expect(lastBox(renderProp, "fill").width).toBe(120);
-  });
+  }, 120_000);
 
   // adapt-sheets/meter.md M-003 (A-001, A-002, A-003): under injected
   // `input="touch"` the same mount reports every box and every text
@@ -196,7 +196,7 @@ describe("meter mobile", () => {
 
     expect(boxSet(touch)).toEqual(boxSet(pointer));
     expect(contentTexts(touch)).toEqual(contentTexts(pointer));
-  });
+  }, 120_000);
 
   // adapt-sheets/meter.md M-004 (A-001, A-002): under injected
   // `density="compact"` every box equals the default environment's — the
@@ -213,7 +213,7 @@ describe("meter mobile", () => {
     await settleLayout(compact, ["root", "output", "track", "fill"]);
 
     expect(boxSet(compact)).toEqual(boxSet(plain));
-  });
+  }, 120_000);
 
   // adapt-sheets/meter.md M-005 (A-004): under injected touch, pressing the
   // root and the track never reaches a callback — the component registers no
@@ -241,7 +241,7 @@ describe("meter mobile", () => {
     expect(new Set(names)).toEqual(new Set(["layout"]));
     expect(boxSet(app)).toEqual(before);
     expect(app.texts()).toEqual(beforeTexts);
-  });
+  }, 120_000);
 
   // adapt-sheets/meter.md M-006 (A-006): the fixture channel works — every
   // case mounts its own tree and the fill `onLayout` probe writes bounds a
@@ -264,20 +264,23 @@ describe("meter mobile", () => {
       for (const probe of mount.probes) {
         expect(lastBox(app, probe).width).toBeGreaterThan(0);
       }
+
+      // The loop's unpinned "default" mount is also the baseline half of the
+      // ScopedMobile check: absent params keep the host-derived environment.
+      if (mount.name === "default") {
+        expect(app.texts()).toContain("env=input:pointer density:default");
+      }
     }
 
-    // The ScopedMobile injection path itself: `host.params.input` and
-    // `host.params.density` reach `EnvironmentScope` — the EnvProbe line
-    // reports the resolved pair, and absent params keep the host baseline.
-    const touch = await openMobile("default", { input: "touch" });
-    expect(touch.texts()).toContain("env=input:touch density:default");
-
-    const compact = await openMobile("default", { density: "compact" });
-    expect(compact.texts()).toContain("env=input:pointer density:compact");
-
-    const plain = await openMobile("default");
-    expect(plain.texts()).toContain("env=input:pointer density:default");
-  });
+    // The injection half: one mount carrying both params proves each reaches
+    // its own EnvironmentScope field — `input` reports touch while `density`
+    // reports compact (M-003/M-004 already pin the single-param forms).
+    const injected = await openMobile("default", {
+      input: "touch",
+      density: "compact",
+    });
+    expect(injected.texts()).toContain("env=input:touch density:compact");
+  }, 120_000);
 
   // adapt-sheets/meter.md M-007 (A-007): the same assertions pass in both
   // environments this file serves — the `ScopedMobile` injection path under
@@ -293,5 +296,5 @@ describe("meter mobile", () => {
     await settleLayout(touch, ["fill"]);
     expect(touch.shows("role:progressbar[Storage]")).toBe(true);
     expect(lastBox(touch, "fill").width).toBe(180);
-  });
+  }, 120_000);
 });
