@@ -1,5 +1,5 @@
 import type { JSX, MouseEvent as NshMouseEvent, PressEvent, ViewProps, ViewRef } from "nsh";
-import { computed, effect, signal, split, Text, View } from "nsh";
+import { cleanup, computed, effect, signal, split, Text, View } from "nsh";
 import type { CalendarDate } from "@internationalized/date";
 import { DateFormatter, isSameDay, isSameMonth, isToday } from "@internationalized/date";
 
@@ -7,6 +7,8 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { renderChildren } from "./children";
 import { CalendarCellContext, useCalendarContext, useCalendarGridContext } from "./calendar-context";
 import type { CalendarCellRenderProps } from "./calendar-context";
@@ -41,7 +43,7 @@ function eraFormat(date: CalendarDate): "short" | undefined {
  * and state class (R-025…R-038).
  */
 export function CalendarCell(props: CalendarCellProps): JSX.Element {
-  const { state, slots, isYearPickerOpen } = useCalendarContext();
+  const { state, slots, isYearPickerOpen, setCellFeedback } = useCalendarContext();
   const grid = useCalendarGridContext();
   const [local, rest] = split(props, [
     "date",
@@ -60,6 +62,7 @@ export function CalendarCell(props: CalendarCellProps): JSX.Element {
   const modality = createInteractionModality();
   const hovered = signal(false);
   const pressed = signal(false);
+  const input = createInput();
 
   let node: ViewRef | undefined;
 
@@ -81,6 +84,29 @@ export function CalendarCell(props: CalendarCellProps): JSX.Element {
   const isTabStop = computed(
     () => !disabled() && local.excludeFromTabOrder !== true && isSameDay(date, state.focusedDate()),
   );
+
+  // A-004: the touch-only press-feedback seam, gated out on the blockers the
+  // press path already honors — a disabled, unavailable or read-only cell
+  // expands and records nothing, so its `enabled` reads false either way.
+  // A-005: the cell never binds the seam's `hitSlop` — seven columns of
+  // `aspect-square` cells sit edge to edge, and a 4pt slop ring per cell
+  // would overlap the neighbors into ambiguous hit space; the `input` axis's
+  // 44pt column is the minimum-target path instead.
+  const feedbackEnabled = () =>
+    input() === "touch" && !disabled() && !unavailable() && !state.isReadOnly;
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
+
+  // The seam's channels go through the context keyed by this date so a
+  // fixture can sample the gated `isPressed`/`enabled` — `hitSlop` is a view
+  // prop `nsh/test` cannot read (sheet §6). `local.date` is a static prop.
+  setCellFeedback(date.toString(), {
+    isPressed: feedback.isPressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    hitSlop: feedback.hitSlop,
+    enabled: feedbackEnabled,
+  });
+  cleanup(() => setCellFeedback(date.toString(), undefined));
 
   const dateFormatter = new DateFormatter(state.locale, {
     weekday: "long",
@@ -150,12 +176,15 @@ export function CalendarCell(props: CalendarCellProps): JSX.Element {
       // R-030/R-034: today's hover and the generic hover are mutually
       // exclusive upstream; emitting only one also keeps them from
       // overwriting each other at the same class layer. Upstream gates these
-      // behind `(hover: hover)`; NSH has no hover media query, so pointer
-      // hover also applies on touch hosts (registered difference).
-      !selected() && today() ? "hover:bg-accent-soft-hover" : ""
+      // behind `(hover: hover)`; NSH has no hover media query, so the
+      // `input` axis carries the gate — under `touch` neither hover class is
+      // emitted at all, because web's sticky hover would otherwise keep the
+      // paint after a press (adapt sheet A-001, same seam the navButton
+      // cells carry). `hovered` still records the pointer events.
+      input() !== "touch" && !selected() && today() ? "hover:bg-accent-soft-hover" : ""
     } ${
       // R-034: generic hover for a non-selected, non-today cell.
-      !selected() && !today() ? "hover:bg-default" : ""
+      input() !== "touch" && !selected() && !today() ? "hover:bg-default" : ""
     } ${
       // R-035: outside-month dimming.
       outsideMonth() ? "text-muted opacity-50" : ""
@@ -236,12 +265,23 @@ export function CalendarCell(props: CalendarCellProps): JSX.Element {
             hovered.set(false);
             local.onHoverEnd?.(event);
           }}
+          // A-004: the seam's press edges head the chains — under touch they
+          // drive `isPressed` for probes; under pointer `enabled` is false and
+          // they only forward, so the desktop bookkeeping below is unchanged.
           onPressDown={(event) => {
+            feedback.pressDown(event);
             pressed.set(true);
             if (isKeyboardPress(event)) modality.setKeyboardModality();
             else modality.setPointerModality();
           }}
-          onPressUp={() => pressed.set(false)}
+          onPressUp={(event) => {
+            feedback.pressUp(event);
+            pressed.set(false);
+          }}
+          // A-004: the seam's `bounds` feed `hitSlop` computation — kept for
+          // symmetry even though the cell never binds hitSlop (A-005); the
+          // outer `td` view still owns the caller's `onLayout` passthrough.
+          onLayout={(event) => feedback.layout(event)}
           onPress={(event: PressEvent) => {
             local.onPress?.(event);
             if (isKeyboardPress(event)) modality.setKeyboardModality();

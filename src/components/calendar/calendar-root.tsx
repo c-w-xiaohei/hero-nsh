@@ -4,10 +4,13 @@ import type { CalendarIdentifier, DateDuration, DateValue } from "@international
 import { createCalendar as createCalendarDefault } from "@internationalized/date";
 
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
+import { createInput } from "../../primitives/environment";
 import {
   CalendarContext,
   CalendarDefaultsContext,
   CalendarGridLayoutContext,
+  type CalendarFeedbackChannels,
+  type CalendarNavSlot,
   type CalendarRenderProps,
 } from "./calendar-context";
 import { calendarVariants } from "./calendar.styles";
@@ -209,7 +212,42 @@ export function CalendarRoot(props: CalendarRootProps): JSX.Element {
   });
 
   const gridBounds = signal<Bounds | undefined>(undefined);
-  const slots = calendarVariants();
+
+  // A-002: the `input` variant axis reads the environment, never a prop —
+  // `CalendarRootProps` does not inherit `CalendarVariants` (sheet §3), so
+  // `input` is resolved here once, like the siblings that call the factory
+  // with a single argument.
+  const input = createInput();
+  const slots = calendarVariants({ input: input() });
+
+  // A-003/A-004: the seam channels Cell and NavButton register on mount.
+  // `hitSlop` is a view prop `nsh/test` cannot reach, so these signals are
+  // the seam's only observable surface (sheet §6): both rest empty under the
+  // pointer default because a gated seam registers resting channels.
+  const navButtonHitSlop = signal<
+    Partial<Record<CalendarNavSlot, CalendarFeedbackChannels>>
+  >({});
+  const cellFeedback = signal<ReadonlyMap<string, CalendarFeedbackChannels>>(new Map());
+
+  const setNavButtonFeedback = (
+    slot: CalendarNavSlot,
+    channels: CalendarFeedbackChannels | undefined,
+  ) => {
+    const next = { ...navButtonHitSlop() };
+    if (channels === undefined) delete next[slot];
+    else next[slot] = channels;
+    navButtonHitSlop.set(next);
+  };
+
+  const setCellFeedback = (
+    dateKey: string,
+    channels: CalendarFeedbackChannels | undefined,
+  ) => {
+    const next = new Map(cellFeedback());
+    if (channels === undefined) next.delete(dateKey);
+    else next.set(dateKey, channels);
+    cellFeedback.set(next);
+  };
 
   const calendarRef = (next: ViewRef) => {
     local.ref?.(next);
@@ -241,6 +279,10 @@ export function CalendarRoot(props: CalendarRootProps): JSX.Element {
         ariaLabel,
         direction,
         isYearPickerOpen,
+        navButtonHitSlop,
+        cellFeedback,
+        setNavButtonFeedback,
+        setCellFeedback,
       }}
     >
       <YearPickerContext.Provider value={yearPicker}>
