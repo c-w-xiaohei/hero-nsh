@@ -2,7 +2,18 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, radius, shadow } from "../../tokens/geometry";
+// `ease.smooth`, `radius.*` and `shadow.field.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker imports this file
+// through Node ESM, which does not resolve extensionless relative specifiers,
+// so the geometry module cannot be imported from a `.styles.ts`. Same pattern
+// as `switch.styles.ts` / `pagination.styles.ts`; keep in sync with
+// `EASE_VALUES.smooth`, `radius` and `SHADOW_VALUES.field`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const RADIUS_FIELD = "rounded-(--radius-field)";
+const RADIUS_FIELD_START = "rounded-s-(--radius-field)";
+const RADIUS_FIELD_END = "rounded-e-(--radius-field)";
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
 
 /**
  * InputGroup's variant table, mirroring `@heroui/styles` 3.2.7
@@ -32,9 +43,9 @@ export const inputGroupVariants = tv({
     // R-009's property list is inline style in the root (one owner per
     // property), while `duration-150 ease-smooth` carry the timing here.
     base: [
-      `inline-flex min-h-9 items-center ${radius.field} border-0 bg-field`,
-      `text-sm text-field-foreground ${shadow.field.both} outline-none`,
-      `duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `inline-flex min-h-9 items-center ${RADIUS_FIELD} border-0 bg-field`,
+      `text-sm text-field-foreground ${SHADOW_FIELD_BOTH} outline-none`,
+      `duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     ].join(" "),
 
     // R-015: `.input-group__input` → the full upstream declaration list.
@@ -50,7 +61,7 @@ export const inputGroupVariants = tv({
     // `bg-transparent` is already part of this slot, so the variant needs no
     // declaration of its own.
     input: [
-      `flex-1 basis-auto ${radius.field} border-0 bg-transparent`,
+      `flex-1 basis-auto ${RADIUS_FIELD} border-0 bg-transparent`,
       "px-3 py-2 text-base shadow-none outline-none placeholder:text-field-placeholder sm:text-sm",
     ].join(" "),
 
@@ -61,8 +72,8 @@ export const inputGroupVariants = tv({
     // R-026: `@apply motion-reduce:transition-none`.
     // R-025's property list is inline style in the part; the timing is here.
     prefix: [
-      `flex h-full items-center justify-center ${radius.fieldStart} rounded-e-none`,
-      `bg-transparent px-3 text-field-placeholder duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `flex h-full items-center justify-center ${RADIUS_FIELD_START} rounded-e-none`,
+      `bg-transparent px-3 text-field-placeholder duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     ].join(" "),
 
     // R-027: `.input-group__suffix` → `flex h-full items-center justify-center
@@ -71,8 +82,8 @@ export const inputGroupVariants = tv({
     // R-031: `@apply motion-reduce:transition-none`.
     // R-030's property list is inline style in the part; the timing is here.
     suffix: [
-      `flex h-full items-center justify-center rounded-s-none ${radius.fieldEnd}`,
-      `bg-transparent px-3 text-field-placeholder duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `flex h-full items-center justify-center rounded-s-none ${RADIUS_FIELD_END}`,
+      `bg-transparent px-3 text-field-placeholder duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     ].join(" "),
   },
   variants: {
