@@ -10,6 +10,11 @@ import { Text } from "nsh";
  *
  * This is the local copy every component keeps; merging them into
  * `src/primitives/` is a separate refactor, not a dependency of this unit.
+ *
+ * A-006: Item renders its children through this helper (paired with
+ * `untracked(...)`) so the fixture's `PressableFeedbackContext` probe resolves
+ * the seam's channels under the web host — a bare `children as JSX.Element`
+ * creates them under the Item owner and the probe reads RESTING defaults.
  */
 export function renderChildren(node: JSX.Element): JSX.Element {
   if (node === null || node === undefined || typeof node === "boolean") {
