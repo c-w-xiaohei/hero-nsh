@@ -23,6 +23,7 @@ import {
 import type { PressableFeedbackContextValue } from "../../primitives/pressable";
 import { renderChildren } from "./children";
 import { AccordionContext, AccordionItemContext } from "./accordion-context";
+import type { AriaProps, DataProps } from "./dom-props";
 
 /** The live state HeroUI hands a Trigger's render props (React Aria's `ButtonRenderProps`). */
 export interface AccordionTriggerRenderProps {
@@ -43,7 +44,7 @@ export interface AccordionTriggerRenderProps {
  * keeps compiling; NSH has no form submission, no key events on a view and no
  * replaceable element (port sheet §1, §8).
  */
-export interface AccordionTriggerProps {
+export interface AccordionTriggerProps extends AriaProps, DataProps {
   /** The title and the Indicator, or a render prop called once (D17). */
   children?:
     | JSX.Element
@@ -185,11 +186,8 @@ export interface AccordionTriggerProps {
   /** Accepted, no effect: NSH has no slot collection. */
   slot?: string;
 
-  /** Accepted, no effect (D18). */
-  [key: `aria-${string}`]: unknown;
-
-  /** Accepted, no effect (D18). */
-  [key: `data-${string}`]: unknown;
+  // The `aria-*` / `data-*` index families sit on the `AriaProps` / `DataProps`
+  // parents (dom-props.ts), for API parity (D18).
 
   /** The trigger view; a callback, as NSH forwards refs. */
   ref?: (node: ViewRef) => void;

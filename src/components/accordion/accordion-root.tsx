@@ -12,6 +12,7 @@ import type { AccordionVariants } from "./accordion.styles";
 import type { AccordionRenderProps } from "./accordion-types";
 import { createAccordionGroupState } from "./create-accordion-group-state";
 import { withTooltip } from "./tooltip";
+import type { DataProps } from "./dom-props";
 
 /* -------------------------------------------------------------------------------------------------
  * Props
@@ -27,7 +28,7 @@ import { withTooltip } from "./tooltip";
  * port sheet §1 and §8 say what each can and cannot do. `ref` is a callback
  * because NSH forwards refs that way (`_common` §46).
  */
-export interface AccordionRootProps {
+export interface AccordionRootProps extends DataProps {
   /**
    * The items, or a render prop called once with the group state (D17). A bare
    * string inside it becomes `Text` at the placement.
@@ -121,9 +122,6 @@ export interface AccordionRootProps {
 
   /** Accepted, no effect: NSH has no wheel event. */
   onWheel?: unknown;
-
-  /** Accepted, no effect (D18: no data attributes). */
-  [key: `data-${string}`]: unknown;
 
   /** The root view; a callback, as NSH forwards refs. */
   ref?: (node: ViewRef) => void;
