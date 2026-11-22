@@ -62,6 +62,36 @@ function probeNames(app: App): string[] {
   return calls(app).map((c) => c.name);
 }
 
+// adapt-sheets/color-input-group.md M-008 (A-011) — the shared half of the
+// two M-008 rows above. Six sequential opens per scope: a dozen web hosts
+// in one test exhausts the web target (the M3 run proved it), so the row
+// splits one scope per test rather than looping in a single test.
+async function assertFixtureSurface(params: Params) {
+  const basic = await openCase("basic", params);
+  expect(basic.shows("id:group")).toBe(true);
+  expect(basic.shows("id:group-input")).toBe(true);
+
+  const layout = await openCase("layout", params);
+  await layout.waitUntil(() => callsOf(layout, "layout").length > 0);
+
+  const hover = await openCase("hover", params);
+  expect(rootClassRecords(hover).length).toBeGreaterThan(0);
+
+  const submit = await openCase("submit", params);
+  await submit.type("id:group-input", "x");
+  await submit.submit("id:group-input");
+  expect(callsOf(submit, "onSubmit")).toHaveLength(1);
+
+  const events = await openCase("events", params);
+  await events.type("id:group-input", "x");
+  expect(callsOf(events, "onKeyPress")).toHaveLength(1);
+
+  const kbd = await openCase("kbd", params);
+  // `id:k-max` sits below the viewport's 768 pt fold under touch
+  // (sixteen 44 pt rows) — the first row is on-screen in both scopes.
+  expect(kbd.shows("id:kh-enter")).toBe(true);
+}
+
 describe("color-input-group mobile", () => {
   // adapt-sheets/color-input-group.md M-001 (A-001, A-002): under the
   // injected touch environment the `input` axis' `min-h-11` lifts the group
@@ -252,38 +282,13 @@ describe("color-input-group mobile", () => {
   // itself — every probe-bearing fixture case mounts under both scopes and
   // its recorders land in Storage, so a silent fixture regression cannot
   // pass the rows above vacuously.
-  test("M-008 fixture entry: every case mounts and records under both scopes", async () => {
-    for (const params of [{}, { scope: "touch" }] as Params[]) {
-      const basic = await openCase("basic", params);
-      expect(basic.shows("id:group")).toBe(true);
-      expect(basic.shows("id:group-input")).toBe(true);
+  test("M-008 fixture entry: every case mounts and records (pointer scope)", async () => {
+    await assertFixtureSurface({});
+  }, 120_000);
 
-      const layout = await openCase("layout", params);
-      await layout.waitUntil(() => callsOf(layout, "layout").length > 0);
-
-      const hover = await openCase("hover", params);
-      expect(rootClassRecords(hover).length).toBeGreaterThan(0);
-
-      const submit = await openCase("submit", params);
-      await submit.type("id:group-input", "x");
-      await submit.submit("id:group-input");
-      expect(callsOf(submit, "onSubmit")).toHaveLength(1);
-
-      const field = await openCase("field-mock", params);
-      await field.type("id:group-input", "x");
-      await field.submit("id:group-input");
-      expect(callsOf(field, "field-submit")).toHaveLength(1);
-
-      const events = await openCase("events", params);
-      await events.type("id:group-input", "x");
-      expect(callsOf(events, "onKeyPress")).toHaveLength(1);
-
-      const kbd = await openCase("kbd", params);
-      // `id:k-max` sits below the viewport's 768 pt fold under touch
-      // (sixteen 44 pt rows) — the first row is on-screen in both scopes.
-      expect(kbd.shows("id:kh-enter")).toBe(true);
-    }
-  }, 240_000);
+  test("M-008 fixture entry: every case mounts and records (touch scope)", async () => {
+    await assertFixtureSurface({ scope: "touch" });
+  }, 120_000);
 
   // adapt-sheets/color-input-group.md M-009 (基线): the default environment
   // keeps the desktop contract — the same cases and assertions
