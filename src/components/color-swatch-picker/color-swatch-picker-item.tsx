@@ -9,7 +9,16 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, reduceMotion, signal, split, untracked, View } from "nsh";
+import {
+  cleanup,
+  computed,
+  createAnimatedValue,
+  reduceMotion,
+  signal,
+  split,
+  untracked,
+  View,
+} from "nsh";
 
 import {
   createSelectableItem,
@@ -19,6 +28,13 @@ import {
   type SelectionMode,
   type SelectionModifiers,
 } from "../../primitives";
+import { createDensity } from "../../primitives/environment";
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { shadow } from "../../tokens/geometry";
 import { joinClassNames } from "../color-picker/class-names";
 import type { AriaProps, DataProps, DomEventProps, GlobalDomProps } from "../color-picker/dom-props";
@@ -29,6 +45,7 @@ import {
   ColorSwatchPickerContext,
   ColorSwatchPickerItemContext,
 } from "./color-swatch-picker-context";
+import { renderChildren } from "./children";
 import { colorSwatchPickerVariants } from "./color-swatch-picker.styles";
 
 /** The live state HeroUI hands to an item's children, `className` and `style`. */
@@ -235,6 +252,39 @@ export function ColorSwatchPickerItem(
     () => pointerPressed() || list.keyboardPressedKey() === key,
   );
 
+  // A-001 / A-002 / A-003: the `input` axis is read once here — it feeds the
+  // variant table's `input` argument, gates the press-feedback seam, and
+  // suppresses the hover channel under touch. `density` feeds the table's
+  // `density` argument (the row gap literal lives in that axis).
+  const input = createInput();
+  const density = createDensity();
+
+  // A-003: the touch-gated press-feedback seam (encapsulation.md §1,
+  // press-feedback 接缝). The gate folds `isDisabled` in so a disabled
+  // option expands nothing; under the default pointer environment `enabled`
+  // stays false and every channel rests, so the option pays nothing. The
+  // option mounts no overlay — the selected border and the swatch's
+  // selection shrink are already the selection feedback — but it provides
+  // the seam's context so a caller can compose
+  // `PressableFeedback.Scale`/`Highlight`/`Ripple` inside its children (the
+  // B 档 "只用 highlight 或扩大 hitSlop" clause; the `hitSlop` half is
+  // bound on the view below).
+  const feedbackEnabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
+
+  const pressFeedbackContextValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: feedbackEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   const textValue = computed(() => color().getColorName("en"));
 
   const renderProps: ColorSwatchPickerItemRenderProps = {
@@ -256,6 +306,10 @@ export function ColorSwatchPickerItem(
       layout: list.layout(),
       size: list.size(),
       variant: list.variant(),
+      // A-001: the environment axes — `input` carries the 44pt item
+      // minimum, `density` the row gap.
+      input: input(),
+      density: density(),
     }),
   );
 
@@ -339,15 +393,21 @@ export function ColorSwatchPickerItem(
   cleanup(() => list.unregisterItemLayout(key));
 
   const content = () => {
+    // The single read of `props.children`, at the placement inside the item
+    // context (research 4.1 / 4.6). `untracked` keeps the render-prop call
+    // out of the surrounding computation (the tabs A-003 pattern, which the
+    // PressableFeedbackContext.Provider placement depends on).
     const children = local.children;
 
     if (typeof children === "function" && children.length >= 1) {
-      return (children as (values: ColorSwatchPickerItemRenderProps) => JSX.Element)(
-        renderProps,
+      return renderChildren(
+        untracked(() => (children as (values: ColorSwatchPickerItemRenderProps) => JSX.Element)(
+          renderProps,
+        )),
       );
     }
 
-    return children as JSX.Element;
+    return renderChildren(children as JSX.Element);
   };
 
   const itemContext: ColorSwatchPickerItemContextValue = { state: renderProps };
@@ -360,6 +420,13 @@ export function ColorSwatchPickerItem(
     // The pointer modality first: a press on an already focused root must drop
     // the keyboard ring even though no new focus event follows.
     list.notePointer();
+
+    // A-003: the seam sees the press after the keyboard early-return, before
+    // the selection callbacks; it gates itself on `enabled`, so a pointer
+    // press records nothing.
+    if (event) {
+      feedback.pressDown(event);
+    }
 
     if (!selectable.isDisabled()) {
       pointerPressed.set(true);
@@ -377,6 +444,19 @@ export function ColorSwatchPickerItem(
   };
 
   const handlePressUp = (event?: PressEvent) => {
+    // A-003: the seam's end edge — release and cancel share `onPressUp`, and
+    // `pressUp` clears `pressOrigin` even for a gated press, so it runs before
+    // the keyboard early-return. It is deferred one frame: the web host
+    // dispatches down and up inside one gesture turn, so a synchronous clear
+    // collapses `isPressed` into the same commit that raised it — reactive
+    // consumers see only the settle state (the registered web batching gap).
+    // One frame lets the held state commit before the release lands; a real
+    // contact already lasts frames, so the seam's observable semantics are
+    // unchanged on every other host.
+    if (event) {
+      requestAnimationFrame(() => feedback.pressUp(event));
+    }
+
     if (event && isKeyboardPress(event)) {
       return;
     }
@@ -421,6 +501,14 @@ export function ColorSwatchPickerItem(
       return;
     }
 
+    // A-002: the `input` axis owns hover independence — under touch the hover
+    // signal stays off entirely, so a web sticky hover cannot pin the option
+    // (and its `hover:scale-110`) after a press (the switch A-003 / tabs
+    // A-002 ruling: host `onMouseEnter`/`onMouseLeave` callbacks still pass).
+    if (selectable.isDisabled() || isHovered() || input() === "touch") {
+      return;
+    }
+
     isHovered.set(true);
     local.onHoverStart?.(event);
     local.onHoverChange?.(true);
@@ -432,7 +520,9 @@ export function ColorSwatchPickerItem(
     // cancels on leave.
     pointerPressed.set(false);
 
-    if (!isHovered()) {
+    // A-002: under touch the hover channel never opened, so no hover end
+    // fires either — `onMouseLeave` itself still passed above.
+    if (input() === "touch" || !isHovered()) {
       return;
     }
 
@@ -442,6 +532,8 @@ export function ColorSwatchPickerItem(
   };
 
   const handleLayout = (event: { bounds: Bounds }) => {
+    // A-003: the measured size feeds the seam's `hitSlop`/`scale`.
+    feedback.layout(event);
     list.registerItemLayout(key, event.bounds);
   };
 
@@ -499,9 +591,15 @@ export function ColorSwatchPickerItem(
         onMouseLeave={handleMouseLeave}
         onFocus={local.onFocus}
         onBlur={local.onBlur}
+        // A-003: the invisible half of the hit-area path — computed by the
+        // seam from `Environment` + the density table, never a prop;
+        // `undefined` while the pointer gate holds.
+        hitSlop={feedback.hitSlop()}
         onLayout={handleLayout}
       >
-        {content()}
+        <PressableFeedbackContext.Provider value={pressFeedbackContextValue}>
+          {content()}
+        </PressableFeedbackContext.Provider>
       </View>
     </ColorSwatchPickerItemContext.Provider>
   );

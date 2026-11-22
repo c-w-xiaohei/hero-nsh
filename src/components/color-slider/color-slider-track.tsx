@@ -8,14 +8,28 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { computed, signal, split, View } from "nsh";
+import { computed, createAnimatedValue, signal, split, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
+import { createPan } from "../../primitives/pan";
+import { createPressFeedback, PressableFeedbackContext } from "../../primitives/pressable";
+import type { PressableFeedbackContextValue } from "../../primitives/pressable";
 import { Checkerboard } from "./checkerboard";
 import { joinClassNames } from "./class-names";
 import type { AriaProps, DataProps, DomEventProps, GlobalDomProps } from "./color-slider-dom-props";
 import { hostProps } from "./color-slider-dom-props";
-import type { ColorSliderTrackRenderProps } from "./color-slider-context";
-import { ColorSliderContext, EMPTY_COLOR_SLIDER_STATE } from "./color-slider-context";
+import type { ColorSliderPan, ColorSliderTrackRenderProps } from "./color-slider-context";
+import {
+  ColorSliderContext,
+  ColorSliderPanContext,
+  EMPTY_COLOR_SLIDER_STATE,
+} from "./color-slider-context";
+import {
+  claimSliderTouch,
+  insideThumbHitArea,
+  releaseSliderTouch,
+  sliderTouchClaimed,
+} from "./color-slider-pan-state";
 import { clamp } from "./color-slider-utils";
 import { renderRenderPropChildren } from "./render-children";
 
@@ -107,6 +121,8 @@ export function ColorSliderTrack(props: ColorSliderTrackProps): JSX.Element {
     "onHoverStart",
     "onHoverEnd",
     "onHoverChange",
+    "onTouchEnd",
+    "onTouchCancel",
   ] as const);
 
   // Read once, in the body: the slider this track belongs to, if any.
@@ -308,14 +324,45 @@ export function ColorSliderTrack(props: ColorSliderTrackProps): JSX.Element {
       : "shadow-[inset_0_1px_0_0_rgb(0_0_0_/_0.1),inset_0_-1px_0_0_rgb(0_0_0_/_0.1)]",
   );
 
+  // --- Seams (adapt sheet A-002 / A-004) --------------------------------------
+  const input = createInput();
+
+  // A-002: the press-feedback seam, consuming only the `hitSlop`/`layout`
+  // half-channel — the track walks the responder system, not press events, so
+  // `pressDown`/`pressUp`/`scale`/`isPressed` stay unwired. Under the default
+  // pointer environment `enabled` is false and `hitSlop()` answers
+  // `undefined`; under touch the 20pt cross axis is padded to the 44pt
+  // minimum.
+  const feedbackEnabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
+
+  // The seam's read half for the fixture's `CtxProbe` (`hitSlop` is a view
+  // prop with no other observable surface, sheet §6); the children mount once
+  // inside the provider at the placement.
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: feedbackEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   // --- Measurement -----------------------------------------------------------
   // The pointer maths needs the track's border box, which is also what React
-  // Aria's `getBoundingClientRect` measured; the caller's `onLayout` still runs.
+  // Aria's `getBoundingClientRect` measured; the caller's `onLayout` still
+  // runs. Order: the size report, then the seam's `layout` (A-002: `bounds`
+  // feeds `hitSlop`), then the caller.
   const handleLayout = (event: { bounds: Bounds }) => {
     slider?.setTrackSize({
       width: event.bounds.size.width,
       height: event.bounds.size.height,
     });
+    feedback.layout(event);
     local.onLayout?.(event);
   };
 
@@ -342,23 +389,34 @@ export function ColorSliderTrack(props: ColorSliderTrackProps): JSX.Element {
     return isRtl() ? 1 - fraction : fraction;
   };
 
-  const handleStartShouldSetResponder = () => slider !== undefined && !isDisabled();
+  // A-004: the bare responder chain is the desktop path. Under touch the
+  // predicate below stays false and `pan` claims instead — the native Scroll
+  // recognizer would otherwise take an axial drag through a JS-claimed bare
+  // responder without ever asking `onResponderTerminationRequest` (sheet §6),
+  // so the arbitration lives in the pan's `shouldClaim`, not in a gate on the
+  // grant.
+  const handleStartShouldSetResponder = () =>
+    input() !== "touch" && slider !== undefined && !isDisabled();
 
-  const handleGrant = (event: GestureResponderEvent) => {
+  // The grant half of a press anywhere on the track: jump to the touched
+  // point, then record the interaction (React Aria's Track focuses the
+  // thumb's input on a press — focus first, then the pointer modality, so
+  // `onFocus` cannot paint the keyboard ring, port sheet §2 and §5).
+  const beginJump = (locationX: number, locationY: number) => {
     if (!slider || isDisabled()) {
       return false;
     }
 
-    slider.state.setPercent(percentAt(event.locationX, event.locationY));
+    slider.state.setPercent(percentAt(locationX, locationY));
     slider.state.startDragging();
-    // React Aria's Track focuses the thumb's input on a press. Focus first,
-    // then record the pointer: `onFocus` would otherwise report the keyboard
-    // and paint the focus ring after a click (port sheet §2 and §5).
     slider.focusThumb();
     slider.modality.setPointerModality();
 
     return true;
   };
+
+  const handleGrant = (event: GestureResponderEvent) =>
+    beginJump(event.locationX, event.locationY);
 
   const handleMove = (event: GestureResponderEvent) => {
     if (!slider || isDisabled() || !slider.state.isDragging()) {
@@ -379,11 +437,99 @@ export function ColorSliderTrack(props: ColorSliderTrackProps): JSX.Element {
     slider.state.endInteraction();
   };
 
+  // A-004: the touch path. `shouldClaim` is the first-frame axial-dominance
+  // test — a move along the slider's axis is a drag on the track, a
+  // cross-axis or ambiguous one is the surrounding Scroll's. Once the pan
+  // holds the touches `onShouldBlockNativeResponder` keeps the Scroll from
+  // taking them back.
+  const pan = createPan({
+    enabled: () => input() === "touch",
+    shouldClaim: (event, gesture) => {
+      if (slider === undefined || isDisabled()) {
+        return false;
+      }
+
+      // The move negotiation asks this ancestor's capture predicate before
+      // the thumb's own, on every move frame — a touch that went down inside
+      // the thumb's slop-expanded hit area is the thumb's drag (the delta
+      // path), so the track defers. `pageX - gesture.dx` is where the finger
+      // went down in surface coordinates (the claim event's `locationX` is
+      // target-local, useless to an ancestor).
+      if (
+        insideThumbHitArea(
+          event.pageX - gesture.dx,
+          event.pageY - gesture.dy,
+        )
+      ) {
+        return false;
+      }
+
+      const along = isVertical() ? gesture.dy : gesture.dx;
+      const across = isVertical() ? gesture.dx : gesture.dy;
+
+      return along !== 0 && Math.abs(across) < Math.abs(along);
+    },
+    onDragStart: (event, gesture) => {
+      claimSliderTouch(event.identifier);
+      // The claim fired on the first dominant move, so `locationX`/`locationY`
+      // is where the finger is now. The jump's point is where it went down —
+      // `locationX - gesture.dx` walks the local point back by the travel the
+      // gesture state reports, keeping the pre-claim displacement in the
+      // drag's baseline as the bare grant does.
+      beginJump(event.locationX - gesture.dx, event.locationY - gesture.dy);
+    },
+    onDrag: (event) => handleMove(event),
+    onDragEnd: () => handleRelease(),
+  });
+
+  // The pan's probe surface (the `panKeys` count under the default
+  // environment is the negative assertion that no gesture path mounted).
+  const panValue: ColorSliderPan = {
+    panHandlers: pan.panHandlers,
+    active: pan.active,
+  };
+
+  // A touch tap never produces a move frame, so `shouldClaim` is never asked
+  // and the gated bare chain never runs; `onTouchEnd` commits the tap instead
+  // (the tap-to-jump half). A touch the pan claimed (or one the Scroll took)
+  // is skipped by the claim ledger; touches on the thumb never reach this
+  // handler — the thumb's own `onTouchEnd` stops their propagation.
+  const handleTouchEnd = (event: GestureResponderEvent) => {
+    // The caller's raw touch callback is always reported; the tap commit
+    // below is the touch-only half.
+    local.onTouchEnd?.(event);
+
+    if (input() !== "touch") {
+      return;
+    }
+
+    if (sliderTouchClaimed(event.identifier)) {
+      releaseSliderTouch(event.identifier);
+      return;
+    }
+
+    // The tap's commit is `handleGrant` + `handleRelease` verbatim: jump to
+    // the point the finger left from, one `onChangeEnd` per tap, the same
+    // sequence the bare grant-then-release commits on the desktop.
+    if (beginJump(event.locationX, event.locationY)) {
+      handleRelease();
+    }
+  };
+
+  const handleTouchCancel = (event: GestureResponderEvent) => {
+    releaseSliderTouch(event.identifier);
+    local.onTouchCancel?.(event);
+  };
+
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
-    // React Aria's `useHover({ isDisabled })`: a disabled track never hovers.
-    if (isDisabled() || isHovered()) {
+    // A-005: under touch the hover signal stays off entirely, so a web sticky
+    // hover cannot pin `isHovered` after a press (the tabs A-002 ruling: host
+    // hover callbacks do not pass under touch, only the raw `onMouseEnter` /
+    // `onMouseLeave` passthrough does). React Aria's `useHover({ isDisabled })`
+    // keeps a disabled track unhovered on every environment.
+    if (input() === "touch" || isDisabled() || isHovered()) {
       return;
     }
 
@@ -395,7 +541,7 @@ export function ColorSliderTrack(props: ColorSliderTrackProps): JSX.Element {
   const handleMouseLeave = (event: NshMouseEvent) => {
     local.onMouseLeave?.(event);
 
-    if (!isHovered()) {
+    if (input() === "touch" || !isHovered()) {
       return;
     }
 
@@ -414,12 +560,31 @@ export function ColorSliderTrack(props: ColorSliderTrackProps): JSX.Element {
       focusable={false}
       class={classes()}
       style={resolvedStyle()}
+      // A-002: the seam's view-prop half — `hitSlop` is undefined under the
+      // pointer environment (the prop lands but expands nothing) and pads the
+      // 20pt cross axis to the 44pt minimum under touch.
+      hitSlop={feedback.hitSlop()}
       onLayout={handleLayout}
       onStartShouldSetResponder={handleStartShouldSetResponder}
       onResponderGrant={handleGrant}
       onResponderMove={handleMove}
       onResponderRelease={handleRelease}
       onResponderTerminate={handleRelease}
+      // A-004: the touch-gated pan spreads after the bare chain — JSX's
+      // last-prop-wins hands the responder lane to the pan's emitted props
+      // under touch (the ShouldSet pairs, grant/move/release/terminate, the
+      // termination request and the native block), so `shouldClaim` runs and
+      // `onPanResponderGrant` drives `onDragStart`/`active`. Under the
+      // pointer environment `panHandlers()` resolves to `{}` — the spread
+      // mounts nothing and the gated bare chain above keeps the desktop
+      // path. Spread first instead, these own props would shadow the pan's
+      // emitted keys and its whole lifecycle would never run.
+      {...pan.panHandlers()}
+      // The part's own raw touch handlers stay bound after the spread: the
+      // pan emits none, and the tap-jump compensation below needs
+      // `onTouchEnd`.
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -474,9 +639,16 @@ export function ColorSliderTrack(props: ColorSliderTrackProps): JSX.Element {
         The single read of `props.children`, at the placement and after every
         layer, so the thumb (and anything else the caller puts here) draws above
         the gradient and the caps. A one-argument function is the render prop
-        (D17); anything else goes through `renderChildren`.
+        (D17); anything else goes through `renderChildren`. The seam providers
+        wrap it (A-002 / A-004): they are the fixture `CtxProbe`'s only surface
+        for `hitSlop` and the pan's handler count, and children still resolve
+        exactly once, inside them.
       */}
-      {renderTrackChildren(local.children, renderProps())}
+      <PressableFeedbackContext.Provider value={feedbackValue}>
+        <ColorSliderPanContext.Provider value={panValue}>
+          {renderTrackChildren(local.children, renderProps())}
+        </ColorSliderPanContext.Provider>
+      </PressableFeedbackContext.Provider>
     </View>
   );
 }
