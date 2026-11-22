@@ -528,10 +528,16 @@ export function PopoverContent(props: PopoverContentProps) {
           `SheetBody` is the scroll container the children land in, the
           upstream `contentContainer` counterpart (§8). `props.isExiting`
           reaches the backdrop so the retained-mount contract holds on this
-          carrier too. */}
+          carrier too, and `isKeyboardDismissDisabled` goes with it so the
+          contract prop gates Escape on the sheet carrier exactly as
+          `handleCancel` gates it on the panel chain (§1 baseline — the
+          prop keeps its documented effect under `presentation="sheet"`). */}
       <If when={presentation() === "sheet"} else={panelBranch}>
         <SheetRoot isOpen={isOpen()} onOpenChange={setOpen}>
-          <SheetBackdrop isExiting={props.isExiting}>
+          <SheetBackdrop
+            isExiting={props.isExiting}
+            isKeyboardDismissDisabled={isKeyboardDismissDisabled()}
+          >
             <SheetContent
               ref={(node) => props.ref?.(node)}
               testID={sheetTestID()}

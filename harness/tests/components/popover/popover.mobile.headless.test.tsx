@@ -76,6 +76,9 @@ describe("popover mobile (headless)", () => {
   // and the Dialog `{close}` render-prop (scopedTrigger re-supplied inside
   // the Sheet branch, so `close` still reaches this popover's `close`)
   // both land `onOpenChange(false)` on the Popover owner exactly once.
+  // `isKeyboardDismissDisabled` is forwarded onto `SheetBackdrop`, so the
+  // contract prop blocks Escape on the sheet carrier exactly as
+  // `handleCancel` blocks it on the panel chain (§1 baseline parity).
   test("M-006 sheet-mode closes reach the popover owner through both channels", async () => {
     const app = await openMobileIos();
 
@@ -98,6 +101,19 @@ describe("popover mobile (headless)", () => {
     expect(callsOf(app, "dialogClose")).toEqual([["dialog"]]);
     expect(callsOf(app, "openChange")).toEqual([[true], [false], [true], [false]]);
     await app.waitFor("id:pop-sheet", { state: "gone" });
+
+    // The contract prop on the sheet carrier: `isKeyboardDismissDisabled`
+    // reaches `SheetBackdrop`, so Escape is gated by `closesOnEscape` and
+    // the popover stays open — while the `{close}` channel still works.
+    const kb = await openMobileIos({ kbDismiss: "1" });
+    await kb.press("id:pop-trigger");
+    expect(kb.count("id:pop-sheet")).toBe(1);
+    await kb.keyboard.press("escape");
+    expect(kb.count("id:pop-sheet")).toBe(1);
+    expect(callsOf(kb, "openChange")).toEqual([[true]]);
+    await kb.press("id:pop-close");
+    expect(callsOf(kb, "openChange")).toEqual([[true], [false]]);
+    await kb.waitFor("id:pop-sheet", { state: "gone" });
   });
 
   // adapt-sheets/popover.md M-007 (A-002): `isNonModal` suppresses the
