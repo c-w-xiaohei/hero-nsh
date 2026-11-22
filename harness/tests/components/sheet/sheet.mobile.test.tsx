@@ -284,4 +284,46 @@ describe("sheet-handoff", () => {
       expect(initial.atTop).toBe(true);
     }
   });
+
+  // adapt-sheets/sheet.md M-018 (A-001, baseline): under the default pointer
+  // environment the Handle's existing responder channel still drives the
+  // detent — the arbitration decision kept the desktop path ungated.
+  test("M-018 baseline: Handle drag drives the detent in the default pointer environment", async () => {
+    const app = await openSheet("handoff");
+
+    await settle(app);
+
+    const recordsBefore = detentCalls(app).length;
+    await app.drag("id:handle", { x: 0, y: 120 });
+    await settle(app);
+
+    expect(
+      detentCalls(app)
+        .slice(recordsBefore)
+        .some((record) => record.length < 170),
+    ).toBe(true);
+    expect(lastDetent(app).isExpanded).toBe(false);
+  });
+
+  // adapt-sheets/sheet.md M-022 (A-004, negative): under the default pointer
+  // environment `scrollProps()` resolves to an empty object — no
+  // `keyboardDismissMode` reaches the Body's Scroll.
+  test("M-022 default pointer environment: scrollProps resolves empty on the paired Scroll", async () => {
+    const app = await openSheet("handoff");
+
+    await settle(app);
+
+    expect(lastDetent(app).scrollKeys).toBe(0);
+  });
+
+  // adapt-sheets/sheet.md M-023 (A-004): under the injected touch
+  // environment `scrollProps()` produces `keyboardDismissMode: "interactive"`
+  // for the paired Scroll — the keyboard link exists only on mobile input.
+  test("M-023 touch: scrollProps carries the interactive keyboardDismissMode", async () => {
+    const app = await openSheet("handoff", "touch");
+
+    await settle(app);
+
+    expect(lastDetent(app).scrollKeys).toBe(1);
+  });
 });
