@@ -1,10 +1,40 @@
-import type { Accessor, Bounds } from "nsh";
+import type { Accessor, Bounds, Edges, Point, Size } from "nsh";
 import { context } from "nsh";
 import type { Calendar, CalendarDate, CalendarIdentifier, DateValue } from "@internationalized/date";
 
 import type { calendarVariants } from "./calendar.styles";
 import type { CalendarState } from "./create-calendar-state";
 import type { CalendarOrRangeState } from "./date-utils";
+
+/** Which page button registered: `slot` of `CalendarNavButtonProps`. */
+export type CalendarNavSlot = "previous" | "next";
+
+/**
+ * The touch-gated `createPressFeedback` channels a Cell or NavButton runs
+ * (adapt sheet A-003/A-004), seen as read channels only — the part's `View`
+ * owns the writers. `hitSlop` is a view prop `nsh/test` cannot read and a
+ * seam `isPressed` has no style of its own, so these accessors are the seam's
+ * only observable surface (sheet §6's hitSlop registration); they sit on the
+ * context exactly as `CheckboxFeedbackChannels` does. Under the default
+ * pointer environment every channel rests: `isPressed` false, `hitSlop`
+ * `undefined`, `enabled` false.
+ */
+export interface CalendarFeedbackChannels {
+  /** The seam's press flag; rises only while `enabled` holds. */
+  isPressed: Accessor<boolean>;
+
+  /** The part's measured size, from `onLayout`. */
+  bounds: Accessor<Size>;
+
+  /** Where the current press went down; null while the seam is gated off. */
+  pressOrigin: Accessor<Point | null>;
+
+  /** The slop the seam binds on the part's `hitSlop`; `undefined` under pointer. */
+  hitSlop: Accessor<number | Partial<Edges> | undefined>;
+
+  /** The seam's effective gate (`input() === "touch"` plus the part's own blockers). */
+  enabled: Accessor<boolean>;
+}
 
 /** Everything a calendar part reads from its root. */
 export interface CalendarContextValue {
@@ -16,6 +46,34 @@ export interface CalendarContextValue {
   direction: Accessor<"ltr" | "rtl">;
   /** True while a YearPicker panel is open; the Header hides its nav buttons. */
   isYearPickerOpen: Accessor<boolean>;
+
+  /**
+   * A-003: the NavButton press-feedback channels by slot — `hitSlop`
+   * included, the only way a test observes the computed slop. `undefined`
+   * while no button of that slot has mounted.
+   */
+  navButtonHitSlop: Accessor<
+    Partial<Record<CalendarNavSlot, CalendarFeedbackChannels>>
+  >;
+
+  /**
+   * A-004: each mounted Cell's press-feedback channels, keyed by
+   * `date.toString()`, so a test can sample the gated `isPressed` and
+   * `enabled` of the exact cell it pressed.
+   */
+  cellFeedback: Accessor<ReadonlyMap<string, CalendarFeedbackChannels>>;
+
+  /** A NavButton registers its channels on mount and clears them on cleanup. */
+  setNavButtonFeedback: (
+    slot: CalendarNavSlot,
+    channels: CalendarFeedbackChannels | undefined,
+  ) => void;
+
+  /** A Cell registers its channels under its date key, cleared on cleanup. */
+  setCellFeedback: (
+    dateKey: string,
+    channels: CalendarFeedbackChannels | undefined,
+  ) => void;
 }
 
 export const CalendarContext = context<CalendarContextValue | undefined>(undefined);
