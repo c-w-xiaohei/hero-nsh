@@ -2,7 +2,13 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { shadow } from "../../tokens/geometry";
+// `shadow.surface.both` of `src/tokens/geometry.ts` written out: the M2 class
+// walker imports this file through Node ESM, which does not resolve
+// extensionless relative specifiers, so the geometry module cannot be imported
+// from a `.styles.ts`. Same pattern as `tooltip.styles.ts` /
+// `switch.styles.ts`; keep in sync with `SHADOW_VALUES.surface`.
+const SHADOW_SURFACE_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
 
 /**
  * Tabs' variant table, mirroring `@heroui/styles` 3.2.7
@@ -108,7 +114,7 @@ export const tabsVariants = tv({
     // `tab-indicator.tsx` (NSH does not transition translate or layout).
     // R-062: the secondary look is on the `variant` dimension below.
     tabIndicator:
-      `absolute start-0 top-0 size-full rounded-3xl bg-segment ${shadow.surface.both} z-[-1]`,
+      `absolute start-0 top-0 size-full rounded-3xl bg-segment ${SHADOW_SURFACE_BOTH} z-[-1]`,
     // R-022: `.tabs__list` → `@apply inline-flex p-1`; `p-1` moved into the
     // `density` axis (A-001). R-058's secondary `p-0` moved into compound
     // entries so it still resolves after the density cell.
