@@ -29,8 +29,10 @@ type Box = {
 
 // Resolved on the harness theme (theme/hero-nsh.theme.json): `muted` is
 // oklch(0.5517 0.0138 285.94) → #71717aff, the same token Card's T-sheet
-// reads for its description part.
+// reads for its description part; `accent` is oklch(0.6204 0.195 253.83) →
+// #0485f7ff, the value switch.heroui.test.tsx pins for `text-accent`.
 const MUTED = "#71717aff";
+const ACCENT = "#0485f7ff";
 
 function openFixture(params: Record<string, string>): Promise<App> {
   return open("../../../description.fixtures.tsx", {
@@ -90,6 +92,19 @@ function spanOf(app: App, selector: string): Span {
 
 const BASIC_BOXES = ["basic", "custom", "long"];
 
+const DESC_SELECTORS = [
+  "id:desc-basic >> text:Save changes",
+  "id:desc-custom >> text:Custom tone",
+  "id:desc-long >> text:A",
+];
+
+const DESC_IDS = ["desc-basic", "desc-custom", "desc-long"];
+
+/** `texts()` minus the fixture's EnvProbe line, which names the injected environment on purpose. */
+function contentTexts(app: App): string[] {
+  return app.texts().filter((text) => !text.startsWith("input="));
+}
+
 describe("description mobile", () => {
   // adapt-sheets/description.md M-001 (baseline): the default environment is
   // the desktop-parity surface — the description paints its upstream
@@ -116,7 +131,7 @@ describe("description mobile", () => {
 
     const custom = app.spanStyle("id:desc-custom >> text:Custom tone");
     expect(custom.fontWeight).toBe(600);
-    expect(custom.color).not.toBe(MUTED);
+    expect(custom.color).toBe(ACCENT);
 
     const height = (name: string) =>
       Math.max(...boxes(app).filter((b) => b.name === name).map((b) => b.height));
@@ -134,13 +149,13 @@ describe("description mobile", () => {
     await settleLayout(touch, BASIC_BOXES);
     await settleLayout(pointer, BASIC_BOXES);
 
-    for (const selector of [
-      "id:desc-basic >> text:Save changes",
-      "id:desc-custom >> text:Custom tone",
-      "id:desc-long >> text:A",
-    ]) {
+    for (const selector of DESC_SELECTORS) {
       expect(spanOf(touch, selector)).toEqual(spanOf(pointer, selector));
     }
+    for (const id of DESC_IDS) {
+      expect(touch.shows(`id:${id}`)).toBe(pointer.shows(`id:${id}`));
+    }
+    expect(contentTexts(touch)).toEqual(contentTexts(pointer));
     expect(boxSet(touch)).toEqual(boxSet(pointer));
   });
 
@@ -156,9 +171,13 @@ describe("description mobile", () => {
     await settleLayout(both, BASIC_BOXES);
     await settleLayout(plain, BASIC_BOXES);
 
-    expect(spanOf(compact, "id:desc-basic >> text:Save changes")).toEqual(
-      spanOf(plain, "id:desc-basic >> text:Save changes"),
-    );
+    for (const selector of DESC_SELECTORS) {
+      expect(spanOf(compact, selector)).toEqual(spanOf(plain, selector));
+    }
+    for (const id of DESC_IDS) {
+      expect(compact.shows(`id:${id}`)).toBe(plain.shows(`id:${id}`));
+    }
+    expect(contentTexts(compact)).toEqual(contentTexts(plain));
     expect(boxSet(compact)).toEqual(boxSet(plain));
     expect(boxSet(both)).toEqual(boxSet(plain));
   });
