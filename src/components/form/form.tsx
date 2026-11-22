@@ -225,6 +225,9 @@ export function FormRoot(props: FormRootProps): JSX.Element {
   // The submit channel (port sheet §5.2, §5.3): a control calls it, the Form
   // builds one event and calls the caller's `onSubmit` once. The props getter
   // is read here, when the submission happens, not when the Form was created.
+  // A-008's fixture bridge lands here too — `SubmitField` in
+  // harness/form.fixtures.tsx calls this `submit()` from an Input `onSubmit`,
+  // standing in for the field units' production Return bridge until it lands.
   const submit = () => {
     const handler = local.onSubmit;
 
