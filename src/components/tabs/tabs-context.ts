@@ -1,4 +1,4 @@
-import type { Accessor, Bounds, Size } from "nsh";
+import type { Accessor, Bounds, Size, ViewRef } from "nsh";
 import { context } from "nsh";
 
 import type { ListCollection } from "../../primitives/list";
@@ -80,6 +80,17 @@ export interface TabsContextValue {
 
   /** Forgets a tab's frame when that tab unmounts. */
   unregisterBounds: (key: string) => void;
+
+  /**
+   * The tab's `ViewRef`, which the list container's `reveal` calls need —
+   * `reveal` scrolls the enclosing scroll views direction-aware (right-to-left
+   * included) once the turn's layout lands, where an offset computed from
+   * `bounds` + the reported `offset` cannot.
+   */
+  tabRef: (key: string) => ViewRef | undefined;
+
+  /** Reports a tab's view from its `ref` callback; `undefined` unregisters. */
+  registerTabRef: (key: string, node: ViewRef | undefined) => void;
 
   /**
    * The tab selected before the current one, which the newly mounted indicator
