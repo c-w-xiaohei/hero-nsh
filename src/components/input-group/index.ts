@@ -64,6 +64,10 @@ export type {
  * Variants
  * -----------------------------------------------------------------------------------------------*/
 
+// A-011: the fixture seam for this unit lives in
+// `harness/input-group.fixtures.tsx` — `Scoped` (`host.params.scope="touch"`
+// → `EnvironmentScope input="touch"`) wrapping every case plus the `layout` /
+// `hover` / `submit` / `kbd` mobile cases that carry the assertion probes.
 export { inputGroupVariants } from "./input-group.styles";
 
 export type { InputGroupVariants, InputGroupVariant } from "./input-group.styles";

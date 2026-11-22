@@ -16,6 +16,7 @@
  */
 
 import type {
+  Bounds,
   JSX,
   MouseEvent as NshMouseEvent,
   StyleProp,
@@ -26,6 +27,7 @@ import type {
 import { computed, PanResponder, signal, split, View } from "nsh";
 
 import { createKeymapScope } from "../../primitives";
+import { createInput } from "../../primitives/environment";
 import { joinClassNames } from "./class-names";
 import { useColorAreaContext } from "./color-area-context";
 import type {
@@ -108,6 +110,11 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
   const { state, slots, isDisabled, direction, modality, displayColor } =
     context;
 
+  // A-001 / A-003: the environment seam — gates the seam's hitSlop binding and
+  // the sticky-hover suppression; read once in the body (context reads are
+  // body-only in NSH).
+  const input = createInput();
+
   const [local, rest] = split(props, [
     "children",
     "className",
@@ -124,6 +131,11 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
     "nativeID",
     "focusable",
     "role",
+    // A-001: `hitSlop`/`onLayout` are `ViewProps` members that already reach the
+    // view through `rest`; they are split so the seam's layout channel runs
+    // first and the caller's explicit `hitSlop` wins over the seam's value.
+    "hitSlop",
+    "onLayout",
     "aria-label",
     "accessibilityLabel",
   ] as const);
@@ -321,9 +333,14 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
    * ----------------------------------------------------------------------------------------- */
 
   const handleMouseEnter = (event: NshMouseEvent) => {
+    // A-003: under touch the hover state stays off — on web a press leaves a
+    // sticky `hover:` style behind, so enter/leave are short-circuited at the
+    // environment axis (the `onMouse*` pass-through still runs). The hovered
+    // flag is cleared too, so a mid-hover environment flip cannot leave it
+    // stuck on.
     local.onMouseEnter?.(event);
 
-    if (isDisabled() || isHovered()) {
+    if (input() === "touch" || isDisabled() || isHovered()) {
       return;
     }
 
@@ -334,6 +351,11 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
 
   const handleMouseLeave = (event: NshMouseEvent) => {
     local.onMouseLeave?.(event);
+
+    if (input() === "touch") {
+      isHovered.set(false);
+      return;
+    }
 
     if (!isHovered()) {
       return;
@@ -364,6 +386,13 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
   const handleBlur = () => {
     context.setFocused(false);
     local.onBlur?.();
+  };
+
+  // A-001: the seam's layout channel keeps `bounds`/`hitSlop` honest; the
+  // caller's `onLayout` still runs.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    context.thumbFeedback.layout(event);
+    local.onLayout?.(event);
   };
 
   /* -------------------------------------------------------------------------------------------
@@ -439,6 +468,11 @@ export function ColorAreaThumb(props: ColorAreaThumbProps): JSX.Element {
         "opacity-50 cursor-not-allowed": isDisabled(),
       }}
       style={thumbStyle()}
+      // A-001: the invisible-hit-area path — `undefined` under the default
+      // pointer environment or while `isDisabled`; the caller's own `hitSlop`
+      // always wins (same internal wiring as radio's A-002).
+      hitSlop={local.hitSlop ?? context.thumbFeedback.hitSlop()}
+      onLayout={handleLayout}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
