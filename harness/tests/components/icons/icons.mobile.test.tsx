@@ -1,6 +1,6 @@
 import { describe, expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
-import { callsOf } from "../../helpers/calls";
+import { calls, callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the icons adapt unit, one test per row of
@@ -186,7 +186,10 @@ describe("icons mobile", () => {
     await expect(app.press("id:icon-close")).rejects.toMatchObject({
       code: "ERR_NSH_TEST_NOT_FOUND",
     });
-    expect(callsOf(app, "layout").length).toBeGreaterThan(0);
+    // The probe channel holds layout records and nothing else: the rejected
+    // press left no trace, and no gesture or press path fired.
+    expect(calls(app).length).toBeGreaterThan(0);
+    expect(calls(app).every((call) => call.name === "layout")).toBe(true);
   });
 
   // adapt-sheets/icons.md M-006 (A-007, A-008): the scope wiring itself —

@@ -37,7 +37,7 @@ import { probe } from "@scenario/probe";
  * directory as the app root, so a fixture under harness/tests/... would find no
  * nsh.json and lose the `@heroui/react` alias and the theme.
  *
- * host.params.case: defaults (all sixteen with layout probes), size (width and
+ * host.params.case: defaults (fifteen icons with layout probes), size (width and
  * height props), class-name (className override), test-id (custom identity),
  * colors (visual only), mobile (the dual-environment row the
  * `icons.mobile.test.tsx` assertions drive).
