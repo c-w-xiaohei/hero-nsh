@@ -33,6 +33,11 @@ import { alertDialogVariants } from "./alert-dialog.styles";
  * and the offset signal — while the Dialog is the view that moves and hosts
  * the responder props, so the channel crosses the context rather than a prop.
  * `null` outside a Backdrop subtree.
+ *
+ * (A-008) This context value is also what the `SwipeProbe` in
+ * `harness/alert-dialog.fixtures.tsx` reads to report `panKeys`/`offset` —
+ * the §4 observation carrier lives in the fixture file, outside the gate's
+ * component-only marker scan.
  */
 export interface AlertDialogSwipe {
   /** Spread onto the Dialog's view; `{}` whenever the gesture is gated off. */

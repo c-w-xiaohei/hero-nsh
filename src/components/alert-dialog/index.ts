@@ -96,6 +96,9 @@ export type {
  * -----------------------------------------------------------------------------------------------*/
 export { alertDialogVariants } from "./alert-dialog.styles";
 
+// A-007: `AlertDialogPresentation` is the additive export of the C seam — the
+// carrier domain the `presentation` pin resolves to, re-exported with the
+// variant types it sits beside in styles.
 export type {
   AlertDialogPlacement,
   AlertDialogPresentation,

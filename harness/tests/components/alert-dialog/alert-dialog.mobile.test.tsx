@@ -104,13 +104,10 @@ describe("alert-dialog mobile", () => {
 
   // adapt-sheets/alert-dialog.md M-002 (A-001): a `"panel"` pin beats the
   // touch + compact auto rule — the card stays centered under the `max-w-md`
-  // cap instead of docking.
-  //
-  // adapt-sheets/alert-dialog.md M-012 (A-007): the `AlertDialogPresentation`
-  // type annotation on the pin is the compile-time half of the index.ts
-  // export assertion — `nsh check harness` failing on it would mean the type
-  // never reached the public surface.
-  test("M-002 presentation=\"panel\" pin holds the centered panel under touch-compact", async () => {
+  // cap instead of docking. (The title keeps 'panel' single-quoted: a
+  // backslash-escaped `\"` survives into the gate's scanned title and the
+  // executed name then never matches it.)
+  test("M-002 presentation='panel' pin holds the centered panel under touch-compact", async () => {
     const pin: AlertDialogPresentation = "panel";
     const app = await openDialog({ scope: "touch-compact", presentation: pin });
 
@@ -394,5 +391,23 @@ describe("alert-dialog mobile", () => {
     );
     expect(app.shows("id:ad-card")).toBe(true);
     expect(falseOpenChanges(app)).toEqual([]);
+  });
+
+  // adapt-sheets/alert-dialog.md M-012 (A-007): `AlertDialogPresentation`
+  // reaches the public surface — the top-level `import type` plus the
+  // annotation on the pin below; `nsh check harness` failing on either means
+  // index.ts never re-exported the type. The runtime half (what the pin
+  // resolves to) is covered by M-001/M-002, so this test re-drives the same
+  // pin call and asserts the panel geometry as the observable smoke check.
+  test("M-012 AlertDialogPresentation annotates the presentation pin", async () => {
+    const pin: AlertDialogPresentation = "panel";
+    const app = await openDialog({ scope: "touch-compact", presentation: pin });
+
+    await settle(app, 300);
+
+    expect(pin).toBe("panel");
+    const dialog = lastLayout(app, "dialog");
+    expect(Math.abs(centerY(dialog) - CENTER_Y)).toBeLessThanOrEqual(40);
+    expect(dialog.width).toBeLessThan(600);
   });
 });
