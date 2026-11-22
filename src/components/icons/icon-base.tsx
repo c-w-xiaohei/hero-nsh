@@ -260,6 +260,15 @@ interface IconCanvasProps extends IconProps {
  * icon's path with the resolved paint. All fifteen icons are this component
  * with different data, so the shrinking, the prop merging and the hiding are
  * written once.
+ *
+ * Mobile 落点: the component itself carries no axis — a decorative Canvas has
+ * no hit area, no hover dependence and no overlay container (adapt sheet
+ * A-001…A-006, all 保留). The two `接轴` spots are realized outside this tree:
+ * // A-007 — the `case === "mobile"` scope branch in
+ * `harness/icons.fixtures.tsx` (EnvironmentScope fed from
+ * `host.params.input`/`density`);
+ * // A-008 — `harness/tests/components/icons/icons.mobile.test.tsx`, the
+ * M-001…M-006 assertions running headless+web under the desktop pin.
  */
 export function IconCanvas(props: IconCanvasProps): JSX.Element {
   const [local] = split(props, [
