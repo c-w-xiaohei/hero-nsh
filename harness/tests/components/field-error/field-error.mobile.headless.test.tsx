@@ -23,9 +23,10 @@ import { callsOf } from "../../helpers/calls";
  * null gates, `spanStyle` for the font and tone, `app.storage()` probes for
  * the `field-error.registered` registration and the `layout` bounds
  * records. Padding has no query, so the `px-1`/`px-0.5`/`px-0` cells are
- * read from the error box's width and edge: `px-1` widens the box 8 pt over
- * the toggle's `px-0` (same text, same font), and `partClass: "p-2"`
- * widens it 16 pt with the left edge unmoved.
+ * read from the error box's width: `px-1` widens the box 8 pt over the
+ * toggle's `px-0` (same text, same font), `px-0.5` gives back 4 pt of it,
+ * and `partClass: "p-2"` trades `px-1`'s 4 pt sides for 8 pt (+8 width)
+ * while adding 8 pt above and below (+16 height).
  */
 
 type Params = Record<string, string>;
@@ -100,7 +101,7 @@ describe("field-error mobile (headless)", () => {
     // px-1 on both sides vs px-0: 4 pt left + 4 pt right, left edges equal.
     expect(Math.round(box.width - toggleBox.width)).toBe(8);
     expect(Math.round(box.x)).toBe(Math.round(toggleBox.x));
-  });
+  }, 120_000);
 
   // adapt-sheets/field-error.md M-002 (基线): the toggle field paints muted
   // and keeps zero inline padding (the px-0 override holds next to the
@@ -130,7 +131,7 @@ describe("field-error mobile (headless)", () => {
 
     const renderProps = await openCase("render-props");
     expect(renderProps.shows("text:Rendered via props")).toBe(true);
-  });
+  }, 120_000);
 
   // adapt-sheets/field-error.md M-003 (A-002, A-003): `input` is not wired
   // — under an injected touch environment the invalid / toggle /
@@ -161,7 +162,7 @@ describe("field-error mobile (headless)", () => {
         expect(touchStyle).toEqual(pointerStyle);
       }
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/field-error.md M-004 (A-002): `density="compact"`
   // tightens the padding cell one step — `px-1` → `px-0.5` is 2 pt off the
@@ -193,13 +194,13 @@ describe("field-error mobile (headless)", () => {
     expect(compactToggle.spanStyle("text:Enter a valid email").color).toBe(
       "#71717aff",
     );
-  });
+  }, 120_000);
 
   // adapt-sheets/field-error.md M-005 (A-004): under touch the field-owner
   // channels hold — the registration probe records the children string
-  // exactly once, `partClass="p-2"` lands on the error box (+16 pt width,
-  // left edge unmoved), and the transition case's RAC fallback still
-  // follows the presses.
+  // exactly once, `partClass="p-2"` lands on the error box (+8 pt width,
+  // +16 pt height), and the transition case's RAC fallback still follows
+  // the presses.
   test("M-005 under touch: registration, partClass channel and the transition fallback hold", async () => {
     const app = await openCase("invalid", { input: "touch" });
     expect(callsOf(app, "field-error.registered")).toEqual([
@@ -229,7 +230,7 @@ describe("field-error mobile (headless)", () => {
 
     await transition.press("id:set-late-error");
     expect(transition.shows("text:late error")).toBe(false);
-  });
+  }, 120_000);
 
   // adapt-sheets/field-error.md M-006 (A-005): a plain text part owns no
   // press path — pressing the error under touch is either refused by the
@@ -248,12 +249,15 @@ describe("field-error mobile (headless)", () => {
     expect(callsOf(app, "field-error.registered")).toEqual([
       ["Enter a valid email"],
     ]);
-  });
+  }, 120_000);
 
   // adapt-sheets/field-error.md M-007 (A-007): the fixture's EnvironmentScope
   // wiring — no params means the host baseline, each param lands on its
-  // axis, and the ten existing cases and `message` behave as before.
-  test("M-007 the scope feeds input/density/partClass and the case set is unchanged", async () => {
+  // axis, and `message` behaves as before. The case-name sweep is the next
+  // two tests: on the web target every `open` holds its app until the test
+  // ends, so one test cannot sweep all ten cases without exhausting the
+  // host (the headless file splits the same way for identical coverage).
+  test("M-007 the scope feeds input/density/partClass and the message param", async () => {
     // Unscoped == explicit host baseline.
     const plain = await openCase("invalid");
     const explicit = await openCase("invalid", {
@@ -270,27 +274,49 @@ describe("field-error mobile (headless)", () => {
     expect(Math.round((await errorBox(plain)).width - (await errorBox(compact)).width)).toBe(4);
 
     const padded = await openCase("invalid", { partClass: "p-2" });
-    expect(Math.round((await errorBox(padded)).width - (await errorBox(plain)).width)).toBe(8);
+    const paddedBox = await errorBox(padded);
+    const plainBox = await errorBox(plain);
+    expect(Math.round(paddedBox.width - plainBox.width)).toBe(8);
+    expect(Math.round(paddedBox.height - plainBox.height)).toBe(16);
 
-    // The ten cases and the message param still answer.
+    // The message param still answers.
     const kobalte = await openCase("invalid", { message: "ErrorMessage" });
     expect(kobalte.shows("text:ErrorMessage")).toBe(true);
-    for (const caseName of [
-      "valid",
-      "empty",
-      "render-props",
-      "toggle",
-      "required",
-      "disabled",
-      "readonly",
-      "with-id",
-      "custom-id",
-      "transition",
-    ]) {
+  }, 120_000);
+
+  // adapt-sheets/field-error.md M-007 (A-007), second half: the first six
+  // case names still mount their field state — the two null gates stay
+  // shut, the render prop resolves, the toggle field answers.
+  test("M-007 case sweep: valid, empty, render-props, toggle, required, disabled", async () => {
+    const expected: Record<string, string | null> = {
+      valid: null,
+      empty: null,
+      "render-props": "Rendered via props",
+      toggle: "Enter a valid email",
+      required: "Enter a valid email",
+      disabled: "Enter a valid email",
+    };
+    for (const [caseName, text] of Object.entries(expected)) {
       const app = await openCase(caseName);
-      expect(app.count("id:set-late-error") >= 0).toBe(true);
+      expect(app.shows(`text:${text ?? "Enter a valid email"}`)).toBe(
+        text !== null,
+      );
     }
-  });
+  }, 120_000);
+
+  // adapt-sheets/field-error.md M-007 (A-007), third half: the remaining
+  // case names — `transition` mounts its toggle button and no error until
+  // pressed.
+  test("M-007 case sweep: readonly, with-id, custom-id, transition", async () => {
+    for (const caseName of ["readonly", "with-id", "custom-id"]) {
+      const app = await openCase(caseName);
+      expect(app.shows("text:Enter a valid email")).toBe(true);
+    }
+
+    const transition = await openCase("transition");
+    expect(transition.count("id:set-late-error")).toBe(1);
+    expect(transition.shows("text:late error")).toBe(false);
+  }, 120_000);
 
   // adapt-sheets/field-error.md M-008 (A-008): the pinned desktop open is
   // the assertion — `platform:"windows"` + 1024×768 lands on the pointer
@@ -302,5 +328,5 @@ describe("field-error mobile (headless)", () => {
     expect(app.shows("text:ErrorMessage")).toBe(true);
     expect(callsOf(app, "field-error.registered")).toEqual([["ErrorMessage"]]);
     expect(app.spanStyle("text:ErrorMessage").color).toBe("#ff383cff");
-  });
+  }, 120_000);
 });
