@@ -38,3 +38,50 @@ export function sliderTouchClaimed(identifier: number): boolean {
 export function releaseSliderTouch(identifier: number): void {
   claimedTouches.delete(identifier);
 }
+
+/*
+ * The thumb's slop-expanded hit area in surface (`pageX`/`pageY`)
+ * coordinates, published by the thumb's `onTouchStart` — the one handler
+ * guaranteed to run at finger-down, before any move-frame claim, and not
+ * again while the finger is held, so the frame stays fixed for the gesture
+ * that consults it.
+ *
+ * The track's `shouldClaim` consults it because the responder system's move
+ * negotiation asks ancestor capture predicates before the target's own
+ * (`onMoveShouldSetResponderCapture` walks outside-in, and it keeps asking
+ * on every move frame): a drag that went down inside the thumb's hit area —
+ * bounds plus `hitSlop`, whose expansion is itself part of the thumb's hit
+ * test — would otherwise be stolen by the track's claim and committed as a
+ * press-jump instead of the thumb's delta drag (the same mechanism the
+ * color-slider fix measured: the track's pan claimed `app.drag("id:thumb")`
+ * while the thumb's `panActive` stayed false).
+ *
+ * The check is geometric rather than an id comparison (`GestureResponderEvent
+ * .target` is a numeric id a part cannot read its own side of), so it also
+ * defers touches that went down on a view inside the thumb.
+ */
+
+let thumbHitArea: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} | null = null;
+
+/** Registers the thumb's slop-expanded frame in surface coordinates; `null` on unmount. */
+export function setThumbHitArea(
+  area: { x: number; y: number; width: number; height: number } | null,
+): void {
+  thumbHitArea = area;
+}
+
+/** Whether a surface-space point (`event.pageX - gesture.dx` of a claim) fell inside the thumb's expanded hit area. */
+export function insideThumbHitArea(x: number, y: number): boolean {
+  return (
+    thumbHitArea !== null &&
+    x >= thumbHitArea.x &&
+    x <= thumbHitArea.x + thumbHitArea.width &&
+    y >= thumbHitArea.y &&
+    y <= thumbHitArea.y + thumbHitArea.height
+  );
+}
