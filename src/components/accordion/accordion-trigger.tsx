@@ -9,12 +9,18 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { computed, effect, reduceMotion, signal, split, untracked, View } from "nsh";
+import { computed, createAnimatedValue, effect, reduceMotion, signal, split, untracked, View } from "nsh";
 
 import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+} from "../../primitives/pressable";
+import type { PressableFeedbackContextValue } from "../../primitives/pressable";
 import { renderChildren } from "./children";
 import { AccordionContext, AccordionItemContext } from "./accordion-context";
 
@@ -275,6 +281,34 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
   const isSurface = computed(() => accordion.variant() === "surface");
   const isDisabled = computed(() => item.isDisabled() || local.isDisabled === true);
   const isPending = computed(() => local.isPending ?? false);
+  const isBlocked = () => isDisabled() || isPending();
+
+  // A-002: the press-feedback seam, gated on `input() === "touch"` and the
+  // blocked flags — under a pointer environment it is a physical no-op, so
+  // the desktop event chain below is untouched. `feedback.isPressed` is its
+  // own canonical channel and never merges into the render-prop `isPressed`.
+  const input = createInput();
+  const enabled = () => input() === "touch" && !isBlocked();
+  const feedback = createPressFeedback({ enabled });
+
+  // A-004: the seam's read half for consumers. `AccordionTriggerRenderProps.
+  // isPressed` is a bare boolean accessor, so a part or a probe that needs
+  // the animated channels reads this context (the e-parts ControlField /
+  // ListGroup split). No Highlight/Ripple/Scale overlay mounts by default —
+  // a caller that wants a press visual composes
+  // `<PressableFeedback.Highlight/>` into the trigger's children.
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
 
   const renderProps: AccordionTriggerRenderProps = {
     isHovered: hovered,
@@ -372,10 +406,13 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
   };
 
   const handlePressDown = (event: PressEvent) => {
-    if (isDisabled()) {
+    if (isBlocked()) {
       return;
     }
 
+    // A-002: after the blocked early-out, before the channel's own notes —
+    // a gated (pointer) call is a no-op inside.
+    feedback.pressDown(event);
     notePress(event);
     pressed.set(true);
     local.onPressStart?.(event);
@@ -389,7 +426,12 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
       local.onPressChange?.(false);
     }
 
-    if (isDisabled()) {
+    // A-002: end and cancel share `onPressUp`; the seam resets here, before
+    // the blocked early-out, so a press a disable flip stranded still
+    // completes its round-trip.
+    feedback.pressUp(event);
+
+    if (isBlocked()) {
       return;
     }
 
@@ -398,7 +440,7 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
   };
 
   const handlePress = (event: PressEvent) => {
-    if (isDisabled()) {
+    if (isBlocked()) {
       return;
     }
 
@@ -414,7 +456,7 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
   };
 
   const handleLongPress = (event: PressEvent) => {
-    if (isDisabled()) {
+    if (isBlocked()) {
       return;
     }
 
@@ -424,7 +466,7 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
-    if (isDisabled() || hovered()) {
+    if (isBlocked() || hovered()) {
       return;
     }
 
@@ -528,9 +570,20 @@ export function AccordionTrigger(props: AccordionTriggerProps): JSX.Element | nu
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
       onBlur={handleBlur}
-      onLayout={local.onLayout}
+      // A-003: the view-prop half of the hit area — the seam's computed
+      // slop, undefined while gated off or the view is already at target.
+      hitSlop={feedback.hitSlop()}
+      onLayout={(event) => {
+        // A-002: `bounds` feeds `hitSlop` and `scale`, so the seam reads
+        // the layout first.
+        feedback.layout(event);
+        local.onLayout?.(event);
+      }}
     >
-      {content()}
+      {/* A-004: children resolve exactly once, inside the provider. */}
+      <PressableFeedbackContext.Provider value={feedbackValue}>
+        {content()}
+      </PressableFeedbackContext.Provider>
     </View>
   );
 }
