@@ -6,7 +6,8 @@ import { calls, callsOf } from "../../helpers/calls";
  * Mobile assertions for the alert adapt unit, one test per row of
  * adapt-sheets/alert.md §4 (M-001…M-004). The fixture is
  * `harness/alert.fixtures.tsx`: case "mobile" mounts the probed alert (root,
- * indicator and content each report their box over `onLayout`) under
+ * indicator and content each report their box over `onLayout`, plus a second
+ * alert in a 200pt box for the narrow-width `flex-auto` check) under
  * `EnvironmentScope` driven by `host.params.input` / `host.params.density`.
  *
  * Absent params leave the host-derived environment — pointer + default
@@ -54,9 +55,14 @@ function boxes(app: App): Box[] {
 /** Waits until every probed box has reported at least once. */
 async function settleLayout(app: App): Promise<void> {
   await app.waitUntil(() =>
-    ["root", "indicator", "content"].every((name) =>
-      boxes(app).some((box) => box.name === name),
-    ),
+    [
+      "root",
+      "indicator",
+      "content",
+      "narrow-root",
+      "narrow-indicator",
+      "narrow-content",
+    ].every((name) => boxes(app).some((box) => box.name === name)),
   );
 }
 
@@ -137,6 +143,28 @@ describe("alert mobile", () => {
     expect(Math.round(root.height - content.height)).toBe(24);
     // flex-auto keeps the content wide inside the row, not squeezed to zero.
     expect(Math.round(content.width)).toBeGreaterThan(0);
+
+    // The narrow twin: in a 200pt box the description's max-content width
+    // (~200pt) exceeds the ~128pt the row leaves the content, so only
+    // `flex-auto`'s shrink side keeps both texts on screen — they show, the
+    // content box stays inside the row's leftover width, and nothing clips
+    // to zero height.
+    expect(app.shows("id:alert-narrow-title >> text:Update available")).toBe(
+      true,
+    );
+    expect(
+      app.shows(
+        "id:alert-narrow-description >> text:A new version is ready to install.",
+      ),
+    ).toBe(true);
+    const narrowRoot = boxOf(app, "narrow-root");
+    const narrowContent = boxOf(app, "narrow-content");
+    // px-4×2 + indicator 24 + gap 16 = 72pt of non-content row width.
+    expect(Math.round(narrowContent.width)).toBeLessThanOrEqual(
+      Math.round(narrowRoot.width) - 72,
+    );
+    expect(Math.round(narrowContent.width)).toBeGreaterThan(0);
+    expect(Math.round(narrowContent.height)).toBeGreaterThan(0);
   });
 
   // adapt-sheets/alert.md M-002 (A-001, A-003): injected touch changes no

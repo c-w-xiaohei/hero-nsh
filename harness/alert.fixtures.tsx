@@ -90,6 +90,36 @@ function MobileCase() {
           </Alert.Description>
         </Alert.Content>
       </Alert>
+      {/*
+       * The same alert in a 200pt box: `Alert.Content` is `flex-auto`, so the
+       * row must hand the text the leftover width instead of clipping it
+       * (adapt-sheets/alert.md M-001). The description's max-content width
+       * exceeds what 200pt leaves, so only the shrink side of `flex-auto`
+       * keeps both texts on screen.
+       */}
+      <View style={{ width: 200 }}>
+        <Alert
+          status="warning"
+          testID="alert-narrow-root"
+          onLayout={boxProbe("narrow-root")}
+        >
+          <Alert.Indicator
+            testID="alert-narrow-indicator"
+            onLayout={boxProbe("narrow-indicator")}
+          />
+          <Alert.Content
+            testID="alert-narrow-content"
+            onLayout={boxProbe("narrow-content")}
+          >
+            <Alert.Title testID="alert-narrow-title">
+              Update available
+            </Alert.Title>
+            <Alert.Description testID="alert-narrow-description">
+              A new version is ready to install.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
+      </View>
     </View>
   );
 }
