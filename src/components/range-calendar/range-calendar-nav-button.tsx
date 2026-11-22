@@ -1,15 +1,20 @@
 import type { JSX, PressEvent, ViewProps, ViewRef } from "nsh";
-import { signal, split, View } from "nsh";
+import { cleanup, signal, split, View } from "nsh";
 
 import { IconChevronLeft, IconChevronRight } from "../icons";
 import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { CalendarDefaultsContext } from "../calendar/calendar-context";
 import { useYearPicker } from "../calendar/year-picker-context";
 import { renderChildren } from "../calendar/children";
-import { useRangeCalendarContext } from "./range-calendar-context";
+import {
+  useRangeCalendarContext,
+  type RangeCalendarNavSlot,
+} from "./range-calendar-context";
 
 export interface RangeCalendarNavButtonProps
   extends Omit<ViewProps, "children" | "class" | "onPress" | "ref"> {
@@ -35,7 +40,7 @@ export interface RangeCalendarNavButtonProps
  * NSH has no slot-based prop context, so the part reads the range state itself.
  */
 export function RangeCalendarNavButton(props: RangeCalendarNavButtonProps): JSX.Element {
-  const { state, slots } = useRangeCalendarContext();
+  const { state, slots, setNavButtonFeedback } = useRangeCalendarContext();
   // R-009: the header fades both nav buttons while a year panel is open.
   // Upstream reaches them with `:has()`, which NSH does not have.
   const yearPicker = useYearPicker();
@@ -50,6 +55,7 @@ export function RangeCalendarNavButton(props: RangeCalendarNavButtonProps): JSX.
 
   const modality = createInteractionModality();
   const focused = signal(false);
+  const input = createInput();
 
   // R-030: a picker's layer cancels the chevron's right-to-left flip
   // (`.date-range-picker__popover .range-calendar__nav-button-icon { rotate: 0 }`).
@@ -71,6 +77,28 @@ export function RangeCalendarNavButton(props: RangeCalendarNavButtonProps): JSX.
         ? state.isNextVisibleRangeInvalid()
         : false;
   const disabled = () => local.isDisabled === true || rangeDisabled();
+
+  // A-003: the touch-only press-feedback seam. `hitSlop` is the invisible
+  // half of the hit-area path (the visible half is the `input` axis's
+  // `size-11`); no `scale`/`highlight`/`ripple` is bound — the press look
+  // stays the slot's `active:scale-[0.95]`. `enabled` folds `disabled` in so
+  // a blocked button (prop or range edge) expands nothing.
+  const feedbackEnabled = () => input() === "touch" && !disabled();
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
+
+  // The seam's channels go through the context so a fixture can read the
+  // computed `hitSlop` — a view prop `nsh/test` cannot observe (sheet §6).
+  // `local.slot` is a static prop, so it keys the registration directly.
+  const navSlot = (): RangeCalendarNavSlot =>
+    local.slot === "previous" ? "previous" : "next";
+  setNavButtonFeedback(navSlot(), {
+    isPressed: feedback.isPressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    hitSlop: feedback.hitSlop,
+    enabled: feedbackEnabled,
+  });
+  cleanup(() => setNavButtonFeedback(navSlot(), undefined));
 
   const label = local.slot === "previous" ? "Previous" : "Next";
 
@@ -118,6 +146,23 @@ export function RangeCalendarNavButton(props: RangeCalendarNavButtonProps): JSX.
       onBlur={() => {
         focused.set(false);
       }}
+      // A-003: the seam's press edges and layout feed `isPressed`/`hitSlop`;
+      // caller handlers still fire, with the layout callback last (sheet §2).
+      onPressDown={(event) => {
+        feedback.pressDown(event);
+        rest.onPressDown?.(event);
+      }}
+      onPressUp={(event) => {
+        feedback.pressUp(event);
+        rest.onPressUp?.(event);
+      }}
+      onLayout={(event) => {
+        feedback.layout(event);
+        rest.onLayout?.(event);
+      }}
+      // A-003: the seam's computed hitSlop is the default writer of this view
+      // prop; a caller's own value still wins, as ViewProps passthrough.
+      hitSlop={rest.hitSlop ?? feedback.hitSlop()}
       onPress={activate}
     >
       {local.children

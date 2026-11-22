@@ -1,5 +1,5 @@
 import type { JSX, MouseEvent as NshMouseEvent, PressEvent, ViewProps, ViewRef } from "nsh";
-import { computed, effect, signal, split, Text, View } from "nsh";
+import { cleanup, computed, effect, signal, split, Text, View } from "nsh";
 import type { CalendarDate } from "@internationalized/date";
 import { DateFormatter, isSameDay, isSameMonth, isToday } from "@internationalized/date";
 
@@ -7,6 +7,8 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { renderChildren } from "../calendar/children";
 import type { CalendarCellRenderProps } from "../calendar/calendar-context";
 import {
@@ -73,7 +75,7 @@ function eraFormat(date: CalendarDate): "short" | undefined {
  * outside-month neighbour", like upstream's element without a `td`.
  */
 export function RangeCalendarCell(props: RangeCalendarCellProps): JSX.Element {
-  const { state, slots, isYearPickerOpen } = useRangeCalendarContext();
+  const { state, slots, isYearPickerOpen, setCellFeedback } = useRangeCalendarContext();
   const grid = RangeCalendarGridContext();
   const row = RangeCalendarRowContext();
   const [local, rest] = split(props, [
@@ -93,6 +95,7 @@ export function RangeCalendarCell(props: RangeCalendarCellProps): JSX.Element {
   const modality = createInteractionModality();
   const hovered = signal(false);
   const pressed = signal(false);
+  const input = createInput();
 
   // R-035/R-036 and R-047/R-048 read the cell's place in its week row; without
   // a row provider the cell behaves as a middle cell (§3).
@@ -129,6 +132,29 @@ export function RangeCalendarCell(props: RangeCalendarCellProps): JSX.Element {
   const isTabStop = computed(
     () => !disabled() && local.excludeFromTabOrder !== true && isSameDay(date, state.focusedDate()),
   );
+
+  // A-004: the touch-only press-feedback seam, gated out on the blockers the
+  // press path already honors — a disabled, unavailable or read-only cell
+  // expands and records nothing, so its `enabled` reads false either way.
+  // A-005: the cell never binds the seam's `hitSlop` — seven columns of
+  // `aspect-square` cells sit edge to edge, and a 4pt slop ring per cell
+  // would overlap the neighbors into ambiguous hit space; the `input` axis's
+  // 44pt column is the minimum-target path instead.
+  const feedbackEnabled = () =>
+    input() === "touch" && !disabled() && !unavailable() && !state.isReadOnly;
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
+
+  // The seam's channels go through the context keyed by this date so a
+  // fixture can sample the gated `isPressed`/`enabled` — `hitSlop` is a view
+  // prop `nsh/test` cannot read (sheet §6). `local.date` is a static prop.
+  setCellFeedback(date.toString(), {
+    isPressed: feedback.isPressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    hitSlop: feedback.hitSlop,
+    enabled: feedbackEnabled,
+  });
+  cleanup(() => setCellFeedback(date.toString(), undefined));
 
   const dateFormatter = new DateFormatter(state.locale, {
     weekday: "long",
@@ -256,8 +282,13 @@ export function RangeCalendarCell(props: RangeCalendarCellProps): JSX.Element {
       // R-032: today's soft accent fill.
       today() ? "bg-accent-soft text-accent-soft-foreground" : ""
     } ${
-      // R-033: today's hover, only while the day is not selected.
-      !selected() && today() ? "hover:bg-accent-soft-hover" : ""
+      // R-033: today's hover, only while the day is not selected. Upstream
+      // gates the hover paints behind `(hover: hover)`; NSH has no hover
+      // media query, so the `input` axis carries the gate — under `touch`
+      // neither hover class is emitted, because web's sticky hover would
+      // otherwise keep the paint after a press (A-004). `hovered` still
+      // records the pointer events.
+      input() !== "touch" && !selected() && today() ? "hover:bg-accent-soft-hover" : ""
     } ${
       // R-037: the caps' solid accent circle (and the calendar's only place
       // that paints the accent foreground on a day number).
@@ -269,9 +300,9 @@ export function RangeCalendarCell(props: RangeCalendarCellProps): JSX.Element {
     } ${isCap() ? "active:bg-accent-hover" : ""} ${
       // R-042: a plain day lightens on hover. R-033 and R-042 are mutually
       // exclusive upstream; emitting one keeps them from overwriting each
-      // other in NSH's class layer (skill rule 4). Upstream gates both behind
-      // `(hover: hover)`, which the host cannot express (§8).
-      !selected() && !today() ? "hover:bg-default" : ""
+      // other in NSH's class layer (skill rule 4). The `(hover: hover)` gate
+      // becomes the `input` axis, as R-033 above.
+      input() !== "touch" && !selected() && !today() ? "hover:bg-default" : ""
     }`;
 
   // The children prop is read exactly once, at its placement inside the
@@ -333,12 +364,24 @@ export function RangeCalendarCell(props: RangeCalendarCellProps): JSX.Element {
             hovered.set(false);
             local.onHoverEnd?.(event);
           }}
+          // A-004: the seam's press edges head the chains — under touch they
+          // drive `isPressed` for probes; under pointer `enabled` is false
+          // and they only forward, so the desktop bookkeeping below is
+          // unchanged.
           onPressDown={(event) => {
+            feedback.pressDown(event);
             pressed.set(true);
             if (isKeyboardPress(event)) modality.setKeyboardModality();
             else modality.setPointerModality();
           }}
-          onPressUp={() => pressed.set(false)}
+          onPressUp={(event) => {
+            feedback.pressUp(event);
+            pressed.set(false);
+          }}
+          // A-004: the seam's `bounds` feed `hitSlop` computation — kept for
+          // symmetry even though the cell never binds hitSlop (A-005); the
+          // outer `td` view still owns the caller's `onLayout` passthrough.
+          onLayout={(event) => feedback.layout(event)}
           onPress={(event: PressEvent) => {
             local.onPress?.(event);
             if (isKeyboardPress(event)) modality.setKeyboardModality();
