@@ -19,7 +19,8 @@ export interface NumberFieldContextValue {
 
   /**
    * The `input` environment axis the root resolved once (A-002): the group's
-   * column width comes through `slots.groupCols()`, and the step buttons read
+   * column width comes through `slots.groupCols()` (the slot's `w-*` class
+   * mapped to its length), and the step buttons read
    * this single accessor for their seam gate and hold timings, so no part
    * reads the environment itself.
    */

@@ -219,9 +219,10 @@ export function NumberFieldGroup(props: NumberFieldGroupProps): JSX.Element {
     const decrement = field?.hasDecrement() ?? false;
     const increment = field?.hasIncrement() ?? false;
 
-    // A-003: the column width follows the `input` axis — the table's internal
-    // `groupCols` slot (40 px pointer, 44 px touch). A lone group keeps the
-    // pointer width, as the `pointer` default cell produces it.
+    // A-003: the column width follows the `input` axis — the context's
+    // `slots.groupCols()` length (40 px pointer, 44 px touch; the slot itself
+    // carries the `w-10`/`w-11` class and the root maps it). A lone group
+    // keeps the pointer width, as the `pointer` default cell produces it.
     const col = field?.slots.groupCols() ?? "40px";
 
     if (decrement && increment) {

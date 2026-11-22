@@ -31,7 +31,7 @@ import {
   type GlobalDomProps,
   hostProps,
 } from "./number-field-dom-props";
-import { numberFieldVariants } from "./number-field.styles";
+import { GROUP_COL_WIDTHS, numberFieldVariants } from "./number-field.styles";
 import type { NumberFieldVariants } from "./number-field.styles";
 import { renderChildren } from "./render-children";
 
@@ -293,7 +293,9 @@ export function NumberFieldRoot(props: NumberFieldRootProps): JSX.Element {
     input: () => resolvedSlots().input(),
     incrementButton: () => resolvedSlots().incrementButton(),
     decrementButton: () => resolvedSlots().decrementButton(),
-    groupCols: () => resolvedSlots().groupCols(),
+    // A-001: the slot carries a width class (`w-10`/`w-11`); the group's
+    // template and the probe consume the length it carries (40px/44px).
+    groupCols: () => GROUP_COL_WIDTHS[resolvedSlots().groupCols()] ?? "40px",
   } as NumberFieldContextValue["slots"];
 
   // --- Effective state ------------------------------------------------------

@@ -33,9 +33,10 @@ const SHADOW_FIELD_BOTH =
  * `base` / `group` / `input` / `incrementButton` / `decrementButton`,
  * `fullWidth` and `variant`. A-001 adds the encapsulation model's `input`
  * axis and one internal slot, `groupCols`: the step-column width the group
- * interpolates into its `grid-cols-[…]` template (40 px pointer, 44 px
- * touch). It carries a length, not a class — the template stays the class —
- * so `input` is its only axis and it has no base value.
+ * interpolates into its `grid-cols-[…]` template (`w-10` pointer, `w-11`
+ * touch). It carries a class, not the length itself — every string in the
+ * table must class-check — and `GROUP_COL_WIDTHS` below translates the class
+ * to the length the group's template and the field probe consume.
  */
 export const numberFieldVariants = tv({
   defaultVariants: {
@@ -139,7 +140,8 @@ export const numberFieldVariants = tv({
 
     // A-001: the step-column width the group reads through
     // `slots.groupCols()` and interpolates into its `grid-cols-[…]` template.
-    // A length, not a class — there is no base cell and no other axis feeds it.
+    // A class (`w-10` / `w-11`), not a length — a literal would fail the class
+    // check. `GROUP_COL_WIDTHS` maps the class back to the length.
     groupCols: "",
   },
   variants: {
@@ -176,17 +178,29 @@ export const numberFieldVariants = tv({
       pointer: {
         incrementButton: "active:bg-field-foreground/10 active:scale-[0.97]",
         decrementButton: "active:bg-field-foreground/10 active:scale-[0.97]",
-        groupCols: "40px",
+        groupCols: "w-10",
       },
       touch: {
         group: "min-h-11",
         incrementButton: "w-11",
         decrementButton: "w-11",
-        groupCols: "44px",
+        groupCols: "w-11",
       },
     },
   },
 });
+
+/**
+ * The length each `groupCols` class carries (`w-10` → `40px`, `w-11` →
+ * `44px`). The slot cannot store the length itself: every string in the tv()
+ * config is class-checked, and a raw `"40px"` is not a class. The root maps
+ * `slots.groupCols()`'s class to this length for the group's `grid-cols-[…]`
+ * template and the field probe.
+ */
+export const GROUP_COL_WIDTHS: Record<string, string> = {
+  "w-10": "40px",
+  "w-11": "44px",
+};
 
 export type NumberFieldVariants = VariantProps<typeof numberFieldVariants>;
 
