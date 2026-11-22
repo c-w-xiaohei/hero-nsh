@@ -1,6 +1,7 @@
 import type { Bounds, JSX, ScrollEvent, ScrollRef, Size, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { cleanup, computed, signal, split, View } from "nsh";
+import { cleanup, computed, effect, signal, split, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp } from "../icons";
 import { ScrollShadow, type ScrollShadowVisibility } from "../scroll-shadow";
 import { renderChildren } from "./children";
@@ -262,6 +263,56 @@ export function TabListContainer(props: TabListContainerProps): JSX.Element | nu
 
   tabs.registerScrollToKey(scrollKeyIntoView);
   cleanup(() => tabs.registerScrollToKey(undefined));
+
+  /* -------------------------------------------------------------------------------------------
+   * A-004: under touch, a programmatic selection centers the selected tab in
+   * the viewport — Native `TabsScrollView`'s `scrollAlign="center"` default
+   * (`N/components/tabs/tabs.tsx:212-287`). It is a gating seam, not a new
+   * gesture path: the `input()==="touch"` read is the whole divergence, and
+   * the pointer environment keeps the existing `focusedKey→scrollToItem`
+   * minimal-visibility scroll as its only scroll path.
+   *
+   * The geometry reuses the same physical coordinates as `scrollKeyIntoView`
+   * (content-space bounds minus a viewport-space offset, so a right-to-left
+   * horizontal list needs no sign flip); `clamp` keeps the target inside the
+   * scroll range, so a tab already near an edge lands at the edge.
+   * ----------------------------------------------------------------------------------------- */
+  const input = createInput();
+
+  effect(() => {
+    if (input() !== "touch") {
+      return;
+    }
+
+    const key = tabs.selectedKey();
+
+    if (key == null) {
+      return;
+    }
+
+    const tabBounds = tabs.bounds(key);
+    const vertical = isVertical();
+    const viewportSize = vertical ? viewport().height : viewport().width;
+
+    if (tabBounds == null || viewportSize <= 0) {
+      return;
+    }
+
+    const current = vertical ? offset().y : offset().x;
+    const start = vertical ? tabBounds.origin.y : tabBounds.origin.x;
+    const end = start + (vertical ? tabBounds.size.height : tabBounds.size.width);
+    const next = clamp((start + end) / 2 - viewportSize / 2);
+
+    if (next === current) {
+      return;
+    }
+
+    scroller?.scrollTo(
+      vertical
+        ? { y: next, animated: true }
+        : { x: next, animated: true },
+    );
+  });
 
   /* -------------------------------------------------------------------------------------------
    * Classes

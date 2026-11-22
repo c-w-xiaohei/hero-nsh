@@ -1,6 +1,7 @@
 import type { Accessor, Bounds, JSX, Size, StyleProp, ViewRef, ViewStyle } from "nsh";
 import { cleanup, computed, effect, signal, split, untracked, View } from "nsh";
 
+import { createDensity, createInput } from "../../primitives/environment";
 import { createSingleSelectListState } from "../../primitives/list";
 import { renderChildren } from "./children";
 import {
@@ -207,11 +208,20 @@ export function TabsRoot(props: TabsRootProps): JSX.Element {
   // R-042: upstream scopes alignment with `.tabs--align-* > :is(…)`; here the
   // variant table is resolved per instance and handed to every part through
   // the context, so a Tabs nested in a panel keeps its own slots.
+  // A-001: `input` and `density` are the environment's two variant axes,
+  // fed by the factory accessors — callers never set them, and the default
+  // environment resolves `pointer`/`default`, which keeps the desktop output
+  // verbatim.
+  const input = createInput();
+  const density = createDensity();
+
   const slots = computed<TabsSlots>(() =>
     tabsVariants({
       align: align(),
       variant: variant(),
       orientation: orientation(),
+      input: input(),
+      density: density(),
     }),
   );
 

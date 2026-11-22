@@ -8,12 +8,27 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, effect, signal, split, untracked, View } from "nsh";
+import {
+  cleanup,
+  computed,
+  createAnimatedValue,
+  effect,
+  signal,
+  split,
+  untracked,
+  View,
+} from "nsh";
 
 import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { createSelectableItem } from "../../primitives/selection";
 import { renderChildren } from "./children";
 import {
@@ -263,6 +278,36 @@ export function Tab(props: TabProps): JSX.Element | null {
   const focused = signal(false);
   const modality = createInteractionModality();
 
+  // A-002 / A-003: the `input` axis is read once here — it gates the
+  // press-feedback seam, the `hover:opacity-70` classList half and the hover
+  // state writes below.
+  const input = createInput();
+
+  // A-003: the touch-gated press-feedback seam (encapsulation.md §1,
+  // press-feedback 接缝). The gate folds `isDisabled` in so a disabled tab
+  // expands nothing; under the default pointer environment `enabled` stays
+  // false and every channel rests, so the tab pays nothing. The tab mounts no
+  // overlay — the selected state is already the selection feedback — but it
+  // provides the seam's context so a caller can compose
+  // `PressableFeedback.Scale`/`Highlight`/`Ripple` inside its children (the B
+  // 档 "只用 highlight 或扩大 hitSlop" clause; the `hitSlop` half is bound on
+  // the view below).
+  const feedbackEnabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
+
+  const pressFeedbackContextValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: feedbackEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   const isFocusVisible = computed(() => focused() && modality.isKeyboard());
 
   const renderProps: TabRenderProps = {
@@ -320,6 +365,11 @@ export function Tab(props: TabProps): JSX.Element | null {
 
     modality.setPointerModality();
 
+    // A-003: the seam sees the press after the keyboard early-return, before
+    // the selection callbacks; it gates itself on `enabled`, so a pointer
+    // press records nothing.
+    feedback.pressDown(event);
+
     if (!isDisabled()) {
       pressed.set(true);
       pointerFocusPending = true;
@@ -333,6 +383,11 @@ export function Tab(props: TabProps): JSX.Element | null {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-003: the seam's end edge — release and cancel share `onPressUp`, and
+    // `pressUp` clears `pressOrigin` even for a gated press, so it runs before
+    // the keyboard early-return.
+    feedback.pressUp(event);
+
     if (isKeyboardPress(event)) {
       return;
     }
@@ -371,9 +426,15 @@ export function Tab(props: TabProps): JSX.Element | null {
   };
 
   const handleMouseEnter = (event: NshMouseEvent) => {
+    // `onMouseEnter` is a raw host event and still reported; the hover state
+    // and the `useHover` callbacks below are not.
     local.onMouseEnter?.(event);
 
-    if (isDisabled() || hovered()) {
+    // A-002: the `input` axis owns hover independence — under touch the hover
+    // signal stays off entirely, so a web sticky hover cannot pin the tab
+    // (and its `hover:opacity-70`) after a press (the switch A-003 ruling:
+    // host hover callbacks do not pass under touch).
+    if (input() === "touch" || isDisabled() || hovered()) {
       return;
     }
 
@@ -386,7 +447,7 @@ export function Tab(props: TabProps): JSX.Element | null {
     local.onMouseLeave?.(event);
     pressed.set(false);
 
-    if (!hovered()) {
+    if (input() === "touch" || !hovered()) {
       return;
     }
 
@@ -443,7 +504,9 @@ export function Tab(props: TabProps): JSX.Element | null {
     // condition the `hover:` variant alone cannot express.
     // R-038: the rule's `@media (hover: hover)` wrapper is deleted, as R-013:
     // NSH reports hover only where a pointer exists.
-    if (!isSelected() && !isDisabled()) {
+    // A-002: the `input()` gate is that pointer check — under touch the class
+    // never resolves, so a sticky web hover cannot survive a press.
+    if (input() !== "touch" && !isSelected() && !isDisabled()) {
       list.push("hover:opacity-70");
     }
 
@@ -517,12 +580,20 @@ export function Tab(props: TabProps): JSX.Element | null {
         onMouseLeave={handleMouseLeave}
         onFocus={handleFocus}
         onBlur={handleBlur}
+        // A-003: the invisible half of the hit-area path — computed by the
+        // seam from `Environment` + the density table, never a prop;
+        // `undefined` while the pointer gate holds.
+        hitSlop={feedback.hitSlop()}
         onLayout={(event) => {
+          // A-003: the measured size feeds the seam's `hitSlop`/`scale`.
+          feedback.layout(event);
           tabs.registerBounds(key, event.bounds);
           local.onLayout?.(event);
         }}
       >
-        {content()}
+        <PressableFeedbackContext.Provider value={pressFeedbackContextValue}>
+          {content()}
+        </PressableFeedbackContext.Provider>
       </View>
     </TabContext.Provider>
   );
