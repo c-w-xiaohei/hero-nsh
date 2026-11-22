@@ -91,10 +91,23 @@ export const inputGroupVariants = tv({
       false: {},
       true: { base: "w-full" },
     },
+    // A-001: the `input` axis of the encapsulation model. `pointer` keeps the
+    // pre-axis output byte-for-byte (an empty cell); `touch` raises the row's
+    // `min-h-9` (36pt) to `min-h-11` (44pt) — the hit face lives on the row,
+    // as a press anywhere in it focuses the control (R-005's handlePress).
+    // `density` gets no axis here: the row height is the hit face, not a
+    // spacing preset.
+    input: {
+      pointer: {},
+      touch: { base: "min-h-11" },
+    },
   },
   defaultVariants: {
     fullWidth: false,
     variant: "primary",
+    // A-001: a caller that resolves `inputGroupVariants` without the axis
+    // (the context fallback) gets the pre-axis output.
+    input: "pointer",
   },
 });
 
