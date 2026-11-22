@@ -2,7 +2,12 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
-import { ease } from "../../tokens/geometry";
+// `ease.smooth` of `src/tokens/geometry.ts` written out: the M2 class walker
+// imports this file through Node ESM, which does not resolve extensionless
+// relative specifiers, so the geometry module cannot be imported from a
+// `.styles.ts`. Same pattern as `switch.styles.ts` / `button.styles.ts`; keep
+// in sync with `EASE_VALUES.smooth`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
 
 /**
  * Pagination's variant table, mirroring `@heroui/styles` 3.2.7
@@ -66,7 +71,7 @@ export const paginationVariants = tv({
      * under touch is the A-002 `createPressFeedback` `scale` AnimatedValue's
      * alone (the two-writers ban).
      */
-    link: `relative inline-flex size-9 origin-center items-center justify-center rounded-3xl text-sm font-medium whitespace-nowrap outline-none select-none bg-transparent text-default-foreground cursor-pointer duration-[250ms] ${ease.smooth} md:size-8`,
+    link: `relative inline-flex size-9 origin-center items-center justify-center rounded-3xl text-sm font-medium whitespace-nowrap outline-none select-none bg-transparent text-default-foreground cursor-pointer duration-[250ms] ${EASE_SMOOTH} md:size-8`,
     // R-016: `.pagination__ellipsis` → `inline-flex size-9 items-center
     // justify-center text-sm text-muted select-none md:size-8`.
     ellipsis:
