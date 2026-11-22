@@ -2,7 +2,12 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
-import { ease } from "../../tokens/geometry";
+// `ease.smooth` of `src/tokens/geometry.ts` written out: the M2 class walker
+// imports this file through Node ESM, which does not resolve extensionless
+// relative specifiers, so the geometry module cannot be imported from a
+// `.styles.ts`. Same pattern as `switch.styles.ts` / `button.styles.ts`; keep
+// in sync with `EASE_VALUES.smooth`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
 
 /*
  * ToggleButton variant table (HeroUI 3.2.7,
@@ -23,7 +28,7 @@ export const toggleButtonVariants = tv({
     "relative flex h-10 w-fit shrink origin-center items-center justify-center gap-2 rounded-3xl px-4 text-sm font-medium whitespace-nowrap outline-none select-none md:h-9",
     // R-003: one duration and one curve (the property list is the inline
     // `transitionProperty` in toggle-button-root.tsx).
-    `duration-[250ms] ${ease.smooth} motion-reduce:transition-none`,
+    `duration-[250ms] ${EASE_SMOOTH} motion-reduce:transition-none`,
     // R-004: `cursor: var(--cursor-interactive)`, written as the literal class
     // because the theme has no cursor token.
     "cursor-pointer",
