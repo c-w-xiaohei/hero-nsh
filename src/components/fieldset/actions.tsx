@@ -47,10 +47,14 @@ export function FieldsetActions(props: FieldsetActionsProps): JSX.Element {
 
   // Upstream reads `slots?.actions` from the root context and applies only
   // `className` outside a `Fieldset` (`compose.ts:22-28`, `fieldset.tsx:171-177`).
+  // A-003/A-004: the actions' gap and top padding sit in the `density` cell,
+  // fed by the context the Root provides.
   const classes = computed(() =>
     fieldset === undefined
       ? local.className
-      : fieldsetVariants().actions({ className: local.className }),
+      : fieldsetVariants({ density: fieldset.density() }).actions({
+          className: local.className,
+        }),
   );
 
   // The one read of `props.children`, at the placement. A bare string inside a
