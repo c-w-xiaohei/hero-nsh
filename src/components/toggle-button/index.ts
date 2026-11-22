@@ -14,6 +14,17 @@ import {
   type ToggleButtonGroupSeparatorProps,
 } from "./toggle-button-group-separator";
 
+// A-007: the harness-side 接轴 spot of adapt sheet toggle-button.md is
+// realized outside this directory — `harness/toggle-button.fixtures.tsx`
+// (`Scoped` feeds `EnvironmentScope input="touch"` around the standalone,
+// sizes, icon-only and group cases; probes record the `events` sequence,
+// `isHovered`/`isSelected` markers, the `PressableFeedbackContext` channels
+// `isPressed`/`scale.getValue()`/`hitSlop()` via CtxProbe/`ctx-sample`,
+// `viewStyle().backgroundColor` and `onLayout` bounds), asserted by
+// `toggle-button.mobile.web.test.tsx` / `toggle-button.mobile.headless.test.tsx`.
+// The gate's marker scan only sees `src/components/toggle-button/`, so the
+// record lives here — same pattern as the surface unit's index.ts.
+
 /* -------------------------------------------------------------------------------------------------
  * Compound Component
  * -----------------------------------------------------------------------------------------------*/
