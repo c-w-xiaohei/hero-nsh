@@ -209,7 +209,12 @@ describe("input-otp mobile", () => {
   // controlled value never writing back, FieldError rendering, disabled
   // refusal and Return keeping focus. (`app.paste` is headless-only and its
   // dual lives in M-005; the scenarios run on the pointer host here.)
-  test("M-008 default environment baseline: typing, complete, replace, pattern, controlled, invalid, disabled, enter", async () => {
+  //
+  // Split into two tests of four scenarios each: apps close only when their
+  // test ends, so the eight mounts otherwise stay live together on the web
+  // target and exhaust its browser pool — the toast w3b M-008 failure mode
+  // (mid-test `open(): the page did not connect in 60 s`).
+  test("M-008a default environment baseline: typing, complete, replace, pattern", async () => {
     // T-003 dual: typing reports the whole code on every keystroke.
     const typing = await openScenario("input-otp/typing");
     await typing.type("id:input-otp-input", "12");
@@ -242,7 +247,9 @@ describe("input-otp mobile", () => {
     await pattern.waitUntil(() => callsOf(pattern, "onChange").length > 0);
     expect(callsOf(pattern, "onChange").at(-1)?.[0]).toBe("ab");
     expect(pattern.count("id:input-otp-slot-value")).toBe(2);
+  }, 180_000);
 
+  test("M-008b default environment baseline: controlled, invalid, disabled, enter", async () => {
     // S-002 dual: a controlled value reports onChange but never writes back.
     const controlled = await openScenario("input-otp/controlled");
     await controlled.type("id:input-otp-input", "9");
