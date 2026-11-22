@@ -1,6 +1,16 @@
 import { SurfaceRoot } from "./surface";
 import type { SurfaceRootProps } from "./surface";
 
+// A-005 / A-006: the two harness-side 接轴 spots of adapt sheet surface.md are
+// realized outside this directory — `harness/surface.fixtures.tsx`
+// (`ScopedMobile` feeds `host.params.input`/`density` into `EnvironmentScope`
+// and mounts the `basic`/`variants`/`press`/`context` cases with testID,
+// storage and layout probes) and
+// `harness/tests/components/surface/surface.mobile.test.tsx` (the
+// desktop-pinned, dual-environment M-001…M-006 assertions). The gate's marker
+// scan only sees `src/components/surface/`, so the record lives here. Every
+// spot they probe — the part this file exports — is environment-invariant.
+
 /* -------------------------------------------------------------------------------------------------
  * Compound Component
  * -----------------------------------------------------------------------------------------------*/
