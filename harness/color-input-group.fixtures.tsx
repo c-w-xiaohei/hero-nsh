@@ -46,6 +46,12 @@ import { probe } from "@scenario/probe";
  *                  `commit=0` withholds `onSubmit` so only the local one runs
  *   kbd            one group per `enterKeyHint` / `returnKeyType` value, plus
  *                  type / inputMode / autofill / maxLength mounts
+ *   press          a bare group carrying no press props at all — the surface
+ *                  M-003's negative presses; a View with `onPress` is a press
+ *                  target (toolbar's press-root case), so the no-press-channel
+ *                  assertion needs probes absent, not just silent
+ *   events         the `rest` pass-through probes (`onPaste`, `onKeyPress`,
+ *                  `onCompositionChange`) M-007 reads in both environments
  *
  * `host.params.scope` wraps any case: "" = the host's default environment
  * (pointer — the desktop-parity side), "touch" = `EnvironmentScope
@@ -341,6 +347,46 @@ function KbdCase() {
   );
 }
 
+/* A-011: the no-press-channel negative (M-003) needs a surface with NO
+ * caller press props — a View that hears presses is a press target, so the
+ * `hover` case's onPress probes would themselves answer `app.press`. This
+ * bare group carries none: `app.press` on an affix must find nothing
+ * (NOT_FOUND, the same form toolbar's bare-surface rows use), and the
+ * focus/blur probes prove the container never routes a press into the
+ * input — there is no press-to-focus channel here. */
+function PressCase() {
+  return (
+    <ColorInputGroup testID="group">
+      <ColorInputGroup.Prefix>#</ColorInputGroup.Prefix>
+      <ColorInputGroup.Input
+        testID="group-input"
+        placeholder="#000000"
+        onFocus={probe("focus")}
+        onBlur={probe("blur")}
+      />
+      <ColorInputGroup.Suffix>%</ColorInputGroup.Suffix>
+    </ColorInputGroup>
+  );
+}
+
+/* A-011: the `rest` pass-through recorders (M-007) — `onPaste`,
+ * `onKeyPress` and `onCompositionChange` ride `rest` to the host input in
+ * both environments; the case only wires the recorders, nothing in the
+ * component reads them. */
+function EventsCase() {
+  return (
+    <ColorInputGroup testID="group">
+      <ColorInputGroup.Input
+        testID="group-input"
+        placeholder="#000000"
+        onPaste={probe("onPaste")}
+        onKeyPress={probe("onKeyPress")}
+        onCompositionChange={probe("onCompositionChange")}
+      />
+    </ColorInputGroup>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "basic");
 
@@ -356,6 +402,8 @@ function Fixture() {
   if (name === "submit") return <Scoped><SubmitCase /></Scoped>;
   if (name === "field-mock") return <Scoped><FieldMockCase /></Scoped>;
   if (name === "kbd") return <Scoped><KbdCase /></Scoped>;
+  if (name === "press") return <Scoped><PressCase /></Scoped>;
+  if (name === "events") return <Scoped><EventsCase /></Scoped>;
 
   return <Scoped><BasicCase /></Scoped>;
 }
