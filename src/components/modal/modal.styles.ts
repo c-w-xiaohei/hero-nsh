@@ -2,7 +2,16 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, shadow } from "../../tokens/geometry";
+// `ease.outQuad`, `ease.outQuart` and `shadow.overlay.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker imports this file
+// through Node ESM, which does not resolve extensionless relative specifiers,
+// so the geometry module cannot be imported from a `.styles.ts`. Same pattern
+// as `switch.styles.ts` / `color-slider.styles.ts`; keep in sync with
+// `EASE_VALUES` and `SHADOW_VALUES.overlay`.
+const EASE_OUT_QUAD = "ease-[cubic-bezier(0.25,0.46,0.45,0.94)]";
+const EASE_OUT_QUART = "ease-[cubic-bezier(0.165,0.84,0.44,1)]";
+const SHADOW_OVERLAY_BOTH =
+  "shadow-[0_2px_8px_0_rgba(0,0,0,0.06),0_-6px_12px_0_rgba(0,0,0,0.03),0_14px_28px_0_rgba(0,0,0,0.08)] dark:shadow-[0_0_1px_0_rgba(255,255,255,0.3)_inset]";
 
 /**
  * Modal's variant table, mirroring `@heroui/styles` 3.2.7
@@ -64,14 +73,14 @@ export const modalVariants = tv({
     // classes move; NSH has one property list per view, and the transform and
     // opacity are its members.
     container:
-      `flex flex-col items-center w-full min-w-0 flex-1 p-4 sm:w-fit sm:p-10 pointer-events-none transition duration-[250ms] ${ease.outQuad} motion-reduce:transition-none`,
+      `flex flex-col items-center w-full min-w-0 flex-1 p-4 sm:w-fit sm:p-10 pointer-events-none transition duration-[250ms] ${EASE_OUT_QUAD} motion-reduce:transition-none`,
     // R-032 `.modal__dialog` → `relative` + `flex w-full flex-col`; R-033 →
     // `bg-overlay shadow-overlay outline-none` (the dark half comes from
     // `shadow.overlay` in `src/tokens/geometry.ts`); R-034 radius `min(32px,
     // --radius-3xl)` → `rounded-3xl` (24px in this theme); R-035 → `p-6
     // pointer-events-auto`.
     dialog:
-      `relative flex w-full flex-col bg-overlay text-overlay-foreground ${shadow.overlay.both} outline-none rounded-3xl p-6 pointer-events-auto`,
+      `relative flex w-full flex-col bg-overlay text-overlay-foreground ${SHADOW_OVERLAY_BOTH} outline-none rounded-3xl p-6 pointer-events-auto`,
     // R-056 `.modal__footer` → `flex flex-row items-center justify-end gap-2
     // mt-0`.
     footer: "flex flex-row items-center justify-end gap-2 mt-0",
@@ -93,7 +102,7 @@ export const modalVariants = tv({
     // disabled → `opacity-50 cursor-not-allowed pointer-events-none` under
     // `disabled:`; R-006 pressed → `scale-[0.97]` under `active:`.
     trigger:
-      `inline-block w-fit cursor-pointer duration-[250ms] ${ease.outQuart} motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]`,
+      `inline-block w-fit cursor-pointer duration-[250ms] ${EASE_OUT_QUART} motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]`,
   },
   variants: {
     scroll: {
