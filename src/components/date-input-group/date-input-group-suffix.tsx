@@ -1,10 +1,7 @@
 import type { Bounds, JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
 import { cleanup, split, View } from "nsh";
 
-import {
-  DateInputGroupAffixContext,
-  DateInputGroupContext,
-} from "./date-input-group-context";
+import { DateInputGroupContext } from "./date-input-group-context";
 import { renderChildren } from "./render-children";
 
 /** The props of `DateInputGroup.Suffix`, HeroUI's `DateInputGroupSuffixProps`. */
@@ -63,20 +60,16 @@ export function DateInputGroupSuffix(props: DateInputGroupSuffixProps): JSX.Elem
   ] as const);
 
   const group = DateInputGroupContext();
-  const interactiveAffixes = DateInputGroupAffixContext();
 
   // R-011: report this part for as long as it is mounted.
   cleanup(group.registerSuffix());
 
   const classes = () => {
-    const slot = group.slots().suffix();
-    // R-026: `pointer-events-none` becomes `auto` inside a picker.
-    const pointer = interactiveAffixes()
-      ? slot.replace("pointer-events-none", "pointer-events-auto")
-      : slot;
+    // R-026: `pointer-events-none` becomes `auto` inside a picker — the table's
+    // `interactive` axis paints it now (A-001), fed by the same affix context.
     const own = local.className ?? "";
 
-    return [pointer, own].filter((part) => part.length > 0).join(" ");
+    return [group.slots().suffix(), own].filter((part) => part.length > 0).join(" ");
   };
 
   return (
