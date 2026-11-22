@@ -449,9 +449,15 @@ describe("table mobile", () => {
   // `disabledBehavior:"selection"` action+disabled selection,
   // `toggleSort`/`onSortChange` payload, `expandedKeys`, typeahead and
   // arrow navigation, and selection-checkbox row/header linkage — is
-  // exercised per environment below; the existing `table.*` files stay
+  // exercised per environment across the three M-011 tests below (the
+  // input-otp/color-field precedent of one sheet row split over several
+  // same-id titles): `nsh test` keeps every `open()` app mounted until
+  // the test ends, so on `--target web` each open is a live page and a
+  // single test holding a dozen of them drops the 2G-capped dev client
+  // mid-suite — the disconnect the gate recorded on this row. No
+  // assertion is dropped or weakened; the existing `table.*` files stay
   // green as the F-regression evidence.
-  test("M-011 injected touch keeps the desktop selection and sorting semantics", async () => {
+  test("M-011 injected touch keeps multiple/single selection and select-all semantics", async () => {
     for (const params of [{}, { input: "touch" }] as Params[]) {
       const app = await openTable("rows", params);
 
@@ -496,7 +502,13 @@ describe("table mobile", () => {
       await app.waitUntil(() => callsOf(app, "selection").length >= 2);
       expect(callsOf(app, "selection")[1][0]).toEqual(["two"]);
     }
+  }, 120_000);
 
+  // adapt-sheets/table.md M-011 (A-008/基线), second half: the inert
+  // selection modes — `selectionMode="none"` and
+  // `disabledBehavior="selection"` — keep identical observable semantics
+  // under the injected touch environment.
+  test("M-011 injected touch keeps none-mode and disabledBehavior selection semantics", async () => {
     // selectionMode="none": presses never produce a selection call, but
     // the row's own action still fires (the disabledBehavior="selection"
     // row's `onAction` is asserted separately below).
@@ -536,7 +548,12 @@ describe("table mobile", () => {
         )).toBe(true);
       }
     }
+  }, 120_000);
 
+  // adapt-sheets/table.md M-011 (A-008/基线), third half: `expandedKeys`,
+  // the sortable column's `onSortChange` payload and the keymap's
+  // typeahead/arrow navigation under the injected touch environment.
+  test("M-011 injected touch keeps expansion, sorting and keyboard navigation semantics", async () => {
     // expandedKeys dual: the `tree` case mounts a parent/child pair. The
     // collection's `expandedKeys` filter decides whether the child rows
     // are *members* — collapsed children still mount physically (the
@@ -701,29 +718,45 @@ describe("table mobile", () => {
 
   // adapt-sheets/table.md M-014 (A-010): the fixture itself — every case
   // mounts in all three environments (uninjected pointer, injected touch,
-  // injected compact density) and every probe channel records.
-  test("M-014 the fixture mounts in every environment and every probe records", async () => {
-    for (const params of [{}, { input: "touch" }, { density: "compact" }] as Params[]) {
-      const layout = await openTable("layout", params);
-      expect(layouts(layout, "cell-one").length).toBeGreaterThan(0);
-      expect(layouts(layout, "column-role").length).toBeGreaterThan(0);
-      expect(layouts(layout, "footer").length).toBeGreaterThan(0);
-      expect(layouts(layout, "resizer-name").length).toBeGreaterThan(0);
+  // injected compact density) and every probe channel records. One test
+  // per scope (the color-field/input-otp M-id split precedent): `nsh
+  // test` keeps every `open()` app mounted until its test ends, so a
+  // single test holding all nine mounts drops the 2G-capped web dev
+  // client mid-suite — the disconnect the gate recorded on this row.
+  // Each scope's three mounts close when its test ends; no assertion is
+  // dropped or weakened.
+  const probeFixtureChannels = async (params: Params) => {
+    const layout = await openTable("layout", params);
+    expect(layouts(layout, "cell-one").length).toBeGreaterThan(0);
+    expect(layouts(layout, "column-role").length).toBeGreaterThan(0);
+    expect(layouts(layout, "footer").length).toBeGreaterThan(0);
+    expect(layouts(layout, "resizer-name").length).toBeGreaterThan(0);
 
-      const ctx = await openTable("ctx-probe", params);
-      expect(callsOf(ctx, "ctx-env").length).toBeGreaterThan(0);
-      expect(callsOf(ctx, "resizer-env").length).toBeGreaterThan(0);
-      await ctx.press("id:ctx-sample");
-      await ctx.waitUntil(() => callsOf(ctx, "ctx-channels").length > 0);
-      expect(ctx.shows("id:resize-key")).toBe(true);
+    const ctx = await openTable("ctx-probe", params);
+    expect(callsOf(ctx, "ctx-env").length).toBeGreaterThan(0);
+    expect(callsOf(ctx, "resizer-env").length).toBeGreaterThan(0);
+    await ctx.press("id:ctx-sample");
+    await ctx.waitUntil(() => callsOf(ctx, "ctx-channels").length > 0);
+    expect(ctx.shows("id:resize-key")).toBe(true);
 
-      const events = await openTable("events", params);
-      await events.press("id:row-one");
-      await events.waitUntil(() => callsOf(events, "selection").length >= 1);
-      // Web dispatches no `onPress*` on row parts (the M-012 note).
-      if (!isWeb(events)) {
-        expect(eventsOf(events, "row").length).toBeGreaterThan(0);
-      }
+    const events = await openTable("events", params);
+    await events.press("id:row-one");
+    await events.waitUntil(() => callsOf(events, "selection").length >= 1);
+    // Web dispatches no `onPress*` on row parts (the M-012 note).
+    if (!isWeb(events)) {
+      expect(eventsOf(events, "row").length).toBeGreaterThan(0);
     }
+  };
+
+  test("M-014 the fixture mounts in every environment and every probe records (pointer scope)", async () => {
+    await probeFixtureChannels({});
+  }, 120_000);
+
+  test("M-014 the fixture mounts in every environment and every probe records (touch scope)", async () => {
+    await probeFixtureChannels({ input: "touch" });
+  }, 120_000);
+
+  test("M-014 the fixture mounts in every environment and every probe records (compact density scope)", async () => {
+    await probeFixtureChannels({ density: "compact" });
   }, 120_000);
 });
