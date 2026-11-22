@@ -37,6 +37,15 @@ function dragStates(app: App): boolean[] {
   return callsOf(app, "drag-state").map((args) => args[0] as boolean);
 }
 
+type CtxEnv = { id: string; panKeys: number; panActive: boolean };
+
+/** The `ctx-env` records one part's `SeamProbe` has written so far. */
+function ctxEnvOf(app: App, id: string): CtxEnv[] {
+  return callsOf(app, "ctx-env")
+    .map((args) => args[0] as CtxEnv)
+    .filter((record) => record.id === id);
+}
+
 function scrollerOffsets(app: App): { x: number; y: number }[] {
   return callsOf(app, "scroller").map(
     (args) => args[0] as { x: number; y: number },
@@ -66,6 +75,7 @@ describe("color-slider mobile headless", () => {
         const app = await openSlider("mobile", {
           scope: "touch",
           orientation,
+          probe: "1",
         });
         sessions.push({
           app,
@@ -84,6 +94,29 @@ describe("color-slider mobile headless", () => {
       expect(dragStates(app)).toContain(true);
       expect(callsOf(app, "onChangeEnd")).toHaveLength(0);
       expect(callsOf(app, "onChange").length).toBeGreaterThan(0);
+
+      // Positive pan observation (review M-013 complement to M-012's
+      // `panKeys === 0` negative): `ctx-env` must report `panActive === true`
+      // on this part while the finger is still held — `pan.active()` only
+      // sets inside the pan's `onPanResponderGrant`, which the shadowed-spread
+      // defect never ran. `probe=1` mounts the per-part `SeamProbe`s.
+      try {
+        await app.waitUntil(
+          () => ctxEnvOf(app, part).some((record) => record.panActive),
+          { timeout: 2000 },
+        );
+      } catch {
+        // Timed out: `pan.active()` never went true — exactly the bug.
+      }
+      const envRecords = ctxEnvOf(app, part);
+      // Mid-hold the pan must own the gesture: the handlers are mounted
+      // (`panKeys > 0`, the positive half of M-012's `panKeys === 0`) and at
+      // least one report reads `panActive` — the pan's grant ran.
+      expect(envRecords.length).toBeGreaterThan(0);
+      expect(
+        envRecords.every((record) => record.panKeys > 0),
+      ).toBe(true);
+      expect(envRecords.some((record) => record.panActive)).toBe(true);
 
       await app.drop();
       await app.wait(100);
@@ -209,6 +242,60 @@ describe("color-slider mobile headless", () => {
 
       expect(callsOf(app, "onChangeEnd")).toHaveLength(0);
       expect(dragStates(app).filter(Boolean)).toHaveLength(0);
+    }
+  });
+
+  // Review regression (implementation bug, review finding M-013): the pan's
+  // `{...pan.panHandlers()}` spread sat BEFORE the part's own
+  // `onResponderGrant`/`onResponderMove`/`onResponderRelease`/
+  // `onResponderTerminate` props, so JSX last-prop-wins shadowed the pan's
+  // `onPanResponderGrant` lifecycle — `pan.active()` never set, `onDragStart`
+  // never ran, and `isDragging` still went true through the bare chain.
+  // Evidence: src/components/color-slider/color-slider-thumb.tsx:535,577-582
+  // and color-slider-track.tsx:543,556-561. Required behavior: under touch
+  // the pan owns the claimed drag end-to-end — `ctx-env` reports
+  // `panActive === true` while the finger is held, `onChangeEnd` fires
+  // exactly once on `drop()`, and the claim ledger skips the claimed
+  // `onTouchEnd` so no double-commit lands.
+  test("M-013 touch: a held axial drag reports panActive mid-gesture and one onChangeEnd on drop", async () => {
+    for (const part of ["thumb", "track"] as const) {
+      const app = await openSlider("mobile", { scope: "touch", probe: "1" });
+      await app.waitUntil(() => callsOf(app, "ctx-env").length >= 2);
+
+      await app.dragAndHold(`id:${part}`, { x: 60, y: 0 });
+
+      // Mid-hold: the pan's own lifecycle must be live — `panActive` true in
+      // this part's `ctx-env` records while `dragging` is also true (the
+      // shadowed signature is `dragging` with `panActive` never set). Under
+      // the defect `pan.active()` stays false the whole hold, so this
+      // `waitUntil` times out — the red the fix turns green.
+      try {
+        await app.waitUntil(
+          () => ctxEnvOf(app, part).some((record) => record.panActive),
+          { timeout: 2000 },
+        );
+      } catch {
+        // Timed out: `pan.active()` never went true — exactly the bug.
+      }
+      const envRecords = ctxEnvOf(app, part);
+      expect(envRecords.length).toBeGreaterThan(0);
+      // The pan's handlers are mounted (`panKeys > 0`, the positive half of
+      // M-012's `panKeys === 0`) and at least one report reads `panActive` —
+      // `onPanResponderGrant` ran, which the bare chain shadowed.
+      expect(envRecords.every((record) => record.panKeys > 0)).toBe(true);
+      expect(envRecords.some((record) => record.panActive)).toBe(true);
+      expect(app.texts()).toContain("dragging");
+      expect(callsOf(app, "onChangeEnd")).toHaveLength(0);
+
+      await app.drop();
+      await app.wait(100);
+
+      // Exactly one commit: the pan's `onDragEnd` released the interaction
+      // and the claimed `onTouchEnd` was skipped by the ledger — not a
+      // second `onChangeEnd` from the bare chain.
+      expect(callsOf(app, "onChangeEnd")).toHaveLength(1);
+      expect(dragStates(app).at(-1)).toBe(false);
+      expect(app.texts()).toContain("idle");
     }
   });
 });

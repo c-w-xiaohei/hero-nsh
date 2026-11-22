@@ -55,6 +55,14 @@ import { probe } from "@scenario/probe";
  * host.params.scope picks the EnvironmentScope wrapper: "touch" injects
  * input="touch", anything else leaves the default environment — the
  * desktop-parity half of the same case (the switch fixures' convention).
+ *
+ * The positive pan observation the headless assertions read is the
+ * `ctx-env` channel's `panActive`/`panKeys` pair (review M-013 complement to
+ * M-012's `panKeys === 0` negative): `pan.active()` only sets inside the
+ * pan's `onPanResponderGrant`, so a `ctx-env` record with `panActive ===
+ * true` mid-hold is the proof the pan's lifecycle ran — `drag-state` alone
+ * cannot distinguish the pan's grant-driven `isDragging` from the bare
+ * chain's or a commit-by-luck sequence (the shadowed-spread regression).
  */
 
 const CHANNELS = [
