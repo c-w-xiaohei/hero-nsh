@@ -1,6 +1,8 @@
 import { context } from "nsh";
 import type { Accessor } from "nsh";
 
+import type { EnvironmentDensity } from "../../tokens/density";
+
 /**
  * The disabled scope of a `Fieldset` (port sheet §2, §5.2).
  *
@@ -32,6 +34,14 @@ import type { Accessor } from "nsh";
 export interface FieldsetContextValue {
   /** The whole subtree is unavailable, as `<fieldset disabled>` means. */
   isDisabled: Accessor<boolean>;
+
+  /**
+   * The density the Root mounted under (adapt sheet A-004): Legend, Group
+   * and Actions read it for their slot calls so a scoped `EnvironmentScope`
+   * tightens every part of the same fieldset together. Additive to the
+   * contract — `isDisabled` and its OR semantics are unchanged (A-008).
+   */
+  density: Accessor<EnvironmentDensity>;
 }
 
 export const FieldsetContext = context<FieldsetContextValue | undefined>(undefined);

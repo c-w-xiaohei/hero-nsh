@@ -7,6 +7,7 @@ import type {
   TextStyle,
 } from "nsh";
 
+import { createDensity } from "../../primitives/environment";
 import { FieldErrorContext } from "./context";
 import { fieldErrorVariants } from "./field-error.styles";
 
@@ -129,6 +130,14 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
     "render",
   ] as const);
 
+  // A-002: the `density` variant axis is the environment's, fed here — the
+  // props surface gains nothing (A-003). The unit's harness-side seams are
+  // realized outside this file and recorded here: A-007 — the
+  // `EnvironmentScope` wrap and `partClass` probe channel live in
+  // `harness/field-error.fixtures.tsx`; A-008 — the dual pinned mobile
+  // assertion files live under `harness/tests/components/field-error/`.
+  const density = createDensity();
+
   // Read once, in the body: a field root's validation state, when an error is
   // rendered inside one (port sheet §2). There is no context in NSH's event
   // handlers, so every closure below keeps this value.
@@ -164,12 +173,16 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
   // elements it returns are reused instead of built again.
   const children = computed(() => local.children);
 
-  // R-002 / R-005 / R-013: the block's padding and color, and the toggle
-  // field's overrides, all come from the field type. One owner per property:
-  // `px-1` and the colors are mutually exclusive pairs. Kept as a function so
-  // the JSX binding re-reads the field state instead of freezing it here.
+  // R-002 / R-005 / R-013: the block's color, and the toggle field's
+  // overrides, all come from the field type. One owner per property: the
+  // colors are a mutually exclusive pair. The padding literal moved to the
+  // variants' `density` axis (A-002): `px-1`/`px-0.5` is the non-toggle
+  // padding, and the toggle's zero padding stays as `px-0` here — NSH
+  // resolves classList after the class string, so it wins for a toggle
+  // field under any density. Kept as a function so the JSX binding re-reads
+  // the field state instead of freezing it here.
   const classList = () => ({
-    "px-1": !isToggle(),
+    "px-0": isToggle(),
     "text-danger": !isToggle(),
     "text-muted": isToggle(),
   });
@@ -280,7 +293,10 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
   const classes = computed(() => {
     const container = field?.partClass?.();
 
+    // A-002: the `density` cell owns the block's padding; the environment
+    // accessor feeds it, callers never see a density prop.
     return fieldErrorVariants({
+      density: density(),
       className: [container, className()]
         .filter((part): part is string => typeof part === "string" && part.length > 0)
         .join(" "),

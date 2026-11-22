@@ -50,11 +50,16 @@ export function FieldsetLegend(props: FieldsetLegendProps): JSX.Element {
 
   // Upstream's `composeSlotClassName(undefined, className)` applies nothing but
   // the caller's class when there is no root (`compose.ts:22-28`); the default
-  // context is `{}` (`fieldset.tsx:29`).
+  // context is `{}` (`fieldset.tsx:29`). A-004: inside a Root the slot
+  // resolves under the context's density — the legend's own cell is empty
+  // (A-005 keeps its type scale), so the read only keeps every part on the
+  // same axis value.
   const classes = computed(() =>
     fieldset === undefined
       ? local.className
-      : fieldsetVariants().legend({ className: local.className }),
+      : fieldsetVariants({ density: fieldset.density() }).legend({
+          className: local.className,
+        }),
   );
 
   // The one read of `props.children`, at the placement. A bare string is what a

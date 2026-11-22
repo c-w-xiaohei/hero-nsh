@@ -58,6 +58,11 @@ export function DescriptionRoot(props: DescriptionRootProps): JSX.Element {
   // (port sheet §8).
   const children = computed(() => local.children);
 
+  // A-006 / A-007: the fixture's `ctx` case (`harness/description.fixtures.tsx`)
+  // and `description.mobile.test.tsx` probe exactly these two context channels —
+  // `registerDescription` and `partClass` — under the default and injected-touch
+  // environments; both are environment-invariant (adapt sheet §2 A-003).
+  //
   // Registration side effect (port sheet §2): when a field root can take it,
   // report this description's text so the field can hint its control. The
   // accessor reads the shared computed value, never `props.children` again.
