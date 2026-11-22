@@ -1,6 +1,7 @@
-import { context } from "nsh";
+import { context, createAnimatedValue } from "nsh";
 import type { Accessor, PressEvent, ViewRef } from "nsh";
 
+import type { PressFeedback } from "../../primitives/pressable";
 import type { SwitchSize } from "./switch.styles";
 
 /**
@@ -43,9 +44,26 @@ export interface SwitchPressHandlers {
  * This context is internal: it is not exported from the public entry, exactly
  * as HeroUI's own `SwitchContext` is not.
  */
+/**
+ * The field root's `createPressFeedback` seam, hung on the context so the
+ * Content part can drive it and the Control part can read it (A-002). The
+ * `PressFeedback` channels arrive whole — the Content is the writer
+ * (`pressDown`/`pressUp`/`layout`), the Control only reads `scale` — plus the
+ * seam's effective gate (`input()==="touch"` and not `isDisabled`) for probes
+ * and consumers. Under the default pointer environment every channel rests:
+ * `isPressed` false, `hitSlop` `undefined`, `scale` pinned to 1.
+ */
+export interface SwitchFeedbackChannels extends PressFeedback {
+  /** The seam's effective gate (`input()==="touch"` and not `isDisabled`). */
+  enabled: Accessor<boolean>;
+}
+
 export interface SwitchContextValue {
   /** The size dimension of the variant table. */
   size: Accessor<SwitchSize>;
+
+  /** The touch-gated press-feedback seam the Content drives (A-002). */
+  feedback: SwitchFeedbackChannels;
 
   /** The selection state, as `createToggleState` reports it. */
   isSelected: Accessor<boolean>;
@@ -226,6 +244,24 @@ export interface SwitchButtonRenderProps extends SwitchFieldRenderProps {
  */
 export const FALLBACK_SWITCH_CONTEXT: SwitchContextValue = {
   size: () => "md",
+  // A-002: the resting seam — every channel inert (`pressDown`/`pressUp` no-op,
+  // `hitSlop`/`pressOrigin` report nothing, `scale` pinned to 1). Shared
+  // animated values are safe at module scope: they are never driven. The
+  // control-field adapter inherits this object through its `...FALLBACK`
+  // spread, so a row-provided default switch piece keeps the seam off.
+  feedback: {
+    isPressed: () => false,
+    pressed: createAnimatedValue(0),
+    bounds: () => ({ width: 0, height: 0 }),
+    pressOrigin: () => null,
+    hitSlop: () => undefined,
+    scale: createAnimatedValue(1),
+    highlightOpacity: createAnimatedValue(0),
+    pressDown: () => {},
+    pressUp: () => {},
+    layout: () => {},
+    enabled: () => false,
+  },
   isSelected: () => false,
   isDisabled: () => false,
   isReadOnly: () => false,

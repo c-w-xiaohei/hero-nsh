@@ -2,7 +2,16 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, shadow } from "../../tokens/geometry";
+// `ease.smooth`, `ease.outFluid` and `shadow.field.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker imports this file
+// through Node ESM, which does not resolve extensionless relative specifiers,
+// so the geometry module cannot be imported from a `.styles.ts`. Same pattern
+// as `radio.styles.ts` / `button.styles.ts`; keep in sync with
+// `SHADOW_VALUES.field` and `EASE_VALUES`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const EASE_OUT_FLUID = "ease-[cubic-bezier(0.32,0.72,0,1)]";
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
 
 /**
  * Switch's variant table, mirroring `@heroui/styles` 3.2.7
@@ -40,22 +49,36 @@ export const switchVariants = tv({
     // shorthand is 250ms `ease-smooth` (port sheet §8, R-024).
     // R-025: `motion-reduce:transition-none`.
     control:
-      `relative flex shrink-0 items-center overflow-hidden rounded-xl bg-default transition duration-[250ms] ${ease.smooth} motion-reduce:transition-none h-5 w-10`,
+      `relative flex shrink-0 items-center overflow-hidden rounded-xl bg-default transition duration-[250ms] ${EASE_SMOOTH} motion-reduce:transition-none h-5 w-10`,
     // R-036: `.switch__thumb` → `relative ms-0.5 flex origin-center
     // transform-gpu rounded-lg bg-white text-black shadow-field`; `transform-gpu`
     // does nothing in NSH, and both halves of the shadow come from
-    // `shadow.field` in `src/tokens/geometry.ts`.
+    // `SHADOW_FIELD_BOTH` (= `shadow.field` in `src/tokens/geometry.ts`).
     // R-039: `.switch__thumb`'s default dimensions → `h-4 w-[1.375rem]` (the
     // stylesheet's medium values live in the base block, not in `.switch--md`).
     // R-040: the property list is the inline `transitionProperty` in
     // `switch-thumb.tsx`; the class carries duration and curve (300ms,
     // `ease-out-fluid`). R-041: `motion-reduce:transition-none`.
     thumb:
-      `relative ms-0.5 flex origin-center rounded-lg bg-white text-black ${shadow.field.both} duration-300 ${ease.outFluid} motion-reduce:transition-none h-4 w-[1.375rem]`,
+      `relative ms-0.5 flex origin-center rounded-lg bg-white text-black ${SHADOW_FIELD_BOTH} duration-300 ${EASE_OUT_FLUID} motion-reduce:transition-none h-4 w-[1.375rem]`,
     // R-046: `.switch__thumb > *` → `flex size-full items-center justify-center`.
     icon: "flex h-full w-full items-center justify-center",
   },
   variants: {
+    // A-001: the `input` axis of the encapsulation model — `input` owns
+    // interaction usability, and the visible hit minimum is one half of the
+    // hit-area path (`hitSlop` is the other, inside `createPressFeedback`).
+    // `touch` adds `min-h-11` on the clickable face (44 pt target, the same
+    // value control-field/list-group take); `pointer` keeps the content-sized
+    // face, so the default environment sees no change. There is no `density`
+    // axis: the track/thumb dimensions are the `size` contract, not a spacing
+    // preset.
+    input: {
+      pointer: {},
+      touch: {
+        content: "min-h-11",
+      },
+    },
     // R-018 / R-019 / R-020: `.switch--sm` / `.switch--md` / `.switch--lg` are
     // empty blocks upstream; the dimensions they scope onto the control and the
     // thumb are the values below.
