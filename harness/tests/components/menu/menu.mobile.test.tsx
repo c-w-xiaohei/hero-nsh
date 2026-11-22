@@ -400,7 +400,7 @@ describe("menu mobile", () => {
   // The row is split across four tests: every `open()` lives until its own
   // test ends (`nsh/test` closes them then), and a dozen browser engines at
   // once disconnects the web host — each group holds at most six.
-  test("M-005a existing cases under touch: menu structure, actions and the pointer close rule", async () => {
+  test("M-005 a — existing cases under touch: menu structure, actions and the pointer close rule", async () => {
     for (const params of [{}, { input: "touch" }] as Params[]) {
       // `log` (T-001/T-002 dual): trigger → three rows → action + close.
       const log = await openMenu("log", params);
@@ -422,7 +422,7 @@ describe("menu mobile", () => {
     }
   }, 240_000);
 
-  test("M-005b existing cases under touch: selection payloads and marks", async () => {
+  test("M-005 b — existing cases under touch: selection payloads and marks", async () => {
     for (const params of [{}, { input: "touch" }] as Params[]) {
       // `single-log` / `multiple-log`: payload parity on press.
       const single = await openMenu("single-log", params);
@@ -442,7 +442,7 @@ describe("menu mobile", () => {
     }
   }, 240_000);
 
-  test("M-005c existing cases under touch: controlled selection and disabled rows", async () => {
+  test("M-005 c — existing cases under touch: controlled selection and disabled rows", async () => {
     for (const params of [{}, { input: "touch" }] as Params[]) {
       // `controlled`: the parent ignores the change, `force` rewrites it.
       const controlled = await openMenu("controlled", params);
@@ -469,7 +469,7 @@ describe("menu mobile", () => {
     }
   }, 240_000);
 
-  test("M-005d existing cases under touch: submenu render-props and id-less keys", async () => {
+  test("M-005 d — existing cases under touch: submenu render-props and id-less keys", async () => {
     for (const params of [{}, { input: "touch" }] as Params[]) {
       // `submenu`: hasSubmenu/isOpen render-prop text.
       const submenu = await openMenu("submenu", params);
