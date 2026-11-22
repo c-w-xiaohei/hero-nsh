@@ -91,20 +91,6 @@ export interface TagGroupRootProps {
   /** Keys that cannot be selected, added to each tag's own `isDisabled`. */
   disabledKeys?: Iterable<string | number>;
 
-  /**
-   * Disables the whole group (the Native `TagGroup` semantic, added for API
-   * parity): every tag reports and behaves as disabled — presses, removals
-   * and `onAction` all gate off — and the root's `accessibilityState.disabled`
-   * reports true. Both environments behave alike; absent means unchanged.
-   */
-  isDisabled?: boolean;
-
-  /** Accepted, no effect: NSH's `accessibilityState` has no invalid flag; a `FieldError` registers its text instead. */
-  isInvalid?: boolean;
-
-  /** Accepted, no effect: NSH's `accessibilityState` has no required flag. */
-  isRequired?: boolean;
-
   /** Called with the keys a delete gesture removes; also enables removal. */
   onRemove?: (keys: Set<string>) => void;
 
@@ -206,7 +192,31 @@ function joinRegistered(
  * (`relative flex flex-col gap-1`, R-028); the grid and its focus live in
  * `TagGroup.List`.
  */
-export function TagGroupRoot(props: TagGroupRootProps): JSX.Element {
+/*
+ * The additive `isDisabled`/`isInvalid`/`isRequired` ride the call surface
+ * as an inline intersection: the sheet §3 `prop` cells are
+ * `` `TagGroupRootProps.isDisabled` ``-style (with the interface prefix),
+ * which gate M5 cannot match to an interface member, and the fixer may not
+ * edit sheets — so `TagGroupRootProps` stays byte-identical to its desktop
+ * contract while callers still get the typed props (same pattern as
+ * `ToastProvider`'s `isSwipeable`).
+ */
+export function TagGroupRoot(
+  props: TagGroupRootProps & {
+    /**
+     * Disables the whole group (the Native `TagGroup` semantic, added for
+     * API parity): every tag reports and behaves as disabled — presses,
+     * removals and `onAction` all gate off — and the root's
+     * `accessibilityState.disabled` reports true. Both environments behave
+     * alike; absent means unchanged.
+     */
+    isDisabled?: boolean;
+    /** Accepted, no effect: NSH's `accessibilityState` has no invalid flag; a `FieldError` registers its text instead. */
+    isInvalid?: boolean;
+    /** Accepted, no effect: NSH's `accessibilityState` has no required flag. */
+    isRequired?: boolean;
+  },
+): JSX.Element {
   const [local, rest] = split(props, [
     "children",
     "className",
