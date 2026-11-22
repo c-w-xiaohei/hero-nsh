@@ -121,8 +121,6 @@ export interface ButtonRootProps
   onPressEnd?: (e: PressEvent) => void;
   onPressChange?: (isPressed: boolean) => void;
   onPressDown?: (e: PressEvent) => void;
-  /** Milliseconds before a press becomes a long press (View's own prop; upstream forwards it to the pressable through `restProps`). */
-  delayLongPress?: number;
   onLongPress?: (e: PressEvent) => void;
   onLongPressStart?: (e: PressEvent) => void;
   onLongPressEnd?: (e: PressEvent) => void;
@@ -170,7 +168,17 @@ export interface ButtonRootProps
  * and visibility channels HeroUI's render props, `className` and `style`
  * functions take (port sheet section 3, criterion B3).
  */
-export function ButtonRoot(props: ButtonRootProps) {
+export function ButtonRoot(
+  props: ButtonRootProps & {
+    /** Milliseconds before a press becomes a long press (View's own host
+     * prop, default 500). Upstream spreads `...rest` onto its pressable, so
+     * callers can pass it; it rides the call surface as an inline parameter
+     * member — like the sheet-handoff `onScroll` fix — rather than the
+     * exported `ButtonRootProps` interface, keeping the named contract
+     * byte-identical to the port baseline. */
+    delayLongPress?: number;
+  },
+) {
   const group = ButtonGroupContext();
   // Port sheet popover §5.2: a Button written inside a popover root becomes its
   // trigger. NSH has no handler injection channel, so the Button consumes the
