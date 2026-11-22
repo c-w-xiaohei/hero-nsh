@@ -95,7 +95,13 @@ export function CalendarYearPickerCell(props: CalendarYearPickerCellProps): JSX.
     selectYear: () => grid.selectYear(year),
   };
 
-  const child =
+  // `local.children` builds its views at read time under the reader's owner —
+  // it must resolve inline at the Provider's children position, where the
+  // mount already sits under `PressableFeedbackContext`; resolving it here at
+  // setup would build the subtree under this component's own owner, above the
+  // Provider (control-field.tsx, same rule), and a composed part would read
+  // the resting context.
+  const child = () =>
     typeof local.children === "function"
       ? renderChildren(local.children(values))
       : renderChildren(local.children ?? <Text>{label}</Text>);
@@ -164,9 +170,10 @@ export function CalendarYearPickerCell(props: CalendarYearPickerCellProps): JSX.
       }}
     >
       {/* A-005: the resolved child sits inside the provider so composed
-          press-feedback parts read the seam's context. */}
+          press-feedback parts read the seam's context; resolving it at this
+          position is what puts the subtree under the Provider's owner. */}
       <PressableFeedbackContext.Provider value={feedbackValue}>
-        {child}
+        {child()}
       </PressableFeedbackContext.Provider>
     </View>
   );
