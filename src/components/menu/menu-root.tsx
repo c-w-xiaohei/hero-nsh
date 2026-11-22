@@ -1014,13 +1014,17 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
         ? list.collection().getItem(key)
         : undefined;
 
-    if (platform.os === "web") {
-      // The announce fallback covers unmounted keys too: the collection still
-      // knows the entry's text (f-collection §5, host gap register).
-      const text = handle?.textValue?.() ?? node?.textValue;
+    // The announce fallback covers unmounted keys too: the collection still
+    // knows the entry's text (f-collection §5, host gap register).
+    const text = () => handle?.textValue?.() ?? node?.textValue;
 
-      if (screenReaderEnabled() && text != null) {
-        announce(text);
+    if (platform.os === "web") {
+      if (screenReaderEnabled()) {
+        const value = text();
+
+        if (value != null) {
+          announce(value);
+        }
       }
 
       return;
@@ -1036,10 +1040,10 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     // An unmounted entry (or one whose view is not yet bound) has no view to
     // take accessibility focus; the announce fallback is its degradation on
     // every host (A-005; the same announce the web branch above performs).
-    const text = handle?.textValue?.() ?? node?.textValue;
+    const value = text();
 
-    if (text != null) {
-      announce(text);
+    if (value != null) {
+      announce(value);
     }
   });
 
