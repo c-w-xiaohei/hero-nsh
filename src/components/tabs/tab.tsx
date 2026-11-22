@@ -403,8 +403,14 @@ export function Tab(props: TabProps): JSX.Element | null {
   const handlePressUp = (event: PressEvent) => {
     // A-003: the seam's end edge — release and cancel share `onPressUp`, and
     // `pressUp` clears `pressOrigin` even for a gated press, so it runs before
-    // the keyboard early-return.
-    feedback.pressUp(event);
+    // the keyboard early-return. It is deferred one frame: the web host
+    // dispatches down and up inside one gesture turn, so a synchronous clear
+    // collapses `isPressed` into the same commit that raised it — reactive
+    // consumers see only the settle state (the registered web batching gap).
+    // One frame lets the held state commit before the release lands; a real
+    // contact already lasts frames, so the seam's observable semantics are
+    // unchanged on every other host.
+    requestAnimationFrame(() => feedback.pressUp(event));
 
     if (isKeyboardPress(event)) {
       return;
