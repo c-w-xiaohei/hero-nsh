@@ -1,6 +1,13 @@
 import { host, mount } from "nsh";
 import type { JSX } from "nsh";
-import { EnvironmentScope, Label, SearchField } from "@heroui/react";
+import {
+  Description,
+  EnvironmentScope,
+  FieldError,
+  Label,
+  SearchField,
+} from "@heroui/react";
+import type { SearchFieldInputProps } from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 
@@ -38,6 +45,18 @@ import { probe } from "@scenario/probe";
  *                 `enabled === false`, M-006)
  *   disabled      `isDisabled` (same assertion, plus `ERR_NSH_TEST_DISABLED`
  *                 on type, M-009)
+ *   empty         `defaultValue="hero"` with the Root render props recorded
+ *                 under `root-props` — the `isEmpty` flip behind T-006
+ *                 (M-009's baseline half)
+ *   controlled    `value="hero"` with no write-back: typing reports
+ *                 `onChange` but the displayed value stays (M-009)
+ *   invalid       `isInvalid isRequired value="ab"` + Description +
+ *                 FieldError — the T-008 render (M-009)
+ *   kbd           the keyboard-parameter matrix as separate labeled fields,
+ *                 one `kbd-*` testID and `kbd-<slug>` onChange probe per
+ *                 variant — M-004's dual-env × 8-variant matrix in two opens
+ *                 instead of sixteen (the web host drops steps when a test
+ *                 holds more live apps than its budget)
  *
  * `host.params.scope` picks the environment: "" keeps the host default
  * (pointer on headless/web — the desktop-parity half), "touch" wraps the
@@ -251,6 +270,122 @@ function DisabledCase() {
   );
 }
 
+/*
+ * The M-009 baseline cases, mirroring the desktop suite's `empty.split` /
+ * `controlled` / `invalid` scenarios: the Root render props record the
+ * `isEmpty` flip T-006 reads upstream from `data-empty` (D18), the controlled
+ * value never writes itself back, and the invalid field renders its
+ * FieldError while hiding the Description.
+ */
+function EmptyCase() {
+  const record = probe("root-props");
+
+  return (
+    <Stage>
+      <SearchField
+        name="search"
+        defaultValue="hero"
+        onChange={probe("onChange")}
+        onClear={probe("onClear")}
+        className={(values: {
+          isEmpty: () => boolean;
+          isDisabled: () => boolean;
+          isInvalid: () => boolean;
+          isReadOnly: () => boolean;
+          isRequired: () => boolean;
+        }) => {
+          record({
+            isEmpty: values.isEmpty(),
+            isDisabled: values.isDisabled(),
+            isInvalid: values.isInvalid(),
+            isReadOnly: values.isReadOnly(),
+            isRequired: values.isRequired(),
+          });
+
+          return "";
+        }}
+      >
+        <FieldParts />
+      </SearchField>
+    </Stage>
+  );
+}
+
+function ControlledCase() {
+  return (
+    <Stage>
+      <SearchField name="search" value="hero" onChange={probe("onChange")}>
+        <FieldParts />
+      </SearchField>
+    </Stage>
+  );
+}
+
+function InvalidCase() {
+  return (
+    <Stage>
+      <SearchField name="search" isInvalid isRequired value="ab">
+        <Label>Search</Label>
+        <SearchField.Group testID="sf-group">
+          <SearchField.SearchIcon />
+          <SearchField.Input testID="sf-input" placeholder="Search..." />
+          <SearchField.ClearButton />
+        </SearchField.Group>
+        <Description>Search by title or author</Description>
+        <FieldError>Enter at least 3 characters</FieldError>
+      </SearchField>
+    </Stage>
+  );
+}
+
+/*
+ * The M-004 keyboard matrix, one mount per environment instead of one per
+ * parameter set: each variant is its own labeled field so `app.type` can
+ * address it by `id:kbd-*`, and its Root `onChange` records under
+ * `kbd-<slug>` so the callback chain is attributable per variant. This is
+ * the input-group `kbd` case's pattern — the web host loses its step
+ * channel when a single test holds a dozen live apps.
+ */
+type KbdInputProps = Pick<
+  SearchFieldInputProps,
+  "enterKeyHint" | "returnKeyType" | "type" | "inputMode" | "autoComplete"
+>;
+
+const KBD_VARIANTS: { slug: string; label: string; input: KbdInputProps }[] = [
+  { slug: "hint-search", label: "Kbd hint search", input: { enterKeyHint: "search" } },
+  { slug: "hint-go", label: "Kbd hint go", input: { enterKeyHint: "go" } },
+  { slug: "hint-done", label: "Kbd hint done", input: { enterKeyHint: "done" } },
+  { slug: "return-search", label: "Kbd return search", input: { returnKeyType: "search" } },
+  { slug: "type-search", label: "Kbd type search", input: { type: "search" } },
+  { slug: "type-email", label: "Kbd type email", input: { type: "email" } },
+  { slug: "mode-numeric", label: "Kbd mode numeric", input: { inputMode: "numeric" } },
+  { slug: "autofill-off", label: "Kbd autofill off", input: { autoComplete: "off" } },
+];
+
+function KbdCase() {
+  return (
+    <Stage>
+      {KBD_VARIANTS.map((variant) => (
+        <SearchField
+          name={`kbd-${variant.slug}`}
+          onChange={probe(`kbd-${variant.slug}`)}
+        >
+          <Label>{variant.label}</Label>
+          <SearchField.Group>
+            <SearchField.SearchIcon />
+            <SearchField.Input
+              {...variant.input}
+              testID={`kbd-${variant.slug}`}
+              placeholder={variant.label}
+            />
+            <SearchField.ClearButton />
+          </SearchField.Group>
+        </SearchField>
+      ))}
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "basic");
   const body = () => {
@@ -261,6 +396,10 @@ function Fixture() {
     if (name === "empty-escape") return <EmptyEscapeCase />;
     if (name === "readonly") return <ReadonlyCase />;
     if (name === "disabled") return <DisabledCase />;
+    if (name === "empty") return <EmptyCase />;
+    if (name === "controlled") return <ControlledCase />;
+    if (name === "invalid") return <InvalidCase />;
+    if (name === "kbd") return <KbdCase />;
 
     return <BasicCase />;
   };
