@@ -8,13 +8,26 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, effect, reduceMotion, signal, View } from "nsh";
+import { cleanup, computed, createAnimatedValue, effect, reduceMotion, signal, View } from "nsh";
 import type { Accessor } from "nsh";
 
 import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  getRootAnimationState,
+  PressableFeedback,
+  PressableFeedbackContext,
+  type AnimationRoot,
+  type PressableFeedbackContextValue,
+  type PressableFeedbackHighlightAnimation,
+  type PressableFeedbackRippleAnimation,
+  type PressableFeedbackScaleAnimation,
+} from "../../primitives/pressable";
+import { themeToken } from "../../theme";
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
 import { HoverTriggerContext, OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { FormContext } from "../form/context";
@@ -37,7 +50,39 @@ export interface ButtonRenderProps {
   isPending: Accessor<boolean>;
 }
 
-export interface ButtonRootProps extends ButtonVariants, AriaProps, GlobalDomProps {
+/**
+ * A-006: which press feedback the button renders under `input === "touch"`,
+ * heroui-native's `feedbackVariant` plus `"auto"`. `"auto"` (the default)
+ * resolves to `scale-highlight` on touch — upstream's own default — and to
+ * `none` under a pointer, keeping the desktop zero-change guarantee. `scale`
+ * presses the root only; `scale-highlight` / `scale-ripple` add the matching
+ * overlay; `none` mounts and animates nothing while `onPress` still fires.
+ */
+export type ButtonFeedbackVariant =
+  | "auto"
+  | "scale-highlight"
+  | "scale-ripple"
+  | "scale"
+  | "none";
+
+/**
+ * A-006: the `animation` prop, upstream's per-preset discriminated union
+ * merged into one shape (`sheet §3` — the §8 difference proposal): `scale`
+ * configures the root's built-in channel, `highlight` / `ripple` the
+ * overlay of the same name; keys the active preset does not use are
+ * ignored. `false` / `"disabled"` and `"disable-all"` hold every channel at
+ * rest (upstream's `isAnimationDisabled` treats them alike).
+ */
+export type ButtonAnimation = AnimationRoot<{
+  scale?: PressableFeedbackScaleAnimation;
+  highlight?: PressableFeedbackHighlightAnimation;
+  ripple?: PressableFeedbackRippleAnimation;
+}>;
+
+export interface ButtonRootProps
+  extends Omit<ButtonVariants, "input">,
+    AriaProps,
+    GlobalDomProps {
   children?: JSX.Element | ((values: ButtonRenderProps) => JSX.Element);
   className?: string | ((values: ButtonRenderProps) => string);
   style?: StyleProp<ViewStyle> | ((values: ButtonRenderProps) => StyleProp<ViewStyle>);
@@ -102,6 +147,16 @@ export interface ButtonRootProps extends ButtonVariants, AriaProps, GlobalDomPro
   render?: unknown;
   preventFocusOnPress?: boolean;
   allowFocusOnInteraction?: boolean;
+  /** A-006: the press feedback the touch environment renders. @default "auto" */
+  feedbackVariant?: ButtonFeedbackVariant;
+  /** A-006: per-channel animation configuration. */
+  animation?: ButtonAnimation;
+  /**
+   * A-006: whether the feedback seam may write `scale` on the root style.
+   * `false` leaves the transform channel to the caller.
+   * @default true
+   */
+  isAnimatedStyleActive?: boolean;
   "aria-describedby"?: string;
   "aria-labelledby"?: string;
   "aria-controls"?: string;
@@ -113,7 +168,17 @@ export interface ButtonRootProps extends ButtonVariants, AriaProps, GlobalDomPro
  * and visibility channels HeroUI's render props, `className` and `style`
  * functions take (port sheet section 3, criterion B3).
  */
-export function ButtonRoot(props: ButtonRootProps) {
+export function ButtonRoot(
+  props: ButtonRootProps & {
+    /** Milliseconds before a press becomes a long press (View's own host
+     * prop, default 500). Upstream spreads `...rest` onto its pressable, so
+     * callers can pass it; it rides the call surface as an inline parameter
+     * member — like the sheet-handoff `onScroll` fix — rather than the
+     * exported `ButtonRootProps` interface, keeping the named contract
+     * byte-identical to the port baseline. */
+    delayLongPress?: number;
+  },
+) {
   const group = ButtonGroupContext();
   // Port sheet popover §5.2: a Button written inside a popover root becomes its
   // trigger. NSH has no handler injection channel, so the Button consumes the
@@ -178,6 +243,182 @@ export function ButtonRoot(props: ButtonRootProps) {
   const fullWidth = computed(() => props.fullWidth ?? group?.fullWidth() ?? false);
   const isIconOnly = () => props.isIconOnly ?? false;
 
+  // A-002 / A-003 / A-004 / A-005: the press-feedback seam. `createInput()`
+  // feeds the tv() `input` axis and gates `createPressFeedback`; under the
+  // default pointer environment the seam is inert — no press edge, no
+  // hitSlop, scale held at 1 — which is the desktop-zero-change half of the
+  // encapsulation model. Everything the caller sees stays exactly as it
+  // was: the seam's `isPressed` is a private channel, not the render-prop
+  // one, and the user callback order is untouched.
+  const input = createInput();
+
+  // A-006: `"auto"` resolves per input — upstream's own default
+  // (`scale-highlight`) on touch, `none` under a pointer.
+  const preset = computed<Exclude<ButtonFeedbackVariant, "auto">>(() => {
+    const value = props.feedbackVariant ?? "auto";
+
+    if (value !== "auto") {
+      return value;
+    }
+
+    return input() === "touch" ? "scale-highlight" : "none";
+  });
+
+  // Upstream's `isAnimationDisabled` (button.utils.ts): `false` / `"disabled"`
+  // and `"disable-all"` all hold every channel at rest.
+  const { isAnimationDisabled: feedbackAllDisabled } = getRootAnimationState(
+    props.animation,
+  );
+
+  // Upstream's `rootAnimation` (`button.tsx:236-250`): `"disable-all"`
+  // cascades to every channel, `preset === "none"` or an off `scale` key
+  // switches the built-in scale off, an object configures it. The strings
+  // collapse to `scaleOff` for the factory: its own `getAnimationState`
+  // does not read `"disable-all"`, so `false` is what pins `scale` to 1.
+  const feedbackAnimation = (() => {
+    if (feedbackAllDisabled) {
+      return false as const;
+    }
+
+    const user =
+      typeof props.animation === "object" && props.animation !== null
+        ? props.animation
+        : undefined;
+
+    if (preset() === "none" || user?.scale === false || user?.scale === "disabled") {
+      return false as const;
+    }
+
+    if (typeof user?.scale === "object") {
+      return { scale: user.scale };
+    }
+
+    return undefined;
+  })();
+
+  const feedbackEnabled = () =>
+    input() === "touch" && !isDisabled() && preset() !== "none";
+
+  const feedback = createPressFeedback({
+    enabled: feedbackEnabled,
+    animation:
+      typeof feedbackAnimation === "object"
+        ? feedbackAnimation.scale
+        : feedbackAnimation,
+  });
+
+  // A-005: the seam's read half for the Highlight / Ripple parts (and for
+  // probes — the channels are the only observable surface `nsh/test` can
+  // reach; A-009's harness/button.fixtures.tsx probe reads them through
+  // `PressableFeedbackContext`). The root keeps the writers; the parts only
+  // ever animate the root-owned `highlightOpacity` / `rippleProgress`,
+  // matching the `PressableFeedback` root's own context value.
+  const feedbackContextValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: feedbackEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => feedbackAllDisabled,
+  };
+
+  // A-005 / upstream `highlightAnimationConfig` (`button.tsx:154-190`): the
+  // overlay tints with the variant's hover color — a highlight is what a
+  // press draws when there is no hover — with the default-cell alpha folded
+  // into the hex (`hasDefaultThemeBackground` is always false on NSH; the
+  // glass background stays a §7-deferred item). The opacity peak stays the
+  // part's own `[0, 0.1]` (upstream overrides `[0,1]`; sheet M-004 fixes the
+  // channel's end value at 0.1, the same peak `HIGHLIGHT_PEAK` and the
+  // ripple channel use — recorded in sheet §7).
+  const highlightBackgroundColor = () => {
+    switch (variant()) {
+      case "primary":
+        return themeToken("accent-hover");
+      case "secondary":
+      case "tertiary":
+        return `${themeToken("default-hover")}33`;
+      case "outline":
+      case "ghost":
+        return `${themeToken("default-hover")}4d`;
+      case "danger":
+        return themeToken("danger-hover");
+      case "danger-soft":
+        return themeToken("danger-soft-hover");
+      default:
+        return themeToken("foreground");
+    }
+  };
+
+  const highlightAnimation = (() => {
+    if (preset() !== "scale-highlight") {
+      return undefined;
+    }
+
+    const user =
+      typeof props.animation === "object" && props.animation !== null
+        ? props.animation.highlight
+        : undefined;
+
+    if (user === false || user === "disabled") {
+      return undefined;
+    }
+
+    const base = {
+      backgroundColor: { value: highlightBackgroundColor() },
+      opacity: { value: [0, 0.1] as [number, number] },
+    };
+
+    if (typeof user === "object" && user !== null) {
+      return {
+        ...user,
+        backgroundColor: { ...base.backgroundColor, ...(user.backgroundColor ?? {}) },
+        opacity: { ...base.opacity, ...(user.opacity ?? {}) },
+      };
+    }
+
+    return base;
+  })();
+
+  // Upstream's `rippleAnimationConfig` (`button.tsx:192-230`): same tint and
+  // merge order as the highlight — button defaults fill the channels the
+  // caller's `ripple` config leaves alone (the opacity peak is the part's
+  // own `[0, 0.1, 0]` for the same reason as the highlight's).
+  const rippleAnimation = (() => {
+    if (preset() !== "scale-ripple") {
+      return undefined;
+    }
+
+    const user =
+      typeof props.animation === "object" && props.animation !== null
+        ? props.animation.ripple
+        : undefined;
+
+    if (user === false || user === "disabled") {
+      return undefined;
+    }
+
+    const base = {
+      backgroundColor: { value: highlightBackgroundColor() },
+      opacity: { value: [0, 0.1, 0] as [number, number, number] },
+    };
+
+    if (typeof user === "object" && user !== null) {
+      return {
+        ...user,
+        backgroundColor: { ...base.backgroundColor, ...(user.backgroundColor ?? {}) },
+        opacity: { ...base.opacity, ...(user.opacity ?? {}) },
+        scale: user.scale,
+        progress: user.progress,
+      };
+    }
+
+    return base;
+  })();
+
   const renderProps: ButtonRenderProps = {
     isHovered,
     isPressed,
@@ -204,8 +445,11 @@ export function ButtonRoot(props: ButtonRootProps) {
   );
 
   const classes = computed(() => {
+    // A-002: the `input` axis takes the environment's accessor; every other
+    // resolution is unchanged.
     const variantClasses = buttonVariants({
       fullWidth: fullWidth(),
+      input: input(),
       isIconOnly: isIconOnly(),
       size: size(),
       variant: variant(),
@@ -220,6 +464,21 @@ export function ButtonRoot(props: ButtonRootProps) {
     const style = props.style;
     return typeof style === "function" ? style(renderProps) : style;
   };
+
+  // A-004: `isAnimatedStyleActive` owns the `scale` channel entirely — while
+  // off, nothing writes it, so the caller's own transform never races the
+  // animation (the two-writers ban). The channel is bound only while the
+  // root's scale animation can actually run: `preset` "none" and an off
+  // `scale` key leave the caller's transform untouched as well.
+  const animatedStyleActive = () => props.isAnimatedStyleActive ?? true;
+  const scaleChannelBound = () =>
+    animatedStyleActive() && feedbackAnimation !== false;
+
+  const rootStyle = (): StyleProp<ViewStyle> => [
+    { transitionProperty: transitionProperty() },
+    ...(scaleChannelBound() ? [{ scale: feedback.scale }] : []),
+    resolvedStyle(),
+  ];
 
   // R-002: the CSS transition names three properties with two durations and
   // two curves. NSH takes one property list, one duration and one curve, so the
@@ -279,6 +538,10 @@ export function ButtonRoot(props: ButtonRootProps) {
     }
 
     notePress(event);
+    // A-003: the seam's edge sits where the render-prop `isPressed` sits —
+    // after the `isBlocked` early return, before any user callback. The two
+    // channels are parallel: a pending button produces neither.
+    feedback.pressDown(event);
     isPressed.set(true);
     // Tooltip port sheet §5.3: React Aria closes on pointerdown, so a held
     // press hides the tip at once instead of waiting for the release.
@@ -289,6 +552,10 @@ export function ButtonRoot(props: ButtonRootProps) {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-003: the seam clears at the same point the render-prop state does —
+    // release and cancel share `onPressUp` on NSH, so both take this path.
+    feedback.pressUp(event);
+
     if (isPressed()) {
       isPressed.set(false);
       props.onPressChange?.(false);
@@ -360,6 +627,13 @@ export function ButtonRoot(props: ButtonRootProps) {
     isFocused.set(false);
     hoverTrigger?.focusEnd();
     props.onBlur?.();
+  };
+
+  // A-003: the seam needs the measured bounds for `hitSlop` and the scale
+  // coefficient; the caller's `onLayout` keeps its payload and position.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    feedback.layout(event);
+    props.onLayout?.(event);
   };
 
   let node: ViewRef | undefined;
@@ -437,35 +711,53 @@ export function ButtonRoot(props: ButtonRootProps) {
     return renderChildren(content as JSX.Element);
   };
   return (
-    <View
-      ref={handleRef}
-      testID={props.testID}
-      nativeID={props.id ?? props.nativeID}
-      tooltip={props.tooltip}
-      role={toAccessibilityRole(props.role, "button")}
-      disabled={isDisabled()}
-      focusable={props.excludeFromTabOrder === true ? false : undefined}
-      accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel}
-      accessibilityState={accessibilityState()}
-      accessibilityElementsHidden={props["aria-hidden"] ?? props.accessibilityElementsHidden}
-      class={classes()}
-      // R-006 focus ring; R-008 pending pointer blocking.
-      classList={{
-        "ring-2 ring-focus ring-offset-2 ring-offset-background": isFocusVisible(),
-        "pointer-events-none": isPending(),
-      }}
-      style={[{ transitionProperty: transitionProperty() }, resolvedStyle()]}
-      onPress={handlePress}
-      onPressDown={handlePressDown}
-      onPressUp={handlePressUp}
-      onLongPress={handleLongPress}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      onLayout={props.onLayout}
-    >
-      {renderContent(props.children)}
-    </View>
+    <PressableFeedbackContext.Provider value={feedbackContextValue}>
+      <View
+        ref={handleRef}
+        testID={props.testID}
+        nativeID={props.id ?? props.nativeID}
+        tooltip={props.tooltip}
+        role={toAccessibilityRole(props.role, "button")}
+        disabled={isDisabled()}
+        focusable={props.excludeFromTabOrder === true ? false : undefined}
+        accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel}
+        accessibilityState={accessibilityState()}
+        accessibilityElementsHidden={props["aria-hidden"] ?? props.accessibilityElementsHidden}
+        class={classes()}
+        // R-006 focus ring; R-008 pending pointer blocking.
+        classList={{
+          "ring-2 ring-focus ring-offset-2 ring-offset-background": isFocusVisible(),
+          "pointer-events-none": isPending(),
+        }}
+        style={rootStyle()}
+        // A-004: the seam's computed hitSlop is the only writer of this view
+        // prop — components never set a literal and never take a hitSlop prop.
+        hitSlop={feedback.hitSlop()}
+        onPress={handlePress}
+        onPressDown={handlePressDown}
+        onPressUp={handlePressUp}
+        delayLongPress={props.delayLongPress}
+        onLongPress={handleLongPress}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onLayout={handleLayout}
+      >
+        {/* A-005: children read `PressableFeedbackContext` — `props.children`
+            is still read exactly once, inside the provider. The overlays are
+            absolute `pointerEvents: none` layers, so they neither lay out nor
+            take presses. The Provider wraps the root View outright (the same
+            shape `PressableFeedback` uses): a Provider nested inside the root
+            View leaves children outside its scope on the web host. */}
+        <If when={preset() === "scale-highlight" && highlightAnimation !== undefined}>
+          <PressableFeedback.Highlight animation={highlightAnimation} />
+        </If>
+        <If when={preset() === "scale-ripple" && rippleAnimation !== undefined}>
+          <PressableFeedback.Ripple animation={rippleAnimation} />
+        </If>
+        {renderContent(props.children)}
+      </View>
+    </PressableFeedbackContext.Provider>
   );
 }
