@@ -1,4 +1,4 @@
-import { host, mount } from "nsh";
+import { host, mount, View } from "nsh";
 import type { JSX } from "nsh";
 import {
   Button,
@@ -18,6 +18,7 @@ import { CalendarDate } from "@internationalized/date";
 import type { DateValue } from "@internationalized/date";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
+import { DateInputGroupKeyboardContext } from "../src/components/date-input-group/date-input-group-context";
 
 /*
  * NSH-only DatePicker fixture (port sheet 4b.3). The shared scenarios cover the
@@ -45,6 +46,8 @@ import { probe } from "@scenario/probe";
  *                     land inside it, for the reduced-motion paint case (X-001)
  *   controlled        `value` from params year/month/day, `onChange` probe
  *                     (controlled write-back)
+ *   empty             no `defaultValue`/`value`: placeholder segments, for the
+ *                     mobile layer's keymap/channel editing assertions
  *
  * Every case mounts inside `Scoped` (A-011): `host.params.input` /
  * `host.params.width` / `host.params.density` inject an `EnvironmentScope`
@@ -60,7 +63,19 @@ import { probe } from "@scenario/probe";
  * `host.params.kt` feeds `DateField.Input`'s `keyboardType` ("auto" when
  * absent — the inherited date-input-group A-007 channel, A-006/M-010).
  * `host.params.readonly`/`disabled`="1" set the Root's `isReadOnly` /
- * `isDisabled`.
+ * `isDisabled`. `host.params.kbdismiss`="1" sets the Popover's
+ * `isKeyboardDismissDisabled` and `host.params.skipanim`="1" its
+ * `shouldSkipAnimation` (the M-006 / M-014 exit-path halves).
+ *
+ * The mobile layer's probes (adapt sheet §4): every part reports `onLayout`
+ * bounds through the `layout` probe — `trigger`, `group`, `suffix` and one
+ * `segment-<type>` per segment (Segment takes no `onLayout`, so a
+ * shrink-wrapping View reports its bounds, the date-input-group convention);
+ * each Segment's render props record `segments` ({type, text, isPlaceholder,
+ * isEditable, isFocused, isReadOnly, isDisabled}) and a zero-argument child
+ * records the `DateInputGroupKeyboardContext` value it reads as
+ * `keyboard-type` — the internal context by relative path, the same reach
+ * date-input-group's own fixture takes (A-006/M-009/M-010/M-013).
  *
  * testIDs: dp-root, dp-group, dp-trigger, dp-popover (+ the derived carriers
  * `dp-popover-panel` / `dp-popover-sheet`, adapt sheet §8), dp-calendar,
@@ -116,6 +131,21 @@ function layout(name: string) {
     });
 }
 
+/*
+ * Reads the `DateInputGroupKeyboardContext` the Input provides and records
+ * it, so `DateField.Input`'s `keyboardType` prop path to the segments is
+ * observable where the host keyboard itself is not (adapt sheet M-010, the
+ * same probe date-input-group's `keyboard-type` case mounts).
+ */
+function KeyboardTypeProbe() {
+  const record = probe("keyboard-type");
+  const type = DateInputGroupKeyboardContext();
+
+  record(type());
+
+  return <></>;
+}
+
 /* The upstream `CalendarContent`: the calendar shares the picker's value, so it
  * passes none of its own (port sheet §5, contract one). */
 function CalendarContent(props: { probes?: boolean }) {
@@ -161,6 +191,8 @@ type ShellProps = {
     onLayout?: (event: LayoutEvent) => void;
     presentation?: "auto" | "panel" | "sheet";
     isNonModal?: boolean;
+    isKeyboardDismissDisabled?: boolean;
+    shouldSkipAnimation?: boolean;
   };
   inputKeyboardType?: DateInputGroupInputKeyboardType;
   isReadOnly?: boolean;
@@ -182,14 +214,41 @@ function Shell(props: ShellProps) {
         value={props.value}
       >
         <Label>Date</Label>
-        <DateField.Group testID="dp-group">
+        <DateField.Group testID="dp-group" onLayout={layout("group")}>
           <DateField.Input keyboardType={props.inputKeyboardType}>
-            {(segment) => <DateField.Segment segment={segment} />}
+            {(segment) => (
+              <View onLayout={layout(`segment-${segment.type}`)}>
+                {/* The context probe sits beside the Segment, inside the
+                    Input's provider tree: it reads the same
+                    `DateInputGroupKeyboardContext` a channel inside the
+                    segment would, without replacing the segment's own
+                    `segment.text` child. */}
+                <KeyboardTypeProbe />
+                <DateField.Segment
+                  segment={segment}
+                  className={(values) => {
+                    probe("segments")({
+                      type: segment.type,
+                      text: segment.text,
+                      isPlaceholder: segment.isPlaceholder,
+                      isEditable: segment.isEditable,
+                      isFocused: values.isFocused(),
+                      isReadOnly: values.isReadOnly(),
+                      isDisabled: values.isDisabled(),
+                    });
+
+                    return "";
+                  }}
+                />
+              </View>
+            )}
           </DateField.Input>
-          <DateField.Suffix>
+          <DateField.Suffix onLayout={layout("suffix")}>
             <DatePicker.Trigger
               aria-label="Open calendar"
               onFocus={() => probe("trigger-focus")()}
+              onLayout={layout("trigger")}
+              onPress={() => probe("trigger-press")()}
               testID="dp-trigger"
             >
               <DatePicker.TriggerIndicator />
@@ -199,9 +258,11 @@ function Shell(props: ShellProps) {
         <DatePicker.Popover
           aria-label={props.popoverProps?.["aria-label"]}
           className={props.popoverProps?.className}
+          isKeyboardDismissDisabled={props.popoverProps?.isKeyboardDismissDisabled}
           isNonModal={props.popoverProps?.isNonModal}
           onLayout={props.popoverProps?.onLayout}
           presentation={props.popoverProps?.presentation}
+          shouldSkipAnimation={props.popoverProps?.shouldSkipAnimation}
           testID="dp-popover"
         >
           <CalendarContent probes={props.probes} />
@@ -246,6 +307,8 @@ function Fixture() {
   const kt = String(host.params.kt ?? "");
   const readonly = String(host.params.readonly ?? "") === "1";
   const disabled = String(host.params.disabled ?? "") === "1";
+  const kbDismiss = String(host.params.kbdismiss ?? "") === "1";
+  const skipAnim = String(host.params.skipanim ?? "") === "1";
 
   const shellProps: ShellProps = {
     defaultValue: startDate(),
@@ -254,11 +317,13 @@ function Fixture() {
     inputKeyboardType:
       kt === "" ? undefined : (kt as DateInputGroupInputKeyboardType),
     popoverProps: {
+      isKeyboardDismissDisabled: kbDismiss || undefined,
       presentation:
         presentation === ""
           ? undefined
           : (presentation as "auto" | "panel" | "sheet"),
       isNonModal: nonModal || undefined,
+      shouldSkipAnimation: skipAnim || undefined,
     },
   };
 
@@ -290,7 +355,11 @@ function Fixture() {
   if (name === "no-close-on-select") {
     return (
       <Scoped>
-        <Shell {...shellProps} shouldCloseOnSelect={false} />
+        <Shell
+          {...shellProps}
+          onOpenChange={probe("openChange")}
+          shouldCloseOnSelect={false}
+        />
       </Scoped>
     );
   }
@@ -310,6 +379,14 @@ function Fixture() {
     return (
       <Scoped>
         <Shell {...shellProps} defaultValue={undefined} value={startDate()} />
+      </Scoped>
+    );
+  }
+
+  if (name === "empty") {
+    return (
+      <Scoped>
+        <Shell {...shellProps} defaultValue={undefined} />
       </Scoped>
     );
   }
