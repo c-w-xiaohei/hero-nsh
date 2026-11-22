@@ -75,9 +75,19 @@ import { probe } from "@scenario/probe";
  *                  and one per Input `returnKeyType` value (five mounts) —
  *                  mounting is the channel assertion (sheet §6)
  *   hover          the Group's `isHovered` render-prop record plus
- *                  `onHover*` / `onMouse*` probes on Group and Input, and
- *                  `onPress` probes on the affixes for the no-press-channel
- *                  contract (color-input-group's `hover` case precedent)
+ *                  `onHover*` / `onMouse*` probes on Group and Input, a
+ *                  `root-press` probe making the Group pressable so M-002's
+ *                  touch press has a target, and `onPress` probes on the
+ *                  affixes for the no-press-channel contract
+ *                  (color-input-group's `hover` case precedent)
+ *   baseline       M-010's whole default-environment surface in ONE app —
+ *                  the commit-boundary controlled field (Label + isRequired
+ *                  + isInvalid + FieldError + affixes + Description + focus
+ *                  probes + an outside blur target), a hue channel field, a
+ *                  hex step field, a saturation channel field, a disabled
+ *                  field and the fullWidth/default width pair — so the
+ *                  baseline row needs a single open (sequential web hosts
+ *                  exhaust the target)
  *
  * `host.params.scope` wraps every case: "" = the host's default environment
  * (pointer — the desktop-parity side), "touch" = `EnvironmentScope
@@ -157,9 +167,9 @@ function DisabledCase() {
 function PrefixSuffixCase() {
   return (
     <Stage>
-      <ColorField name="color">
+      <ColorField name="color" testID="field-root">
         <Label>Color</Label>
-        <ColorField.Group>
+        <ColorField.Group testID="group">
           <ColorField.Prefix>#</ColorField.Prefix>
           <ColorField.Input />
           <ColorField.Suffix>%</ColorField.Suffix>
@@ -412,6 +422,7 @@ function HoverCase() {
           onHoverChange={probe("root-hover-change")}
           onMouseEnter={probe("root-mouse-enter")}
           onMouseLeave={probe("root-mouse-leave")}
+          onPress={probe("root-press")}
         >
           <ColorField.Prefix onPress={probe("prefix-press")}>#</ColorField.Prefix>
           <ColorField.Input
@@ -424,6 +435,121 @@ function HoverCase() {
         </ColorField.Group>
       </ColorField>
     </Stage>
+  );
+}
+
+/* M-010: the whole default-environment contract in ONE app — a dozen
+ * sequential web hosts in a single test exhausts the `--target web`
+ * browser pool, so the baseline row mounts every face it reads at once
+ * (color-input-group's `baseline` precedent). `b-`-prefixed testIDs
+ * distinguish the fields; probe names stay the per-case ones (`onChange`,
+ * `layout`, `b-focus` / `b-blur`). */
+function BaselineCase() {
+  const value = signal<ColorValue | null>(parseColor("#0485F7"));
+
+  return (
+    <View class="flex-col gap-3 p-4">
+      <ColorField
+        isInvalid
+        isRequired
+        name="b-main"
+        value={value()}
+        onChange={(color: ColorValue | null) => {
+          value.set(color);
+          probe("onChange")(color ? color.toString("hex") : null);
+        }}
+      >
+        <Label>Brand Color</Label>
+        <ColorField.Group>
+          <ColorField.Prefix>#</ColorField.Prefix>
+          <ColorField.Input
+            testID="b-input"
+            onBlur={probe("b-blur")}
+            onFocus={probe("b-focus")}
+          />
+          <ColorField.Suffix>%</ColorField.Suffix>
+        </ColorField.Group>
+        <FieldError>Bad color</FieldError>
+      </ColorField>
+      <Input testID="b-outside" placeholder="outside" />
+
+      <ColorField
+        channel="hue"
+        colorSpace="hsl"
+        name="b-hue"
+        defaultValue={parseColor("hsl(200, 50%, 50%)")}
+      >
+        <Label>Hue</Label>
+        <ColorField.Group>
+          <ColorField.Input testID="b-hue" />
+        </ColorField.Group>
+        <Description>Pick a hue</Description>
+      </ColorField>
+
+      <ColorField
+        channel="saturation"
+        colorSpace="hsl"
+        name="b-saturation"
+        defaultValue={parseColor("hsl(200, 50%, 50%)")}
+      >
+        <Label>Saturation</Label>
+        <ColorField.Group>
+          <ColorField.Input testID="b-saturation" />
+        </ColorField.Group>
+      </ColorField>
+
+      <ColorField defaultValue={parseColor("#0485F7")} name="b-keys">
+        <ColorField.Group>
+          <ColorField.Input testID="b-keys" />
+        </ColorField.Group>
+      </ColorField>
+
+      {/* controlled-reject: a fixed `value` the parent never rewrites, so
+       * commits report but the displayed text only moves through the
+       * field's own writes (X-001 / X-002 semantics). */}
+      <ColorField
+        value={parseColor("#0485F7")}
+        name="b-reject"
+        onChange={(color: ColorValue | null) =>
+          probe("onChange-reject")(color ? color.toString("hex") : null)
+        }
+      >
+        <ColorField.Group>
+          <ColorField.Input testID="b-reject" />
+        </ColorField.Group>
+      </ColorField>
+
+      <ColorField isDisabled defaultValue={parseColor("#0485F7")} name="b-disabled">
+        <Label>Disabled</Label>
+        <ColorField.Group>
+          <ColorField.Input testID="b-disabled" />
+        </ColorField.Group>
+      </ColorField>
+
+      <View class="w-[400px] flex-col items-start gap-4">
+        <ColorField
+          fullWidth
+          defaultValue={parseColor("#10B981")}
+          name="b-full"
+          onLayout={layoutProbe("full")}
+        >
+          <Label>Full</Label>
+          <ColorField.Group>
+            <ColorField.Input />
+          </ColorField.Group>
+        </ColorField>
+        <ColorField
+          defaultValue={parseColor("#8B5CF6")}
+          name="b-plain"
+          onLayout={layoutProbe("default")}
+        >
+          <Label>Plain</Label>
+          <ColorField.Group>
+            <ColorField.Input />
+          </ColorField.Group>
+        </ColorField>
+      </View>
+    </View>
   );
 }
 
@@ -447,6 +573,7 @@ function Fixture() {
   if (name === "submit") return <Scoped><SubmitCase /></Scoped>;
   if (name === "kbd") return <Scoped><KbdCase /></Scoped>;
   if (name === "hover") return <Scoped><HoverCase /></Scoped>;
+  if (name === "baseline") return <Scoped><BaselineCase /></Scoped>;
 
   return <Scoped><BasicCase /></Scoped>;
 }
