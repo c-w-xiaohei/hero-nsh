@@ -50,10 +50,14 @@ export function FieldGroup(props: FieldGroupProps): JSX.Element {
 
   // Upstream reads `slots?.fieldGroup` from the root context and applies only
   // `className` outside a `Fieldset` (`compose.ts:22-28`, `fieldset.tsx:142-148`).
+  // A-002/A-004: the group's row spacing sits in the `density` cell, fed by
+  // the context the Root provides.
   const classes = computed(() =>
     fieldset === undefined
       ? local.className
-      : fieldsetVariants().fieldGroup({ className: local.className }),
+      : fieldsetVariants({ density: fieldset.density() }).fieldGroup({
+          className: local.className,
+        }),
   );
 
   // The one read of `props.children`, at the placement. A bare string inside a

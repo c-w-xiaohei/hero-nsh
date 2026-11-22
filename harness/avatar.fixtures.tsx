@@ -1,6 +1,6 @@
 import { host, mount, Text, View } from "nsh";
 import type { JSX } from "nsh";
-import { Avatar, AvatarGroup } from "@heroui/react";
+import { Avatar, AvatarGroup, EnvironmentScope } from "@heroui/react";
 import { probe } from "@scenario/probe";
 
 /*
@@ -18,6 +18,13 @@ import { probe } from "@scenario/probe";
  *                     group wraps (fifth at y = first + 52, x = first), the clip
  *                     group keeps one row (fifth at y = first)
  *   geometry-sizes    group size sm / md / lg: avatar widths 32 / 40 / 48
+ *   geometry-count    `max` slicing + counts: an automatic `+2` group and a
+ *                     group whose explicit `AvatarGroup.Count` suppresses it
+ *
+ * Two host params inject the environment (A-007): `scope` = "" or
+ * `EnvironmentScope input="touch"`, `density` = "" or `density="compact"`.
+ * They pass through the same `EnvironmentScope`, so an absent param keeps the
+ * host-derived field and a case opened without them is the desktop baseline.
  *
  * It sits next to harness/nsh.json on purpose: NSH takes the entry's own
  * directory as the app root, so a fixture under harness/tests/... would find no
@@ -31,7 +38,12 @@ type LayoutEvent = {
   };
 };
 
-type Entry = "geometry-overlap" | "geometry-ring" | "geometry-grid" | "geometry-sizes";
+type Entry =
+  | "geometry-overlap"
+  | "geometry-ring"
+  | "geometry-grid"
+  | "geometry-sizes"
+  | "geometry-count";
 
 type LayoutName =
   | "first"
@@ -43,7 +55,9 @@ type LayoutName =
   | "grid-second"
   | "grid-fifth"
   | "clip-first"
-  | "clip-fifth";
+  | "clip-fifth"
+  | "count-first"
+  | "count-third";
 
 function layoutProbe(name: LayoutName) {
   return (event: LayoutEvent) =>
@@ -145,11 +159,75 @@ function Sizes() {
   );
 }
 
+/*
+ * `max` slicing and both count flavors. Four md avatars with `max={2}`: the
+ * third registers but renders nothing (count-third stays 0×0 at the origin),
+ * and the group appends an automatic `+2` the test reads with `texts`. The
+ * second group writes an explicit `AvatarGroup.Count`, whose registration
+ * suppresses the automatic `+3` — the probe `count-first` only proves the
+ * group mounted; the suppression is a `texts` assertion.
+ */
+function Count() {
+  return (
+    <View class="flex-col items-start gap-4 p-6">
+      <AvatarGroup max={2}>
+        <Avatar onLayout={layoutProbe("count-first")} testID="count-first">
+          <Avatar.Fallback>A</Avatar.Fallback>
+        </Avatar>
+        <Avatar testID="count-second">
+          <Avatar.Fallback>B</Avatar.Fallback>
+        </Avatar>
+        <Avatar onLayout={layoutProbe("count-third")} testID="count-third">
+          <Avatar.Fallback>C</Avatar.Fallback>
+        </Avatar>
+        <Avatar testID="count-fourth">
+          <Avatar.Fallback>D</Avatar.Fallback>
+        </Avatar>
+      </AvatarGroup>
+      <AvatarGroup max={1}>
+        <Avatar testID="explicit-first">
+          <Avatar.Fallback>E</Avatar.Fallback>
+        </Avatar>
+        <Avatar testID="explicit-second">
+          <Avatar.Fallback>F</Avatar.Fallback>
+        </Avatar>
+        <Avatar testID="explicit-third">
+          <Avatar.Fallback>G</Avatar.Fallback>
+        </Avatar>
+        <Avatar testID="explicit-fourth">
+          <Avatar.Fallback>H</Avatar.Fallback>
+        </Avatar>
+        <AvatarGroup.Count>9+</AvatarGroup.Count>
+      </AvatarGroup>
+    </View>
+  );
+}
+
+/**
+ * `host.params.scope` / `host.params.density` feed `EnvironmentScope` (A-007);
+ * an absent param leaves the field unset, so the scope inherits the host's
+ * value for it and a case opened without params is the desktop baseline.
+ */
+function ScopedMobile(props: { children?: JSX.Element }) {
+  const scope = String(host.params.scope ?? "");
+  const density = String(host.params.density ?? "");
+
+  return (
+    <EnvironmentScope
+      input={scope === "touch" ? "touch" : undefined}
+      density={density === "compact" ? "compact" : undefined}
+    >
+      {props.children}
+    </EnvironmentScope>
+  );
+}
+
 const entries: Record<Entry, () => JSX.Element> = {
   "geometry-overlap": () => <Pair />,
   "geometry-ring": () => <Pair overlap="ring" />,
   "geometry-grid": GridWrap,
   "geometry-sizes": Sizes,
+  "geometry-count": Count,
 };
 
 function Fixture() {
@@ -158,7 +236,11 @@ function Fixture() {
 
   if (!Entry) return <Text>{`unknown fixture: ${name}`}</Text>;
 
-  return <Entry />;
+  return (
+    <ScopedMobile>
+      <Entry />
+    </ScopedMobile>
+  );
 }
 
 mount(Fixture);
