@@ -10,12 +10,27 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, effect, openUrl, signal, split, View } from "nsh";
+import {
+  cleanup,
+  computed,
+  createAnimatedValue,
+  effect,
+  openUrl,
+  signal,
+  split,
+  View,
+} from "nsh";
 
 import {
+  createDensity,
+  createInput,
+  createPressFeedback,
   createSelectableItem,
   isKeyboardPress,
   modifiersFromPress,
+  PressableFeedbackContext,
+  toListItemData,
+  type PressableFeedbackContextValue,
   type SelectionBehavior,
   type SelectionMode,
   type SelectionModifiers,
@@ -33,6 +48,7 @@ import {
   type MenuActivationKey,
   type MenuItemContextValue,
   type MenuItemDescriptor,
+  type MenuRowHandle,
   MenuSectionContext,
 } from "./menu-context";
 import { menuItemVariants, type MenuItemVariants } from "./menu.styles";
@@ -223,10 +239,12 @@ export interface MenuItemRootProps<T = unknown> extends MenuItemVariants {
 }
 
 /**
- * The key React Aria derives for an entry: `id` → the object's `id` → its
- * `key` → the item's index (`react-aria-components/src/Menu.tsx:513`). An entry
- * with none of them gets a generated key from the root; `textValue` is not part
- * of the order (`react-aria/dist/private/collections/Document.js:212`).
+ * The key React Aria derives for an entry: `id` → the datum's `id`/`key` → a
+ * primitive value itself → the item's index (`react-aria-components/
+ * src/Menu.tsx:513`). f-collection converged the chain (A-006):
+ * `toListItemData` is the same normalization the `items` data source runs,
+ * so a mounted row and its datum resolve one key; `textValue` is not part of
+ * the order (`react-aria/dist/private/collections/Document.js:212`).
  */
 function resolveKey(
   id: string | number | undefined,
@@ -237,24 +255,9 @@ function resolveKey(
     return String(id);
   }
 
-  if (value != null) {
-    if (typeof value === "object") {
-      const record = value as { id?: unknown; key?: unknown };
-      const derived = record.id ?? record.key;
+  const derived = toListItemData(value, index).key;
 
-      if (derived != null) {
-        return String(derived);
-      }
-    } else {
-      return String(value);
-    }
-  }
-
-  if (index != null) {
-    return String(index);
-  }
-
-  return undefined;
+  return derived !== "" ? derived : undefined;
 }
 
 /**
@@ -348,6 +351,12 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
 
   const variant = computed(() => local.variant ?? "default");
 
+  // A-001…A-003: the `input` axis is read once here — it feeds the
+  // `menuItemVariants` lookup, gates the hover channel and gates the
+  // press-feedback seam; `density` feeds the row's spacing cells.
+  const input = createInput();
+  const density = createDensity();
+
   // RAC's `GroupSelectionManager`: a Section with its own `selectionMode` keeps
   // the selection local while focus stays on the menu's manager.
   const selectionManager = () =>
@@ -413,6 +422,30 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     isDropTarget: () => false,
   };
 
+  // A-003: the touch-gated press-feedback seam (encapsulation.md §1,
+  // press-feedback 接缝). The gate folds `isDisabled` in so a disabled row
+  // expands nothing; under the default pointer environment `enabled` stays
+  // false and every channel rests, so the row pays nothing. The row mounts no
+  // overlay — `scale-[0.98]`/`hover:bg-default` are already its press visual
+  // (the B 档 "只用 highlight 或扩大 hitSlop" clause) — but it provides the
+  // seam's context so a caller composes `PressableFeedback.Scale`/`Highlight`/
+  // `Ripple` inside its children, and binds `hitSlop` on the view below.
+  const feedbackEnabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
+
+  const pressFeedbackContextValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: feedbackEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   // `MenuItemProps` inherits FocusEvents upstream (`Menu.tsx:518-529`) and
   // `useMenuItem` wires `focusableProps` (`useMenuItem.js:160-230`). Rows here
   // only hold the menu's virtual focus, so gaining or losing `focusedKey` is
@@ -436,7 +469,13 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     }
   });
 
-  const slots = computed(() => menuItemVariants({ variant: variant() }));
+  const slots = computed(() =>
+    menuItemVariants({
+      variant: variant(),
+      input: input(),
+      density: density(),
+    }),
+  );
 
   const resolvedClassName = () => {
     const className = local.className;
@@ -576,7 +615,26 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     // Its `<Each>` row's index signal, read when the collection is built.
     order: collectionItem?.index,
     disabled: () => local.isDisabled === true || list.isDisabledKey(key),
+  };
+
+  // f-collection (A-006): the static-children path still feeds the collection
+  // through a descriptor; under `items` the data itself is the collection, so
+  // this row only mounts a handle — its `textValue`/`isDisabled`/`value`
+  // merge into its datum while mounted, and activation/submenu/SR focus read
+  // the handle.
+  if (collectionItem == null) {
+    const register = section?.register ?? list.register;
+    cleanup(register(descriptor));
+  }
+
+  const handle: MenuRowHandle = {
+    type: "item",
+    key,
+    value: collectionItem ? collectionItem.value : () => local.value,
+    textValue: () => textValue(),
+    disabled: () => local.isDisabled === true || list.isDisabledKey(key),
     ref: () => node,
+    children: () => content(),
     activate,
     openSubmenu: local.openSubmenu
       ? (focusFirst?: boolean) => local.openSubmenu?.(focusFirst)
@@ -586,9 +644,7 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
       : undefined,
   };
 
-  const register = section?.register ?? list.register;
-
-  cleanup(register(descriptor));
+  cleanup(list.registerRow(handle));
   cleanup(() => list.unregisterItemLayout(key));
 
   // R-010: `:has(.menu-item__indicator)` has no NSH form, so both indicator
@@ -620,6 +676,13 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
       return;
     }
 
+    // A-003: the seam sees the press after the keyboard early-return, before
+    // the row's own notes; it gates itself on `enabled`, so a pointer press
+    // records nothing. The Label's forwarded press carries no event.
+    if (event) {
+      feedback.pressDown(event);
+    }
+
     // The pointer modality first: a press on an already focused row must drop
     // the keyboard ring even though no new focus event follows.
     list.notePointer();
@@ -640,6 +703,17 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
   };
 
   const handlePressUp = (event?: PressEvent) => {
+    // A-003: the seam's end edge — release and cancel share `onPressUp`, and
+    // `pressUp` clears `pressOrigin` even for a gated press, so it runs before
+    // the keyboard early-return. It is deferred one frame: the web host
+    // dispatches down and up inside one gesture turn, so a synchronous clear
+    // collapses `isPressed` into the same commit that raised it — reactive
+    // consumers see only the settle state (the registered web batching gap,
+    // tabs A-003 precedent). The Label's forwarded press carries no event.
+    if (event) {
+      requestAnimationFrame(() => feedback.pressUp(event));
+    }
+
     if (event && isKeyboardPress(event)) {
       return;
     }
@@ -678,9 +752,15 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
   };
 
   const handleMouseEnter = (event: NshMouseEvent) => {
+    // `onMouseEnter` is a raw host event and still reported; the hover state
+    // and the `useHover` callbacks below are not (switch A-003 precedent).
     local.onMouseEnter?.(event);
 
-    if (selectable.isDisabled() || isHovered()) {
+    // A-002: the `input` axis owns hover independence — under touch the hover
+    // signal stays off entirely, so a web sticky hover cannot pin the row's
+    // `isHovered` (or `hover:bg-default`) after a press, and the virtual
+    // focus never follows a synthetic enter.
+    if (input() === "touch" || selectable.isDisabled() || isHovered()) {
       return;
     }
 
@@ -715,6 +795,9 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
   };
 
   const handleLayout = (event: { bounds: Bounds }) => {
+    // A-003: the measured size feeds the seam's `hitSlop`/`scale`; the layout
+    // registration and the caller's callback keep their order.
+    feedback.layout(event);
     list.registerItemLayout(key, event.bounds, section?.key);
     local.onLayout?.(event);
   };
@@ -844,9 +927,15 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
             onLongPress={handleLongPress}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
+            // A-003: the invisible half of the hit-area path — computed by the
+            // seam from `Environment` + the density table, never a prop;
+            // `undefined` while the pointer gate holds.
+            hitSlop={feedback.hitSlop()}
             onLayout={handleLayout}
           >
-            {content()}
+            <PressableFeedbackContext.Provider value={pressFeedbackContextValue}>
+              {content()}
+            </PressableFeedbackContext.Provider>
           </View>
         </MenuItemContext.Provider>
       </DescriptionContext.Provider>
