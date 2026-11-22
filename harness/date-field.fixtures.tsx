@@ -197,7 +197,14 @@ function DefaultCase() {
 function EmptyCase() {
   return (
     <Stage>
-      <DateField name="date" onChange={recordChange} testID="df-root">
+      <DateField
+        name="date"
+        onChange={recordChange}
+        testID="df-root"
+        onFocus={() => probe("focus-in")()}
+        onBlur={() => probe("focus-out")()}
+        onFocusChange={(focused) => probe("focus-change")(focused)}
+      >
         <Label>Date</Label>
         <DateField.Group testID="df-group">
           <Segments />

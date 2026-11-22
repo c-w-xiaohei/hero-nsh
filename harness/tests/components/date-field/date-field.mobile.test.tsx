@@ -181,27 +181,21 @@ describe("date-field mobile", () => {
     await app.waitUntil(() => lastSegment(app, "month").text === "1");
 
     // Enter is `blurAndSubmit`: the blur crosses the group boundary and runs
-    // `commit()` once. Editing emits the valid intermediate values eagerly
-    // (February 30th clamps to the 28th, exactly as the pointer path's
-    // `commitValue` does), so the boundary commits the same value once and
-    // `onChange` reports nothing new — 只多发一次提交值, here zero.
-    const editing = await openCase("default", { scope: "touch" });
+    // `commit()` once. On the empty field the invalid display (February
+    // 30th) never committed while editing — the date stays incomplete until
+    // the last keystroke and then fails validation — so the boundary emits
+    // exactly one value: the clamped February 28th.
+    const editing = await openCase("empty", { scope: "touch" });
     await editing.type("id:dig-seg-month", "02");
     await editing.type("id:dig-seg-day", "30");
     await editing.type("id:dig-seg-year", "2026");
     await editing.waitUntil(() => lastSegment(editing, "year").text === "2026");
-    await editing.waitUntil(() => changes(editing).length > 0);
-
-    // Every intermediate emit is a valid commit; the last one is the
-    // clamped February 28th.
-    expect(lastChange(editing).text).toBe("2026-02-28");
-    const before = changes(editing).length;
+    expect(changes(editing)).toHaveLength(0);
 
     await editing.keyboard.press("enter");
-    await editing.wait(200);
+    await editing.waitUntil(() => changes(editing).length > 0);
 
-    expect(changes(editing).length).toBe(before);
-    expect(lastChange(editing).text).toBe("2026-02-28");
+    expect(changes(editing)).toEqual(["2026-02-28"]);
     expect(lastOf<boolean>(editing, "focus-change")).toBe(false);
     expect(callsOf(editing, "focus-out").length).toBeGreaterThan(0);
   }, 120_000);
