@@ -1,7 +1,22 @@
 import type { JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { cleanup, computed, openUrl, signal, split, untracked, View } from "nsh";
+import {
+  cleanup,
+  computed,
+  createAnimatedValue,
+  openUrl,
+  signal,
+  split,
+  untracked,
+  View,
+} from "nsh";
 
 import { isKeyboardPress } from "../../primitives";
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { TableSelectionCheckboxContext } from "../checkbox/table-selection-context";
 import { renderChildren } from "./table-children";
 import {
@@ -150,6 +165,32 @@ export function TableRow(props: TableRowProps) {
   const hasChildItems = computed(() => model()?.hasChildItems ?? local.hasChildItems === true);
   const level = computed(() => model()?.level ?? parentRow?.level ?? 1);
 
+  // A-002 / A-006: the `input` axis is read once — it gates the
+  // press-feedback seam below and the hover writes in the event handlers.
+  const input = createInput();
+
+  // A-002: the touch-gated press-feedback seam. The row mounts no overlay of
+  // its own — the `group-selected:` cell surfaces are already the selection
+  // feedback — but it provides the seam's context so a caller can compose
+  // `PressableFeedback` parts inside its cells (the B-档 "只用 highlight"
+  // clause). `hitSlop` stays unbound: A-001 lifts every row to ≥44 pt, and
+  // extra slop between adjacent rows would misattribute their touches.
+  const feedbackEnabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
+
+  const pressFeedbackContextValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: feedbackEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   // The row view is a Tab stop of its own (§8): while it holds the focus
   // itself, no cell of it is the focused cell yet, so the row's own signal
   // keeps R-045–R-048's ring and the row's render props honest.
@@ -280,6 +321,10 @@ export function TableRow(props: TableRowProps) {
 
   const handlePressDown = (event: PressEvent) => {
     isPressed.set(true);
+    // A-002: the seam sees the press after the component's own flag, before
+    // the modality write and the forwarded callbacks; it gates itself on
+    // `enabled`, so a pointer press records nothing.
+    feedback.pressDown(event);
     // R-013: a keyboard activation is a press on the focused view; the input
     // modality follows the source of the press.
     if (isKeyboardPress(event)) {
@@ -292,6 +337,8 @@ export function TableRow(props: TableRowProps) {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-002: the seam's end edge — release and cancel share `onPressUp`.
+    feedback.pressUp(event);
     isPressed.set(false);
     local.onPressUp?.(event);
   };
@@ -384,6 +431,8 @@ export function TableRow(props: TableRowProps) {
             expanded: hasChildItems() ? isExpanded() : undefined,
           }}
           onLayout={(event) => {
+            // A-002: the measured box feeds the seam's `bounds` first.
+            feedback.layout(event);
             state.registerRowLayout(key, event.bounds);
             local.onLayout?.(event);
           }}
@@ -396,15 +445,22 @@ export function TableRow(props: TableRowProps) {
             isRowFocused.set(false);
           }}
           onMouseEnter={(event) => {
-            isHovered.set(true);
-            local.onHoverChange?.(true);
-            local.onHoverStart?.(event);
+            // A-006: under touch the hover state and its callbacks stay off —
+            // a web sticky hover cannot pin the row after a press; the raw
+            // `onMouseEnter`/`onMouseLeave` callbacks still forward.
+            if (input() !== "touch") {
+              isHovered.set(true);
+              local.onHoverChange?.(true);
+              local.onHoverStart?.(event);
+            }
             local.onMouseEnter?.(event);
           }}
           onMouseLeave={(event) => {
-            isHovered.set(false);
-            local.onHoverChange?.(false);
-            local.onHoverEnd?.(event);
+            if (input() !== "touch") {
+              isHovered.set(false);
+              local.onHoverChange?.(false);
+              local.onHoverEnd?.(event);
+            }
             local.onMouseLeave?.(event);
           }}
           onPressDown={handlePressDown}
@@ -416,11 +472,15 @@ export function TableRow(props: TableRowProps) {
           style={[rowStyle(), resolvedStyle()]}
         >
           {/* A function child draws one cell per column; a plain tree is the
-              static form (port sheet §1, Row's children). */}
-          <Each of={columnList()}>
-            {(column) => renderColumnCell(column())}
-          </Each>
-          <If when={!hasColumns()}>{staticChildren()}</If>
+              static form (port sheet §1, Row's children). A-002: the seam's
+              context wraps the cells so a composed `PressableFeedback` part
+              inside reads this row's press state. */}
+          <PressableFeedbackContext.Provider value={pressFeedbackContextValue}>
+            <Each of={columnList()}>
+              {(column) => renderColumnCell(column())}
+            </Each>
+            <If when={!hasColumns()}>{staticChildren()}</If>
+          </PressableFeedbackContext.Provider>
           {/* R-045–R-048: one inset ring for the whole row while a cell of it
               has the keyboard focus. R-046 is the left segment, R-047 the right
               one and R-048 the middle cells' top and bottom edges; the single
