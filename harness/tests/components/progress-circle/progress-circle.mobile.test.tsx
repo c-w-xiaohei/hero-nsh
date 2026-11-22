@@ -267,4 +267,23 @@ describe("progress-circle mobile", () => {
 
     expect(boxes(sizes).length).toBeGreaterThanOrEqual(3);
   });
+
+  // adapt-sheets/progress-circle.md M-007 (A-008): this file itself — every
+  // case opens through the same `platform:"windows"` 1024×768 pin, so the
+  // desktop baseline and the injected-environment mounts share one file
+  // under both the headless and the `--target web` runner; no
+  // `.headless.`/`.web.` split is needed because nothing injects a mobile
+  // platform or drags a held touch.
+  test("M-007 dual environment: the pinned open works under both runners", async () => {
+    const baseline = await openCircle("paint");
+    await settleStrokes(baseline);
+    expect(baseline.shows("role:progressbar[Loading]")).toBe(true);
+
+    const touch = await openCircle("paint", { input: "touch" });
+    await settleStrokes(touch);
+    expect(touch.shows("role:progressbar[Loading]")).toBe(true);
+    expect(paintSignature(touch).fillDash).toEqual(
+      paintSignature(baseline).fillDash,
+    );
+  });
 });
