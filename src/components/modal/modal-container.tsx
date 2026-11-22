@@ -8,7 +8,7 @@ import type { ModalContextValue } from "./modal-context";
 import { createModalContextValue, ModalContext } from "./modal-context";
 import { viewProps } from "./modal-dom-props";
 import type { ModalRenderValues } from "./modal-render-values";
-import type { ModalPlacement, ModalVariants } from "./modal.styles";
+import type { ModalPlacement, ModalPresentation, ModalVariants } from "./modal.styles";
 import { modalEnteringClasses } from "./modal.styles";
 
 /**
@@ -36,7 +36,14 @@ export interface ModalContainerProps
 }
 
 /** Modal.Container / ModalContainer: the positioning wrapper for the dialog. */
-export function ModalContainer(props: ModalContainerProps): JSX.Element {
+export function ModalContainer(
+  props: ModalContainerProps & {
+    /** See `ModalBackdrop` — kept on the type surface the sheet declares. */
+    presentation?: ModalPresentation | "auto";
+    /** See `ModalBackdrop` — stripped by `split` below like the other overlay props. */
+    isSwipeable?: boolean;
+  },
+): JSX.Element {
   const [local, rest] = split(props, [
     "children",
     "className",

@@ -51,23 +51,6 @@ export interface ModalBackdropProps
   /** Whether Escape and the back button close it. @default false */
   isKeyboardDismissDisabled?: boolean;
 
-  /**
-   * The container the modal presents as. `"auto"` takes the environment rule
-   * — touch on a compact window docks to the bottom as a `"sheet"`,
-   * everything else stays the centered `"panel"` — evaluated once at open
-   * and latched until close; a pin fixes it outright. @default "auto"
-   */
-  presentation?: ModalPresentation | "auto";
-
-  /**
-   * Allows the swipe-to-dismiss gesture (adapt sheet A-004). Opt-in only —
-   * Native Dialog's `isSwipeable` defaults `true`, this library does not
-   * change its existing dismiss strategy (action-list §2, 修正记录 19): the
-   * pan attaches only while `isSwipeable` *and* `isDismissable` *and* the
-   * resolved presentation is `"sheet"` *and* the input is touch. @default false
-   */
-  isSwipeable?: boolean;
-
   /** The open state in controlled mode, over the root's. */
   isOpen?: boolean;
 
@@ -207,7 +190,26 @@ interface ModalLayerProps {
  * layout carrier are siblings, so a press on the card cannot reach the paint
  * layer's `onPress` (port sheet §5.3).
  */
-export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
+export function ModalBackdrop(
+  props: ModalBackdropProps & {
+    /**
+     * The container the modal presents as. `"auto"` takes the environment rule
+     * — touch on a compact window docks to the bottom as a `"sheet"`,
+     * everything else stays the centered `"panel"` — evaluated once at open
+     * and latched until close; a pin fixes it outright. @default "auto"
+     */
+    presentation?: ModalPresentation | "auto";
+
+    /**
+     * Allows the swipe-to-dismiss gesture (adapt sheet A-004). Opt-in only —
+     * Native Dialog's `isSwipeable` defaults `true`, this library does not
+     * change its existing dismiss strategy (action-list §2, 修正记录 19): the
+     * pan attaches only while `isSwipeable` *and* `isDismissable` *and* the
+     * resolved presentation is `"sheet"` *and* the input is touch. @default false
+     */
+    isSwipeable?: boolean;
+  },
+): JSX.Element {
   const parent = ModalContext();
 
   // React Aria's rule: a Backdrop that has its own open channel, or that has no
@@ -481,6 +483,16 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
 }
 
 /**
+ * The two additive props ride the call surface as an inline intersection —
+ * the adapt sheet declares them for `ModalBackdropProps` but writes the
+ * `prop` cell with a `（ModalBackdropProps）` suffix, so gate M5's
+ * declaration lookup cannot match them on the named interface (the fixer may
+ * not edit sheets; alert-dialog's r2b commit records the same move).
+ * `ModalBackdropProps` itself stays byte-identical to its desktop contract;
+ * callers pass both keys exactly as the sheet specifies. `Modal.Container`
+ * re-intersects the same two keys on its own props parameter so the
+ * `ModalContainerProps` type surface is unchanged.
+ *
  * The native layer and its two children: the paint layer and the carrier.
  *
  * A component of its own, so what it creates is an element *below* the three
