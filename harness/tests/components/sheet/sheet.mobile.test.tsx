@@ -83,6 +83,10 @@ function lastBodyOffset(app: App): number {
 }
 
 async function settle(app: App): Promise<void> {
+  // `open` can resolve before the web host's first commit; every assertion
+  // here reads the detent probe, so wait for its first record instead of
+  // trusting a fixed 40ms settle (the M-023 web flake read an empty probe).
+  await app.waitUntil(() => callsOf(app, "detent").length > 0, { timeout: 15_000 });
   await app.clock?.runFor(40);
 }
 
