@@ -14,6 +14,7 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
 import { HoverTriggerContext } from "../../primitives/create-overlay-trigger";
 import { renderChildren } from "./children";
 import { TooltipContext } from "./tooltip-context";
@@ -98,6 +99,7 @@ export function TooltipTrigger(props: TooltipTriggerProps) {
   const slots = tooltip?.slots ?? tooltipVariants();
 
   const modality = createInteractionModality();
+  const input = createInput();
   // The modality says which input interacted last; this says whether the view
   // has focus at all, and R-019 needs both.
   const focused = signal(false);
@@ -144,16 +146,30 @@ export function TooltipTrigger(props: TooltipTriggerProps) {
   };
 
   const handleLongPress = (event: PressEvent) => {
+    // A-001: the root's long-press channel runs before the caller's callback,
+    // as the hover / press channels do. Under pointer it is a no-op inside the
+    // root, so a held press only ever reports `onLongPress`.
+    tooltip?.longPress?.();
     props.onLongPress?.(event);
   };
 
+  // A-003: the `input` axis owns hover independence — a touch host can
+  // synthesize hover (web's sticky hover is the measured case), and feeding it
+  // into the channel would open the tip and let hover bypass the long-press
+  // entry. The caller's own handlers still run; only the channel is gated.
   const handleMouseEnter = (event: NshMouseEvent) => {
-    hoverTrigger?.hoverStart();
+    if (input() !== "touch") {
+      hoverTrigger?.hoverStart();
+    }
+
     props.onMouseEnter?.(event);
   };
 
   const handleMouseLeave = (event: NshMouseEvent) => {
-    hoverTrigger?.hoverEnd();
+    if (input() !== "touch") {
+      hoverTrigger?.hoverEnd();
+    }
+
     props.onMouseLeave?.(event);
   };
 

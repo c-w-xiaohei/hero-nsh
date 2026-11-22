@@ -13,6 +13,7 @@
 import type { JSX, ViewRef } from "nsh";
 import { cleanup, signal } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import {
   createOverlayTrigger,
   HoverTriggerContext,
@@ -116,10 +117,19 @@ export function TooltipRoot(props: TooltipRootProps) {
   const isDisabled = () => props.isDisabled ?? false;
   const isHoverTrigger = () => (props.trigger ?? "hover") === "hover";
 
+  const input = createInput();
+
   // Plain flags: they steer the open state, they are not rendered (port sheet
   // §2), so they do not need to be signals.
   let hovered = false;
   let focused = false;
+
+  // A-001: a long-press shown this way survives the press that may follow its
+  // release — whether the host still dispatches `press` after `onLongPress`
+  // resolves is an open host question (sheet §6), so the flag covers both
+  // orders: `pressStart` clears it, `longPress` sets it, the first `press`
+  // after consumes it instead of closing the tip.
+  let longPressShown = false;
 
   let warmUpTimer: number | undefined;
   let closeTimer: number | undefined;
@@ -250,6 +260,9 @@ export function TooltipRoot(props: TooltipRootProps) {
     hide(false);
   };
 
+  // A-004: the keyboard-focus channel stays open on both ends — focus is a
+  // per-event modality, so a touch device with a keyboard keeps this path; the
+  // `input` axis never gates it.
   /** RAC's `onFocus`: a view's focus only comes from the keyboard. */
   const focusStart = () => {
     if (isDisabled()) {
@@ -277,8 +290,16 @@ export function TooltipRoot(props: TooltipRootProps) {
   /**
    * RAC's `onPressStart` / `onPress`: pressing the trigger means the user acted
    * on it, so the tip goes away (unless `shouldCloseOnPress` is false).
+   * A-001: the press that may land right after a long-press open is consumed
+   * instead — releasing the hold is not acting on the trigger.
    */
   const handlePress = () => {
+    if (longPressShown) {
+      longPressShown = false;
+
+      return;
+    }
+
     if (isDisabled() || props.shouldCloseOnPress === false) {
       return;
     }
@@ -288,6 +309,38 @@ export function TooltipRoot(props: TooltipRootProps) {
     }
 
     hide(true);
+  };
+
+  /**
+   * A-001: the `pressStart` half. A pointer going down on the trigger still
+   * counts as acting on it (RAC's `onPointerDown` closes the tip); it also
+   * resets the one-shot `longPressShown` flag so only the press immediately
+   * after a held press is suppressed.
+   */
+  const handlePressStart = () => {
+    longPressShown = false;
+    handlePress();
+  };
+
+  /**
+   * A-001: the touch-only show entry. A held press on the trigger opens the
+   * tip at once — the same `show` a warm hover takes, so the registry,
+   * `shouldCloseOnPress`, `isDisabled` and one-open-at-a-time semantics are
+   * shared, not duplicated (A-006). The `input` axis gates it: under pointer
+   * there is no long-press path at all, and `trigger="focus"` ignores every
+   * pointer input, a held press included.
+   *
+   * A-006: `openTooltip(true)` keeps the single state machine — the registry,
+   * warm flag, `skipAnimation`, `shouldCloseOnPress` and `isDisabled` gates
+   * all apply to a long-press open exactly as to a hover open.
+   */
+  const longPress = () => {
+    if (input() !== "touch" || isDisabled() || !isHoverTrigger()) {
+      return;
+    }
+
+    longPressShown = true;
+    openTooltip(true);
   };
 
   /** `useTooltip`'s `onHoverStart` on the content: keeps it open while hovered. */
@@ -324,7 +377,7 @@ export function TooltipRoot(props: TooltipRootProps) {
     hoverEnd,
     focusStart,
     focusEnd,
-    pressStart: handlePress,
+    pressStart: handlePressStart,
     press: handlePress,
     registerTrigger: trigger.registerTrigger,
   };
@@ -335,6 +388,7 @@ export function TooltipRoot(props: TooltipRootProps) {
     skipAnimation,
     shouldSkipAnimation: () => props.shouldSkipAnimation === true,
     triggerRef: trigger.triggerRef,
+    longPress,
     contentHoverStart,
     contentHoverEnd,
     state,
