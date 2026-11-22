@@ -578,6 +578,79 @@ function DismissedList() {
   );
 }
 
+/*
+ * M-008: the whole queue-behaviour baseline in one mount. Sequential opens
+ * exhaust the web target's browser pool (the M3 gate run proved it), so the
+ * row replays its behaviours as phases over a single provider instead of one
+ * app per case — the same route color-input-group's `baseline` case took.
+ * The provider's own queue tracks every key the buttons create:
+ *   mount        "Persistent" (timeout 0, onClose "onCloseP") — T-049, then
+ *                the CloseButton close path (T-012/T-050)
+ *   "Show"/"Close toast"  a keyed toast + queue.close — T-051
+ *   "Show Timed" a default-timeout toast — T-013
+ *   "Show Hover" a 1000 ms toast for the hover suspend/resume — T-062
+ *   "Show Cap"   four persistent toasts under maxVisibleToasts=3 — T-059
+ *   "Clear"      queue.clear(), one onCloseCap per cap toast — T-018
+ *   "Outside"    a hover target off the stack
+ */
+function Baseline() {
+  const queue = new ToastQueue();
+  const key = signal("");
+
+  queue.add({ title: "Persistent" }, { onClose: probe("onCloseP"), timeout: 0 });
+
+  return (
+    <Frame>
+      <Toast.Provider maxVisibleToasts={3} queue={queue} />
+      <Button
+        onPress={() => {
+          key.set(queue.add({ title: "Keyed" }, { onClose: probe("onCloseK"), timeout: 0 }));
+        }}
+      >
+        Show
+      </Button>
+      <Button
+        onPress={() => {
+          queue.close(key());
+        }}
+      >
+        Close toast
+      </Button>
+      <Button
+        onPress={() => {
+          queue.add({ title: "Timed" });
+        }}
+      >
+        Show Timed
+      </Button>
+      <Button
+        onPress={() => {
+          queue.add({ title: "Hoverable" }, { timeout: 1000 });
+        }}
+      >
+        Show Hover
+      </Button>
+      <Button
+        onPress={() => {
+          for (let index = 0; index < 4; index++) {
+            queue.add({ title: `Cap-${index}` }, { onClose: probe("onCloseCap"), timeout: 0 });
+          }
+        }}
+      >
+        Show Cap
+      </Button>
+      <Button
+        onPress={() => {
+          queue.clear();
+        }}
+      >
+        Clear
+      </Button>
+      <Button>Outside</Button>
+    </Frame>
+  );
+}
+
 /* T-051: closing through the queue, not the close button. */
 function CloseKey() {
   const id = signal("");
@@ -817,6 +890,7 @@ const cases: Record<string, Component> = {
   "maxvisible-three": MaxVisibleThree,
   "dismissed-list": DismissedList,
   "close-key": CloseKey,
+  baseline: Baseline,
   "update-text": UpdateText,
   "promise-resolve": PromiseResolve,
   "promise-reject": PromiseReject,

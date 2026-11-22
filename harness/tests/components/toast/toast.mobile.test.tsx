@@ -242,70 +242,74 @@ describe("toast mobile", () => {
 
   // adapt-sheets/toast.md M-008 (基线): the existing behaviours are
   // unchanged in both environments — the default pointer side and the
-  // injected touch side answer identically: CloseButton close, `queue.close`
-  // / `clear`, `onClose`, timeout expiry, the persistent opt-out, the
-  // hover/interaction suspend, the maxVisible mount rule, and the
-  // focus handoff (`moveFocusFrom`, T-020/T-022) on the focus-capable web
-  // host.
-  test("M-008 baseline: queue, close, timeout, hover and focus semantics hold in both environments", async () => {
+  // injected touch side answer identically. Sequential opens exhaust the
+  // web target's browser pool (the M3 gate run proved it, the same host
+  // count color-input-group hit), so the queue behaviours replay as phases
+  // over the fixture's single `baseline` mount — one open per scope — and
+  // the focus half keeps its own `platform:"web"` app.
+  test("M-008 baseline: queue, close, timeout, hover and cap semantics hold in both environments", async () => {
     for (const scope of [undefined, "touch"] as const) {
       const params: Record<string, string | number | boolean> = scope
         ? { scope }
         : {};
+      const app = await openToast("baseline", { params });
+
+      // T-049: `timeout: 0` never counts down — the seeded Persistent toast
+      // is still there well past the default timeout's span.
+      expect(app.shows("text:Persistent")).toBe(true);
+      await advance(app, 1500);
+      expect(app.shows("role:alert")).toBe(true);
 
       // T-012/T-050: the CloseButton closes through the queue, onClose once.
-      const close = await openToast("close-onclose", { params });
-      await closeToast(close);
-      expect(callsOf(close, "onClose")).toHaveLength(1);
-      await settleExit(close);
-      expect(close.count("role:alert")).toBe(0);
+      await closeToast(app);
+      expect(callsOf(app, "onCloseP")).toHaveLength(1);
+      // Move the pointer off the stack so no interaction suspension survives.
+      await app.hover("role:button[Outside]");
+      await settleExit(app);
+      expect(app.count("role:alert")).toBe(0);
 
-      // T-018: queue.clear() closes every toast, each onClose once.
-      const cleared = await openToast("clear-two", { params });
-      await showToast(cleared, "Clear");
-      expect(callsOf(cleared, "onCloseA")).toHaveLength(1);
-      expect(callsOf(cleared, "onCloseB")).toHaveLength(1);
-      await settleExit(cleared);
-      expect(cleared.count("role:alert")).toBe(0);
-
-      // T-051: toast.close(key) through the queue.
-      const keyed = await openToast("close-key", { params });
-      await showToast(keyed, "Show");
-      await showToast(keyed, "Close toast");
-      await settleExit(keyed);
-      expect(keyed.count("role:alert")).toBe(0);
+      // T-051: queue.close(key) through the queue.
+      await showToast(app, "Show");
+      await showToast(app, "Close toast");
+      expect(callsOf(app, "onCloseK")).toHaveLength(1);
+      await settleExit(app);
+      expect(app.count("role:alert")).toBe(0);
 
       // T-013: the default timeout expires on schedule.
-      const timed = await openToast("timeout-default", { params });
-      await advance(timed, DEFAULT_TOAST_TIMEOUT);
-      await settleExit(timed);
-      expect(timed.count("role:alert")).toBe(0);
-
-      // T-049: `timeout: 0` never counts down.
-      const persistent = await openToast("persistent", { params });
-      await advance(persistent, 1500);
-      expect(persistent.shows("role:alert")).toBe(true);
+      await showToast(app, "Show Timed");
+      await advance(app, DEFAULT_TOAST_TIMEOUT);
+      await settleExit(app);
+      expect(app.count("role:alert")).toBe(0);
 
       // T-062: hovering the stack suspends the countdown, leaving resumes.
-      const hover = await openToast("hover-pause", { params });
-      await hover.hover("role:alert");
-      await advance(hover, 1000);
-      expect(hover.shows("text:Pausing")).toBe(true);
-      await hover.hover("role:button[Outside]");
-      await advance(hover, 1100);
-      await settleExit(hover);
-      expect(hover.count("text:Pausing")).toBe(0);
+      await showToast(app, "Show Hover");
+      await app.hover("role:alert");
+      await advance(app, 1000);
+      expect(app.shows("text:Hoverable")).toBe(true);
+      await app.hover("role:button[Outside]");
+      await advance(app, 1100);
+      await settleExit(app);
+      expect(app.count("text:Hoverable")).toBe(0);
 
       // T-059: toasts past maxVisibleToasts stay mounted and hidden.
-      const capped = await openToast("maxvisible-three", { params });
-      expect(capped.count("role:alert")).toBe(4);
-    }
+      await showToast(app, "Show Cap");
+      expect(app.count("role:alert")).toBe(4);
 
-    // T-020/T-022: the focus handoff — Tab reaches region → frontmost toast
-    // → its close button; closing the focused toast moves focus to the
-    // remaining one. `platform: "web"` is the focus-capable host (the same
-    // channel tabs.mobile.test.tsx uses); `scope` still injects the
-    // environment, so the touch half runs the identical keyboard path.
+      // T-018: queue.clear() closes every toast, each onClose once.
+      await showToast(app, "Clear");
+      expect(callsOf(app, "onCloseCap")).toHaveLength(4);
+      await settleExit(app);
+      expect(app.count("role:alert")).toBe(0);
+    }
+  }, 120_000);
+
+  // adapt-sheets/toast.md M-008 (基线), focus half — T-020/T-022: the focus
+  // handoff — Tab reaches region → frontmost toast → its close button;
+  // closing the focused toast moves focus to the remaining one.
+  // `platform: "web"` is the focus-capable host (the same channel
+  // tabs.mobile.test.tsx uses); `scope` still injects the environment, so
+  // the touch half runs the identical keyboard path.
+  test("M-008 baseline: focus handoff holds in both environments", async () => {
     for (const scope of [undefined, "touch"] as const) {
       const app = await openToast("focus-stack", {
         params: { count: 2, ...(scope ? { scope } : {}) },
