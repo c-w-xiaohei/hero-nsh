@@ -1,4 +1,5 @@
 import { host, mount } from "nsh";
+import type { JSX } from "nsh";
 import type { Color } from "@heroui/react";
 import {
   ColorArea,
@@ -6,7 +7,13 @@ import {
   ColorSlider,
   ColorSwatch,
   ColorSwatchPicker,
+  EnvironmentScope,
   Label,
+} from "@heroui/react";
+import type {
+  EnvironmentDensity,
+  EnvironmentInput,
+  EnvironmentWidth,
 } from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
@@ -32,6 +39,19 @@ import { probe } from "@scenario/probe";
  *                  open / close case (T-006) runs on the shared
  *                  `color-picker/default` scenario instead, so this case only
  *                  exists as the fixture's plain shape.
+ *
+ * Every case mounts inside `Scoped` (A-007): `host.params.input` /
+ * `host.params.width` / `host.params.density` inject an `EnvironmentScope`
+ * per field, and absent params keep the host-derived environment (pointer +
+ * regular + default on headless/web — the desktop-parity baseline). The
+ * wrapper is always a real provider, never a bare fragment: popover's §7
+ * measured that a fragment wrapper breaks the exit-hold unmount.
+ *
+ * `host.params.presentation` ∈ "auto"|"panel"|"sheet" pins the carrier on
+ * `ColorPicker.Popover`; `host.params.nonmodal`="1" sets `isNonModal` (the
+ * non-modal fold of A-002). The popover carries `testID="cp"` so the carrier
+ * probes read `cp-panel` / `cp-sheet` (the `<id>-panel` derivation
+ * convention), and `probe("openChange")` records the open/close round.
  */
 
 const PRESETS = ["#ef4444", "#22c55e", "#3b82f6"] as const;
@@ -41,6 +61,9 @@ function recordColor(name: string) {
 }
 
 function PickerCase(props: { withSwatches?: boolean }) {
+  const presentation = String(host.params.presentation ?? "");
+  const nonModal = String(host.params.nonmodal ?? "") === "1";
+
   return (
     <Stage>
       <ColorPicker defaultValue="#0485F7" onChange={recordColor("onChange")}>
@@ -48,7 +71,16 @@ function PickerCase(props: { withSwatches?: boolean }) {
           <ColorSwatch size="lg" />
           <Label>Pick a color</Label>
         </ColorPicker.Trigger>
-        <ColorPicker.Popover>
+        <ColorPicker.Popover
+          testID="cp"
+          presentation={
+            presentation === ""
+              ? undefined
+              : (presentation as "auto" | "panel" | "sheet")
+          }
+          isNonModal={nonModal || undefined}
+          onOpenChange={probe("openChange")}
+        >
           {props.withSwatches ? (
             <ColorSwatchPicker aria-label="Color presets" size="xs">
               {PRESETS.map((preset) => (
@@ -79,12 +111,47 @@ function PickerCase(props: { withSwatches?: boolean }) {
   );
 }
 
+/**
+ * EnvironmentScope wrapper (A-007): always a real provider, per-field. An
+ * absent param keeps the host-derived value, so a case opened without them is
+ * the desktop-parity baseline. NSH context reaches a subtree only for
+ * elements created under the provider, so the case element is built inside
+ * the provider, never outside it.
+ */
+function Scoped(props: { children?: JSX.Element }) {
+  const input = host.params.input;
+  const width = host.params.width;
+  const density = host.params.density;
+
+  return (
+    <EnvironmentScope
+      input={input === undefined ? undefined : (String(input) as EnvironmentInput)}
+      width={width === undefined ? undefined : (String(width) as EnvironmentWidth)}
+      density={
+        density === undefined ? undefined : (String(density) as EnvironmentDensity)
+      }
+    >
+      {props.children}
+    </EnvironmentScope>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "with-swatches");
 
-  if (name === "default") return <PickerCase />;
+  if (name === "default") {
+    return (
+      <Scoped>
+        <PickerCase />
+      </Scoped>
+    );
+  }
 
-  return <PickerCase withSwatches />;
+  return (
+    <Scoped>
+      <PickerCase withSwatches />
+    </Scoped>
+  );
 }
 
 mount(Fixture);
