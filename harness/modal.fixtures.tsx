@@ -43,7 +43,7 @@ type LayoutEvent = {
   };
 };
 
-function layoutProbe(name: "container" | "dialog" | "body") {
+function layoutProbe(name: "container" | "dialog" | "body" | "trigger") {
   return (event: LayoutEvent) =>
     probe("layout")({
       name,
@@ -112,6 +112,7 @@ function ModalTree() {
     <Modal defaultOpen={open} onOpenChange={probe("openChange")}>
       <Modal.Trigger
         testID="mo-trigger"
+        onLayout={layoutProbe("trigger")}
         onPress={() => probe("events")("press")}
         onPressDown={() => probe("events")("pressDown")}
         onPressUp={() => probe("events")("pressUp")}
@@ -128,6 +129,16 @@ function ModalTree() {
           scroll={scroll}
           size={size}
           placement={placement}
+          // The scrollable case needs a real inner Scroll: upstream's
+          // container carries `h-(--visual-viewport-height)`, which the NSH
+          // port replaces with `flex-1` — but the carrier row's
+          // `items-center` never stretches the container vertically, so its
+          // height stays content-driven and the dialog's `max-h-full` has no
+          // definite basis (measured: a 1719pt dialog in a 768pt window, body
+          // scroll range ≈ 0). A fixture-side definite height restores the
+          // upstream intent for this case only; the panel/sheet assertions
+          // never mount it.
+          style={scrollable ? { height: 700 } : undefined}
           onLayout={layoutProbe("container")}
         >
           <Modal.Dialog
@@ -135,7 +146,10 @@ function ModalTree() {
             aria-label="Mobile modal"
             onLayout={layoutProbe("dialog")}
           >
-            <Modal.CloseTrigger onPress={() => probe("closePress")()} />
+            <Modal.CloseTrigger
+              testID="mo-close"
+              onPress={() => probe("closePress")()}
+            />
             <Modal.Header>
               <Modal.Heading>Welcome</Modal.Heading>
             </Modal.Header>
@@ -188,7 +202,11 @@ function Scoped(props: { children?: JSX.Element }) {
     );
   }
 
-  return <>{props.children}</>;
+  // No fragment here: a `<>` boundary between the mount root and the tree
+  // breaks the presented Dialog's owner chain — the modal opens but never
+  // closes (measured on this fixture; the alert-dialog fixture hit the same
+  // wall on open). Returning the child directly keeps the chain intact.
+  return props.children;
 }
 
 const cases: Record<string, Component> = {
