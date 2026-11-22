@@ -1,4 +1,4 @@
-import type { Accessor, ViewRef } from "nsh";
+import type { Accessor, KeyboardType, ViewRef } from "nsh";
 import { context } from "nsh";
 
 import type { DateFieldState } from "./create-date-field-state";
@@ -91,7 +91,12 @@ export interface DateInputGroupContextValue {
 }
 
 /** The resting slot strings a lone part uses; computed once, never mutable. */
-const FALLBACK_SLOTS = dateInputGroupVariants({ variant: "primary", fullWidth: false });
+const FALLBACK_SLOTS = dateInputGroupVariants({
+  variant: "primary",
+  fullWidth: false,
+  input: "pointer",
+  interactive: false,
+});
 
 /** What a part sees outside a group: resting state, no registrations, no crash. */
 export const FALLBACK_DATE_INPUT_GROUP_CONTEXT: DateInputGroupContextValue = {
@@ -151,3 +156,27 @@ export const DateInputGroupAffixContext = context<Accessor<boolean>>(() => false
  */
 export const DateInputGroupAnchorContext =
   context<((ref: ViewRef | undefined) => void) | undefined>(undefined);
+
+/* -------------------------------------------------------------------------------------------------
+ * Keyboard type (A-007)
+ * -----------------------------------------------------------------------------------------------*/
+
+/**
+ * `DateInputGroup.Input`'s `keyboardType` prop: `"auto"`, or one explicit NSH
+ * `KeyboardType` for every segment of the row. `"auto"` resolves per segment —
+ * numeric segments to `"numeric"`, lettered ones (`dayPeriod`, `era`,
+ * `timeZoneName`) to `"default"` — following React Aria's `useDateSegment`
+ * `inputMode` precedent. It only feeds the soft-keyboard channel a touch
+ * environment mounts on each segment; under `pointer` nothing reads it, and
+ * the host keyboard types as before.
+ */
+export type DateInputGroupInputKeyboardType = "auto" | KeyboardType;
+
+/**
+ * The `keyboardType` the Input advertises to its segments, as an accessor.
+ * Internal: the Input provides it from the prop and each segment's channel
+ * resolves it; outside an Input it holds `"auto"`, which resolves to the same
+ * per-segment values as an absent prop.
+ */
+export const DateInputGroupKeyboardContext =
+  context<Accessor<DateInputGroupInputKeyboardType>>(() => "auto");
