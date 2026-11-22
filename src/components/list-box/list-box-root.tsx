@@ -23,6 +23,7 @@ import {
 } from "nsh";
 
 import {
+  createDensity,
   createInput,
   createInteractionModality,
   createKeymapScope,
@@ -780,6 +781,13 @@ export function ListBoxRoot<T>(
     state: list,
   };
 
+  // Environment.input, read once under this root's context: the unmounted
+  // activation fallback below needs the same touch rule `createSelectableItem`
+  // applies to a mounted row (touch toggles instead of replacing), and the
+  // A-001 `input`/`density` axes feed `listboxVariants` here.
+  const input = createInput();
+  const density = createDensity();
+
   const resolvedClassName = () => {
     const className = local.className;
 
@@ -793,7 +801,11 @@ export function ListBoxRoot<T>(
   // (the same three-segment order Description and FieldError use).
   const classes = computed(() =>
     [
-      listboxVariants({ variant: variant() }),
+      listboxVariants({
+        variant: variant(),
+        input: input(),
+        density: density(),
+      }),
       container?.listClass?.(),
       resolvedClassName(),
     ]
@@ -818,11 +830,6 @@ export function ListBoxRoot<T>(
 
     return typeof style === "function" ? style(renderProps) : style;
   };
-
-  // Environment.input, read once under this root's context: the unmounted
-  // activation fallback below needs the same touch rule `createSelectableItem`
-  // applies to a mounted row (touch toggles instead of replacing).
-  const input = createInput();
 
   /**
    * f-collection 激活兜底: activation of a focused key whose row is not
