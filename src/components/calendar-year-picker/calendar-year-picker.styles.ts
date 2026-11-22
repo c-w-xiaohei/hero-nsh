@@ -34,7 +34,23 @@ export const calendarYearPickerVariants = tv({
     yearCell:
       "relative flex h-8 w-full items-center justify-center rounded-3xl px-2.5 text-sm font-medium text-foreground outline-none select-none cursor-pointer transition duration-100 ease-out motion-reduce:transition-none",
   },
-  variants: {},
+  variants: {
+    // A-001: the `input` axis is the visible half of the hit-area path — under
+    // touch the trigger row and each year cell (the two hit surfaces) reach
+    // the 44 pt minimum `MIN_HIT_TARGET_BY_DENSITY` carries; the invisible
+    // half (`hitSlop`, a view prop tv() cannot produce) lives in each part's
+    // `createPressFeedback` seam. `pointer` stays empty so the desktop table
+    // is byte-identical. No `density` axis: the hit floor is
+    // `MIN_HIT_TARGET_BY_DENSITY`'s and neither part carries density-matter
+    // type/padding (sheet §2 — density axis needs a reason, none exists).
+    input: {
+      pointer: {},
+      touch: {
+        trigger: "min-h-11",
+        yearCell: "min-h-11",
+      },
+    },
+  },
 });
 
 export type CalendarYearPickerVariants = VariantProps<typeof calendarYearPickerVariants>;
