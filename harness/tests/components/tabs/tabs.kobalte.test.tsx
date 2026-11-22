@@ -76,6 +76,12 @@ test("T-016 supports using click to change tab", async () => {
 test("T-020 disabled tabs cannot be pressed", async () => {
   const app = await openFixture("kobalte-disabled-middle");
 
+  // `shows`/`enabled` query the screen synchronously; on `--target web` a
+  // slow page load can resolve `open` before the first paint (gate r4 rerun:
+  // empty screen, every sibling fixture fine). Wait for the fixture to
+  // render — if the tabs never mount this still fails, only slower.
+  await app.waitFor("role:tab[Overview]", { timeout: 15_000 });
+
   expect(app.enabled("role:tab[Analytics]")).toBe(false);
 
   await expect(app.press("role:tab[Analytics]")).rejects.toMatchObject({
