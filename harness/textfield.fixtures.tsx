@@ -61,6 +61,10 @@ import { probe } from "@scenario/probe";
  *   keyboard       Input with `keyboardType` / `inputMode` / `enterKeyHint`
  *                  / `autoComplete` / `autoCorrect` / `autoCapitalize` /
  *                  `maxLength` params and an `onChange` probe
+ *   baseline       the M-007 default-environment contract in one mount:
+ *                  `onFocusChange`, controlled write-back refusal,
+ *                  `masked` / `type="password"`, Label / Description /
+ *                  FieldError texts, invalid render, TextArea rows height
  *
  * `host.params.scope` wraps the mobile cases: "" = the host's default
  * environment (pointer — the desktop-parity side), "touch" =
@@ -464,7 +468,8 @@ function SubmitTextAreaCase() {
 
 /* A-008: the hover face (M-002) — the `isHovered` render-prop record plus
  * the `onHover*` and `onMouseEnter` / `onMouseLeave` probes, in both
- * environments. */
+ * environments. `hover-away` is the leave target: `app.hover` only reports
+ * `onMouseLeave` / `onHoverEnd` once the pointer rests somewhere else. */
 function HoverCase() {
   const reportInput = probe("input-class");
 
@@ -483,6 +488,7 @@ function HoverCase() {
         onMouseEnter={probe("onMouseEnter")}
         onMouseLeave={probe("onMouseLeave")}
       />
+      <Text testID="hover-away">away</Text>
     </Stage>
   );
 }
@@ -543,6 +549,68 @@ function KeyboardCase() {
   );
 }
 
+/* M-007's baseline surface in ONE mount (the color-input-group `baseline`
+ * precedent: sequential web hosts exhaust the target, so the default-
+ * environment contract faces share a single app). Covers what the older
+ * cases do not probe: `onFocusChange`, `masked` / `type="password"`, the
+ * controlled write-back refusal, Label / Description / FieldError texts,
+ * the invalid render and the TextArea's rows height + Enter line break.
+ * The composition fan-out stays on the `composition` case (X-001). */
+function BaselineCase() {
+  const controlled = signal("Ada");
+
+  return (
+    <Stage>
+      <TextField
+        isInvalid
+        name="baseline"
+        onChange={probe("root-change")}
+        onFocusChange={probe("onFocusChange")}
+      >
+        <Label>Baseline name</Label>
+        <Input testID="baseline-name" />
+        <FieldError>Baseline error</FieldError>
+      </TextField>
+
+      {/* Valid on purpose: an invalid field hides its Description
+       * (upstream `.textfield[data-invalid] [data-slot=description]`). */}
+      <TextField name="baseline-controlled" value={controlled()} onChange={probe("controlled-change")}>
+        <Label>Controlled</Label>
+        <Input testID="baseline-controlled-input" />
+        <Description>Baseline hint</Description>
+      </TextField>
+
+      <Input
+        aria-label="Password"
+        testID="baseline-password"
+        type="password"
+        onChange={probe("onChange")}
+      />
+      <Input
+        aria-label="Masked"
+        masked
+        testID="baseline-masked"
+        onChange={probe("onChange")}
+      />
+
+      <TextField name="baseline-bio">
+        <Label>Bio</Label>
+        <TextArea
+          testID="baseline-bio"
+          rows={3}
+          onChange={probe("onChange")}
+          onLayout={(e) =>
+            probe("baseline-textarea-layout")({
+              width: e.bounds.size.width,
+              height: e.bounds.size.height,
+            })
+          }
+        />
+      </TextField>
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "log");
 
@@ -571,6 +639,7 @@ function Fixture() {
   if (name === "hover") return <Scoped><HoverCase /></Scoped>;
   if (name === "layout") return <Scoped><LayoutCase /></Scoped>;
   if (name === "keyboard") return <Scoped><KeyboardCase /></Scoped>;
+  if (name === "baseline") return <Scoped><BaselineCase /></Scoped>;
 
   return <LogCase />;
 }
