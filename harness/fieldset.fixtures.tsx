@@ -1,4 +1,4 @@
-import { host, mount, Text, View } from "nsh";
+import { host, mount, signal, Text, View } from "nsh";
 import type { JSX } from "nsh";
 import { Button, EnvironmentScope, Fieldset } from "@heroui/react";
 import { Stage } from "@scenario/stage";
@@ -24,8 +24,9 @@ import { probe } from "@scenario/probe";
  *   Root+Legend+Group(two members)+Actions fieldset whose blocks report
  *   their bounds through `onLayout`, mounted under an `EnvironmentScope`
  *   fed by `host.params.input` / `host.params.density`.
- * - `mobile-disabled`: the same tree with `disabled` on, for the context
- *   propagation half of M-002/M-005.
+ * - `mobile-disabled`: the same tree with `disabled` on, plus an
+ *   always-enabled `toggle-disabled` Button outside the Root that clears
+ *   it — the context-propagation and restore halves of M-002/M-005.
  */
 
 function AttributedCase() {
@@ -81,14 +82,18 @@ function boxProbe(name: string) {
  * sheet A-008) M-002/M-005 read `enabled` and the press refusal from. Its
  * own `input` adaptation (a taller touch row) is the button unit's claim,
  * so M-003 compares fieldset-owned spacing around it rather than its box.
- * Everything else is a plain View/Text block. `disabled` is fixed by the
- * case name.
+ * Everything else is a plain View/Text block. `disabled` starts from the
+ * case name; the `toggle-disabled` Button outside the Root clears it, which
+ * is the "撤销 disabled 后恢复" half of M-002 on the same tree. The bare
+ * `{"Root note"}` string is the root's `renderChildren` path M-001 reads.
  */
 function MobileCase(props: { disabled?: boolean }) {
+  const disabled = signal(props.disabled === true);
+
   return (
     <View class="p-6">
       <Fieldset
-        disabled={props.disabled}
+        disabled={disabled()}
         testID="fieldset-root"
         role="group"
         aria-label="Mobile fieldset"
@@ -134,7 +139,11 @@ function MobileCase(props: { disabled?: boolean }) {
             <Text>Cancel</Text>
           </View>
         </Fieldset.Actions>
+        {"Root note"}
       </Fieldset>
+      <Button testID="toggle-disabled" onPress={() => disabled.set(false)}>
+        EnableAll
+      </Button>
     </View>
   );
 }

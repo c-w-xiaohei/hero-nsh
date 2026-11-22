@@ -134,30 +134,38 @@ describe("fieldset mobile", () => {
     expect(g.actionGap).toBe(8);
 
     expect(app.texts()).toContain("Settings");
+    // The bare string child of the Root goes through `renderChildren` —
+    // the X-001 path — and shows as text.
+    expect(app.shows("text:Root note")).toBe(true);
+    // `role="group"` + `aria-label` surface as the group's role and name;
+    // `testID` is the observable id channel (`id` → nativeID has none).
+    expect(app.shows("role:group[Mobile fieldset]")).toBe(true);
     expect(app.shows("id:fieldset-root")).toBe(true);
     expect(app.spanStyle("id:legend >> text:Settings").fontSize).toBe(16);
   });
 
   // adapt-sheets/fieldset.md M-002 (基线, A-008): `disabled` reaches a real
   // control through `FieldsetContext` — a Button inside the disabled tree is
-  // `enabled=false` and its press is refused with no callback — while the
-  // same control in the enabled tree is enabled and its press records.
-  test("M-002 default environment: disabled propagates through the context", async () => {
-    const disabled = await openMobile("mobile-disabled");
-    await settleLayout(disabled);
+  // `enabled=false` and its press is refused with no callback — and clearing
+  // `disabled` on the same tree restores it: the context accessor follows
+  // the signal back without a remount (OR merge, zero drift).
+  test("M-002 default environment: disabled propagates and clearing it restores the control", async () => {
+    const app = await openMobile("mobile-disabled");
+    await settleLayout(app);
 
-    expect(disabled.enabled("id:member-two")).toBe(false);
-    await expect(disabled.press("id:member-two")).rejects.toMatchObject({
+    expect(app.enabled("id:member-two")).toBe(false);
+    await expect(app.press("id:member-two")).rejects.toMatchObject({
       code: "ERR_NSH_TEST_DISABLED",
     });
-    expect(callsOf(disabled, "member-press")).toHaveLength(0);
+    expect(callsOf(app, "member-press")).toHaveLength(0);
 
-    const enabled = await openMobile("mobile");
-    await settleLayout(enabled);
+    // The toggle lives outside the Root, so it stays pressable while the
+    // subtree is disabled; clearing the signal re-enables the member.
+    await app.press("id:toggle-disabled");
+    await app.waitUntil(() => app.enabled("id:member-two"));
 
-    expect(enabled.enabled("id:member-two")).toBe(true);
-    await enabled.press("id:member-two");
-    expect(callsOf(enabled, "member-press")).toHaveLength(1);
+    await app.press("id:member-two");
+    expect(callsOf(app, "member-press")).toHaveLength(1);
   });
 
   // adapt-sheets/fieldset.md M-003 (A-006, A-009): injected `input="touch"`
