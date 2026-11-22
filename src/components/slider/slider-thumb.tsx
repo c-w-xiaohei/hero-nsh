@@ -1,5 +1,6 @@
 import type {
   AccessibilityState,
+  Bounds,
   GestureResponderEvent,
   JSX,
   MouseEvent as NshMouseEvent,
@@ -15,12 +16,20 @@ import {
   type InteractionModalityState,
 } from "../../primitives/create-interaction-modality";
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
+import { createInput } from "../../primitives/environment";
+import { createPan } from "../../primitives/pan";
+import { createPressFeedback } from "../../primitives/pressable";
 import { shadow } from "../../tokens/geometry";
 import { FieldContext } from "../label/context";
 import type { FieldState } from "../label/context";
 import { joinClassNames } from "./class-names";
-import type { SliderThumbRenderProps } from "./slider-context";
-import { SliderContext } from "./slider-context";
+import {
+  claimSliderTouch,
+  releaseSliderTouch,
+  sliderTouchClaimed,
+} from "./slider-pan-state";
+import type { SliderSeam, SliderThumbRenderProps } from "./slider-context";
+import { SliderContext, SliderSeamContext } from "./slider-context";
 import {
   hostProps,
   type AriaProps,
@@ -183,6 +192,9 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
     "isRequired",
     "isInvalid",
     "inputRef",
+    "onLayout",
+    "onTouchEnd",
+    "onTouchCancel",
     "dir",
     "lang",
     "hidden",
@@ -377,13 +389,16 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
     return isVertical() ? size.height : size.width;
   };
 
-  const handleGrant = (event: GestureResponderEvent) => {
+  // A-003: the grant body, shared by the bare responder chain and the touch
+  // pan's `onDragStart` — either path reports `true` when it armed a drag, so
+  // the claim ledger and the tap compensation read the same acceptance.
+  const beginDrag = (pageX: number, pageY: number): boolean => {
     if (!state || isDisabled()) {
-      return;
+      return false;
     }
 
-    dragStartPageX = event.pageX;
-    dragStartPageY = event.pageY;
+    dragStartPageX = pageX;
+    dragStartPageY = pageY;
     dragStartPercent = percent();
     draggingNow = true;
 
@@ -393,6 +408,12 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
     modality?.setPointerModality();
 
     state.setThumbDragging(index(), true);
+
+    return true;
+  };
+
+  const handleGrant = (event: GestureResponderEvent) => {
+    beginDrag(event.pageX, event.pageY);
   };
 
   const handleMove = (event: GestureResponderEvent) => {
@@ -426,6 +447,85 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
     state.setThumbDragging(index(), false);
   };
 
+  // --- Mobile seams (adapt-sheets/slider.md §2) -------------------------------
+  // A-001: the hit-area half of the press-feedback seam, gated on the input
+  // axis plus the part's own disabled flag. Only `hitSlop`/`layout` are wired —
+  // the thumb drags through the responder system, never through press events,
+  // so `pressDown`/`pressUp`/`scale`/`isPressed` stay unbound and report their
+  // resting values (a probe cannot catch a lying press flag).
+  const input = createInput();
+  const seamEnabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({ enabled: seamEnabled });
+
+  // A-003: the touch drag path. Under the default pointer environment
+  // `enabled()` is false and `panHandlers()` resolves to `{}` — no listener is
+  // mounted at all, so the desktop never sees this path (`M-012`'s `panKeys`).
+  // The bare responder chain below stays mounted; under touch its predicate
+  // returns false for every event, so the two chains coexist without racing.
+  //
+  // The claim fires on the first *dominant* move and only along the travel
+  // axis: a mostly-cross-axis move is the surrounding Scroll's gesture, and
+  // the host's native recognizer owns the touches from its own ~10-point
+  // threshold, so claiming must not wait for a displacement floor (the
+  // sheet-handoff measurement a wait loses).
+  const pan = createPan({
+    enabled: seamEnabled,
+    shouldClaim: (_event, gesture) => {
+      const along = isVertical() ? gesture.dy : gesture.dx;
+      const across = isVertical() ? gesture.dx : gesture.dy;
+
+      return along !== 0 && Math.abs(across) < Math.abs(along);
+    },
+    onDragStart: (event, gesture) => {
+      // `x0`/`y0` are still the touch-down point on the claiming frame, so the
+      // pre-threshold travel is not lost when the pan takes over — the same
+      // baseline `handleGrant` reads from a press.
+      if (beginDrag(gesture.x0, gesture.y0)) {
+        claimSliderTouch(event.identifier);
+      }
+    },
+    onDrag: (event) => {
+      handleMove(event);
+    },
+    onDragEnd: () => {
+      handleRelease();
+    },
+  });
+
+  // A-003, tap compensation: a bare tap produces no move frame, so the pan
+  // never claims it and the bare chain (gated off under touch) cannot commit
+  // it either. The end of the touch commits the tap exactly the way
+  // `handleGrant` + `handleRelease` would: one dragging bracket, one
+  // `onChangeEnd`, no value write. A touch the pan claimed already settled its
+  // own end; this finger's ledger entry is only forgotten. Under pointer the
+  // bare chain committed on release and this handler adds nothing.
+  const handleTouchEnd = (event: GestureResponderEvent) => {
+    local.onTouchEnd?.(event);
+
+    if (input() !== "touch") {
+      return;
+    }
+
+    // The thumb's touches — the hitSlop overlap included — must not bubble
+    // into the Track's own `onTouchEnd`, whose tap branch would jump the
+    // value under the finger (adapt sheet §2 note: Thumb sits above Track in
+    // the deepest-view order, so this finger is always answered here first).
+    event.stopPropagation();
+
+    if (sliderTouchClaimed(event.identifier)) {
+      releaseSliderTouch(event.identifier);
+      return;
+    }
+
+    beginDrag(event.pageX, event.pageY);
+    handleRelease();
+  };
+
+  const handleTouchCancel = (event: GestureResponderEvent) => {
+    local.onTouchCancel?.(event);
+    releaseSliderTouch(event.identifier);
+  };
+
   // --- Focus and hover -------------------------------------------------------
   const handleFocus = () => {
     focused.set(true);
@@ -442,10 +542,15 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
     local.onBlur?.();
   };
 
+  // A-005: hover is a pointer affordance; under touch a stuck "hover" (the
+  // host replays it on tap) must neither write `hovered` nor fire the
+  // `onHover*` callbacks — `isHovered` only lives in the render prop, so the
+  // gate sits in the handlers and the style table stays untouched. The
+  // caller's own `onMouseEnter`/`onMouseLeave` still run first.
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
-    if (isDisabled() || hovered()) {
+    if (input() === "touch" || isDisabled() || hovered()) {
       return;
     }
 
@@ -457,7 +562,7 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
   const handleMouseLeave = (event: NshMouseEvent) => {
     local.onMouseLeave?.(event);
 
-    if (!hovered()) {
+    if (input() === "touch" || !hovered()) {
       return;
     }
 
@@ -580,10 +685,26 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
     return renderChildren(children as JSX.Element);
   };
 
+  // A-001: `bounds` feeds `hitSlop`, so the seam reads the layout before the
+  // caller's `onLayout`, which stays last in the chain.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    feedback.layout(event);
+    local.onLayout?.(event);
+  };
+
+  // The seam surface a fixture probe reads through `SliderSeamContext` —
+  // offered inside this thumb's own View, never on `SliderContextValue`.
+  const seamValue: SliderSeam = {
+    enabled: seamEnabled,
+    pan: { panHandlers: pan.panHandlers, active: pan.active },
+    feedback,
+  };
+
   return (
     <FieldContext.Provider value={fieldState}>
       <View
         {...hostProps(rest)}
+        {...pan.panHandlers()}
         ref={handleRef}
         nativeID={local.id ?? local.nativeID}
         role="adjustable"
@@ -613,11 +734,20 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
         // (`style={{...thumbProps.style, ...renderProps.style}}`), so a caller
         // keeps the final say on left / top / transform.
         style={[positionStyle(), resolvedStyle()]}
-        onStartShouldSetResponder={() => !isDisabled()}
+        // A-001: the view-prop half of the hit area — the seam's computed
+        // slop, `undefined` while gated off. Explicitly bound after both
+        // spreads so a caller's `hitSlop` in `rest` never reaches the host.
+        hitSlop={feedback.hitSlop()}
+        onLayout={handleLayout}
+        // A-003: the desktop chain stays mounted; under touch its start
+        // predicate reads false and the pan's own responder family answers.
+        onStartShouldSetResponder={() => input() !== "touch" && !isDisabled()}
         onResponderGrant={handleGrant}
         onResponderMove={handleMove}
         onResponderRelease={handleRelease}
         onResponderTerminate={handleRelease}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
         onFocus={handleFocus}
         onBlur={handleBlur}
         onMouseEnter={handleMouseEnter}
@@ -633,7 +763,9 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
             "scale-[0.9] motion-reduce:scale-100": state?.isThumbDragging(index()) ?? false,
           }}
         />
-        {resolveChildren(local.children)}
+        <SliderSeamContext.Provider value={seamValue}>
+          {resolveChildren(local.children)}
+        </SliderSeamContext.Provider>
       </View>
     </FieldContext.Provider>
   );

@@ -10,9 +10,21 @@ import type {
 } from "nsh";
 import { computed, signal, split, untracked, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
+import { createPan } from "../../primitives/pan";
+import { createPressFeedback } from "../../primitives/pressable";
 import { joinClassNames } from "./class-names";
-import type { SliderRenderProps, SliderTrackRenderProps } from "./slider-context";
-import { SliderContext } from "./slider-context";
+import {
+  claimSliderTouch,
+  releaseSliderTouch,
+  sliderTouchClaimed,
+} from "./slider-pan-state";
+import type {
+  SliderRenderProps,
+  SliderSeam,
+  SliderTrackRenderProps,
+} from "./slider-context";
+import { SliderContext, SliderSeamContext } from "./slider-context";
 import {
   hostProps,
   type AriaProps,
@@ -111,6 +123,8 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
     "onHoverStart",
     "onHoverEnd",
     "onHoverChange",
+    "onTouchEnd",
+    "onTouchCancel",
     "dir",
     "lang",
     "hidden",
@@ -234,20 +248,30 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
     return slider?.isRtl() ? 1 - locationX / length : locationX / length;
   };
 
-  const handleGrant = (event: GestureResponderEvent) => {
+  // A-004: the grant body, shared by the bare responder chain, the touch
+  // pan's `onDragStart` and the tap compensation — it reports `true` when it
+  // armed a jump so the claim ledger reads the same acceptance. `pageX` /
+  // `pageY` are the touch-down point in surface coordinates, the baseline
+  // `handleMove` subtracts from.
+  const beginJump = (
+    locationX: number,
+    locationY: number,
+    pageX: number,
+    pageY: number,
+  ): boolean => {
     const owner = slider;
 
     if (!owner || owner.isDisabled() || travelLength() <= 0) {
-      return;
+      return false;
     }
 
-    const percent = percentAt(event.locationX, event.locationY);
+    const percent = percentAt(locationX, locationY);
     const value = owner.state.getPercentValue(percent);
     const index = getClosestValueIndex(owner.state.values(), value);
 
     dragIndex = index;
-    dragStartPageX = event.pageX;
-    dragStartPageY = event.pageY;
+    dragStartPageX = pageX;
+    dragStartPageY = pageY;
     dragStartPercent = percent;
 
     // Focus first, record the pointer after: `focus()` makes the thumb's
@@ -258,6 +282,12 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
 
     owner.state.setThumbDragging(index, true);
     owner.state.setThumbValue(index, value);
+
+    return true;
+  };
+
+  const handleGrant = (event: GestureResponderEvent) => {
+    beginJump(event.locationX, event.locationY, event.pageX, event.pageY);
   };
 
   const handleMove = (event: GestureResponderEvent) => {
@@ -291,18 +321,102 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
     dragIndex = undefined;
   };
 
+  // --- Mobile seams (adapt-sheets/slider.md §2) -------------------------------
+  // A-002: the hit-area half of the press-feedback seam, gated on the input
+  // axis plus the slider's disabled flag. Only `hitSlop`/`layout` are wired —
+  // the track drags through the responder system, never through press events,
+  // so `pressDown`/`pressUp`/`scale`/`isPressed` report their resting values.
+  const input = createInput();
+  const seamEnabled = () => input() === "touch" && !(slider?.isDisabled() ?? false);
+  const feedback = createPressFeedback({ enabled: seamEnabled });
+
+  // A-004: the touch drag path. Under pointer `panHandlers()` is `{}` and no
+  // listener mounts; under touch the bare chain's predicate below is false
+  // and this pan's move claim decides on the first dominant frame — along the
+  // travel axis only, so a cross-axis swipe is left to the surrounding Scroll
+  // (the host's native recognizer claims at ~10 points; a floor would arrive
+  // after it).
+  const pan = createPan({
+    enabled: seamEnabled,
+    shouldClaim: (_event, gesture) => {
+      const along = isVertical() ? gesture.dy : gesture.dx;
+      const across = isVertical() ? gesture.dx : gesture.dy;
+
+      return along !== 0 && Math.abs(across) < Math.abs(along);
+    },
+    onDragStart: (event, gesture) => {
+      // `locationX`/`locationY` are the current local point on the claiming
+      // frame and `gesture.dx`/`dy` its travel since touch-down, so the
+      // difference is the down point in view coordinates — the press-jump
+      // baseline and the pre-threshold travel both survive. The same rewind
+      // in surface coordinates gives `handleMove`'s delta baseline.
+      if (
+        beginJump(
+          event.locationX - gesture.dx,
+          event.locationY - gesture.dy,
+          event.pageX - gesture.dx,
+          event.pageY - gesture.dy,
+        )
+      ) {
+        claimSliderTouch(event.identifier);
+      }
+    },
+    onDrag: (event) => {
+      handleMove(event);
+    },
+    onDragEnd: () => {
+      handleRelease();
+    },
+  });
+
+  // A-004, tap-to-jump compensation: a bare tap produces no move frame, so the
+  // pan never claims it and the bare chain (gated off under touch) cannot
+  // commit it either. An unclaimed touch ending on the track jumps the value
+  // exactly the way `handleGrant` + `handleRelease` would — jump, drag
+  // bracket, one `onChange` + one `onChangeEnd`. A thumb touch never gets
+  // here (`handleTouchEnd` there stops propagation), and a pan-claimed touch
+  // already settled its own end.
+  const handleTouchEnd = (event: GestureResponderEvent) => {
+    local.onTouchEnd?.(event);
+
+    if (input() !== "touch") {
+      return;
+    }
+
+    if (sliderTouchClaimed(event.identifier)) {
+      releaseSliderTouch(event.identifier);
+      return;
+    }
+
+    beginJump(event.locationX, event.locationY, event.pageX, event.pageY);
+    handleRelease();
+  };
+
+  const handleTouchCancel = (event: GestureResponderEvent) => {
+    local.onTouchCancel?.(event);
+    releaseSliderTouch(event.identifier);
+  };
+
+  // A-002: the track's size report leads the chain (the pointer maths needs
+  // it first), the seam's `bounds` feeds `hitSlop` next, the caller's
+  // `onLayout` stays last.
   const handleLayout = (event: { bounds: Bounds }) => {
     slider?.setTrackSize({
       width: event.bounds.size.width,
       height: event.bounds.size.height,
     });
+    feedback.layout(event);
     local.onLayout?.(event);
   };
 
+  // A-006: hover is a pointer affordance; under touch it must neither write
+  // `hovered` nor fire `onHover*` — `isHovered` only lives in the render
+  // prop, so the gate sits in the handlers and the style table stays
+  // untouched. The caller's own `onMouseEnter`/`onMouseLeave` still run first.
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
-    if (slider?.isDisabled() || hovered()) {
+    if (input() === "touch" || slider?.isDisabled() || hovered()) {
       return;
     }
 
@@ -314,7 +428,7 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
   const handleMouseLeave = (event: NshMouseEvent) => {
     local.onMouseLeave?.(event);
 
-    if (!hovered()) {
+    if (input() === "touch" || !hovered()) {
       return;
     }
 
@@ -335,9 +449,18 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
     return renderChildren(children as JSX.Element);
   };
 
+  // The seam surface a fixture probe reads through `SliderSeamContext` —
+  // offered inside this track's own View, never on `SliderContextValue`.
+  const seamValue: SliderSeam = {
+    enabled: seamEnabled,
+    pan: { panHandlers: pan.panHandlers, active: pan.active },
+    feedback,
+  };
+
   return (
     <View
       {...hostProps(rest)}
+      {...pan.panHandlers()}
       ref={(node) => local.ref?.(node)}
       nativeID={local.id ?? local.nativeID}
       class={classes()}
@@ -352,17 +475,29 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
       style={resolvedStyle()}
       focusable={false}
       onLayout={handleLayout}
+      // A-002: the view-prop half of the hit area — the seam's computed slop,
+      // `undefined` while gated off. Bound after both spreads so a caller's
+      // `hitSlop` in `rest` never reaches the host.
+      hitSlop={feedback.hitSlop()}
       // The decorative dots and the fill listen to nothing; the track is the
       // one view here that takes the pointer.
-      onStartShouldSetResponder={() => !(slider?.isDisabled() ?? false)}
+      // A-004: the desktop chain stays mounted; under touch its start
+      // predicate reads false and the pan's own responder family answers.
+      onStartShouldSetResponder={() =>
+        input() !== "touch" && !(slider?.isDisabled() ?? false)
+      }
       onResponderGrant={handleGrant}
       onResponderMove={handleMove}
       onResponderRelease={handleRelease}
       onResponderTerminate={handleRelease}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {resolveChildren(local.children)}
+      <SliderSeamContext.Provider value={seamValue}>
+        {resolveChildren(local.children)}
+      </SliderSeamContext.Provider>
     </View>
   );
 }
