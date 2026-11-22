@@ -1,4 +1,5 @@
 import type {
+  Bounds,
   GestureResponderEvent,
   JSX,
   MouseEvent as NshMouseEvent,
@@ -7,14 +8,27 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, signal, split, View } from "nsh";
+import { cleanup, computed, createAnimatedValue, signal, split, View } from "nsh";
 
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
+import { createInput } from "../../primitives/environment";
+import { createPan } from "../../primitives/pan";
+import { createPressFeedback, PressableFeedbackContext } from "../../primitives/pressable";
+import type { PressableFeedbackContextValue } from "../../primitives/pressable";
 import { joinClassNames } from "./class-names";
 import type { AriaProps, DataProps, DomEventProps, GlobalDomProps } from "./color-slider-dom-props";
 import { hostProps } from "./color-slider-dom-props";
-import type { ColorSliderThumbRenderProps } from "./color-slider-context";
-import { ColorSliderContext, EMPTY_COLOR_SLIDER_STATE } from "./color-slider-context";
+import type { ColorSliderPan, ColorSliderThumbRenderProps } from "./color-slider-context";
+import {
+  ColorSliderContext,
+  ColorSliderPanContext,
+  EMPTY_COLOR_SLIDER_STATE,
+} from "./color-slider-context";
+import {
+  claimSliderTouch,
+  releaseSliderTouch,
+  sliderTouchClaimed,
+} from "./color-slider-pan-state";
 import { renderRenderPropChildren } from "./render-children";
 
 /* -------------------------------------------------------------------------------------------------
@@ -111,11 +125,14 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
     "focusable",
     "slot",
     "render",
+    "onLayout",
     "onMouseEnter",
     "onMouseLeave",
     "onHoverStart",
     "onHoverEnd",
     "onHoverChange",
+    "onTouchEnd",
+    "onTouchCancel",
     "onFocus",
     "onBlur",
     "aria-label",
@@ -199,6 +216,40 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
       : slider?.state.displayColor().toString("css"),
   }));
 
+  // --- Seams (adapt sheet A-001 / A-003 / A-005) ------------------------------
+  const input = createInput();
+
+  // A-001: the press-feedback seam, consuming only the `hitSlop`/`layout`
+  // half-channel — the thumb walks the responder system, not press events, so
+  // `pressDown`/`pressUp`/`scale`/`isPressed` stay unwired. Under the default
+  // pointer environment `enabled` is false and `hitSlop()` answers
+  // `undefined`; under touch the 16pt knob is padded to the 44pt minimum.
+  const feedbackEnabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
+
+  // The seam's read half for the fixture's `CtxProbe` (`hitSlop` is a view
+  // prop with no other observable surface, sheet §6); the children mount once
+  // inside the provider at the placement.
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: feedbackEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
+  // A-002 in `handleLayout` below: `bounds` feeds `hitSlop`, the caller's
+  // `onLayout` still runs.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    feedback.layout(event);
+    local.onLayout?.(event);
+  };
+
   // --- Pointer ---------------------------------------------------------------
   // A drag applies the movement since the press as a fraction of the track, so
   // grabbing the knob never jumps it under the finger; `pageX` / `pageY` are
@@ -206,14 +257,23 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
   let startPage = { x: 0, y: 0 };
   let startPercent = 0;
 
-  const handleStartShouldSetResponder = () => slider !== undefined && !isDisabled();
+  // A-003: the bare responder chain is the desktop path. Under touch the
+  // predicates below stay false and `pan` claims instead — the native Scroll
+  // recognizer would otherwise take an axial drag through a JS-claimed bare
+  // responder without ever asking `onResponderTerminationRequest` (sheet §6),
+  // so the arbitration lives in the pan's `shouldClaim`, not in a gate on the
+  // grant.
+  const handleStartShouldSetResponder = () =>
+    input() !== "touch" && slider !== undefined && !isDisabled();
 
-  const handleGrant = (event: GestureResponderEvent) => {
+  // The grant half of a drag or tap: the drag's baseline plus React Aria's
+  // "press is an interaction" (startDragging → focus → pointer modality).
+  const beginDrag = (pageX: number, pageY: number) => {
     if (!slider || isDisabled()) {
       return false;
     }
 
-    startPage = { x: event.pageX, y: event.pageY };
+    startPage = { x: pageX, y: pageY };
     startPercent = slider.state.getThumbPercent();
     slider.state.startDragging();
     // React Aria's `useSliderThumb` focuses the hidden input on a press; the
@@ -224,6 +284,9 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
 
     return true;
   };
+
+  const handleGrant = (event: GestureResponderEvent) =>
+    beginDrag(event.pageX, event.pageY);
 
   const handleMove = (event: GestureResponderEvent) => {
     if (!slider || isDisabled() || !slider.state.isDragging()) {
@@ -254,11 +317,84 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
     slider.state.endInteraction();
   };
 
+  // A-003: the touch path. `shouldClaim` is the first-frame axial-dominance
+  // test — a move along the slider's axis is a drag on the thumb, a cross-axis
+  // or ambiguous one is the surrounding Scroll's. Once the pan holds the
+  // touches `onShouldBlockNativeResponder` keeps the Scroll from taking them
+  // back.
+  const pan = createPan({
+    enabled: () => input() === "touch",
+    shouldClaim: (_event, gesture) => {
+      if (slider === undefined || isDisabled()) {
+        return false;
+      }
+
+      const along = isVertical() ? gesture.dy : gesture.dx;
+      const across = isVertical() ? gesture.dx : gesture.dy;
+
+      return along !== 0 && Math.abs(across) < Math.abs(along);
+    },
+    onDragStart: (event, gesture) => {
+      claimSliderTouch(event.identifier);
+      // `x0`/`y0` is where the finger went down, not where the first dominant
+      // move fired: the pre-claim travel is part of the drag's delta, exactly
+      // as the bare grant's `event.pageX`/`pageY` baseline is.
+      beginDrag(gesture.x0, gesture.y0);
+    },
+    onDrag: (event) => handleMove(event),
+    onDragEnd: () => handleRelease(),
+  });
+
+  // The pan's probe surface (the `panKeys` count under the default
+  // environment is the negative assertion that no gesture path mounted).
+  const panValue: ColorSliderPan = {
+    panHandlers: pan.panHandlers,
+    active: pan.active,
+  };
+
+  // A touch tap never produces a move frame, so `shouldClaim` is never asked
+  // and the gated bare chain never runs; `onTouchEnd` commits the tap instead.
+  // A touch the pan claimed (or one the Scroll took) is skipped by the claim
+  // ledger — and claimed or not, the thumb ends the propagation so the track
+  // cannot also commit the same finger.
+  const handleTouchEnd = (event: GestureResponderEvent) => {
+    // The caller's raw touch callback is always reported; the tap commit
+    // below is the touch-only half.
+    local.onTouchEnd?.(event);
+
+    if (input() !== "touch") {
+      return;
+    }
+
+    event.stopPropagation();
+
+    if (sliderTouchClaimed(event.identifier)) {
+      releaseSliderTouch(event.identifier);
+      return;
+    }
+
+    // The tap's commit is `handleGrant` + `handleRelease` verbatim: an
+    // interaction with no value change, exactly what a bare grant-then-release
+    // commits on the desktop.
+    if (beginDrag(event.pageX, event.pageY)) {
+      handleRelease();
+    }
+  };
+
+  const handleTouchCancel = (event: GestureResponderEvent) => {
+    releaseSliderTouch(event.identifier);
+    local.onTouchCancel?.(event);
+  };
+
   // --- Hover -----------------------------------------------------------------
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
-    if (isDisabled() || isHovered()) {
+    // A-005: under touch the hover signal stays off entirely, so a web sticky
+    // hover cannot pin `isHovered` after a press (the tabs A-002 ruling: host
+    // hover callbacks do not pass under touch, only the raw `onMouseEnter` /
+    // `onMouseLeave` passthrough does).
+    if (input() === "touch" || isDisabled() || isHovered()) {
       return;
     }
 
@@ -270,7 +406,7 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
   const handleMouseLeave = (event: NshMouseEvent) => {
     local.onMouseLeave?.(event);
 
-    if (!isHovered()) {
+    if (input() === "touch" || !isHovered()) {
       return;
     }
 
@@ -393,6 +529,10 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
   return (
     <View
       {...hostProps(rest)}
+      // A-003: the touch-gated pan. Under the default environment the spread
+      // is an empty object — no listener mounts; under touch its responders
+      // own the gesture while the bare chain below stays gated off.
+      {...pan.panHandlers()}
       ref={handleRef}
       nativeID={local.id ?? local.nativeID}
       // R-083: the transport of React Aria's `role="slider"` on the hidden
@@ -429,17 +569,30 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
         "cursor-default bg-default": isDisabled(),
       }}
       style={[thumbStyle(), resolvedStyle()]}
+      // A-001: the seam's view-prop half — `hitSlop` is undefined under the
+      // pointer environment (the prop lands but expands nothing) and pads the
+      // 16pt knob to the 44pt minimum under touch.
+      hitSlop={feedback.hitSlop()}
+      onLayout={handleLayout}
       onStartShouldSetResponder={handleStartShouldSetResponder}
       onResponderGrant={handleGrant}
       onResponderMove={handleMove}
       onResponderRelease={handleRelease}
       onResponderTerminate={handleRelease}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
       onBlur={handleBlur}
     >
-      {renderRenderPropChildren(local.children as JSX.Element, renderProps())}
+      {/* A-001/A-003: the seams' probe surfaces wrap the children; the single
+          children read still happens exactly once, inside the providers. */}
+      <PressableFeedbackContext.Provider value={feedbackValue}>
+        <ColorSliderPanContext.Provider value={panValue}>
+          {renderRenderPropChildren(local.children as JSX.Element, renderProps())}
+        </ColorSliderPanContext.Provider>
+      </PressableFeedbackContext.Provider>
     </View>
   );
 }

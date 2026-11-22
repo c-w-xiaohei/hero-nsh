@@ -1,6 +1,18 @@
-import { host, mount, signal, Text, View } from "nsh";
-import { Button, ColorSlider, Label, parseColor } from "@heroui/react";
+import { effect, host, mount, Scroll, signal, Text, View } from "nsh";
+import type { JSX } from "nsh";
+import {
+  Button,
+  ColorSlider,
+  EnvironmentScope,
+  Label,
+  parseColor,
+  PressableFeedbackContext,
+} from "@heroui/react";
 import type { ColorChannel } from "@heroui/react";
+import {
+  ColorSliderContext,
+  ColorSliderPanContext,
+} from "../src/components/color-slider/color-slider-context";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 
@@ -25,6 +37,21 @@ import { probe } from "@scenario/probe";
  *   grid       host.params withLabel / withOutput / orientation decide the four
  *              presence combinations; Output, Track and Thumb all report onLayout
  *   alpha      alpha channel hsla(0, 100%, 50%, 0.5), the checkerboard case
+ *   mobile     adapt-sheet M-001…M-012 surface: full probes (onChange /
+ *              onChangeEnd / hover / focus / layout), a `dragging` marker,
+ *              `track-hover` / `thumb-hover` markers floating outside the hit
+ *              surfaces (`pointer-events-none`), and — with `probe=1` — a
+ *              `SeamProbe` inside Track and Thumb reporting `ctx-env`
+ *              (enabled / hitSlop / bounds / panKeys / isPressed / scale /
+ *              pressOrigin). `disabled=1` arms isDisabled.
+ *   scroll     the same slider inside a real `Scroll` for M-004 / M-010: the
+ *              scroll axis is perpendicular to the slider's (`horizontal` for a
+ *              vertical slider, vertical otherwise), `onScroll` probes the
+ *              offset.
+ *
+ * host.params.scope picks the EnvironmentScope wrapper: "touch" injects
+ * input="touch", anything else leaves the default environment — the
+ * desktop-parity half of the same case (the switch fixures' convention).
  */
 
 const CHANNELS = [
@@ -64,6 +91,64 @@ function channelParam(): ColorChannel {
 
 function orientationParam(): "horizontal" | "vertical" {
   return host.params.orientation === "vertical" ? "vertical" : "horizontal";
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Environment + probes (adapt sheet §4)
+ * -----------------------------------------------------------------------------------------------*/
+
+/** `scope=touch` injects the touch environment; anything else is the default. */
+function Scoped(props: { children?: JSX.Element }) {
+  return String(host.params.scope ?? "") === "touch" ? (
+    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  ) : (
+    props.children
+  );
+}
+
+function probeOn() {
+  return String(host.params.probe ?? "") === "1";
+}
+
+/**
+ * The seam's only observable surface (sheet §6: `hitSlop` is a view prop
+ * nsh/test cannot read). `PressableFeedbackContext` carries the part's
+ * `hitSlop`/`bounds`/gate and resting channels; `ColorSliderPanContext`
+ * carries the pan's resolved handler object — `panKeys` 0 under the default
+ * environment is the negative assertion that no gesture path mounted.
+ * Mounted only when `probe=1` asks for it.
+ */
+function SeamProbe(props: { id: string }) {
+  const ctx = PressableFeedbackContext();
+  const pan = ColorSliderPanContext();
+  const report = probe("ctx-env");
+
+  effect(() => {
+    report({
+      id: props.id,
+      enabled: ctx.enabled(),
+      hitSlop: ctx.hitSlop() ?? null,
+      bounds: ctx.bounds(),
+      isPressed: ctx.isPressed(),
+      scale: ctx.scale.getValue(),
+      pressOrigin: ctx.pressOrigin(),
+      panKeys: pan ? Object.keys(pan.panHandlers()).length : -1,
+      panActive: pan ? pan.active() : false,
+    });
+  });
+
+  return null;
+}
+
+/** `dragging`/`idle` marker text the tests sample mid-gesture (M-003, M-010). */
+function StateMarker() {
+  const slider = ColorSliderContext();
+
+  return (
+    <Text testID="dragging">
+      {slider?.state.isDragging() ? "dragging" : "idle"}
+    </Text>
+  );
 }
 
 function valueParam(fallback: string): string {
@@ -216,9 +301,123 @@ function AlphaCase() {
   );
 }
 
+/**
+ * The slider the `mobile` and `scroll` cases share: every callback the
+ * assertions count (`onChange` per frame, one `onChangeEnd` per interaction,
+ * the hover trio, focus) is probed, the markers report the drag and hover
+ * flags, and `probe=1` mounts a `SeamProbe` inside each part.
+ */
+function ProbedSlider() {
+  const channel = channelParam();
+  const orientation = orientationParam();
+  const isDisabled = String(host.params.disabled ?? "") === "1";
+
+  return (
+    <ColorSlider
+      channel={channel}
+      defaultValue={valueParam("hsl(0, 100%, 50%)")}
+      orientation={orientation}
+      isDisabled={isDisabled}
+      onChange={(color) =>
+        probe("onChange")(color.getChannelValue(channel), color.toString("css"))
+      }
+      onChangeEnd={(color) =>
+        probe("onChangeEnd")(color.getChannelValue(channel))
+      }
+    >
+      <Label>Hue</Label>
+      <ColorSlider.Output testID="output" />
+      <StateMarker />
+      <ColorSlider.Track
+        testID="track"
+        onLayout={layoutProbe("track")}
+        onHoverStart={probe("trackHoverStart")}
+        onHoverEnd={probe("trackHoverEnd")}
+        onHoverChange={probe("trackHoverChange")}
+      >
+        {(values) => [
+          /*
+           * The marker floats above the track, `pointer-events-none`, so it
+           * reports the flag without covering the hit surface (the text under
+           * a finger would be `app.press`'s ERR_NSH_TEST_COVERED).
+           */
+          <Text testID="track-hover" class="absolute -top-7 pointer-events-none">
+            {values.isHovered() ? "Hovered" : "Idle"}
+          </Text>,
+          <ColorSlider.Thumb
+            testID="thumb"
+            onFocus={probe("onFocus")}
+            onBlur={probe("onBlur")}
+            onLayout={layoutProbe("thumb")}
+            onHoverStart={probe("thumbHoverStart")}
+            onHoverEnd={probe("thumbHoverEnd")}
+            onHoverChange={probe("thumbHoverChange")}
+          >
+            {(thumbValues) => [
+              <Text
+                testID="thumb-hover"
+                class="absolute -top-7 pointer-events-none"
+              >
+                {thumbValues.isHovered() ? "Hovered" : "Idle"}
+              </Text>,
+              probeOn() ? <SeamProbe id="thumb" /> : null,
+            ]}
+          </ColorSlider.Thumb>,
+          probeOn() ? <SeamProbe id="track" /> : null,
+        ]}
+      </ColorSlider.Track>
+    </ColorSlider>
+  );
+}
+
+function MobileCase() {
+  return (
+    <Stage>
+      <View class={orientationParam() === "vertical" ? "h-64 w-24" : "w-[320px]"}>
+        <ProbedSlider />
+      </View>
+    </Stage>
+  );
+}
+
+/**
+ * M-004 / M-010: the slider inside a real `Scroll`, so the native recognizer
+ * competes for the gesture. The scroll axis is perpendicular to the slider's
+ * — a cross-axis drag is the scroll's, an along-axis one the pan's claim —
+ * and the content overfills the viewport so the Scroll can actually move.
+ */
+function ScrollCase() {
+  const verticalSlider = orientationParam() === "vertical";
+
+  return (
+    <Stage>
+      <View class="h-56 w-56">
+        <Scroll
+          testID="scroller"
+          horizontal={verticalSlider}
+          onScroll={(event) => probe("scroller")(event.offset)}
+        >
+          {verticalSlider ? (
+            <View class="h-64 w-[640px] flex-row gap-8">
+              <ProbedSlider />
+              <View class="w-48" />
+            </View>
+          ) : (
+            <View class="h-[640px] w-[320px]">
+              <ProbedSlider />
+            </View>
+          )}
+        </Scroll>
+      </View>
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "parts");
 
+  if (name === "mobile") return <Scoped><MobileCase /></Scoped>;
+  if (name === "scroll") return <Scoped><ScrollCase /></Scoped>;
   if (name === "keyboard") return <KeyboardCase />;
   if (name === "controlled") return <ControlledCase />;
   if (name === "disabled") return <DisabledCase />;
