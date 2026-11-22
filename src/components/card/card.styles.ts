@@ -2,12 +2,17 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { shadow } from "../../tokens/geometry";
-
 /**
  * Card's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/card/card.styles.ts` plus the declarations of
  * `packages/styles/components/card.css`.
+ *
+ * The geometry classes are written out instead of being imported from
+ * `src/tokens/geometry.ts`: the G2 class check loads this file with plain
+ * Node, which resolves neither an extensionless relative import nor a `.ts`
+ * one, so a `.styles.ts` imports only `tailwind-variants` (same rule as
+ * `date-picker.styles.ts`). The pair in `base` is exactly
+ * `shadow.surface.both` of that file (R-002); keep it in step with it.
  *
  * Upstream the table only emits BEM block and element names and every
  * declaration lives in the stylesheet. NSH has no BEM CSS (D18), so each block
@@ -31,7 +36,7 @@ export const cardVariants = tv({
     // R-003: `.card` → `border-radius: min(32px, var(--radius-3xl))`. This
     // theme's `radius.3xl` is 24, so `min(32, 24)` is 24 and `rounded-3xl`
     // matches; a theme above 32 would exceed upstream's cap (port sheet §8).
-    base: `relative flex flex-col overflow-visible rounded-3xl ${shadow.surface.both}`,
+    base: "relative flex flex-col overflow-visible rounded-3xl shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]",
     // R-004: `.card__header` → `@apply flex flex-col`.
     header: "flex flex-col",
     // R-005: `.card__title` → `@apply text-sm leading-6 font-medium
