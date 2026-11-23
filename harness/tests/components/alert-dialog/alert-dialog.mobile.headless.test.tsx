@@ -57,7 +57,14 @@ describe("alert-dialog mobile (headless)", () => {
     await app.clock?.runFor(300);
 
     const dialog = lastLayout(app, "dialog");
-    expect(Math.abs(dialog.y + dialog.height - VIEWPORT_H)).toBeLessThanOrEqual(4);
+    const container = lastLayout(app, "container");
+    // The dock is against the surface the carrier spans, read off the layout
+    // container's own bottom edge — the same reference the web-sibling file
+    // uses so the assertion survives hosts whose client area is shorter than
+    // the requested viewport.
+    expect(
+      Math.abs(dialog.y + dialog.height - (container.y + container.height)),
+    ).toBeLessThanOrEqual(4);
     expect(dialog.width).toBeGreaterThan(VIEWPORT_W * 0.9);
     expect(app.shows("id:ad-card")).toBe(true);
   });
