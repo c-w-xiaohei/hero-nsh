@@ -231,10 +231,13 @@ export function PressableFeedbackHighlight(
   });
 
   const style = (): StyleProp<ViewStyle> => {
-    if ((local.isAnimatedStyleActive ?? true) === false || disabled()) {
+    if ((local.isAnimatedStyleActive ?? true) === false) {
       return [{ backgroundColor }, local.style];
     }
 
+    // `disabled()` still binds `opacity`: the drive pins the channel at its
+    // resting value, so the overlay sits invisible at rest instead of
+    // falling back to the view's default opacity 1.
     return [{ backgroundColor, opacity }, local.style];
   };
 
@@ -407,10 +410,14 @@ export function PressableFeedbackRipple(
       backgroundImage: `radial-gradient(circle at center, ${backgroundColor} 30%, transparent 70%)`,
     };
 
-    if ((local.isAnimatedStyleActive ?? true) === false || disabled()) {
+    if ((local.isAnimatedStyleActive ?? true) === false) {
       return [circle, local.style];
     }
 
+    // `disabled()` still binds the interpolated channels: `progress` is
+    // pinned at 0, so `opacity`/`rippleScale` land on their resting values
+    // and the circle stays invisible instead of rendering at default
+    // opacity (sheet §1: a gated seam binds the resting style).
     return [{ ...circle, opacity, scale: rippleScale }, local.style];
   };
 

@@ -300,16 +300,23 @@ export function createPressFeedback(
     options.onPressChange?.(true);
   };
 
-  const pressUp = (_event: PressEvent) => {
-    // Cleared unconditionally — the ripple's completion edge is `pressOrigin`
-    // back-to-null, and clearing an already-null origin is a no-op.
-    pressOrigin.set(null);
-
+  // `enabled` flipping false mid-press (a control disabled while held, an
+  // environment flip) ends the press logically: a view that stopped tracking
+  // the press may never fire `pressUp`, yet `isPressed`/`pressOrigin` are
+  // documented to hold only while the seam is enabled. Pin both at rest here
+  // so a re-enabled seam never reports a press nobody is making.
+  effect(() => {
     if (!options.enabled()) {
-      options.onPressChange?.(false);
-      return;
+      isPressed.set(false);
+      pressOrigin.set(null);
     }
+  });
 
+  const pressUp = (_event: PressEvent) => {
+    // Both cleared unconditionally — the ripple's completion edge is
+    // `pressOrigin` back-to-null, `isPressed` the canonical press flag, and
+    // an `enabled` flip between down and up must not strand either.
+    pressOrigin.set(null);
     isPressed.set(false);
     options.onPressChange?.(false);
   };
