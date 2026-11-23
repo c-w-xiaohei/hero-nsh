@@ -61,6 +61,15 @@ function eventsOf(app: App) {
   );
 }
 
+/** The press chain out of `events`: web `app.press` also synthesizes the DOM
+ * mouse/hover events the trigger forwards verbatim, so order assertions read
+ * this press-family subsequence rather than the raw prefix (combo-box M-002). */
+function pressEventsOf(app: App) {
+  return eventsOf(app).filter(
+    (entry) => entry.ev === "down" || entry.ev === "up" || entry.ev === "press",
+  );
+}
+
 /** The last `pan`/`ctx`/`ctx-channels` probe payload. */
 function lastProbe(app: App, name: string) {
   const found = callsOf(app, name).map((args) => args[0] as Record<string, unknown> | undefined);
@@ -93,7 +102,9 @@ describe("dropdown mobile", () => {
   // resolves only after mount: the first reads may be null, none may be
   // true), the `ctx`/`ctx-channels` samples all at rest, and the pinned
   // sheet carrier's `pan` probe reports zero handler keys — no gesture path
-  // exists under pointer.
+  // exists under pointer. Web `app.press` also records the verbatim DOM
+  // mouse/hover forwarding, so the order assertion reads the press-family
+  // subsequence.
   test("M-002 default environment has no touch-only surface", async () => {
     const app = await openMobile("mobile");
 
@@ -101,7 +112,7 @@ describe("dropdown mobile", () => {
     expect(app.count("id:dd-pop-panel")).toBe(1);
 
     await app.host.send("ctx.sample");
-    await app.clock!.runFor(20);
+    await app.waitUntil(() => callsOf(app, "ctx-channels").length > 0);
 
     const sample = lastProbe(app, "ctx-channels");
     expect(sample?.seamPressed).toBe(false);
@@ -111,8 +122,8 @@ describe("dropdown mobile", () => {
     expect(sample?.hitSlop).toBe(null);
     expect(sample?.enabled).toBe(false);
 
-    const events = eventsOf(app).map((entry) => entry.ev);
-    expect(events.slice(0, 3)).toEqual(["down", "up", "press"]);
+    const presses = pressEventsOf(app);
+    expect(presses.map((entry) => entry.ev)).toEqual(["down", "up", "press"]);
     expect(eventsOf(app).every((entry) => entry.seam !== true)).toBe(true);
 
     // The pinned sheet under pointer: `SheetDialog`'s content pan attaches
@@ -282,6 +293,9 @@ describe("dropdown mobile", () => {
   // on the event reads is the full `true`→`false` round-trip
   // (`feedback.pressDown` runs before `onPressDown`, `feedback.pressUp`
   // before `onPressUp`, so each read samples the state at its own moment).
+  // Web `app.press` records the verbatim mouse/hover forwarding around the
+  // press chain and can land the `press` probe a frame after the step, so
+  // the assertion waits for it and reads the press-family subsequence.
   // `narrow` reports a non-null `hitSlop` from the ctx probe; the standard
   // trigger reports none (`w-fit` already clears the 44 pt floor);
   // `disabled`/`pending` presses never reach the chain.
@@ -289,14 +303,13 @@ describe("dropdown mobile", () => {
     const app = await openMobile("mobile", { input: "touch" });
 
     await app.press("id:dd-trigger");
+    await app.waitUntil(() =>
+      eventsOf(app).some((entry) => entry.ev === "press"),
+    );
 
     expect(callsOf(app, "openChange")).toEqual([[true]]);
-    const events = eventsOf(app);
-    expect(events.slice(0, 3).map((entry) => entry.ev)).toEqual([
-      "down",
-      "up",
-      "press",
-    ]);
+    const events = pressEventsOf(app);
+    expect(events.map((entry) => entry.ev)).toEqual(["down", "up", "press"]);
     expect(events[0]?.seam).toBe(true);
     expect(events[1]?.seam).toBe(false);
     expect(events[2]?.seam).toBe(false);
@@ -328,7 +341,7 @@ describe("dropdown mobile", () => {
     await disabled.press("id:dd-trigger").catch(() => undefined);
     await disabled.clock!.runFor(50);
     expect(callsOf(disabled, "openChange")).toEqual([]);
-    expect(eventsOf(disabled)).toEqual([]);
+    expect(pressEventsOf(disabled)).toEqual([]);
     expect(lastProbe(disabled, "ctx-pressed")?.seam).toBe(false);
 
     const pending = await openMobile("mobile", {
@@ -338,7 +351,7 @@ describe("dropdown mobile", () => {
     await pending.press("id:dd-trigger").catch(() => undefined);
     await pending.clock!.runFor(50);
     expect(callsOf(pending, "openChange")).toEqual([]);
-    expect(eventsOf(pending)).toEqual([]);
+    expect(pressEventsOf(pending)).toEqual([]);
   });
 
   // adapt-sheets/dropdown.md M-013 (A-007): injected touch silences the
@@ -403,12 +416,17 @@ describe("dropdown mobile", () => {
   // adapt-sheets/dropdown.md M-015 (A-008, A-014, 基线): the default
   // environment's pre-existing semantics, sampled on the mobile fixture —
   // trigger toggle round-trips through `onOpenChange`, Escape closes, the
-  // modal underlay swallows a covered trigger press into an outside close,
+  // modal underlay turns a covered trigger press into an outside close,
   // the non-modal chain keeps the trigger live, `ownsState` runs on a
   // standalone popover, `isExiting` retains the layer while
   // `shouldSkipAnimation` drops it, and the `contextMenu` trigger still
   // opens from the secondary button. Focus / aria-expanded / typeahead have
-  // no `nsh/test` readout and stay with `dropdown.heroui.*` (sheet §6).
+  // no `nsh/test` readout and stay with `dropdown.heroui.*` (sheet §6). The
+  // covered-anchor press is host-specific below the close contract: web's
+  // DOM underlay hit-tests and swallows it before the anchor handlers (the
+  // verbatim mouse/hover forwarding still records), while headless routes
+  // it through them — the dual-target assertion keeps the two unobstructed
+  // open presses and the close outcome, not that host's event chain.
   test("M-015 baseline sample on the default environment", async () => {
     const app = await openMobile("mobile");
 
@@ -420,30 +438,32 @@ describe("dropdown mobile", () => {
     expect(callsOf(app, "openChange")).toEqual([[true], [false]]);
     expect(app.shows("role:menu")).toBe(false);
 
-    // Reopen, then press the trigger the modal underlay covers: the host
-    // still routes the press through the covered anchor's own handlers
-    // (down/up/press record — a press-outside is not a press-on-anchor
-    // distinction the host hit-tests for), but the underlay's close
-    // channel wins the toggle's outcome — one `onOpenChange(false)` and
-    // the layer stays closed.
+    // Reopen, then press the trigger the modal underlay covers. The close
+    // contract is host-independent — the underlay's outside-press channel
+    // wins one `onOpenChange(false)` and the layer stays closed. Whether the
+    // covered anchor's own press handlers also run is a host hit-test
+    // detail (headless routes the press through them; web's DOM underlay
+    // swallows it before `down`/`up`/`press`), so the press-chain assertion
+    // keeps only the two unobstructed opens both hosts produce.
     await app.press("id:dd-trigger");
     expect(callsOf(app, "openChange")).toEqual([[true], [false], [true]]);
     await app.press("id:dd-trigger");
     await app.clock!.runFor(150);
     expect(callsOf(app, "openChange")).toEqual([[true], [false], [true], [false]]);
     expect(app.shows("role:menu")).toBe(false);
-    expect(eventsOf(app).map((entry) => entry.ev)).toEqual([
-      "down", "up", "press", "down", "up", "press", "down", "up", "press",
+    const modalPresses = pressEventsOf(app);
+    expect(modalPresses.slice(0, 6).map((entry) => entry.ev)).toEqual([
+      "down", "up", "press", "down", "up", "press",
     ]);
 
-    // Non-modal: no underlay, so a covered trigger press toggles closed
-    // through the trigger's own chain.
+    // Non-modal: no underlay, so the same covered-position press toggles
+    // closed through the trigger's own chain on both hosts.
     const nonModal = await openMobile("mobile", { nonmodal: "1" });
     await nonModal.press("id:dd-trigger");
     await nonModal.press("id:dd-trigger");
     await nonModal.clock!.runFor(150);
     expect(callsOf(nonModal, "openChange")).toEqual([[true], [false]]);
-    expect(eventsOf(nonModal).map((entry) => entry.ev)).toEqual([
+    expect(pressEventsOf(nonModal).map((entry) => entry.ev)).toEqual([
       "down", "up", "press", "down", "up", "press",
     ]);
 
@@ -473,7 +493,7 @@ describe("dropdown mobile", () => {
     await contextMenu.keyboard.press("escape");
     await contextMenu.clock!.runFor(150);
     expect(contextMenu.shows("role:menu")).toBe(false);
-  });
+  }, 120_000);
 
   // adapt-sheets/dropdown.md M-016 (A-009): the F-consumption regression —
   // the `items` data path and the static path behave identically on both

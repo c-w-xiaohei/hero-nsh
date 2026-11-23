@@ -350,15 +350,17 @@ function CtxProbe() {
 /* On-demand channel read for the negative half: a gated press never raises
  * the seam's `isPressed` edge, so `ctx-pressed` alone cannot prove the
  * channels stayed at rest — `ctx-channels` samples them after the press,
- * driven by `host.send("ctx.sample")` (combo-box's convention). */
+ * driven by `host.send("ctx.sample")` (combo-box's convention). The two
+ * `AnimatedValue.getValue()` reads settle a frame later on web, so callers
+ * wait for a `ctx-channels` call rather than a fixed clock run. */
 function sampleChannels() {
   const report = probe("ctx-channels");
   const c = triggerCtx;
   if (c === null) {
     return;
   }
-  void c.pressed.getValue().then((pressed) => {
-    void c.scale.getValue().then((scale) => {
+  void Promise.all([c.pressed.getValue(), c.scale.getValue()]).then(
+    ([pressed, scale]) => {
       report({
         seamPressed: c.isPressed(),
         pressed,
@@ -368,8 +370,8 @@ function sampleChannels() {
         bounds: c.bounds(),
         enabled: c.enabled(),
       });
-    });
-  });
+    },
+  );
 }
 
 /* Reports the sheet carrier's content-pan context (A-002's panKeys/scrollKeys
