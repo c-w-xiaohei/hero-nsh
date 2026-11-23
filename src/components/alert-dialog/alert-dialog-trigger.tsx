@@ -1,6 +1,7 @@
 import type {
   AccessibilityRole,
   AccessibilityState,
+  Bounds,
   JSX,
   PressEvent,
   ViewRef,
@@ -11,7 +12,9 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { createPressFeedback } from "../../primitives/pressable";
 import { AlertDialogContext } from "./alert-dialog-context";
 import type { AlertDialogPartDomProps } from "./alert-dialog-dom-props";
 import { viewProps } from "./alert-dialog-dom-props";
@@ -63,6 +66,7 @@ export function AlertDialogTrigger(props: AlertDialogTriggerProps): JSX.Element 
     "onLongPress",
     "onFocus",
     "onBlur",
+    "onLayout",
   ]);
 
   const alertDialog = AlertDialogContext();
@@ -79,6 +83,18 @@ export function AlertDialogTrigger(props: AlertDialogTriggerProps): JSX.Element 
 
   const isDisabled = () => local.disabled === true || local["aria-disabled"] === true;
   const isFocusVisible = computed(() => focused() && modality.isKeyboard());
+
+  // A-005: the press-feedback seam, gated on `input() === "touch"` and the
+  // disabled flag — under a pointer environment every channel is a physical
+  // no-op (`hitSlop()` answers `undefined`, `pressDown`/`pressUp` record
+  // nothing), so the desktop press chain below is untouched. The `scale` and
+  // `highlightOpacity` channels stay unbound: the slot's `active:scale-[0.97]`
+  // is a legal pseudo-state under touch and has no second writer, so "B" only
+  // delivers the feedback state and the invisible hit-area expansion.
+  const input = createInput();
+  const feedback = createPressFeedback({
+    enabled: () => input() === "touch" && !isDisabled(),
+  });
 
   // R-001 … R-006: the slot classes carry the box, the cursor, the timing, the
   // disabled and pressed looks; the caller's classes come later and win.
@@ -120,11 +136,19 @@ export function AlertDialogTrigger(props: AlertDialogTriggerProps): JSX.Element 
       return;
     }
 
+    // A-005: after the disabled early-out, before the modality note — a gated
+    // (pointer) call is a no-op inside.
+    feedback.pressDown(event);
     notePress(event);
     local.onPressDown?.(event);
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-005: release and cancel share `onPressUp`; the seam resets here,
+    // before the disabled early-out, so a press a disable flip stranded still
+    // completes its round-trip.
+    feedback.pressUp(event);
+
     if (isDisabled()) {
       return;
     }
@@ -150,6 +174,13 @@ export function AlertDialogTrigger(props: AlertDialogTriggerProps): JSX.Element 
   const handleBlur = () => {
     focused.set(false);
     local.onBlur?.();
+  };
+
+  // A-005: `bounds` feeds `hitSlop` (and `scale`, unbound here), so the seam
+  // reads every layout before the caller's handler runs.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    feedback.layout(event);
+    local.onLayout?.(event);
   };
 
   let unregister: (() => void) | undefined;
@@ -193,6 +224,11 @@ export function AlertDialogTrigger(props: AlertDialogTriggerProps): JSX.Element 
       onLongPress={handleLongPress}
       onFocus={handleFocus}
       onBlur={handleBlur}
+      onLayout={handleLayout}
+      // A-005: the invisible hit-area expansion is a view prop tv() cannot
+      // produce, so it binds here; `undefined` under a pointer environment or
+      // an unlaid-out view, so the desktop hit box is unchanged.
+      hitSlop={feedback.hitSlop()}
     >
       {renderTriggerChildren(local.children)}
     </View>
