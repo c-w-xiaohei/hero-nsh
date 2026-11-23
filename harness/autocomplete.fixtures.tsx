@@ -359,11 +359,21 @@ function MobileCase(props: MobileCaseProps) {
             {(values: { isHovered: () => boolean }) => (
               <>
                 <Autocomplete.Value />
+                {/* The hover marker sits before the ClearButton: as the last
+                    child its (empty) box overlaps the clear glyph and the
+                    absolutely-placed Indicator at the inline end, and on web
+                    the press at that spot resolves to the marker or falls
+                    through to the trigger instead of the button. */}
+                <Text>{values.isHovered() ? "trigger-hover" : ""}</Text>
                 <Autocomplete.ClearButton testID="ac-clear">
-                  <CtxProbe />
+                  {/* The probe reads the seam; the glyph keeps the button
+                      painted for web hit-testing. */}
+                  <>
+                    <CtxProbe />
+                    <Text>×</Text>
+                  </>
                 </Autocomplete.ClearButton>
                 <Autocomplete.Indicator />
-                <Text>{values.isHovered() ? "trigger-hover" : ""}</Text>
               </>
             )}
           </Autocomplete.Trigger>

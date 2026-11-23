@@ -521,6 +521,13 @@ describe("autocomplete mobile", () => {
       await app.waitUntil(() => callsOf(app, "clear").length === 1);
       expect(callsOf(app, "change")).toEqual([[null]]);
 
+      // The on-demand channel read runs while the overlay is closed: an
+      // open modal carrier owns outside presses (web hit-testing lands the
+      // press on the backdrop/sheet, headless resolves it to the view), so
+      // pressing `ctx-sample` with the popover up would sample nothing.
+      await app.press("id:ctx-sample");
+      await app.waitUntil(() => callsOf(app, "ctx-channels").length > 0);
+
       await app.press(TRIGGER);
       await app.waitFor("role:option");
       expect(callsOf(app, "openChange")).toEqual([[true]]);
@@ -529,8 +536,6 @@ describe("autocomplete mobile", () => {
 
       await app.type(SEARCH, "ca");
       await app.waitUntil(() => callsOf(app, "inputChange").length > 0);
-      await app.press("id:ctx-sample");
-      await app.waitUntil(() => callsOf(app, "ctx-channels").length > 0);
 
       // The pointer half records the hover channel; the touch half's is
       // silent by design (M-004), so only the record shape is pinned there.
