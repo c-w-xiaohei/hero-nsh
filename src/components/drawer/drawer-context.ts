@@ -16,10 +16,10 @@ export interface DrawerDrag {
   /** The Handle's responder props (`createPan` press-claim); empty when the gesture is not attached. */
   panHandlers: () => object;
 
-  /** The panel's own responder props, for the fixture probe's key count; already spread on the Dialog's root view. */
+  /** The panel's own responder props, for the A-005 fixture `DragProbe` key count; already spread on the Dialog's root view. */
   panelPanHandlers: () => object;
 
-  /** The drag's current translateY, for the fixture probe (`AnimatedValue` has no synchronous read). */
+  /** The drag's current translateY, read by the A-005 fixture `DragProbe` (`AnimatedValue` has no synchronous read). */
   offset: Accessor<number>;
 }
 
