@@ -1,13 +1,22 @@
-import { host, mount, signal, Text, View } from "nsh";
+import { effect, host, mount, signal, Text, View } from "nsh";
+import type { JSX } from "nsh";
 import { Dialog } from "nsh/base";
 import {
   Button,
   ComboBox,
+  ComboBoxContext,
   Description,
+  EnvironmentScope,
   FieldError,
   Input,
   Label,
   ListBox,
+  PressableFeedbackContext,
+} from "@heroui/react";
+import type {
+  EnvironmentDensity,
+  EnvironmentInput,
+  EnvironmentWidth,
 } from "@heroui/react";
 import { probe } from "@scenario/probe";
 
@@ -62,6 +71,136 @@ import { probe } from "@scenario/probe";
  * directory as the app root, so an entry under harness/tests/... finds no
  * nsh.json and loses the `@heroui/react` alias and the theme.
  */
+
+/* -------------------------------------------------------------------------------------------------
+ * Mobile layer (adapt sheet A-012)
+ *
+ * `host.params.input` / `width` / `density` inject an `EnvironmentScope`
+ * over the whole app (absent = the host's own environment). The scope always
+ * mounts, wrapping every case — a bare fragment broke the popover unit's
+ * exit-hold unmount (measured there; the provider is harmless when every
+ * field is absent).
+ *
+ * `host.params.presentation` ∈ "auto"|"panel"|"sheet" pins the Popover's
+ * carrier; `modal="1"` passes `isNonModal={false}` (this component's default
+ * is the non-modal half, so "open modal" is the half that needs a param);
+ * `hide=<key>` gates that row of the `items` path behind `<If>` so it never
+ * mounts (the F-consumption regression); `kt`/`rtk`/`ekh`/`im`/`mask` feed
+ * the caller `Input`'s `keyboardType`/`returnKeyType`/`enterKeyHint`/
+ * `inputMode`/`masked` (the G channel).
+ *
+ * Case `b-mobile`: the `Combo` plus the probes the mobile assertions read —
+ * `trigger-box` (the Trigger's `onLayout` bounds, the only observable input
+ * to the hitSlop formula), `cb` on the Popover (which derives `id:cb-panel`
+ * / `id:cb-sheet` on the mounted carrier), the `ctx`/`ctx-pressed`/
+ * `ctx-channels` seam reads (`CtxProbe` samples `PressableFeedbackContext`,
+ * `ctx-sample` samples on demand), and `focusedKey` (the virtual-focus key,
+ * read off `ComboBoxContext`).
+ * -----------------------------------------------------------------------------------------------*/
+
+function param(name: string): string {
+  return String(host.params[name] ?? "");
+}
+
+function Scoped(props: { children?: JSX.Element }) {
+  const input = host.params.input;
+  const width = host.params.width;
+  const density = host.params.density;
+
+  return (
+    <EnvironmentScope
+      input={input === undefined ? undefined : (String(input) as EnvironmentInput)}
+      width={width === undefined ? undefined : (String(width) as EnvironmentWidth)}
+      density={
+        density === undefined ? undefined : (String(density) as EnvironmentDensity)
+      }
+    >
+      {props.children}
+    </EnvironmentScope>
+  );
+}
+
+type LayoutEvent = {
+  bounds: {
+    origin: { x: number; y: number };
+    size: { width: number; height: number };
+  };
+};
+
+/** A full bounds box: parent-relative origin and size, for geometry probes. */
+function boxProbe(name: string) {
+  return (event: LayoutEvent) =>
+    probe("layout")({
+      name,
+      x: event.bounds.origin.x,
+      y: event.bounds.origin.y,
+      width: event.bounds.size.width,
+      height: event.bounds.size.height,
+    });
+}
+
+/** The live `PressableFeedbackContext` of the mounted trigger seam. */
+let triggerCtx: ReturnType<typeof PressableFeedbackContext> | null = null;
+
+/** Reports the trigger seam's environment half the moment it changes. */
+function CtxProbe() {
+  const ctx = PressableFeedbackContext();
+  const report = probe("ctx");
+  const reportPressed = probe("ctx-pressed");
+
+  effect(() => {
+    triggerCtx = ctx;
+  });
+
+  effect(() => {
+    report({
+      enabled: ctx.enabled(),
+      hitSlop: ctx.hitSlop() ?? null,
+    });
+  });
+
+  effect(() => {
+    reportPressed({ seam: ctx.isPressed() });
+  });
+
+  return <Text>{ctx.isPressed() ? "seam-pressed" : "seam-idle"}</Text>;
+}
+
+/* On-demand channel read for the negative half: a gated press never raises
+ * the seam's `isPressed` edge, so `ctx-pressed` alone cannot prove the
+ * channels stayed at rest — `ctx-sample` samples them after the press. */
+function sampleChannels() {
+  const report = probe("ctx-channels");
+  const c = triggerCtx;
+  if (c === null) {
+    return;
+  }
+  void c.pressed.getValue().then((pressed) => {
+    void c.scale.getValue().then((scale) => {
+      report({
+        seamPressed: c.isPressed(),
+        pressed,
+        scale,
+        origin: c.pressOrigin(),
+        hitSlop: c.hitSlop() ?? null,
+        bounds: c.bounds(),
+        enabled: c.enabled(),
+      });
+    });
+  });
+}
+
+/** Reports `focusedKey`, the list's virtual-focus key, on every change. */
+function FocusedKeyProbe() {
+  const combo = ComboBoxContext();
+  const report = probe("focusedKey");
+
+  effect(() => {
+    report(combo?.focusedKey() ?? null);
+  });
+
+  return null;
+}
 
 type ItemData = { id: string; name: string };
 
@@ -153,9 +292,22 @@ type ComboProps = {
   itemsProp?: boolean;
   defaultItems?: boolean;
   outside?: boolean;
+  /** Mounts the `b-mobile` probes (`ctx`, `trigger-box`, `cb`, `focusedKey`). */
+  bMobile?: boolean;
 };
 
 function Combo(props: ComboProps) {
+  // Mobile params: `presentation` pins the carrier, `modal`="1" opens the
+  // modal half (`isNonModal={false}` — the component default is non-modal),
+  // `hide` keeps that row of the `items` path from ever mounting (the
+  // F-consumption regression).
+  const presentation = () =>
+    param("presentation") === ""
+      ? undefined
+      : (param("presentation") as "auto" | "panel" | "sheet");
+  const modal = () => param("modal") === "1";
+  const hidden = signal<string[]>(param("hide") === "" ? [] : [param("hide")]);
+
   return (
     <View class="w-[256px] items-start gap-2">
       {/* Above the field, so the press target stays outside the popover rectangle. */}
@@ -192,11 +344,17 @@ function Combo(props: ComboProps) {
         onOpenChange={(...args: unknown[]) => probe("openChange")(...args)}
         onFocusChange={(value: boolean) => probe("focusChange")(value)}
       >
+        {props.bMobile ? <FocusedKeyProbe /> : null}
         <Label>{props.label ?? "Favorite Animal"}</Label>
         <ComboBox.InputGroup>
           <Input
             testID="combo-box-input"
             placeholder={props.placeholder ?? "Search animals..."}
+            keyboardType={host.params.kt === undefined ? undefined : (param("kt") as never)}
+            returnKeyType={host.params.rtk === undefined ? undefined : (param("rtk") as never)}
+            enterKeyHint={host.params.ekh === undefined ? undefined : (param("ekh") as never)}
+            inputMode={host.params.im === undefined ? undefined : (param("im") as never)}
+            masked={param("mask") === "1" ? true : undefined}
             onFocus={probe("inputFocus")}
             onBlur={probe("inputBlur")}
           />
@@ -209,16 +367,25 @@ function Combo(props: ComboProps) {
             onPressStart={probe("triggerPressStart")}
             onPressUp={probe("triggerPressUp")}
             onPressEnd={probe("triggerPressEnd")}
+            onLayout={props.bMobile ? boxProbe("trigger-box") : undefined}
           >
+            {props.bMobile ? <CtxProbe /> : undefined}
             {props.customIndicator ? <Text>⇅</Text> : undefined}
           </ComboBox.Trigger>
         </ComboBox.InputGroup>
         {props.showValue ? <ComboBox.Value placeholder="No animals selected" /> : null}
-        <ComboBox.Popover>
+        <ComboBox.Popover
+          testID={props.bMobile ? "cb" : undefined}
+          presentation={presentation()}
+          isNonModal={modal() ? false : undefined}
+        >
           <ListBox>
             {props.itemsProp || props.defaultItems
-              ? (item: ItemData) => <Row item={item} />
-              : props.items.map((item) => <Row item={item} />)}
+              ? (item: ItemData) =>
+                  hidden().includes(item.id) ? null : <Row item={item} />
+              : props.items.map((item) =>
+                  hidden().includes(item.id) ? null : <Row item={item} />,
+                )}
           </ListBox>
         </ComboBox.Popover>
         {props.description ? <Description>{props.description}</Description> : null}
@@ -501,7 +668,28 @@ function Case() {
     return <ModalCase />;
   }
 
+  if (name === "b-mobile") {
+    return (
+      <View class="items-start gap-4 p-4">
+        <Combo bMobile items={PETS} />
+        <View testID="ctx-sample" role="button" class="p-2" onPress={sampleChannels}>
+          <Text>ctx-sample</Text>
+        </View>
+      </View>
+    );
+  }
+
   return <Combo items={PETS} />;
 }
 
-mount(Case);
+// A-012: the `EnvironmentScope` wraps every case — absent params inherit the
+// host's baseline, so the default environment keeps desktop parity.
+function Fixture() {
+  return (
+    <Scoped>
+      <Case />
+    </Scoped>
+  );
+}
+
+mount(Fixture);

@@ -11,7 +11,13 @@ import { computed, effect, Overlay, Scroll, signal, split } from "nsh";
 
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
+import type { OverlayTriggerContextValue } from "../../primitives/create-overlay-trigger";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { createPresentation } from "../../primitives/presentation";
+import { SheetBody } from "../sheet/sheet-body";
+import { SheetContent } from "../sheet/sheet-content";
+import { SheetBackdrop } from "../sheet/sheet-backdrop";
+import { SheetRoot } from "../sheet/sheet-root";
 import { renderChildren } from "../list-box/children";
 import {
   ListBoxContainerContext,
@@ -104,6 +110,19 @@ export interface ComboBoxPopoverProps {
   /** Accepted, no effect: the overlay renders in its own root view. */
   UNSTABLE_portalContainer?: unknown;
 
+  /**
+   * The container the popover presents as (A-001). `"auto"` runs the shared
+   * `createPresentation` rule — touch plus a compact short side picks
+   * `"sheet"`, everything else `"panel"`. `"panel"` is the anchored overlay;
+   * `"sheet"` is the `Sheet` bottom carrier. The domain is narrowed to these
+   * two states (the create-presentation unit's two-state overlay
+   * enumeration): `"fullscreen"` is not a member. Under `"auto"` a non-modal
+   * popover still resolves to `"panel"` — this component's `isNonModal`
+   * default is `true`, and a non-modal layer has no sheet semantics (adapt
+   * sheet §6 margin note); an explicit `presentation="sheet"` always pins.
+   */
+  presentation?: "auto" | "panel" | "sheet";
+
   /** A DOM id upstream; maps to `nativeID`. */
   id?: string;
   nativeID?: string;
@@ -168,6 +187,7 @@ export function ComboBoxPopover(props: ComboBoxPopoverProps): JSX.Element {
     "trigger",
     "triggerRef",
     "UNSTABLE_portalContainer",
+    "presentation",
     "id",
     "nativeID",
     "testID",
@@ -242,6 +262,28 @@ export function ComboBoxPopover(props: ComboBoxPopoverProps): JSX.Element {
     skip: () => props.shouldSkipAnimation,
     isEntering: () => props.isEntering,
     isExiting: () => props.isExiting,
+  });
+
+  /* -------------------------------------------------------------------------------------------
+   * Presentation: the carrier the open popover takes (A-002). The value is
+   * evaluated once on `isOpen`'s false→true edge and latched until close, so
+   * a rotation or a scope change can never swap the container mid-open.
+   *
+   * `isNonModal` folds into the pin: a non-modal popover has no sheet
+   * semantics (upstream's bottom-sheet is always modal, and this component's
+   * `isNonModal` default is `true` so `auto` keeps resolving `"panel"`),
+   * while an explicit `presentation="sheet"` still pins, the caller's stated
+   * intent winning over the derived rule — the conservative ruling the adapt
+   * sheet's §6 margin note records.
+   * ----------------------------------------------------------------------------------------- */
+  const presentation = createPresentation<"panel" | "sheet">({
+    pin: () =>
+      isNonModal() &&
+      (props.presentation === undefined || props.presentation === "auto")
+        ? "panel"
+        : props.presentation,
+    isOpen,
+    allowed: () => ["panel", "sheet"],
   });
 
   const resolved = computed(() =>
@@ -449,6 +491,36 @@ export function ComboBoxPopover(props: ComboBoxPopoverProps): JSX.Element {
     close();
   };
 
+  /* -------------------------------------------------------------------------------------------
+   * Scoped trigger context (A-004): `SheetRoot` provides its own
+   * `OverlayTriggerContext`, which would shadow the root's — a Button
+   * written inside the list would then register as the sheet's trigger.
+   * Re-supplying this neutral value keeps the sheet branch's children on
+   * the same contract the panel branch's own `Overlay` already gives them:
+   * `isOpen` reports "no opinion" (`undefined`) and `close` still reaches
+   * this popover's commit-close. The panel branch does not re-provide it —
+   * there the field's own context passes through, as before.
+   * ----------------------------------------------------------------------------------------- */
+  const scopedTrigger: OverlayTriggerContextValue = {
+    isOpen: () => undefined,
+    setIsOpen: () => {},
+    toggle: () => {},
+    close: () => close(),
+    registerTrigger: () => () => {},
+    triggerRef: () => undefined,
+  };
+
+  // A-003/A-004: the carrier probe. Each branch derives its `testID` from
+  // the caller's — `<id>-panel` on the anchored overlay, `<id>-sheet` on
+  // the Sheet content — so `app.shows`/`count` can tell which carrier the
+  // resolved presentation mounted (the popover unit's `<id>-default`
+  // convention; the fixture passes `testID="cb"` so the probes read
+  // `id:cb-panel` / `id:cb-sheet`). `nativeID` keeps its verbatim mapping.
+  const panelTestID = () =>
+    props.testID !== undefined ? `${props.testID}-panel` : undefined;
+  const sheetTestID = () =>
+    props.testID !== undefined ? `${props.testID}-sheet` : undefined;
+
   // One read of `props.children`, at the placement inside the container that
   // tells the list which classes and switches it gets.
   const listContent = (
@@ -475,7 +547,7 @@ export function ComboBoxPopover(props: ComboBoxPopoverProps): JSX.Element {
       // default is 0, which would paste the layer to the input group.
       offset={local.offset ?? 8}
       margin={local.containerPadding ?? 12}
-      testID={local.testID}
+      testID={panelTestID()}
       nativeID={local.id ?? local.nativeID}
       accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel}
       // R-022: the layer is not a focus stop — the field's input keeps the
@@ -492,11 +564,12 @@ export function ComboBoxPopover(props: ComboBoxPopoverProps): JSX.Element {
     </Overlay>
   );
 
+  // A-003: the panel branch is the pre-existing render chain, verbatim.
   // Only a caller's explicit `isNonModal={false}` renders the underlay: the
   // outer overlay then absorbs presses outside the list, as RAC's `usePopover`
   // underlay does. The closed field keeps the content mounted but hidden either
   // way, so the list's collection survives.
-  return (
+  const panelBranch = (
     <If when={!isNonModal()} else={contentOverlay}>
       <Overlay
         class="inset-0"
@@ -513,6 +586,56 @@ export function ComboBoxPopover(props: ComboBoxPopoverProps): JSX.Element {
       >
         {contentOverlay}
       </Overlay>
+    </If>
+  );
+
+  // A-004: the two carriers mount exclusively on the resolved
+  // `presentation()` — never under a `presence.isPresent()` shell. The
+  // closed-field collection contract keeps the list mounted year-round
+  // (filtering, `focusedKey` and the first-focus placement read the mounted
+  // rows), so on the sheet carrier the closed state is carried by
+  // `SheetBackdrop`'s own `isOpen`/`isExiting` keep-alive chain (its
+  // `isHiddenLayer` paints the closed sheet `hidden pointer-events-none`),
+  // exactly as the panel's `hidden` classList does. `SheetRoot` is a
+  // controlled shell fed `isOpen`, and its `onOpenChange(false)` writes
+  // back through `close()` — the same commit-close channel the panel's
+  // outside press takes (`handlePressOutside`), not `handleCancel`'s
+  // revert (adapt sheet §6 margin note). `SheetBackdrop`'s dismissable
+  // paint layer replaces the underlay — a sheet is always modal, and the
+  // contract prop `isKeyboardDismissDisabled` goes with it so Escape keeps
+  // its documented gate on this carrier too (M-006); `SheetContent`
+  // carries the popover's own look (`combo.slots().popover()` plus the
+  // caller's class/style, the `aria-label` and the id/testID); `SheetBody`
+  // wraps the same `listContent` subtree as its scroll shell.
+  return (
+    <If when={presentation() === "sheet"} else={panelBranch}>
+      <SheetRoot
+        isOpen={isOpen()}
+        onOpenChange={(next) => {
+          if (!next) {
+            close();
+          }
+        }}
+      >
+        <SheetBackdrop
+          isExiting={local.isExiting}
+          isKeyboardDismissDisabled={isKeyboardDismissDisabled()}
+        >
+          <SheetContent
+            ref={(node) => local.ref?.(node)}
+            testID={sheetTestID()}
+            nativeID={local.id ?? local.nativeID}
+            accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel}
+            className={classes()}
+            style={resolvedStyle()}
+            onLayout={local.onLayout}
+          >
+            <OverlayTriggerContext.Provider value={scopedTrigger}>
+              <SheetBody>{listContent}</SheetBody>
+            </OverlayTriggerContext.Provider>
+          </SheetContent>
+        </SheetBackdrop>
+      </SheetRoot>
     </If>
   );
 }

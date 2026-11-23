@@ -11,9 +11,10 @@ import { ease, shadow } from "../../tokens/geometry";
  * R-001 … R-040; D18 drops the BEM class names, so each slot carries the
  * declarations its block applied).
  *
- * One dimension, as upstream: `fullWidth`. `variant` is a root prop in HeroUI
- * 3.2.7 that neither the variant table nor the CSS branches on, so it produces
- * no classes here either (port sheet §1).
+ * One upstream dimension (`fullWidth`) plus the environment's `input` axis
+ * (A-008): `variant` is a root prop in HeroUI 3.2.7 that neither the variant
+ * table nor the CSS branches on, so it produces no classes here either (port
+ * sheet §1).
  */
 export const comboBoxVariants = tv({
   slots: {
@@ -34,9 +35,11 @@ export const comboBoxVariants = tv({
     // reset of the button defaults (`border-none bg-transparent outline-none`)
     // rides along; `no-highlight` (Web tap highlight) has no counterpart.
     // R-015: `@media (hover: hover) { &:hover }` → the native hover variant;
-    // the trigger has no child whose hover must be excluded.
+    // the trigger has no child whose hover must be excluded. A-008: the
+    // `hover:text-field-foreground` half moved into the `input` axis's pointer
+    // cell — web's sticky hover keeps painting it after a touch press.
     trigger:
-      "absolute end-0 top-1/2 flex h-full shrink-0 -translate-y-1/2 cursor-pointer items-center justify-center pe-2 text-field-placeholder transition duration-150 border-none bg-transparent outline-none hover:text-field-foreground",
+      "absolute end-0 top-1/2 flex h-full shrink-0 -translate-y-1/2 cursor-pointer items-center justify-center pe-2 text-field-placeholder transition duration-150 border-none bg-transparent outline-none",
     // R-019: `.combo-box__trigger [data-slot="combo-box-trigger-default-icon"]`
     // → the built-in chevron's own box. A caller's indicator never gets it.
     triggerIcon: "size-4 transition-transform duration-150 motion-reduce:transition-none",
@@ -56,6 +59,7 @@ export const comboBoxVariants = tv({
   },
   defaultVariants: {
     fullWidth: false,
+    input: "pointer",
   },
   variants: {
     fullWidth: {
@@ -65,6 +69,17 @@ export const comboBoxVariants = tv({
         base: "w-full",
         inputGroup: "w-full",
       },
+    },
+    // A-008: the `input` axis. Pointer keeps the trigger's hover text colour;
+    // the touch cell is empty — the trigger's hit area grows through the
+    // trigger's own `createPressFeedback` half (A-005), and its row height
+    // inherits the input group's, so this table owns only the hover move.
+    // No `density` axis: `pe-2`/`size-4` are structure sizes, not presets.
+    input: {
+      pointer: {
+        trigger: "hover:text-field-foreground",
+      },
+      touch: {},
     },
   },
 });

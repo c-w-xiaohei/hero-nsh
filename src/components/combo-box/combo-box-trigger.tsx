@@ -8,9 +8,14 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, signal, split, untracked, View } from "nsh";
+import { cleanup, computed, createAnimatedValue, signal, split, untracked, View } from "nsh";
 
-import { isKeyboardPress } from "../../primitives";
+import { createInput, isKeyboardPress } from "../../primitives";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { renderChildren } from "../list-box/children";
 import { ComboBoxContext } from "./combo-box-context";
 
@@ -163,6 +168,34 @@ export function ComboBoxTrigger(props: ComboBoxTriggerProps): JSX.Element {
     () => local.isDisabled === true || combo.isDisabled() || combo.isReadOnly(),
   );
 
+  // A-005: the press-feedback seam, gated on `input() === "touch"` and the
+  // trigger's own disabled flag — under a pointer environment it is a
+  // physical no-op, so the desktop event chain below is untouched. The seam
+  // carries only `hitSlop` here (the invisible half of B; the trigger takes
+  // no `hitSlop` prop and mounts no Scale/Highlight/Ripple part): this
+  // `h-full pe-2` icon box is ~22 pt wide, under the 44 pt minimum.
+  const input = createInput();
+  const feedback = createPressFeedback({
+    enabled: () => input() === "touch" && !isDisabled(),
+  });
+
+  // A-005: the seam's read half for consumers — a part or a fixture probe
+  // inside the trigger's children reads these canonical channels (the
+  // list-box / tag convention). No Scale/Highlight/Ripple part mounts by
+  // default: `hitSlop` alone is this trigger's touch affordance.
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: () => input() === "touch" && !isDisabled(),
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   // R-017: `data-pressed` is React Aria's `isPressed: state.isOpen`, so the
   // trigger stays dimmed while the list is open, not while the pointer is down.
   const isPressed = () => combo.isOpen();
@@ -229,6 +262,10 @@ export function ComboBoxTrigger(props: ComboBoxTriggerProps): JSX.Element {
       return;
     }
 
+    // A-005: after the disabled early-out, before the channel's own notes —
+    // a gated (pointer) call is a no-op inside.
+    feedback.pressDown(event);
+
     if (!isKeyboardPress(event)) {
       combo.notePointer();
     }
@@ -245,6 +282,10 @@ export function ComboBoxTrigger(props: ComboBoxTriggerProps): JSX.Element {
       pressed.set(false);
       local.onPressChange?.(false);
     }
+
+    // A-005: before the disabled early-out — a press the disabled flip
+    // stranded mid-flight still completes the seam's round-trip.
+    feedback.pressUp(event);
 
     if (isDisabled()) {
       return;
@@ -322,36 +363,44 @@ export function ComboBoxTrigger(props: ComboBoxTriggerProps): JSX.Element {
   };
 
   return (
-    <View
-      {...rest}
-      ref={(node) => local.ref?.(node)}
-      testID={local.testID}
-      nativeID={local.id ?? local.nativeID}
-      tooltip={local.tooltip}
-      role="button"
-      // R-018: not a Tab stop, as upstream's `excludeFromTabOrder`.
-      focusable={false}
-      disabled={isDisabled()}
-      accessibilityLabel={local.accessibilityLabel ?? local["aria-label"]}
-      accessibilityHint={local.accessibilityHint}
-      accessibilityState={{
-        ...local.accessibilityState,
-        expanded: combo.isOpen(),
-        disabled: isDisabled(),
-      }}
-      class={classes()}
-      classList={classList()}
-      style={resolvedStyle()}
-      onPress={handlePress}
-      onPressDown={handlePressDown}
-      onPressUp={handlePressUp}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      onLayout={local.onLayout}
-    >
-      {content()}
-    </View>
+    <PressableFeedbackContext.Provider value={feedbackValue}>
+      <View
+        {...rest}
+        ref={(node) => local.ref?.(node)}
+        testID={local.testID}
+        nativeID={local.id ?? local.nativeID}
+        tooltip={local.tooltip}
+        role="button"
+        // R-018: not a Tab stop, as upstream's `excludeFromTabOrder`.
+        focusable={false}
+        disabled={isDisabled()}
+        accessibilityLabel={local.accessibilityLabel ?? local["aria-label"]}
+        accessibilityHint={local.accessibilityHint}
+        accessibilityState={{
+          ...local.accessibilityState,
+          expanded: combo.isOpen(),
+          disabled: isDisabled(),
+        }}
+        class={classes()}
+        classList={classList()}
+        style={resolvedStyle()}
+        onPress={handlePress}
+        onPressDown={handlePressDown}
+        onPressUp={handlePressUp}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        // A-005: the seam's `bounds` feeds `hitSlop`; it reads the layout
+        // first, then the caller's handler gets the same event.
+        onLayout={(event) => {
+          feedback.layout(event);
+          local.onLayout?.(event);
+        }}
+        hitSlop={feedback.hitSlop()}
+      >
+        {content()}
+      </View>
+    </PressableFeedbackContext.Provider>
   );
 }

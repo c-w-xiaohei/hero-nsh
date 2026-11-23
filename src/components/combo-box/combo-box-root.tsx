@@ -19,6 +19,7 @@ import {
 } from "nsh";
 
 import {
+  createInput,
   createInteractionModality,
   createOverlayTrigger,
   createSelectState,
@@ -344,7 +345,12 @@ export function ComboBoxRoot<
 
   const variant = () => local.variant ?? "primary";
   const fullWidth = () => local.fullWidth ?? false;
-  const slots = computed(() => comboBoxVariants({ fullWidth: fullWidth() }));
+  // A-008: the `input` axis feeds the variant call from the environment; a
+  // bare `comboBoxVariants()` call keeps `input: "pointer"` by default.
+  const input = createInput();
+  const slots = computed(() =>
+    comboBoxVariants({ fullWidth: fullWidth(), input: input() }),
+  );
 
   const selectionMode = (): SelectionMode => local.selectionMode ?? "single";
   const isMultiple = () => selectionMode() === "multiple";
