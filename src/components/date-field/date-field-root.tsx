@@ -450,6 +450,9 @@ export function DateFieldRoot(props: DateFieldRootProps): JSX.Element {
   };
 
   return (
+    // A-001: the shared seam — the segment editing channel mounts under the
+    // six bound date-input-group parts and drives this state (`type`,
+    // `backspace`, `commit`), never a self-owned one.
     <DateInputGroupFieldContext.Provider value={state}>
       <FieldContext.Provider value={fieldState}>
         <DescriptionContext.Provider value={descriptionState}>

@@ -19,6 +19,7 @@ import {
 } from "nsh";
 
 import {
+  createInput,
   createInteractionModality,
   createOverlayTrigger,
   createSelectState,
@@ -344,7 +345,12 @@ export function ComboBoxRoot<
 
   const variant = () => local.variant ?? "primary";
   const fullWidth = () => local.fullWidth ?? false;
-  const slots = computed(() => comboBoxVariants({ fullWidth: fullWidth() }));
+  // A-008: the `input` axis feeds the variant call from the environment; a
+  // bare `comboBoxVariants()` call keeps `input: "pointer"` by default.
+  const input = createInput();
+  const slots = computed(() =>
+    comboBoxVariants({ fullWidth: fullWidth(), input: input() }),
+  );
 
   const selectionMode = (): SelectionMode => local.selectionMode ?? "single";
   const isMultiple = () => selectionMode() === "multiple";
@@ -1135,6 +1141,17 @@ export function ComboBoxRoot<
     () => local["aria-label"] ?? labelText(),
   );
 
+  // A-006: the mobile G(输入链) spot. The whole keyboard/input channel —
+  // value/type/inputMode/enterKeyHint/autoComplete/autoCorrect/maxLength/
+  // autoFocus/handleFocus/handleBlur/registerInputFocus/onKeyPress plus
+  // role "combobox" and the expanded accessibility state — is the chain this
+  // row verified as already wired; a caller Input's own
+  // keyboardType/returnKeyType/inputMode/enterKeyHint/masked/autoCorrect/
+  // autoCapitalize/submitBehavior/onSubmit win over the field values in
+  // caller order. The soft-keyboard submit port stays Enter → `onKeyPress` →
+  // `handleInputKeyPress` (commits the highlighted item or `commitValue`),
+  // and `menuTrigger:"input"` still opens on typing. No new wiring and no
+  // prop added for the mobile axis — the spot is consumed, not re-wired.
   const textField: TextFieldContextValue = {
     variant: () =>
       variant() === "secondary" ? "secondary" : "primary",

@@ -36,6 +36,8 @@ export const textAreaVariants = tv({
   ].join(" "),
   defaultVariants: {
     fullWidth: false,
+    // A-001: a bare call still lands on the pointer cell, as Input's table.
+    input: "pointer",
     variant: "primary",
   },
   variants: {
@@ -51,6 +53,14 @@ export const textAreaVariants = tv({
     variant: {
       primary: "",
       secondary: "shadow-none bg-default",
+    },
+    // A-001: the `input` axis exists on every control's table, but the
+    // touch cell stays empty here — `min-h-[38px]` is an upstream visual
+    // floor and the default `rows` height (56 px) already exceeds the 44 pt
+    // touch target, so no declaration moves into the axis.
+    input: {
+      pointer: "",
+      touch: "",
     },
   },
   /*
