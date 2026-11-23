@@ -59,6 +59,18 @@ export function DropdownSubmenuTrigger(props: DropdownSubmenuTriggerProps) {
   // under it.
   const parentLayer = DropdownPopoverContext();
 
+  // A-011: a submenu inside a sheet-carried popover is a mismatch — Native
+  // `SubMenu` has no bottom-sheet form and the layer pins `"panel"` (A-003),
+  // so the caller should give the sheet a submenu-free menu. The host cannot
+  // enumerate the subtree to refuse the combination, so it degrades to this
+  // once-per-mount warning plus the forced panel (§8): silent-swallowing an
+  // explicit `"sheet"` pin is riskier than warning about it.
+  if (parentLayer?.presentation() === "sheet") {
+    console.warn(
+      "Dropdown.SubmenuTrigger: a submenu's popover cannot present as a sheet — Native SubMenu has no bottom-sheet form. The submenu layer stays a panel; give a sheet-carried Dropdown a submenu-free menu instead.",
+    );
+  }
+
   const focusOnOpen = signal(false);
   const anchor = signal<ViewRef | undefined>(undefined);
   const rowFocus = signal<{ run: () => void } | undefined>(undefined);

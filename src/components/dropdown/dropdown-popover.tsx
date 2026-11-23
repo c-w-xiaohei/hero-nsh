@@ -12,7 +12,14 @@ import { computed, effect, Overlay, Scroll, signal, split, untracked } from "nsh
 
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
+import type { OverlayTriggerContextValue } from "../../primitives/create-overlay-trigger";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { createPresentation } from "../../primitives/presentation";
+import { SheetBackdrop } from "../sheet/sheet-backdrop";
+import { SheetBody } from "../sheet/sheet-body";
+import { SheetContent } from "../sheet/sheet-content";
+import { SheetDialog } from "../sheet/sheet-dialog";
+import { SheetRoot } from "../sheet/sheet-root";
 import type {
   PopoverPlacement,
   PopoverSide,
@@ -116,6 +123,17 @@ export interface DropdownPopoverProps {
   "aria-labelledby"?: string;
   "aria-describedby"?: string;
 
+  /**
+   * The container the popover presents as (A-002). `"auto"` runs the shared
+   * `createPresentation` rule — touch plus a compact short side picks
+   * `"sheet"`, everything else `"panel"`. `"panel"` is the anchored overlay
+   * upstream calls `'popover'`; `"sheet"` is the `Sheet` carrier upstream
+   * calls `'bottom-sheet'`. The domain narrows to these two states because
+   * upstream's `Menu` `presentation` knows only `popover`/`bottom-sheet`
+   * (`menu.types.ts`) — `"fullscreen"`/`"dialog"` are not members.
+   */
+  presentation?: "auto" | "panel" | "sheet";
+
   /** Accepted, no effect: the arrow is not part of a dropdown upstream. */
   arrowSize?: number;
 
@@ -181,6 +199,7 @@ export function DropdownPopover(props: DropdownPopoverProps) {
     "crossOffset",
     "shouldFlip",
     "containerPadding",
+    "presentation",
     "aria-label",
     "accessibilityLabel",
     "aria-labelledby",
@@ -203,7 +222,7 @@ export function DropdownPopover(props: DropdownPopoverProps) {
   const submenu = DropdownSubmenuLayerContext();
   const overlayTrigger = OverlayTriggerContext();
 
-  const slots = dropdown?.slots ?? dropdownVariants();
+  const slots = () => dropdown?.slots() ?? dropdownVariants();
 
   /* -------------------------------------------------------------------------------------------
    * Open state: React Aria's rule — a popover given its own `isOpen` /
@@ -263,6 +282,41 @@ export function DropdownPopover(props: DropdownPopoverProps) {
   const resolved = computed(() =>
     resolvePopoverPlacement(local.placement ?? (submenu ? "end top" : "bottom start")),
   );
+
+  /* -------------------------------------------------------------------------------------------
+   * Presentation: the carrier the open popover takes (A-003). The value is
+   * evaluated once on `isOpen`'s false→true edge and latched until close, so
+   * a rotation or a scope change can never swap the container mid-open.
+   *
+   * Two folds into the pin, in order:
+   *
+   *   1. `submenu` — a submenu's layer is always a panel, regardless of env
+   *      or an explicit `"sheet"` pin: Native `SubMenu` does not support
+   *      bottom-sheet, so the over-domain combination lands on panel rather
+   *      than on a broken carrier (§8).
+   *   2. `isNonModal` — under `"auto"` it resolves to `"panel"`: a non-modal
+   *      popover has no sheet semantics (upstream's bottom-sheet is always
+   *      modal), while an explicit `presentation="sheet"` still pins, the
+   *      caller's stated intent winning over the derived rule.
+   * ----------------------------------------------------------------------------------------- */
+  const presentation = createPresentation<"panel" | "sheet">({
+    pin: () => {
+      if (submenu) {
+        return "panel";
+      }
+
+      if (
+        isNonModal() &&
+        (local.presentation === undefined || local.presentation === "auto")
+      ) {
+        return "panel";
+      }
+
+      return local.presentation;
+    },
+    isOpen,
+    allowed: () => ["panel", "sheet"],
+  });
 
   const positionedSide = signal<PopoverSide | undefined>(undefined);
   const side = computed(() => positionedSide() ?? resolved().side);
@@ -399,6 +453,7 @@ export function DropdownPopover(props: DropdownPopoverProps) {
     markMenuFocused: () => menuFocused.set(true),
     close,
     isOpen,
+    presentation,
   };
 
   /* -------------------------------------------------------------------------------------------
@@ -424,7 +479,7 @@ export function DropdownPopover(props: DropdownPopoverProps) {
   };
 
   const classes = computed(() =>
-    [slots.popover(), resolvedClassName()]
+    [slots().popover(), resolvedClassName()]
       .filter((part): part is string => typeof part === "string" && part.length > 0)
       .join(" "),
   );
@@ -466,21 +521,25 @@ export function DropdownPopover(props: DropdownPopoverProps) {
     return list;
   });
 
-  // R-015 / R-016: the min and max width are measured values, so they are
-  // inline. `available.width` already excludes the safe-area margin.
+  // R-015 / R-016: the min width is a measured value, so it is inline.
+  // `available.width` already excludes the safe-area margin. No `maxWidth`:
+  // a max-width the layout can satisfy inside the reported `available` makes
+  // the layer always fit the asked-for side, so the flip check ("the other
+  // side when only that one has room", R-016) never sees the room it would
+  // have needed — a full-width sheet carrier leaves the anchor's right edge
+  // at the screen edge and the submenu collapses to the leftover sliver
+  // instead of flipping left or overflowing at its natural width.
   const minWidth = () => {
     const available = availableWidth();
 
     return available == null ? 220 : Math.min(220, available);
   };
 
-  const maxWidth = () => availableWidth();
-
   const style = () => [
     TRANSITION_STYLE,
     // R-025: the exit is 100ms while the base class keeps 150ms for the enter.
     presence.isExiting() ? EXIT_DURATION_STYLE : undefined,
-    { transformOrigin: transformOrigin(), minWidth: minWidth(), maxWidth: maxWidth() },
+    { transformOrigin: transformOrigin(), minWidth: minWidth() },
     resolvedStyle(),
   ];
 
@@ -514,11 +573,41 @@ export function DropdownPopover(props: DropdownPopoverProps) {
     "pointer-events-none": !isOpen(),
   }));
 
-  // One read of `props.children`, at its placement inside the scroll viewport
-  // and the context the menu reads. The content stays mounted while the layer
-  // is closed, as Select's list does: NSH builds a collection from mounted
-  // parts, and remounting it on every open would also re-create the
-  // `SubmenuTrigger` parts below it and lose their open state.
+  /* Scoped trigger context (A-005; popover's same ruling): `SheetRoot`
+   * provides its own `OverlayTriggerContext`, which would shadow this
+   * popover's — a Button or a row written inside the sheet would register
+   * as the sheet's trigger or close the wrong channel. Re-supplied inside
+   * `SheetContent`, `isOpen` reports "no opinion" (`undefined`) and `close`
+   * still reaches this popover's `close`, the same contract the panel
+   * branch's own `Overlay` already gives its children. */
+  const scopedTrigger: OverlayTriggerContextValue = {
+    isOpen: () => undefined,
+    setIsOpen: () => {},
+    toggle: () => {},
+    close: () => close(),
+    registerTrigger: () => () => {},
+    triggerRef: () => undefined,
+  };
+
+  // A-003/A-005: the carrier probe. Each branch derives its `testID` from
+  // the caller's — `<id>-panel` on the anchored overlay, `<id>-sheet` on
+  // the Sheet content — so `shows`/`count` discriminate which carrier the
+  // resolved presentation mounted (the popover unit's `<id>-panel`/
+  // `<id>-sheet` convention; `nativeID` keeps its verbatim mapping).
+  const panelTestID = () =>
+    local.testID !== undefined ? `${local.testID}-panel` : undefined;
+  const sheetTestID = () =>
+    local.testID !== undefined ? `${local.testID}-sheet` : undefined;
+
+  // One read of `props.children` per carrier, at its placement inside the
+  // scroll viewport and the context the menu reads. The content stays
+  // mounted while the layer is closed, as Select's list does: NSH builds a
+  // collection from mounted parts, and remounting it on every open would
+  // also re-create the `SubmenuTrigger` parts below it and lose their open
+  // state. The panel wraps it in the measured `Scroll`; the sheet carrier
+  // wraps its own copy of the provider subtree in `SheetBody`, whose paired
+  // Scroll takes the scroller's place (A-005) — a shared element node mounts
+  // under one parent only, so the two carriers cannot hold one constant.
   const content = (
     <Scroll
       // R-011: `.dropdown__popover`'s `scrollbar` → the core Scroll's own.
@@ -548,7 +637,7 @@ export function DropdownPopover(props: DropdownPopoverProps) {
         (dropdown?.triggerMode() === "contextMenu" ? 0 : 8)
       }
       margin={local.containerPadding ?? 12}
-      testID={local.testID}
+      testID={panelTestID()}
       nativeID={local.id ?? local.nativeID}
       accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel}
       class={classes()}
@@ -566,12 +655,16 @@ export function DropdownPopover(props: DropdownPopoverProps) {
     </Overlay>
   );
 
+  // A-004: the panel branch is the pre-existing render chain, verbatim — the
+  // modal underlay plus the anchored content overlay. `"panel"` *is* the
+  // upstream popover, so nothing about its structure changes.
+  //
   // The modal underlay: the second overlay that absorbs presses outside the
   // layer, as RAC's `usePopover` underlay. It has to be the outer overlay with
   // the content nested inside it (two sibling overlays both claim the press on
   // the web target, so the content would never see one). `isNonModal` is read
   // when the layer shows, not tracked afterwards, as in React Aria.
-  return (
+  const panelBranch = (
     <If when={!isNonModal()} else={contentOverlay}>
       <Overlay
         class="inset-0"
@@ -585,6 +678,95 @@ export function DropdownPopover(props: DropdownPopoverProps) {
       >
         {contentOverlay}
       </Overlay>
+    </If>
+  );
+
+  /* A-005: the sheet carrier composes the existing Sheet parts, upstream's
+   * `bottom-sheet` state. The popover keeps owning the open state —
+   * `SheetRoot` is a controlled shell fed `isOpen`, and a sheet dismissal
+   * (backdrop press, swipe, Escape, back) reports `onOpenChange(false)`
+   * into the same `close()` the underlay and `handleCancel` take.
+   *
+   * `SheetBackdrop` gets `isExiting` forced (plus the `-backdrop` testID
+   * convention select's carrier uses for the outside-press probe): this
+   * popover's contract keeps
+   * the menu collection and the submenu state mounted while the layer is
+   * closed (`DropdownMenu`'s focus registration, `registerRow` handles and
+   * `SubmenuTrigger`'s `isOpen`/timers all live in `content`), so a sheet
+   * must not unmount them on close — without retention a once-opened sheet
+   * would unregister `rowRegistry`, typeahead and every submenu channel
+   * (the heaviest ruling of this unit, sheet §6 margin note; `isExiting`
+   * is the existing `retentionProps` / Native `forceMount` counterpart —
+   * no new prop). `isKeyboardDismissDisabled` goes with it so the contract
+   * prop gates Escape on this carrier exactly as `handleCancel` gates it on
+   * the panel chain.
+   *
+   * `SheetContent` carries the popover's own look (`slots.popover()` plus
+   * the caller's class/style) and the id / testID / label forwards;
+   * `SheetDialog` is the panel — the `SheetContentPanContext` supply point,
+   * which is what lets the content area drag the detent and arbitrate with
+   * `SheetBody`'s paired Scroll under touch (its pan handlers spread to an
+   * empty object under pointer, so no gesture path exists there); `SheetBody`
+   * wraps the same `content` subtree, replacing the panel branch's `Scroll`
+   * with its own paired one — the `DropdownPopoverContext.Provider` chain
+   * inside it is unchanged. `local.isEntering`/`isExiting`/
+   * `shouldSkipAnimation` are not forwarded: the carrier always retains its
+   * mount, so the caller's exit intent has no semantics here (§8). */
+  /* `If`'s children position takes a function child, which runs only while
+   * `when` holds. The function form matters here: as a constant element the
+   * sheet copy of the children subtree exists while the panel carrier is
+   * the one showing (the two carriers each need their own provider subtree —
+   * one element mounts under one parent), and parts inside the copy run
+   * their bodies without ever mounting; `Dropdown.Menu`'s body-time
+   * `registerMenuFocus` then binds `menuFocus` to a node that never mounts
+   * and the panel's menu loses the open-time focus handoff. Realizing the
+   * carrier inside `If`'s function child keeps one copy of the subtree in
+   * existence, matching the mounted carrier. */
+  const sheetBranch = () => (
+    <SheetRoot
+      isOpen={isOpen()}
+      onOpenChange={(open) => {
+        if (!open) {
+          close();
+        }
+      }}
+    >
+      <SheetBackdrop
+        isExiting={true}
+        isKeyboardDismissDisabled={isKeyboardDismissDisabled()}
+        testID={
+          local.testID !== undefined ? `${local.testID}-backdrop` : undefined
+        }
+      >
+        <SheetContent
+          ref={(node) => local.ref?.(node)}
+          testID={sheetTestID()}
+          nativeID={local.id ?? local.nativeID}
+          accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel}
+          className={classes()}
+          style={resolvedStyle()}
+        >
+          <OverlayTriggerContext.Provider value={scopedTrigger}>
+            <SheetDialog>
+              <SheetBody
+                onMouseEnter={() => submenu?.contentEnter()}
+                onMouseLeave={() => submenu?.contentLeave()}
+                onLayout={local.onLayout}
+              >
+                <DropdownPopoverContext.Provider value={popoverContext}>
+                  {local.children}
+                </DropdownPopoverContext.Provider>
+              </SheetBody>
+            </SheetDialog>
+          </OverlayTriggerContext.Provider>
+        </SheetContent>
+      </SheetBackdrop>
+    </SheetRoot>
+  );
+
+  return (
+    <If when={presentation() === "sheet"} else={panelBranch}>
+      {sheetBranch}
     </If>
   );
 }
