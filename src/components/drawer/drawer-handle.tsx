@@ -23,7 +23,8 @@ export function DrawerHandle(props: DrawerHandleProps): JSX.Element {
       // A-001: the Dialog's drag channel spreads the handle's responder props
       // here — the empty object under pointer or a non-bottom placement, so
       // the decorative handle mounts no gesture path there (the negative
-      // assertion).
+      // assertion). The handlers come from `createPan` inside
+      // `drawer-dialog.tsx` (the shared seam); this file only spreads them.
       {...(context?.drag?.panHandlers() ?? {})}
       accessibilityElementsHidden={true}
       class={classes()}
