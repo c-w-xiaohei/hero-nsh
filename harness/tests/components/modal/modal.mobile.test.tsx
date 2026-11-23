@@ -172,15 +172,7 @@ describe("modal mobile", () => {
       await settleOpen(app);
 
       const dialog = absDialog(app);
-      const container = lastLayout(app, "container");
-      // Dock to the surface's bottom edge — measured against the layout
-      // container's own bottom, not `VIEWPORT_H`: a real Windows window's
-      // caption keeps ~39pt off the client area, so the surface the overlay
-      // spans is shorter than the requested viewport and the card still docks
-      // to its bottom.
-      expect(
-        Math.abs(dialog.y + dialog.height - (container.y + container.height)),
-      ).toBeLessThanOrEqual(4);
+      expect(Math.abs(dialog.y + dialog.height - VIEWPORT_H)).toBeLessThanOrEqual(4);
       expect(dialog.width).toBeGreaterThan(VIEWPORT_W * 0.9);
       expect(dialog.centerY).toBeGreaterThan(CENTER_Y + 100);
       expect(lastSwipe(app).presentation).toBe("sheet");
