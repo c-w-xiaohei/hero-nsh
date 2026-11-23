@@ -196,7 +196,12 @@ export function SelectClearButton(props: SelectClearButtonProps): JSX.Element {
   );
 
   return (
-    <View
+    // The Provider wraps the view (the trigger's A-007 shape): on the web
+    // host a provider inside the view does not shadow an enclosing one for
+    // children the caller wrote — the ctx probe would read the trigger's
+    // seam instead of this one (M-013 read the trigger's 256×44 bounds).
+    <PressableFeedbackContext.Provider value={feedbackValue}>
+      <View
       {...rest}
       ref={(node) => local.ref?.(node)}
       testID={local.testID}
@@ -224,10 +229,9 @@ export function SelectClearButton(props: SelectClearButtonProps): JSX.Element {
       onMouseLeave={handleMouseLeave}
       onLayout={local.onLayout}
     >
-      <PressableFeedbackContext.Provider value={feedbackValue}>
-        {content()}
-        {hitArea()}
-      </PressableFeedbackContext.Provider>
-    </View>
+      {content()}
+      {hitArea()}
+      </View>
+    </PressableFeedbackContext.Provider>
   );
 }

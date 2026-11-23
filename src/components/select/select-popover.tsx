@@ -283,16 +283,19 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
   // A-002's retained-mount corollary: each carrier branch below holds its own
   // ListBox (an element mounts under one parent only, so no shared node can
   // travel between carriers), and all three register with the field. The
-  // branch whose `carrier` tag matches the carrier this open resolved is the
-  // registration `selectionManager` / `findItem` / the focus placement read —
-  // set on the open edge so a closed field keeps the carrier its last open
-  // used (the value read-back and typeahead contract of the retained list).
+  // branch whose `carrier` tag matches the carrier this open resolves is the
+  // registration `selectionManager` / `findItem` / the focus placement read.
+  // The tag tracks `presentation()` continuously — while closed the accessor
+  // previews the carrier the next open will latch, so `open()`'s `markFocus`
+  // (which runs before `setIsOpen` commits) already resolves the carrier the
+  // open is about to show; gating on `isOpen` left the tag one edge stale and
+  // placed the highlight and the view focus in a hidden copy (the web host's
+  // M3 failures). While open the latch holds the same value, so the tracking
+  // is a no-op there.
   const owner = ListOwnerContext();
 
   effect(() => {
-    if (isOpen()) {
-      select.setActiveCarrier(presentation());
-    }
+    select.setActiveCarrier(presentation());
   });
 
   // The owner the children inside `carrier`'s branch see: identical to the
@@ -355,6 +358,14 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
     // `overflow-y-auto`).
     availableHeight.set(event.available.height);
     measureAnchor();
+    // The focus placement runs here as well as in the field state's open
+    // effect: on the web host a `focus()` command issued inside the mount
+    // commit is dropped (a defaultOpen / controlled-open field's `onFocus`
+    // never arrived — T-045/T-046), while `onPosition` arrives once the
+    // overlay is laid out and interactive. Re-focusing an already-focused
+    // list is a no-op (`onFocusIn` returns while `manager.isFocused()`), so
+    // the press-open path sees no duplicate.
+    select.listControls()?.focusList();
   };
 
   // R-048: `transform-origin: var(--trigger-anchor-point)`, computed from the

@@ -95,7 +95,10 @@ import { probe } from "@scenario/probe";
  * per carrier; `layout` reports the trigger and popover boxes; `events` the
  * trigger's down/up/press sequence; `ctx-env`/`ctx-pressed`/`ctx-state`/
  * `ctx-channels` sample the trigger's `PressableFeedbackContext` (the
- * accordion/list-box convention) with `ctx-sample` as the on-demand sampler;
+ * accordion/list-box convention) with `ctx-sample` / `ctx2-sample` as the
+ * on-demand samplers — mounted in the flow while the field is closed and
+ * inside the popover while it is open, so the press reaches them on the
+ * web host's coordinate hit-test either way (M-002/M-019);
  * `pan` reports `SheetContentPanContext` key counts and
  * `keyboardDismissMode` inside the popover children (−1 outside a Dialog).
  */
@@ -385,6 +388,60 @@ function Case(props: CaseProps) {
   const ctx2 = param("ctx2") === "1";
   const kbd = param("kbd") === "1";
 
+  // Open tracking for the sampler mount below. Controlled-open props
+  // (`items-open`, `items-default-open`) never report a mount-time edge, so
+  // the seed reads them; every later edge comes through `onOpenChange`.
+  const popoverOpen = signal(props.open === true || props.defaultOpen === true);
+  const reportOpenChange = (open: boolean) => {
+    popoverOpen.set(open);
+    probe("openChange")(open);
+  };
+
+  // The on-demand channel readers. While the popover is closed they sit in
+  // the flow beside the field (`ml-72` keeps them clear of the open overlay
+  // the way `outside` is); while it is open the outside world is unreachable
+  // anyway — on the web host `app.press` hit-tests by coordinates, and a
+  // modal carrier's underlay swallows every press below it into "dismiss",
+  // so the press can never reach a flow sibling (M-002/M-019 measured). The
+  // open copies therefore live inside the popover's children: a zero-height
+  // `relative` wrapper at the content's end with the sampler absolutely
+  // pinned to its bottom-right corner — in-flow rows would grow the carrier
+  // box and move its centre (M-010's dialog), while an overlay this size
+  // (20pt over the last row's far corner) never covers an option's centre,
+  // which is where `app.press` lands. `hidden` toggles the pair because the
+  // popover's children subtree is built once — a mount/unmount conditional
+  // never re-evaluates there.
+  const sampler = (inside: boolean, id: "ctx-sample" | "ctx2-sample") => {
+    const onPress = id === "ctx-sample" ? sampleChannels : sampleClearChannels;
+    return inside ? (
+      <View
+        class="relative h-0 overflow-visible"
+        classList={{ hidden: !popoverOpen() }}
+      >
+        <View
+          testID={id}
+          role="button"
+          class={`absolute bottom-0 w-5 h-5 ${id === "ctx2-sample" ? "right-5" : "right-0"}`}
+          onPress={onPress}
+        />
+      </View>
+    ) : (
+      <View
+        testID={id}
+        role="button"
+        class="ml-72 p-2"
+        classList={{ hidden: popoverOpen() }}
+        onPress={onPress}
+      >
+        <Text>{id}</Text>
+      </View>
+    );
+  };
+  const samplers = (inside: boolean) => [
+    sampler(inside, "ctx-sample"),
+    props.clear ? sampler(inside, "ctx2-sample") : null,
+  ];
+
   return (
     <View class="w-64 items-start gap-2">
       <Select
@@ -411,17 +468,19 @@ function Case(props: CaseProps) {
         onSelectionChange={props.alias ? undefined : recordSelection}
         onChange={props.alias ? recordSelection : undefined}
         onClear={probe("clear")}
-        onOpenChange={probe("openChange")}
+        onOpenChange={reportOpenChange}
         onLayout={layout ? boxProbe("root") : undefined}
       >
         {props.label ? <Label>{props.label}</Label> : null}
         <Select.Trigger
           testID="select-trigger"
           isDisabled={props.triggerDisabled}
-          // A-013 `narrow`: both dims under the 44pt touch minimum — the
-          // `min-h-6` class wins over the trigger's `min-h-9` base cell and
-          // the touch `min-h-11` cell (the caller's class lands last).
-          className={narrow ? "min-h-6 w-10" : undefined}
+          // A-013 `narrow`: both dims under the 44pt touch minimum — `h-6`
+          // wins over the trigger's `min-h-9` base cell and the touch
+          // `min-h-11` cell (the caller's class lands last). A fixed height,
+          // not a min: on the web host the label text wraps inside `w-10`
+          // and inflates a min-height box to ~196pt (M-019's narrow box).
+          className={narrow ? "h-6 w-10" : undefined}
           onPressDown={() => probe("events")("down")}
           onPressUp={() => probe("events")("up")}
           onPress={() => probe("events")("press")}
@@ -470,23 +529,24 @@ function Case(props: CaseProps) {
               : props.data.map((item) => <Row item={item} />)}
           </ListBox>
           <PanProbe />
+          {samplers(true)}
         </Select.Popover>
         {props.description ? <Description>{props.description}</Description> : null}
         {props.error ? <FieldError>{props.error}</FieldError> : null}
       </Select>
+      {/* The outside press target sits clear of the open popover: the panel
+          carrier anchors below the trigger and covers the column's width on
+          the web host, where `app.press` hit-tests by coordinates — a target
+          in the flow below the trigger selects an option instead of pressing
+          outside (M-002/M-018/M-019). `marginStart: 288` leaves the same
+          "press outside the overlay" semantics with the press landing beside
+          the carrier (`ml-72` ≈ 288 pt clears the trigger-width carrier). */}
       {props.outside ? (
-        <View testID="outside" role="button" onPress={() => undefined}>
+        <View testID="outside" role="button" class="ml-72 p-2" onPress={() => undefined}>
           <Text>Outside</Text>
         </View>
       ) : null}
-      <View testID="ctx-sample" role="button" class="p-2" onPress={sampleChannels}>
-        <Text>ctx-sample</Text>
-      </View>
-      {props.clear ? (
-        <View testID="ctx2-sample" role="button" class="p-2" onPress={sampleClearChannels}>
-          <Text>ctx2-sample</Text>
-        </View>
-      ) : null}
+      {samplers(false)}
     </View>
   );
 }
