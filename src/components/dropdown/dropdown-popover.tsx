@@ -712,7 +712,17 @@ export function DropdownPopover(props: DropdownPopoverProps) {
    * inside it is unchanged. `local.isEntering`/`isExiting`/
    * `shouldSkipAnimation` are not forwarded: the carrier always retains its
    * mount, so the caller's exit intent has no semantics here (§8). */
-  const sheetBranch = (
+  /* `If`'s children position takes a function child, which runs only while
+   * `when` holds. The function form matters here: as a constant element the
+   * sheet copy of the children subtree exists while the panel carrier is
+   * the one showing (the two carriers each need their own provider subtree —
+   * one element mounts under one parent), and parts inside the copy run
+   * their bodies without ever mounting; `Dropdown.Menu`'s body-time
+   * `registerMenuFocus` then binds `menuFocus` to a node that never mounts
+   * and the panel's menu loses the open-time focus handoff. Realizing the
+   * carrier inside `If`'s function child keeps one copy of the subtree in
+   * existence, matching the mounted carrier. */
+  const sheetBranch = () => (
     <SheetRoot
       isOpen={isOpen()}
       onOpenChange={(open) => {
@@ -754,5 +764,9 @@ export function DropdownPopover(props: DropdownPopoverProps) {
     </SheetRoot>
   );
 
-  return <If when={presentation() === "sheet"} else={panelBranch}>{sheetBranch}</If>;
+  return (
+    <If when={presentation() === "sheet"} else={panelBranch}>
+      {sheetBranch}
+    </If>
+  );
 }
