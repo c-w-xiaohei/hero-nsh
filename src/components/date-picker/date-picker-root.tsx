@@ -261,7 +261,14 @@ export function DatePickerRoot(props: DatePickerRootProps): JSX.Element {
   const slots = datePickerVariants();
 
   /* -------------------------------------------------------------------------------------------
-   * Value and segment state (port sheet §2)
+   * Value and segment state (port sheet §2). A-006: the picker's own
+   * `DateFieldState` is also the edit owner the `DateField.Input` /
+   * `DateField.Segment` parts (the `DateInputGroup*` identity binding)
+   * ride on — the date-input-group unit's `dig-seg-*` soft-keyboard
+   * channel and `onKeyPress`→`field.type`/`backspace` bridge land on this
+   * state and reach the picker's `commit()` / `onChange`, and its
+   * `keyboardType` prop arrives through `DateInputGroupKeyboardContext`,
+   * so this unit only consumes the channel and wires nothing of its own.
    * ----------------------------------------------------------------------------------------- */
   const state: DateFieldState = createDateFieldState({
     value: () => local.value,
@@ -540,6 +547,11 @@ export function DatePickerRoot(props: DatePickerRootProps): JSX.Element {
   // R-002 / R-003: `.date-picker .date-input-group__suffix` and `__prefix` turn
   // `pointer-events-none` into `auto`. A descendant selector has no NSH
   // counterpart, so the picker tells the group's affixes through this context.
+  // A-007: the same two providers carry the inherit channel — `DateField.Suffix`
+  // inside the picker is an interactive affix, so date-input-group A-001's
+  // `input×interactive` compound gives it `min-h-11 min-w-11 px-2` under touch,
+  // and `DateInputGroupAnchorContext` is the anchor feed the panel carrier
+  // positions on (both unchanged on the desktop side).
   const affixContext = () => true;
 
   /* -------------------------------------------------------------------------------------------
