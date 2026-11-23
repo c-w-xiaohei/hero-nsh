@@ -181,8 +181,10 @@ export function ComboBoxTrigger(props: ComboBoxTriggerProps): JSX.Element {
 
   // A-005: the seam's read half for consumers — a part or a fixture probe
   // inside the trigger's children reads these canonical channels (the
-  // list-box / tag convention). No Scale/Highlight/Ripple part mounts by
-  // default: `hitSlop` alone is this trigger's touch affordance.
+  // list-box / tag convention). The `A-012` fixture mounts that probe
+  // (`ctx`/`trigger-box`) inside `EnvironmentScope` against this provider.
+  // No Scale/Highlight/Ripple part mounts by default: `hitSlop` alone is
+  // this trigger's touch affordance.
   const feedbackValue: PressableFeedbackContextValue = {
     isPressed: feedback.isPressed,
     pressed: feedback.pressed,

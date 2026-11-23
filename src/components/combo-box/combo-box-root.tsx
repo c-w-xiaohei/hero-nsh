@@ -1141,6 +1141,17 @@ export function ComboBoxRoot<
     () => local["aria-label"] ?? labelText(),
   );
 
+  // A-006: the mobile G(输入链) spot. The whole keyboard/input channel —
+  // value/type/inputMode/enterKeyHint/autoComplete/autoCorrect/maxLength/
+  // autoFocus/handleFocus/handleBlur/registerInputFocus/onKeyPress plus
+  // role "combobox" and the expanded accessibility state — is the chain this
+  // row verified as already wired; a caller Input's own
+  // keyboardType/returnKeyType/inputMode/enterKeyHint/masked/autoCorrect/
+  // autoCapitalize/submitBehavior/onSubmit win over the field values in
+  // caller order. The soft-keyboard submit port stays Enter → `onKeyPress` →
+  // `handleInputKeyPress` (commits the highlighted item or `commitValue`),
+  // and `menuTrigger:"input"` still opens on typing. No new wiring and no
+  // prop added for the mobile axis — the spot is consumed, not re-wired.
   const textField: TextFieldContextValue = {
     variant: () =>
       variant() === "secondary" ? "secondary" : "primary",
