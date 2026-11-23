@@ -2,7 +2,16 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, radius, shadow } from "../../tokens/geometry";
+// `ease.smooth`, `radius.field` and `shadow.field.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker imports this file
+// through Node ESM, which does not resolve extensionless relative specifiers,
+// so the geometry module cannot be imported from a `.styles.ts`. Same pattern
+// as `switch.styles.ts` / `card.styles.ts`; keep in sync with
+// `SHADOW_VALUES.field` and `EASE_VALUES`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const RADIUS_FIELD = "rounded-(--radius-field)";
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
 
 /**
  * InputOTP's slot table, HeroUI 3.2.7
@@ -19,6 +28,9 @@ import { ease, radius, shadow } from "../../tokens/geometry";
 export const inputOTPVariants = tv({
   defaultVariants: {
     variant: "primary",
+    // A-001: the environment's `input` accessor feeds the axis at resolve
+    // time; `pointer` is the desktop default so nothing changes there.
+    input: "pointer",
   },
   slots: {
     // R-001: `.input-otp` → `relative flex w-full items-center gap-2`.
@@ -65,7 +77,7 @@ export const inputOTPVariants = tv({
     // R-010: `transition: … 150ms var(--ease-smooth)` → `transition
     // duration-150 ease-smooth motion-reduce:transition-none`; R-011 writes the
     // three transitioned properties inline.
-    slot: `relative flex h-10 w-[2.375rem] min-w-0 flex-1 items-center justify-center border-0 ${radius.field} bg-field dark:bg-default text-field-foreground text-sm font-semibold ${shadow.field.both} outline-none transition duration-150 ${ease.smooth} motion-reduce:transition-none`,
+    slot: `relative flex h-10 w-[2.375rem] min-w-0 flex-1 items-center justify-center border-0 ${RADIUS_FIELD} bg-field dark:bg-default text-field-foreground text-sm font-semibold ${SHADOW_FIELD_BOTH} outline-none transition duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
 
     // R-017: `.input-otp__slot-value` → `text-lg leading-6
     // tracking-[-0.27px]`.
@@ -84,6 +96,21 @@ export const inputOTPVariants = tv({
         // R-025: `background-color: var(--input-otp-slot-bg)` folded into its
         // value, `--default`. The focus fill is R-027's classList entry.
         slot: "bg-default shadow-none dark:shadow-none",
+      },
+    },
+    // A-001: the `input` axis owns the visible hit minimum (encapsulation.md
+    // §1). `pointer` is the desktop resolution — empty cells, so the default
+    // environment resolves verbatim. `touch` lifts each cell's visible height
+    // to the 44 pt hit minimum (`min-h-11` on top of the base's `h-10`; the
+    // container is an `items-center` flex, so it and the inset-0 input
+    // overlay grow with the cells). The cells' own width is untouched: one
+    // press target covers the whole field (A-005's overlay), so per-cell hit
+    // width is not a separate contract. No `density` axis: a cell's size is
+    // hit surface, not a spacing preset.
+    input: {
+      pointer: {},
+      touch: {
+        slot: "min-h-11",
       },
     },
   },

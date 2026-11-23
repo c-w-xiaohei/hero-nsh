@@ -12,6 +12,7 @@ import type {
 import { computed, effect, signal, split, untracked, View } from "nsh";
 
 import { createControllableSignal } from "../../primitives";
+import { createInput } from "../../primitives/environment";
 import { joinClassNames } from "./class-names";
 import { FieldErrorContext } from "../field-error/context";
 import type { FieldErrorState } from "../field-error/context";
@@ -379,7 +380,13 @@ export function InputOTPRoot(props: InputOTPRootProps): JSX.Element {
   // Re-resolved against the current props: the context hands each part an
   // accessor over the fresh table, so a runtime `variant` change re-resolves
   // every cell.
-  const resolvedSlots = computed(() => inputOTPVariants({ variant: local.variant }));
+  // A-001: `input` is the environment's variant axis, fed by the factory
+  // accessor — callers never set it, and the default environment resolves
+  // `pointer`, which keeps the desktop output verbatim.
+  const input = createInput();
+  const resolvedSlots = computed(() =>
+    inputOTPVariants({ variant: local.variant, input: input() }),
+  );
 
   const slots: InputOTPSlots = {
     base: () => resolvedSlots().base(),
