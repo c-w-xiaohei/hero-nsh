@@ -19,6 +19,7 @@ import {
 } from "nsh";
 
 import { createControllableSignal } from "../../primitives";
+import { createInput } from "../../primitives/environment";
 import { joinClassNames } from "./class-names";
 import { DescriptionContext } from "../description/context";
 import type { DescriptionContextValue } from "../description/context";
@@ -387,10 +388,17 @@ export function SearchFieldRoot(props: SearchFieldRootProps): JSX.Element {
   // Re-resolved against the current props; the context contract is HeroUI's
   // `slots.group()` call shape, so each slot is an accessor over the fresh
   // table and a runtime `variant` / `fullWidth` change re-resolves every part.
+  // A-001: the `input` axis feeds the table's touch hit-height cell; it is a
+  // variant argument, not a prop — `SearchFieldRootProps` gains nothing.
+  // (`inputAxis`, not `input`: the root's input-bindings object below holds
+  // that name.)
+  const inputAxis = createInput();
+
   const resolvedSlots = computed(() =>
     searchFieldVariants({
       fullWidth: local.fullWidth,
       variant: local.variant,
+      input: inputAxis(),
     }),
   );
 

@@ -1,4 +1,4 @@
-import { host, mount, signal, Text, View } from "nsh";
+import { effect, host, mount, signal, Text, View } from "nsh";
 import type { JSX } from "nsh";
 import {
   createListState,
@@ -8,6 +8,8 @@ import {
   Label,
   ListBox,
   ListOwnerContext,
+  PressableFeedback,
+  PressableFeedbackContext,
   toListItemData,
   listItemDataGetters,
 } from "@heroui/react";
@@ -15,6 +17,7 @@ import type {
   ListOwner,
   ListOwnerListControls,
   ListState,
+  PressableFeedbackContextValue,
   SelectionValue,
 } from "@heroui/react";
 import { ListBoxContext } from "../src/components/list-box/list-box-context";
@@ -1186,10 +1189,217 @@ function FCollectionFixture() {
   return which === "registry" ? <FRegistryProbe /> : <FDataProbe />;
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * mobile B(项) cases: the press-feedback seam assertions (sheet §2 A-008)
+ *
+ * `b-item` mounts one items-driven single-select list whose row carries the
+ * `events` sequence probe (down/up/press), the `layout` bounds probe (root
+ * and row), the hover probes (`onHoverStart`/`onHoverEnd`/`onHoverChange`/
+ * `onMouseEnter`/`onMouseLeave` under `hover=1`) and a `CtxProbe` child that
+ * samples `PressableFeedbackContext` — `ctx-env`/`ctx-state`/`ctx-pressed`/
+ * `ctx-channels`, the accordion/control-field convention.
+ *
+ * host.params: `scope` ("" = the host default pointer environment, "touch"
+ * through `EnvironmentScope`), `density` ("compact" mounts
+ * `EnvironmentScope density="compact"`), `narrow="1"` (a 24 pt wide row so
+ * the seam computes a non-empty hitSlop — the `min-h-11` cell already lifts
+ * the height under touch), `disabled="1"`, `hover="1"` (the row's hover
+ * probes plus the render-prop `hov` marker), `overlay="highlight"` (a
+ * caller-composed `<PressableFeedback.Highlight/>` inside the row — the
+ * M-006 composition exit).
+ * `b-action` is the `selectionMode="none"` baseline: `onAction` is the only
+ * activation output.
+ * -----------------------------------------------------------------------------------------------*/
+
+type LayoutEvent = {
+  bounds: {
+    origin: { x: number; y: number };
+    size: { width: number; height: number };
+  };
+};
+
+/** A full bounds box: parent-relative origin and size, for geometry probes. */
+function boxProbe(name: string) {
+  return (event: LayoutEvent) =>
+    probe("layout")({
+      name,
+      x: event.bounds.origin.x,
+      y: event.bounds.origin.y,
+      width: event.bounds.size.width,
+      height: event.bounds.size.height,
+    });
+}
+
+/** The live `PressableFeedbackContext` the `ctx-sample` button reads. */
+let rowCtx: PressableFeedbackContextValue | null = null;
+
+function CtxProbe() {
+  const ctx = PressableFeedbackContext();
+  const reportPressed = probe("ctx-pressed");
+  const reportState = probe("ctx-state");
+  const reportEnv = probe("ctx-env");
+
+  effect(() => {
+    rowCtx = ctx;
+  });
+
+  effect(() => {
+    reportEnv({
+      enabled: ctx.enabled(),
+      hitSlop: ctx.hitSlop() ?? null,
+    });
+  });
+
+  const sample = () => {
+    void ctx.pressed.getValue().then((pressed) => {
+      void ctx.scale.getValue().then((scale) => {
+        reportState({
+          seamPressed: ctx.isPressed(),
+          pressed,
+          scale,
+          origin: ctx.pressOrigin(),
+          hitSlop: ctx.hitSlop() ?? null,
+          bounds: ctx.bounds(),
+          enabled: ctx.enabled(),
+          allDisabled: ctx.isAllAnimationsDisabled(),
+        });
+      });
+    });
+  };
+
+  effect(() => {
+    const seam = ctx.isPressed();
+    reportPressed({ seam });
+    setTimeout(sample, 600);
+    setTimeout(sample, 1500);
+  });
+
+  return <Text>{ctx.isPressed() ? "seam-pressed" : "seam-idle"}</Text>;
+}
+
+/* On-demand channel read for the negative half: a gated press never raises
+ * the seam's `isPressed` edge, so `ctx-state` alone cannot prove the channels
+ * stayed at rest — `ctx-sample` samples them after the press instead. */
+function sampleChannels() {
+  const reportChannels = probe("ctx-channels");
+  const c = rowCtx;
+  if (c === null) {
+    return;
+  }
+  void c.pressed.getValue().then((pressed) => {
+    void c.scale.getValue().then((scale) => {
+      reportChannels({
+        seamPressed: c.isPressed(),
+        pressed,
+        scale,
+        origin: c.pressOrigin(),
+        hitSlop: c.hitSlop() ?? null,
+        enabled: c.enabled(),
+      });
+    });
+  });
+}
+
+function BItemCase() {
+  const narrow = param("narrow") === "1";
+  const disabled = param("disabled") === "1";
+  const hover = param("hover") === "1";
+  const overlay = param("overlay");
+
+  return (
+    <View class="w-64">
+      <ListBox
+        aria-label="Options"
+        selectionMode="single"
+        items={MOBILE_ITEMS.slice(0, 3)}
+        onSelectionChange={onSelectionChange}
+        onLayout={boxProbe("root")}
+      >
+        {(item) => (
+          <ListBox.Item
+            id={item.id}
+            textValue={item.name}
+            aria-label={item.name}
+            isDisabled={disabled}
+            style={narrow ? { width: 24 } : undefined}
+            onPressDown={() => probe("events")("down")}
+            onPressUp={() => probe("events")("up")}
+            onPress={() => probe("events")("press")}
+            onLayout={boxProbe(`row-${item.id}`)}
+            onHoverStart={hover ? () => probe("hover")("start") : undefined}
+            onHoverEnd={hover ? () => probe("hover")("end") : undefined}
+            onHoverChange={
+              hover ? (h) => probe("hover")({ kind: "change", value: h }) : undefined
+            }
+            onMouseEnter={hover ? () => probe("hover")("enter") : undefined}
+            onMouseLeave={hover ? () => probe("hover")("leave") : undefined}
+          >
+            {(values) => [
+              <View class="flex flex-row" onLayout={boxProbe(`pad-${item.id}`)}>
+                <Label>{item.name}</Label>
+                {hover ? (
+                  <Text>{values.isHovered() ? "hov" : ""}</Text>
+                ) : null}
+              </View>,
+              overlay === "highlight" ? (
+                <PressableFeedback.Highlight testID="overlay" />
+              ) : null,
+              <CtxProbe />,
+            ]}
+          </ListBox.Item>
+        )}
+      </ListBox>
+      <View testID="ctx-sample" role="button" class="p-2" onPress={sampleChannels}>
+        <Text>ctx-sample</Text>
+      </View>
+    </View>
+  );
+}
+
+function BActionCase() {
+  return (
+    <View class="w-64">
+      <ListBox
+        aria-label="File actions"
+        selectionMode="none"
+        items={MOBILE_ITEMS.slice(0, 2)}
+        onAction={probe("onAction")}
+        onSelectionChange={onSelectionChange}
+      >
+        {(item) => (
+          <ListBox.Item id={item.id} textValue={item.name} aria-label={item.name}>
+            <Label>{item.name}</Label>
+          </ListBox.Item>
+        )}
+      </ListBox>
+    </View>
+  );
+}
+
+/* The default environment is the desktop-parity half; `scope="touch"` is the
+ * injected mobile half and `density="compact"` the density preset (sheet
+ * A-008/M-007). It wraps `Fixture` at the Root — `props.children` captures
+ * its creation scope, so an `EnvironmentScope` built mid-tree inside
+ * `Fixture` could not reach the cases (the disclosure/accordion convention). */
+function Scoped(props: { children?: JSX.Element }) {
+  const scope = param("scope");
+  const density = param("density");
+
+  return scope === "touch" || density === "compact" ? (
+    <EnvironmentScope
+      input={scope === "touch" ? "touch" : undefined}
+      density={density === "compact" ? "compact" : undefined}
+    >
+      {props.children}
+    </EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "log");
   const disabledMapping = String(host.params.disabled ?? "mapped") !== "none";
-  const scope = param("scope");
 
   if (name === "log") {
     return <PlainList mode="single" />;
@@ -1346,9 +1556,10 @@ function Fixture() {
     return <DynamicReplace />;
   }
 
-  /* f-collection cases (sheet §2 A-009). `scope=touch` wraps the whole case in
-   * `EnvironmentScope` for the M-012 injected-environment contrast; the seam
-   * is environment-agnostic, so every result must read identically. */
+  /* f-collection cases (sheet §2 A-009) and the B(项) `b-*` cases: every
+   * mobile-layer case lives here so `Scoped` at the Root wraps them all —
+   * `scope=touch` injects the touch environment, `density=compact` the
+   * preset; the seams read it identically. */
   const mobile = (() => {
     if (name === "m-items") {
       return <MobileItemsList mode="single" />;
@@ -1390,18 +1601,30 @@ function Fixture() {
       return <FCollectionFixture />;
     }
 
+    if (name === "b-item") {
+      return <BItemCase />;
+    }
+
+    if (name === "b-action") {
+      return <BActionCase />;
+    }
+
     return undefined;
   })();
 
   if (mobile !== undefined) {
-    return scope === "touch" ? (
-      <EnvironmentScope input="touch">{mobile}</EnvironmentScope>
-    ) : (
-      mobile
-    );
+    return mobile;
   }
 
   return <PlainList mode="single" />;
 }
 
-mount(Fixture);
+function Root() {
+  return (
+    <Scoped>
+      <Fixture />
+    </Scoped>
+  );
+}
+
+mount(Root);

@@ -300,7 +300,21 @@ function normalizeValidation(
  * the body would evaluate outside them, and the text parts would lose the field
  * state. The root itself has no role, like upstream's plain `<div>`.
  */
-export function TextFieldRoot(props: TextFieldRootProps): JSX.Element {
+export function TextFieldRoot(
+  props: TextFieldRootProps & {
+    /**
+     * A-005: Return / the soft keyboard's submit key fired inside the
+     * field; the payload is the input's current text (the host's native
+     * payload). The input's own `onSubmit` runs after this one — the same
+     * fan-out order `onPaste` / `onSelect` use. A `TextArea` only reaches
+     * it under an explicit `submitBehavior="submit"` / `"blurAndSubmit"`.
+     * The member lives on the component's parameter type (an additive
+     * intersection) rather than inside `TextFieldRootProps`, so the exported
+     * interface keeps its member list byte-identical.
+     */
+    onSubmit?: (event: { text: string }) => void;
+  },
+): JSX.Element {
   const [local, rest] = split(props, [
     "children",
     "className",
@@ -337,6 +351,7 @@ export function TextFieldRoot(props: TextFieldRootProps): JSX.Element {
     "onCompositionUpdate",
     "onCompositionEnd",
     "onSelect",
+    "onSubmit",
     "onFocusChange",
     "onFocus",
     "onBlur",
@@ -547,6 +562,11 @@ export function TextFieldRoot(props: TextFieldRootProps): JSX.Element {
       local.onCompositionUpdate?.(event);
     },
     onSelectionChange: (event) => local.onSelect?.(event),
+    // A-005: the field's `onSubmit`, fanned out like `onPaste` /
+    // `onSelectionChange` — the input calls it before its own. Validation
+    // is deliberately not committed here: the field's only commit point is
+    // the blur (port sheet §2), so a submit keeps that semantics.
+    onSubmit: (event) => local.onSubmit?.(event),
   };
 
   const fieldState: FieldState = {

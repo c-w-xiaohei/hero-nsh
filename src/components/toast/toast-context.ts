@@ -95,6 +95,19 @@ export interface ToastContextValue {
 
   /** Pointer left; the collapse is deferred one frame so a sibling can cancel it. */
   pointerLeave?: () => void;
+
+  /**
+   * The stack-level swipe default (`ToastProviderProps.isSwipeable`); a
+   * toast's own prop overrides it. Meaningful only where the gesture exists
+   * (`input === "touch"`).
+   */
+  isSwipeable?: Accessor<boolean>;
+
+  /** A swipe claimed a toast; the queue's timers suspend under the `"drag"` source. */
+  dragEnter?: () => void;
+
+  /** The swipe released or was terminated; the `"drag"` suspension lifts. */
+  dragLeave?: () => void;
 }
 
 /** What one toast tells its parts. */
@@ -138,6 +151,22 @@ export interface ToastItemContextValue {
 
   /** Dismisses this toast (the close button's default action). */
   close?: () => void;
+
+  /**
+   * Internal observation of the swipe seam (adapt sheet A-003): what the
+   * toast's pan gesture resolves to. `handlers` is the `panHandlers()` object
+   * — an empty object under a non-touch environment, when no listener exists
+   * at all — `active` is `createPan`'s claimed flag, `offset` the visual
+   * `translateY` the drag adds (rubber-banded against the dismiss direction),
+   * and `dragging` the consumer-side flag that stays set through the release
+   * handling `active` has already cleared.
+   */
+  swipe?: {
+    handlers: Accessor<object>;
+    active: Accessor<boolean>;
+    offset: Accessor<number>;
+    dragging: Accessor<boolean>;
+  };
 }
 
 export const ToastContext = context<ToastContextValue>({});

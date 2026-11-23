@@ -2,6 +2,8 @@ import type { Accessor, PressEvent } from "nsh";
 import { context } from "nsh";
 
 import type { InteractionModalityState } from "../../primitives";
+import type { Pan } from "../../primitives/pan";
+import type { PressFeedback } from "../../primitives/pressable";
 import type { TableColumnLayoutState, TableResizeCallbacks } from "./create-table-column-layout";
 import type { TableRegistry } from "./create-table-collection";
 import type { TableState } from "./create-table-state";
@@ -93,6 +95,28 @@ export interface TableColumnContextValue {
 }
 
 export const TableColumnContext = context<TableColumnContextValue | undefined>(
+  undefined,
+);
+
+/**
+ * What `Table.ColumnResizer` provides to its own children: the seam handles
+ * the mobile layer wires in — the touch-gated `createPressFeedback` (whose
+ * `hitSlop` half-channel widens the 17 px band's hit area) and the touch
+ * `createPan` whose `panHandlers()` spread mounts the horizontal-claim
+ * gesture. Exposing them lets an element inside the hit area observe the
+ * same channels the adapt sheet's ctx probes assert (`enabled`, computed
+ * `hitSlop`, `panHandlers()` key count, `pan.active()`); under the default
+ * pointer environment both report their resting values, so nothing leaks
+ * into the desktop contract.
+ */
+export interface TableResizerContextValue {
+  /** The gate both seams share: `input() === "touch"`. */
+  enabled: Accessor<boolean>;
+  feedback: PressFeedback;
+  pan: Pan;
+}
+
+export const TableResizerContext = context<TableResizerContextValue | undefined>(
   undefined,
 );
 

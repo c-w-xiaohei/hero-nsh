@@ -2,7 +2,16 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, shadow } from "../../tokens/geometry";
+// `ease.outFluid`, `ease.smooth` and `shadow.overlay.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker loads a
+// `.styles.ts` through Node ESM, which resolves neither an extensionless
+// relative import nor a `.ts` one, so a styles file imports only
+// `tailwind-variants` (same ruling as switch/toolbar). Keep in sync with
+// `EASE_VALUES` and `SHADOW_VALUES.overlay`.
+const EASE_OUT_FLUID = "ease-[cubic-bezier(0.32,0.72,0,1)]";
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const SHADOW_OVERLAY_BOTH =
+  "shadow-[0_2px_8px_0_rgba(0,0,0,0.06),0_-6px_12px_0_rgba(0,0,0,0.03),0_14px_28px_0_rgba(0,0,0,0.08)] dark:shadow-[0_0_1px_0_rgba(255,255,255,0.3)_inset]";
 
 /**
  * Toast's variant table, mirroring `@heroui/styles` 3.2.7
@@ -57,7 +66,7 @@ export const toastVariants = tv({
     // duration, so the 150ms opacity half is registered in §8.
     // R-033: `.toast:focus-visible` → `outline-2 outline-offset-2 outline-focus`.
     toast:
-      `group absolute start-0 end-0 flex flex-row items-start justify-start gap-x-1.5 rounded-3xl pointer-events-auto bg-surface px-4 py-3 ${shadow.overlay.both} ${ease.outFluid} focus:outline-2 focus:outline-offset-2 focus:outline-focus`,
+      `group absolute start-0 end-0 flex flex-row items-start justify-start gap-x-1.5 rounded-3xl pointer-events-auto bg-surface px-4 py-3 ${SHADOW_OVERLAY_BOTH} ${EASE_OUT_FLUID} focus:outline-2 focus:outline-offset-2 focus:outline-focus`,
 
     // R-023: `.toast > :not([data-slot="toast-close"])` → `transition: opacity
     // 200ms`; the descendant selector becomes the same three classes on the
@@ -65,7 +74,7 @@ export const toastVariants = tv({
     // R-034: `.toast__content` → `col-start-2 row-start-1 flex min-w-0
     // flex-col items-start self-center`.
     content:
-      `flex-auto flex min-w-0 flex-col items-start gap-y-2 self-center transition-opacity duration-200 ${ease.outFluid} motion-reduce:transition-none`,
+      `flex-auto flex min-w-0 flex-col items-start gap-y-2 self-center transition-opacity duration-200 ${EASE_OUT_FLUID} motion-reduce:transition-none`,
 
     // R-035: `.toast__indicator` → `col-start-1 row-start-1 flex shrink-0
     // items-center justify-center p-1 text-overlay-foreground select-none`.
@@ -73,7 +82,7 @@ export const toastVariants = tv({
     // R-039: the swapped-icon keyframes become a transition pair on the
     // indicator's child; the class pair is applied by the indicator itself.
     indicator:
-      `flex shrink-0 items-center justify-center p-1 text-overlay-foreground select-none transition-opacity duration-200 ${ease.outFluid} motion-reduce:transition-none`,
+      `flex shrink-0 items-center justify-center p-1 text-overlay-foreground select-none transition-opacity duration-200 ${EASE_OUT_FLUID} motion-reduce:transition-none`,
 
     // R-040: `.toast__title` → `text-sm leading-5 font-medium
     // text-overlay-foreground`.
@@ -86,7 +95,7 @@ export const toastVariants = tv({
     // sm:col-start-3 sm:row-start-1`.
     // R-023 again for the action slot.
     action:
-      `transition-opacity duration-200 ${ease.outFluid} motion-reduce:transition-none`,
+      `transition-opacity duration-200 ${EASE_OUT_FLUID} motion-reduce:transition-none`,
 
     // R-042: `.toast__close-button` → `pointer-events-none absolute -end-1
     // -top-1 size-5 border-border bg-default opacity-0 sm:border sm:bg-overlay`;
@@ -96,7 +105,7 @@ export const toastVariants = tv({
     // reduced motion.
     // R-045: `@media (hover: hover) &:hover` → `hover:bg-default`.
     close:
-      `pointer-events-none absolute -end-1 -top-1 size-5 p-0 border-border bg-default opacity-0 sm:border sm:bg-overlay transition-opacity duration-150 ${ease.smooth} motion-reduce:transition-none hover:bg-default`,
+      `pointer-events-none absolute -end-1 -top-1 size-5 p-0 border-border bg-default opacity-0 sm:border sm:bg-overlay transition-opacity duration-150 ${EASE_SMOOTH} motion-reduce:transition-none hover:bg-default`,
   },
   variants: {
     placement: {

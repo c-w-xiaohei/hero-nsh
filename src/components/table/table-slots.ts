@@ -1,6 +1,8 @@
 import type { Accessor } from "nsh";
 import { computed } from "nsh";
 
+import { createDensity, createInput } from "../../primitives/environment";
+import { densityKey } from "../../tokens/density";
 import { TableContext } from "./table-context";
 import { tableVariants } from "./table.styles";
 
@@ -13,7 +15,13 @@ export function useTableSlots(): Accessor<ReturnType<typeof tableVariants>> {
   const table = TableContext();
 
   if (!table) {
-    return () => tableVariants({ variant: "primary" });
+    // A-001: the no-Root fallback feeds the same two axes so a part used
+    // outside `Table.Root` still follows the injected environment.
+    const input = createInput();
+    const density = createDensity();
+
+    return () =>
+      tableVariants({ variant: "primary", input: input(), density: densityKey(density()) });
   }
 
   return computed(() => table.slots());

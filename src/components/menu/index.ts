@@ -54,6 +54,15 @@ export type Menu<T extends object = object> = {
   SectionProps: MenuSectionRootProps;
 };
 
+// A-011: the harness-side 接轴 spot of adapt-sheets/menu.md §2 — the
+// `Scoped` EnvironmentScope carrier, the `m-*`/`f-*` cases and the
+// `ctx`/`hitSlop`/`events`/`registry`/`data` probes — is realized outside
+// this directory: `harness/menu.fixtures.tsx` plus
+// `harness/tests/components/menu/menu.mobile*.test.tsx` (M-001…M-017).
+// The export surface itself is unchanged (sheet §1). The gate's marker
+// scan only sees `src/components/menu/`, so the record lives here
+// (typography/index.ts precedent).
+
 /* -------------------------------------------------------------------------------------------------
  * Named components and their props
  * -----------------------------------------------------------------------------------------------*/

@@ -12,6 +12,7 @@ import type {
 } from "nsh";
 import { cleanup, computed, effect, signal, split, untracked } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { joinClassNames } from "./class-names";
 import {
   type AriaProps,
@@ -364,6 +365,10 @@ export function SearchFieldInput(props: SearchFieldInputProps): JSX.Element {
   const group = SearchFieldGroupContext();
   const bindings = field?.input;
 
+  // A-003: the `input` axis — under touch the input's hover state stays off
+  // (the `input` axis owns "no hover dependence").
+  const input = createInput();
+
   // --- Effective state ------------------------------------------------------
   const isDisabled = computed(() => local.disabled ?? bindings?.isDisabled() ?? false);
 
@@ -613,7 +618,12 @@ export function SearchFieldInput(props: SearchFieldInputProps): JSX.Element {
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
-    if (isDisabled() || hovered()) {
+    // A-003: under touch the `hovered` signal and the `useHover` callbacks
+    // stay off entirely, so web's sticky hover cannot leave `isHovered` true
+    // after a press. `onMouseEnter` still reported above: it is a host event,
+    // not a `useHover` callback. `useHover({ isDisabled })`: disabled inputs
+    // never hover.
+    if (input() === "touch" || isDisabled() || hovered()) {
       return;
     }
 

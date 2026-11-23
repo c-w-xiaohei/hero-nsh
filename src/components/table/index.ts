@@ -1,3 +1,16 @@
+// A-010: the harness-side 接轴 spot of adapt sheet table.md is realized
+// outside this directory — `harness/table.fixtures.tsx` (the `ScopedMobile`
+// wrapper feeding `host.params.input`/`density` into `EnvironmentScope` plus
+// the `rows`/`sortable`/`resizable`/`ctx-probe`/`events`/`layout` cases and
+// their seam probes) and `harness/tests/components/table/
+// table.mobile.test.tsx` + `table.mobile.headless.test.tsx` (the
+// desktop-pinned, dual-environment M-001…M-014 assertions, plus the
+// drag-arbitration and `platform:"ios"` host-derivation halves). The gate's
+// marker scan only sees `src/components/table/`, so the record lives here.
+// The seams those probes read are the `input`/`density` axes in
+// `table.styles.ts` (A-001/A-006), the press-feedback chain in `table-row.tsx`
+// / `table-column.tsx` (A-002/A-003), and the resizer hit-area/pan seams in
+// `table-column-resizer.tsx` (A-004/A-005).
 import { TableRoot } from "./table-root";
 import type { TableRootProps } from "./table-root";
 import {
