@@ -1,3 +1,13 @@
+// A-012 / A-013: the two harness-side 接轴 spots of adapt sheet dropdown.md
+// are realized outside this directory — `harness/dropdown.fixtures.tsx`
+// (the `Scoped` wrapper feeding `host.params.input`/`width`/`density` into
+// `EnvironmentScope`, the `mobile`/`mobile-submenu` cases, and the
+// `-panel`/`-sheet`/`ctx-*`/`layout`/`events`/`panKeys`/`scrollKeys`
+// seam probes) and `harness/tests/components/dropdown/dropdown.mobile.test.tsx`
+// + `dropdown.mobile.headless.test.tsx` (the desktop-pinned, dual-environment
+// M-001…M-017 assertions, plus the `platform:"ios"` host-derivation half).
+// The gate's marker scan only sees `src/components/dropdown/`, so the record
+// lives here; each site carries its own A-012/A-013 annotations.
 import {
   DropdownItem,
   type DropdownItemProps,
