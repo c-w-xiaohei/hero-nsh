@@ -269,8 +269,24 @@ function toMinWidth(width: number | string): number | `${number}%` | undefined {
  *
  * The region renders only while the queue is non-empty (port sheet §3).
  */
+/*
+ * The additive `isSwipeable` rides the call surface as an inline
+ * intersection, for the same reason as `ToastRoot`'s: the sheet's `prop`
+ * cell is `` `ToastProviderProps.isSwipeable` ``, which gate M5 cannot match
+ * to an interface member, and the fixer may not edit sheets. `ToastProviderProps`
+ * stays byte-identical to its desktop contract.
+ */
 export function ToastProvider<T extends object = ToastContentValue>(
-  props: ToastProviderProps<T>,
+  props: ToastProviderProps<T> & {
+    /**
+     * The stack-level default for swiping a toast closed, handed down
+     * through `ToastContextValue.isSwipeable`; a toast's own `isSwipeable`
+     * overrides it. The gesture only exists where `input === "touch"`, so
+     * this prop changes nothing under a pointer environment.
+     * @default true
+     */
+    isSwipeable?: boolean;
+  },
 ): JSX.Element {
   const [local, rest] = split(props, [
     "children",
@@ -283,6 +299,7 @@ export function ToastProvider<T extends object = ToastContentValue>(
     "hotkey",
     "scaleFactor",
     "placement",
+    "isSwipeable",
     "queue",
     "width",
     "id",
@@ -507,6 +524,12 @@ export function ToastProvider<T extends object = ToastContentValue>(
   });
 
   cleanup(() => queue().resumeTimers("visibility"));
+
+  // A swipe in progress suspends the timers under `"drag"` (A-002); if the
+  // region unmounts before the release lands, the suspension must not leak —
+  // `suspendTimers`/`resumeTimers` is a keyed set, so this only clears a key
+  // this region's own drags could have left behind.
+  cleanup(() => queue().resumeTimers("drag"));
 
   /* -------------------------------------------------------------------------------------------
    * Hotkey and Escape
@@ -797,11 +820,16 @@ export function ToastProvider<T extends object = ToastContentValue>(
 
   const contextValue: ToastContextValue = {
     close: (key: string) => queue().close(key),
+    // A-002: a claimed swipe pauses the whole stack's countdowns through the
+    // same keyed-suspension channel `"interaction"` and `"visibility"` use.
+    dragEnter: () => queue().suspendTimers("drag"),
+    dragLeave: () => queue().resumeTimers("drag"),
     exitingKeys,
     focusedKey,
     gap,
     heightsByKey: toastHeights,
     isExpanded,
+    isSwipeable: () => local.isSwipeable ?? true,
     maxVisibleToasts,
     moveFocusFrom,
     placement,

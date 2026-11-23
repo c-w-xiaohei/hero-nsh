@@ -2,6 +2,7 @@ import type { JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh";
 import { cleanup, computed, signal, split, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives";
+import { createInput } from "../../primitives/environment";
 import { renderPartChildren, textOf } from "./table-children";
 import {
   TableRowContext,
@@ -110,6 +111,10 @@ export function TableCell(props: TableCellProps) {
 
   const isHovered = signal(false);
   const isPressed = signal(false);
+
+  // A-006: the `input` axis gates the hover writes — a cell has no press
+  // surface of its own (the press belongs to its row, see the claim chain).
+  const input = createInput();
 
   const isSelected = computed(() => state.isSelected(rowKey));
   // The selection manager covers `disabledKeys` and `disabledBehavior` (§1);
@@ -294,11 +299,17 @@ export function TableCell(props: TableCellProps) {
         local.onBlur?.();
       }}
       onMouseEnter={(event) => {
-        isHovered.set(true);
+        // A-006: under touch the hover state stays off; the raw host
+        // callbacks still forward.
+        if (input() !== "touch") {
+          isHovered.set(true);
+        }
         local.onMouseEnter?.(event);
       }}
       onMouseLeave={(event) => {
-        isHovered.set(false);
+        if (input() !== "touch") {
+          isHovered.set(false);
+        }
         local.onMouseLeave?.(event);
       }}
       onPressDown={handlePressDown}

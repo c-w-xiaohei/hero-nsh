@@ -2,6 +2,8 @@ import type { Bounds, JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh
 import { cleanup, computed, effect, reduceMotion, signal, split, untracked, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { DateInputGroupContext } from "../date-input-group/date-input-group-context";
 import { DatePickerContext } from "./date-picker-context";
 import { renderChildren } from "./render-children";
@@ -186,6 +188,19 @@ export function DatePickerTrigger(props: DatePickerTriggerProps): JSX.Element {
   // `isDisabled` is the union of the two (port sheet §1.3).
   const isDisabled = computed(() => local.isDisabled === true || picker.isDisabled());
 
+  // A-005: the press-feedback seam, gated on `input() === "touch"` and the
+  // disabled flag — under a pointer environment it is a physical no-op, so
+  // the desktop event chain below is untouched (`hitSlop()` answers
+  // `undefined`, `pressDown`/`pressUp` only forward `onPressChange`, which
+  // is not passed). Only the `hitSlop`/`layout`/press-forward half is
+  // consumed: the icon box is ~24pt and the slop is the invisible path to
+  // the 44pt touch minimum — no scale/highlight/ripple binds here because
+  // this pressable's visual state introduces no new contract (adapt sheet
+  // A-005).
+  const input = createInput();
+  const enabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({ enabled });
+
   // The group suppresses its ring while a trigger holds the focus; the picker
   // counts the trigger's focus as its own `isFocusWithin` (port sheet §2).
   cleanup(group.registerTriggerFocus(focused));
@@ -270,7 +285,15 @@ export function DatePickerTrigger(props: DatePickerTriggerProps): JSX.Element {
       // `aria-expanded` / `aria-haspopup`: the picker's state, as
       // `useOverlayTrigger`'s triggerProps report them.
       accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel ?? "Calendar"}
-      onLayout={local.onLayout}
+      // A-005: `bounds` feeds `hitSlop` and `scale`, so the seam reads the
+      // layout first; the caller's `onLayout` keeps its slot right after.
+      onLayout={(event) => {
+        feedback.layout(event);
+        local.onLayout?.(event);
+      }}
+      // A-005: the view-prop half of the hit area — the seam's computed
+      // slop, `undefined` while gated off or the box is already at target.
+      hitSlop={feedback.hitSlop()}
       accessibilityState={{ expanded: picker.isOpen(), disabled: isDisabled() }}
       class={classes()}
       classList={classList()}
@@ -290,6 +313,10 @@ export function DatePickerTrigger(props: DatePickerTriggerProps): JSX.Element {
           return;
         }
 
+        // A-005: after the disabled early-out, before the channel's own
+        // notes — a gated (pointer) call is a no-op inside.
+        feedback.pressDown(event);
+
         notePress(event);
 
         if (!pressed()) {
@@ -300,13 +327,18 @@ export function DatePickerTrigger(props: DatePickerTriggerProps): JSX.Element {
         local.onPressStart?.(event);
       }}
       onPressUp={(event) => {
-        if (isDisabled()) {
-          return;
-        }
-
         if (pressed()) {
           pressed.set(false);
           local.onPressChange?.(false);
+        }
+
+        // A-005: end and cancel share `onPressUp`; the seam resets here,
+        // before the disabled early-out, so a press a disable flip stranded
+        // still completes its round-trip.
+        feedback.pressUp(event);
+
+        if (isDisabled()) {
+          return;
         }
 
         local.onPressUp?.(event);

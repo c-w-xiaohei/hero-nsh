@@ -9,6 +9,7 @@ import type {
 } from "nsh";
 import { computed, reduceMotion, signal, split, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { joinClassNames } from "./class-names";
 import { NumberFieldContext } from "./context";
 import {
@@ -158,6 +159,12 @@ export function NumberFieldGroup(props: NumberFieldGroupProps): JSX.Element {
   // over it, as React Aria's merge does (port sheet §1.3).
   const field = NumberFieldContext();
 
+  // A-002 / A-005: the `input` axis — the field's accessor when the group sits
+  // in a root, the environment's own for a standalone group. It gates the
+  // hover writes below and (through the field) the column template.
+  const envInput = createInput();
+  const input = () => field?.input() ?? envInput();
+
   const isDisabled = computed(() => local.isDisabled ?? field?.isDisabled() ?? false);
   const isInvalid = computed(
     () =>
@@ -174,6 +181,13 @@ export function NumberFieldGroup(props: NumberFieldGroupProps): JSX.Element {
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
+    // A-005: the `input` axis owns hover independence — under touch the hover
+    // state and the `onHover*` callbacks stay off entirely (the date-input-group
+    // A-002 rule), while the host's own `onMouseEnter` still forwards.
+    if (input() === "touch") {
+      return;
+    }
+
     // React Aria's `useHover({ isDisabled })`: a disabled group never hovers.
     if (isDisabled() || hovered()) {
       return;
@@ -186,6 +200,10 @@ export function NumberFieldGroup(props: NumberFieldGroupProps): JSX.Element {
 
   const handleMouseLeave = (event: NshMouseEvent) => {
     local.onMouseLeave?.(event);
+
+    if (input() === "touch") {
+      return;
+    }
 
     if (!hovered()) {
       return;
@@ -201,16 +219,22 @@ export function NumberFieldGroup(props: NumberFieldGroupProps): JSX.Element {
     const decrement = field?.hasDecrement() ?? false;
     const increment = field?.hasIncrement() ?? false;
 
+    // A-003: the column width follows the `input` axis — the context's
+    // `slots.groupCols()` length (40 px pointer, 44 px touch; the slot itself
+    // carries the `w-10`/`w-11` class and the root maps it). A lone group
+    // keeps the pointer width, as the `pointer` default cell produces it.
+    const col = field?.slots.groupCols() ?? "40px";
+
     if (decrement && increment) {
-      return "grid-cols-[40px_1fr_40px]";
+      return `grid-cols-[${col}_1fr_${col}]`;
     }
 
     if (decrement) {
-      return "grid-cols-[40px_1fr]";
+      return `grid-cols-[${col}_1fr]`;
     }
 
     if (increment) {
-      return "grid-cols-[1fr_40px]";
+      return `grid-cols-[1fr_${col}]`;
     }
 
     return "grid-cols-1";

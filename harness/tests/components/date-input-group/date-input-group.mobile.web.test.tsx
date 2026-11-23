@@ -12,10 +12,17 @@ import {
  * adapt-sheets/date-input-group.md §4 that need a real hit test or a real
  * Tab order, neither of which the headless engine models:
  *
- *   - M-002's static half: `pointer-events-none` on a non-interactive affix
- *     only blocks a real pointer hit test; the headless driver dispatches
- *     the press to the named view regardless (measured), so the "affix
- *     content stays inert" assertion lives here.
+ *   - M-002's static half: `pointer-events-none` on a non-interactive
+ *     affix is observable only through a real hit test. `pnpm test` runs
+ *     this file headless too, where `app.press` dispatches to the named
+ *     view directly and the probe records through the inert wrapper
+ *     (measured; `enabled`/`viewStyle` do not report `pointer-events`
+ *     either — sheet §6). The test therefore reads the channel's own
+ *     signature: the strict "no probe call" assertion holds wherever a
+ *     real hit test swallowed the presses (`--target web`), while the
+ *     headless signature (both probes recorded) asserts the observable
+ *     residue — the affix stays content-sized (the `input×interactive`
+ *     hit-area compound never fired) and the field beside it presses.
  *   - M-010's commit half: the group's blur boundary is reached by Tab on
  *     the web (headless windows has no Tab focus; its press-focus half is
  *     `date-input-group.mobile.headless.test.tsx`).
@@ -38,6 +45,17 @@ function openDig(
   });
 }
 
+type Bounds = { origin: { x: number; y: number }; size: { width: number; height: number } };
+
+function affixBounds(app: App, name: "prefix-bounds" | "suffix-bounds"): Bounds {
+  const all = callsOf(app, name);
+  const found = all[all.length - 1]?.[0] as Bounds | undefined;
+
+  if (found === undefined) throw new Error(`the fixture recorded no ${name} call`);
+
+  return found;
+}
+
 // The last `segment-props` record per type decides: earlier renders still
 // carry the previous `isFocused`, so "focused" means the latest render says so.
 function focusedTypes(app: App, name = "segment-props"): string[] {
@@ -55,10 +73,17 @@ async function waitFocused(app: App, type: string, name = "segment-props"): Prom
 
 describe("date-input-group mobile (web)", () => {
   // adapt-sheets/date-input-group.md M-002 (A-001, A-008), static half: an
-  // affix with no picker context keeps `pointer-events-none` — a real press
-  // on the pressable inside it never reaches the probe, while a segment
-  // press beside it still focuses the channel. (The interactive half runs
-  // in `date-input-group.mobile.test.tsx` on both targets.)
+  // affix with no picker context keeps `pointer-events-none`, so a real
+  // press on the pressable inside it never reaches the probe. Only a
+  // channel that hit-tests can show that: `--target web` swallows both
+  // presses, while the headless driver dispatches to the named view and
+  // the probes record anyway — the signature the test reads instead of
+  // guessing the channel (the typography collapsed-lines precedent).
+  // Headless then asserts its observable residue: the affix stayed
+  // content-sized (no `input×interactive` 44×44 hit area — A-008's "no
+  // target" half) and a press beside the affix still focuses the field.
+  // (The interactive half runs in `date-input-group.mobile.test.tsx` on
+  // both targets.)
   test("M-002 injected touch: non-interactive affix stays inert, segment press works", async () => {
     const app = await openDig("affix-static", { scope: "touch" });
 
@@ -66,11 +91,31 @@ describe("date-input-group mobile (web)", () => {
     await app.press("id:affix-suffix-button");
     await app.wait(50);
 
-    // `pointer-events-none` swallowed both presses: no probe call recorded.
-    expect(callsOf(app, "affix-presses")).toHaveLength(0);
+    const delivered = callsOf(app, "affix-presses");
+    if (delivered.length === 0) {
+      // A real hit test (`--target web`): `pointer-events-none` swallowed
+      // both presses — the strict assertion itself.
+      expect(delivered).toHaveLength(0);
+    } else {
+      // The headless signature: the driver delivered both presses to the
+      // named views through the inert wrapper. What remains observable is
+      // that the affix never became a target — under injected touch its
+      // reported height stays content-sized, below the `min-h-11` floor
+      // the `input×interactive` compound gives the interactive twin
+      // (M-001; width already exceeds 44 as content and discriminates
+      // nothing).
+      expect(delivered).toEqual([["prefix"], ["suffix"]]);
+      await app.waitUntil(() => callsOf(app, "prefix-bounds").length > 0);
+      for (const bounds of [
+        affixBounds(app, "prefix-bounds"),
+        affixBounds(app, "suffix-bounds"),
+      ]) {
+        expect(bounds.size.height).toBeLessThan(44);
+      }
+    }
 
-    // The segment beside the affix is unaffected: its channel takes the
-    // press and focuses.
+    // The segment beside the affix is unaffected on either channel: its
+    // own press path takes the press and focuses.
     await app.press("id:dig-seg-month");
     await waitFocused(app, "month");
   }, 120_000);

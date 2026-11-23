@@ -12,6 +12,7 @@ import type {
 import {
   cleanup,
   computed,
+  createAnimatedValue,
   reduceMotion,
   signal,
   split,
@@ -26,6 +27,12 @@ import {
   type SelectionBehavior,
   type SelectionMode,
 } from "../../primitives";
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { renderTagChildren, deriveTagTextValue } from "./tag-children";
 import {
   TagContext,
@@ -329,8 +336,12 @@ export function TagRoot(props: TagRootProps): JSX.Element {
     allowsRemoving: group.allowsRemoving,
   };
 
+  // A-001: the `input` axis of the surrounding environment, feeding the tv()
+  // table below — read from `Environment`, never a prop or `platform`.
+  const input = createInput();
+
   const slots = computed(() =>
-    tagVariants({ size: group.size(), variant: group.variant() }),
+    tagVariants({ size: group.size(), variant: group.variant(), input: input() }),
   );
 
   /* --- Classes ------------------------------------------------------------- */
@@ -377,7 +388,11 @@ export function TagRoot(props: TagRootProps): JSX.Element {
     // R-013 / R-014 / R-019 / R-021: the selected look and the one hover
     // background that applies to this row.
     "bg-accent-soft text-accent-soft-foreground": isSelected(),
-    [hoverClass()]: true,
+    // A-004: the `hover:` class is only produced under pointer — `hover:` is
+    // host-resolved and web keeps it painted after a touch press (the
+    // sticky-hover gap), so gating the signal alone cannot clear it. Under
+    // pointer the entry is byte-for-byte the pre-axis one.
+    [hoverClass()]: input() === "pointer",
   }));
 
   // R-006: `transition: color 100ms …, scale …, opacity …, background-color …,
@@ -431,6 +446,39 @@ export function TagRoot(props: TagRootProps): JSX.Element {
       selectable.allowsSelection() &&
       group.selectionBehavior() === "replace",
   );
+
+  // A-002: the touch-only press-feedback seam — `hitSlop` is the invisible
+  // half of the 44 pt hit target (a view prop tv() cannot produce). It only
+  // opens on a real press target: a static row (selection "none" and no
+  // action, like upstream's label-only tags) keeps `hitSlop()` undefined.
+  // `enabled` folds `isDisabled` in, so under the default pointer environment
+  // every channel rests — the desktop-zero-change half.
+  // The `scale`/`pressed`/`highlightOpacity` channels stay unbound: upstream's
+  // `:active` block on `.tag` is empty (R-012) and the Native item has no
+  // press animation, so nothing new paints on the desktop.
+  const feedbackEnabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({
+    enabled: feedbackEnabled,
+    hitSlop: () => allowsActions() || selectable.allowsSelection(),
+  });
+
+  // A-005: the seam's read half rides `PressableFeedbackContext` — the same
+  // context `PressableFeedback`'s own root provides — so a `PressableFeedback`
+  // part composed into the row's children, or a probe in
+  // `harness/tag.fixtures.tsx`, reads the live channels. No overlay mounts by
+  // default; `highlightOpacity`/`rippleProgress` are parked at rest.
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: feedbackEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
 
   const activate = (
     source: "pointer" | "keyboard",
@@ -531,6 +579,10 @@ export function TagRoot(props: TagRootProps): JSX.Element {
     // the keyboard ring even though no new focus event follows.
     group.notePointer();
 
+    // A-002: the seam records the press at the same point the held flag is
+    // set — gated off under pointer it does nothing at all.
+    feedback.pressDown(event);
+
     if (!selectable.isDisabled()) {
       pointerPressed.set(true);
       // macOS / web: give the list the focus so the arrows keep working after
@@ -549,6 +601,13 @@ export function TagRoot(props: TagRootProps): JSX.Element {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-002: unconditional, before the keyboard early-out — release and
+    // cancel share `onPressUp`, and a synthetic release can carry the
+    // zero-position payload `isKeyboardPress` reads (a held-drop release
+    // reports it). `pressUp` clears `pressOrigin` on every end, so a press
+    // that engaged under touch can never leave the seam stuck down.
+    feedback.pressUp(event);
+
     if (isKeyboardPress(event)) {
       return;
     }
@@ -575,7 +634,11 @@ export function TagRoot(props: TagRootProps): JSX.Element {
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
-    if (selectable.isDisabled() || isHovered()) {
+    // A-004: under touch there is no hover — `isHovered` never sets and the
+    // hover callbacks never fire, so neither the marker nor a `hover:` class
+    // can light up (upstream's `@media (hover: hover)` parity). The host
+    // `onMouseEnter` prop above still hears the event.
+    if (input() === "touch" || selectable.isDisabled() || isHovered()) {
       return;
     }
 
@@ -590,6 +653,16 @@ export function TagRoot(props: TagRootProps): JSX.Element {
     // cancels on leave.
     pointerPressed.set(false);
 
+    // A-002: the seam hears the same cancel — the host reports release and
+    // cancel alike, and `pressUp` clears an in-flight touch press (`pressUp`
+    // reads no field off the event, so the pointer payload is rebuilt here).
+    feedback.pressUp({
+      position: event.position,
+      pagePosition: event.pagePosition,
+      modifiers: event.modifiers,
+      clickCount: 1,
+    });
+
     if (!isHovered()) {
       return;
     }
@@ -597,6 +670,13 @@ export function TagRoot(props: TagRootProps): JSX.Element {
     isHovered.set(false);
     local.onHoverEnd?.(event);
     local.onHoverChange?.(false);
+  };
+
+  // A-003: the seam's `bounds` feed `hitSlop` and the scale coefficient; the
+  // caller's `onLayout` keeps its payload and position.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    feedback.layout(event);
+    local.onLayout?.(event);
   };
 
   const handleFocus = () => {
@@ -674,46 +754,53 @@ export function TagRoot(props: TagRootProps): JSX.Element {
   // the row keeps one child and the visual gap is unchanged.
   return (
     <TagContext.Provider value={tagContext}>
-      <View
-        {...rest}
-        ref={(next) => {
-          node = next;
-          local.ref?.(next);
-        }}
-        testID={local.testID}
-        nativeID={local.id != null ? String(local.id) : local.nativeID}
-        tooltip={local.tooltip}
-        role="row"
-        // Tags are virtual-focus rows: the list is the only Tab stop.
-        focusable={false}
-        disabled={isDisabled()}
-        accessibilityLabel={accessibilityLabel()}
-        accessibilityHint={local.accessibilityHint}
-        accessibilityState={accessibilityState()}
-        accessibilityElementsHidden={
-          local["aria-hidden"] ?? local.accessibilityElementsHidden
-        }
-        class={classes()}
-        classList={classList()}
-        style={[{ transitionProperty: transitionProperty() }, resolvedStyle()]}
-        onPress={handlePress}
-        onPressDown={handlePressDown}
-        onPressUp={handlePressUp}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        onLayout={local.onLayout}
-      >
-        <View role="cell" class="flex items-center gap-1">
-          <TagContent
-            read={() => local.children}
-            renderProps={renderProps}
-            registerText={registerText}
-            renderRemoveButton={renderRemoveButton}
-          />
+      {/* A-005: the provider wraps the root View outright — a Provider nested
+          inside the View leaves children outside its scope on the web host. */}
+      <PressableFeedbackContext.Provider value={feedbackValue}>
+        <View
+          {...rest}
+          ref={(next) => {
+            node = next;
+            local.ref?.(next);
+          }}
+          testID={local.testID}
+          nativeID={local.id != null ? String(local.id) : local.nativeID}
+          tooltip={local.tooltip}
+          role="row"
+          // Tags are virtual-focus rows: the list is the only Tab stop.
+          focusable={false}
+          disabled={isDisabled()}
+          accessibilityLabel={accessibilityLabel()}
+          accessibilityHint={local.accessibilityHint}
+          accessibilityState={accessibilityState()}
+          accessibilityElementsHidden={
+            local["aria-hidden"] ?? local.accessibilityElementsHidden
+          }
+          class={classes()}
+          classList={classList()}
+          style={[{ transitionProperty: transitionProperty() }, resolvedStyle()]}
+          // A-003: the seam's computed hitSlop is the only writer of this view
+          // prop — components never set a literal and never take a hitSlop prop.
+          hitSlop={feedback.hitSlop()}
+          onPress={handlePress}
+          onPressDown={handlePressDown}
+          onPressUp={handlePressUp}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          onLayout={handleLayout}
+        >
+          <View role="cell" class="flex items-center gap-1">
+            <TagContent
+              read={() => local.children}
+              renderProps={renderProps}
+              registerText={registerText}
+              renderRemoveButton={renderRemoveButton}
+            />
+          </View>
         </View>
-      </View>
+      </PressableFeedbackContext.Provider>
     </TagContext.Provider>
   );
 }

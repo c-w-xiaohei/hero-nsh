@@ -1,3 +1,12 @@
+// A-010: the harness-side 接轴 spot of adapt sheet input-otp.md is realized
+// outside this directory — `harness/input-otp.fixtures.tsx` (`Scoped` feeds
+// `host.params.scope="touch"` into `EnvironmentScope` and mounts the
+// `basic`/`complete`/`readonly`/`disabled`/`autocomplete`/`keyboard-type`/
+// `return-key`/`layout` cases with events and layout probes). The gate's
+// marker scan only sees `src/components/input-otp/`, so the record lives
+// here. The environment seam it probes — the `input` axis resolved in this
+// directory's styles/root — is covered by the `// A-001` markers in
+// `input-otp.styles.ts` and `input-otp-root.tsx`.
 import { InputOTPGroup } from "./input-otp-group";
 import type { InputOTPGroupProps } from "./input-otp-group";
 import { InputOTPRoot } from "./input-otp-root";

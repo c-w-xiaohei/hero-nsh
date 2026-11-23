@@ -41,6 +41,9 @@ export const inputVariants = tv({
   ].join(" "),
   defaultVariants: {
     fullWidth: false,
+    // A-001: a bare call still lands on the pointer cell, byte-identical to
+    // what the table produced before the axis existed.
+    input: "pointer",
     variant: "primary",
   },
   variants: {
@@ -56,6 +59,17 @@ export const inputVariants = tv({
     variant: {
       primary: "",
       secondary: "shadow-none bg-default",
+    },
+    // A-001: the `input` axis of the encapsulation model — `input` owns
+    // interaction usability. `touch` adds `min-h-11` so the `py-2` 40 pt
+    // line height becomes the 44 pt touch target (the same value the
+    // button-family units take); `min-h` does not pin `h`, so a caller's
+    // explicit height still wins. `pointer` is empty, so the default
+    // environment sees no change. No `density` axis: the line height is the
+    // hit face, not a spacing preset.
+    input: {
+      pointer: "",
+      touch: "min-h-11",
     },
   },
   /*

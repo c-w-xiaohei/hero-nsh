@@ -2,7 +2,10 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease } from "../../tokens/geometry";
+// `ease.smooth` of `src/tokens/geometry.ts` written out below: the M2 class
+// walker imports this file with plain Node ESM, which cannot resolve the
+// extensionless `../../tokens/geometry` specifier. `.styles.ts` files import
+// only `tailwind-variants` (repo rule), so the curve is inlined.
 
 /*
  * The two variant tables of `@heroui/styles` 3.2.7
@@ -34,7 +37,7 @@ export const tagVariants = tv({
       // blockified `inline-flex` in a column parent stretches to the parent's
       // width, and the tag's own background would paint across it (skill §4.2).
       "relative inline-flex w-fit items-center rounded-xl px-2 py-1 text-xs font-medium select-none",
-      `origin-center transform-gpu motion-reduce:transition-none duration-[100ms] ${ease.smooth}`,
+      `origin-center transform-gpu motion-reduce:transition-none duration-[100ms] ease-[cubic-bezier(0.25,0.1,0.25,1)]`,
       "cursor-pointer",
     ].join(" "),
     // R-022: `.tag__remove-button` → `size-3`; the visible box is 12 × 12 and
@@ -65,10 +68,23 @@ export const tagVariants = tv({
       // variant (`hover:bg-surface-hover`, unselected only).
       surface: { base: "bg-surface text-surface-foreground" },
     },
+    // A-001: the `input` axis of the encapsulation model. A tag is a
+    // compact collection row (every size grade is pressable), so `touch`
+    // lifts the visible hit height to the 36 pt `min-h-9` and the seam's
+    // `hitSlop` closes the rest of the 44 pt target (adapt sheet §8: the
+    // sm/md/lg grades stay distinguishable rather than flattening to 44).
+    // `pointer` adds nothing — the desktop class set is byte-for-byte.
+    input: {
+      pointer: {},
+      touch: { base: "min-h-9" },
+    },
   },
   defaultVariants: {
     size: "md",
     variant: "default",
+    // A-001: a caller that resolves `tagVariants` without the axis gets the
+    // pre-axis output — the desktop-parity guarantee.
+    input: "pointer",
   },
 });
 

@@ -2,7 +2,18 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, radius, shadow } from "../../tokens/geometry";
+// `ease.smooth`, `radius.*` and `shadow.field.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker imports this file
+// through Node ESM, which does not resolve extensionless relative specifiers,
+// so the geometry module cannot be imported from a `.styles.ts`. Same pattern
+// as `input-group.styles.ts`; keep in sync with `EASE_VALUES.smooth`, `radius`
+// and `SHADOW_VALUES.field`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const RADIUS_FIELD = "rounded-(--radius-field)";
+const RADIUS_FIELD_START = "rounded-s-(--radius-field)";
+const RADIUS_FIELD_END = "rounded-e-(--radius-field)";
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
 
 /**
  * NumberField's variant table, mirroring `@heroui/styles` 3.2.7
@@ -18,14 +29,22 @@ import { ease, radius, shadow } from "../../tokens/geometry";
  * three `:has()` column rules are registrations the buttons report to the root
  * (port sheet §4, §5).
  *
- * The slot names and the two variant dimensions stay exactly upstream's:
+ * The slot names and the two upstream variant dimensions stay upstream's:
  * `base` / `group` / `input` / `incrementButton` / `decrementButton`,
- * `fullWidth` and `variant`.
+ * `fullWidth` and `variant`. A-001 adds the encapsulation model's `input`
+ * axis and one internal slot, `groupCols`: the step-column width the group
+ * interpolates into its `grid-cols-[…]` template (`w-10` pointer, `w-11`
+ * touch). It carries a class, not the length itself — every string in the
+ * table must class-check — and `GROUP_COL_WIDTHS` below translates the class
+ * to the length the group's template and the field probe consume.
  */
 export const numberFieldVariants = tv({
   defaultVariants: {
     fullWidth: false,
     variant: "primary",
+    // A-001: a bare `numberFieldVariants()` call keeps producing exactly the
+    // pointer output the table made before the axis existed.
+    input: "pointer",
   },
   slots: {
     /*
@@ -58,9 +77,9 @@ export const numberFieldVariants = tv({
      * R-040: `.number-field__group--full-width` → `@apply w-full`.
      */
     group: [
-      `grid grid-cols-1 h-9 items-center overflow-hidden ${radius.field} border-0 bg-field`,
-      `text-sm text-field-foreground ${shadow.field.both} outline-none`,
-      `duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `grid grid-cols-1 h-9 items-center overflow-hidden ${RADIUS_FIELD} border-0 bg-field`,
+      `text-sm text-field-foreground ${SHADOW_FIELD_BOTH} outline-none`,
+      `duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     ].join(" "),
 
     /*
@@ -96,6 +115,10 @@ export const numberFieldVariants = tv({
      * R-027: `cursor: var(--cursor-interactive)` → `cursor-pointer`.
      * R-028: `:active` / `[data-pressed=true]` → `bg-field-foreground/10` and
      * `scale(0.97)`; the pressed state is also mirrored in the render props.
+     * A-001: the `active:*` pair moves into the `input: "pointer"` cell
+     * below — under touch the press-feedback seam's `scale` owns the
+     * transform and its press overlay the feedback, and two writers may not
+     * share the channel.
      * R-031: increment-only `rounded-s-none rounded-e-field border-s
      * border-field-placeholder/15`, after `rounded-none` so it wins.
      * R-032: decrement-only `rounded-s-field rounded-e-none border-e
@@ -103,17 +126,23 @@ export const numberFieldVariants = tv({
      */
     incrementButton: [
       "flex h-full w-10 items-center justify-center rounded-none bg-transparent",
-      `text-field-foreground outline-none duration-150 ${ease.smooth} motion-reduce:transition-none`,
-      "cursor-pointer active:bg-field-foreground/10 active:scale-[0.97]",
-      `rounded-s-none ${radius.fieldEnd} border-s border-field-placeholder/15`,
+      `text-field-foreground outline-none duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
+      "cursor-pointer",
+      `rounded-s-none ${RADIUS_FIELD_END} border-s border-field-placeholder/15`,
     ].join(" "),
 
     decrementButton: [
       "flex h-full w-10 items-center justify-center rounded-none bg-transparent",
-      `text-field-foreground outline-none duration-150 ${ease.smooth} motion-reduce:transition-none`,
-      "cursor-pointer active:bg-field-foreground/10 active:scale-[0.97]",
-      `${radius.fieldStart} rounded-e-none border-e border-field-placeholder/15`,
+      `text-field-foreground outline-none duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
+      "cursor-pointer",
+      `${RADIUS_FIELD_START} rounded-e-none border-e border-field-placeholder/15`,
     ].join(" "),
+
+    // A-001: the step-column width the group reads through
+    // `slots.groupCols()` and interpolates into its `grid-cols-[…]` template.
+    // A class (`w-10` / `w-11`), not a length — a literal would fail the class
+    // check. `GROUP_COL_WIDTHS` maps the class back to the length.
+    groupCols: "",
   },
   variants: {
     // R-039 / R-040: both the root and the group stretch.
@@ -136,8 +165,42 @@ export const numberFieldVariants = tv({
         group: "shadow-none dark:shadow-none bg-default",
       },
     },
+    // A-001: the `input` axis of the encapsulation model — it owns
+    // interaction usability (the min hit size, no hover dependence, the
+    // touch feedback channels). `pointer` holds the desktop table
+    // byte-for-byte, R-028's `active:` pair included; `touch` raises the row
+    // to the 44 pt target (`min-h-11` over `h-9`, the date-input-group A-001
+    // value), widens the step columns to 44 pt (`w-11` over `w-10`, and
+    // `groupCols` so the grid template follows), and carries no `active:` —
+    // the seam presses instead. No `density` axis: the row height and column
+    // width are hit geometry, not a spacing preset.
+    input: {
+      pointer: {
+        incrementButton: "active:bg-field-foreground/10 active:scale-[0.97]",
+        decrementButton: "active:bg-field-foreground/10 active:scale-[0.97]",
+        groupCols: "w-10",
+      },
+      touch: {
+        group: "min-h-11",
+        incrementButton: "w-11",
+        decrementButton: "w-11",
+        groupCols: "w-11",
+      },
+    },
   },
 });
+
+/**
+ * The length each `groupCols` class carries (`w-10` → `40px`, `w-11` →
+ * `44px`). The slot cannot store the length itself: every string in the tv()
+ * config is class-checked, and a raw `"40px"` is not a class. The root maps
+ * `slots.groupCols()`'s class to this length for the group's `grid-cols-[…]`
+ * template and the field probe.
+ */
+export const GROUP_COL_WIDTHS: Record<string, string> = {
+  "w-10": "40px",
+  "w-11": "44px",
+};
 
 export type NumberFieldVariants = VariantProps<typeof numberFieldVariants>;
 

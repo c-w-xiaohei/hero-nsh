@@ -1,6 +1,7 @@
 import type { JSX, StyleProp, ViewStyle } from "nsh";
 import { computed, split, signal, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { TableSelectionCheckboxContext } from "../checkbox/table-selection-context";
 import { renderPartChildren } from "./table-children";
 import { TableStateContext, type TableHeaderRenderProps } from "./table-context";
@@ -38,6 +39,9 @@ export function TableHeader(props: TableHeaderProps) {
 
   const table = TableStateContext();
   const slots = useTableSlots();
+
+  // A-006: the `input` axis gates the header rowgroup's hover writes.
+  const input = createInput();
 
   const isHovered = signal(false);
 
@@ -110,11 +114,17 @@ export function TableHeader(props: TableHeaderProps) {
         role="rowgroup"
         onLayout={local.onLayout}
         onMouseEnter={(event) => {
-          isHovered.set(true);
+          // A-006: under touch the hover state stays off; the raw host
+          // callbacks still forward.
+          if (input() !== "touch") {
+            isHovered.set(true);
+          }
           local.onMouseEnter?.(event);
         }}
         onMouseLeave={(event) => {
-          isHovered.set(false);
+          if (input() !== "touch") {
+            isHovered.set(false);
+          }
           local.onMouseLeave?.(event);
         }}
         class={[slots().header(), resolvedClassName()].filter(Boolean).join(" ")}
