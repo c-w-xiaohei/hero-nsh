@@ -1,5 +1,4 @@
 import { effect, host, mount, Text } from "nsh";
-import type { JSX } from "nsh";
 import { Drawer, EnvironmentScope } from "@heroui/react";
 import type { DrawerPlacement } from "@heroui/react";
 import { DrawerContext } from "../src/components/drawer/drawer-context";
@@ -46,22 +45,6 @@ import { probe } from "./probe";
  */
 
 const SCROLL_ROWS = 200;
-
-function Scoped(props: { children?: JSX.Element }) {
-  const scope = String(host.params.scope ?? "");
-
-  if (scope === "touch") {
-    return <EnvironmentScope input="touch">{props.children}</EnvironmentScope>;
-  }
-
-  if (scope === "pointer") {
-    return (
-      <EnvironmentScope input="pointer">{props.children}</EnvironmentScope>
-    );
-  }
-
-  return <>{props.children}</>;
-}
 
 /**
  * The observation channel every assertion reads. It must live inside
@@ -161,8 +144,35 @@ function DrawerApp() {
   );
 }
 
-mount(() => (
-  <Scoped>
-    <DrawerApp />
-  </Scoped>
-));
+/*
+ * The scope wrapper is picked here, not in a passthrough component:
+ * measured on this fixture, an extra `props.children` fragment layer
+ * between `mount` and `Drawer` leaves the presented dialog mounted after
+ * a state close (`openChange(false)` records, the panel never unmounts —
+ * the host's presented-dialog pass resolves the extra boundary
+ * differently). Returning the elements directly keeps the tree
+ * mount → Fixture → DrawerApp → Drawer.
+ */
+function Fixture() {
+  const scope = String(host.params.scope ?? "");
+
+  if (scope === "touch") {
+    return (
+      <EnvironmentScope input="touch">
+        <DrawerApp />
+      </EnvironmentScope>
+    );
+  }
+
+  if (scope === "pointer") {
+    return (
+      <EnvironmentScope input="pointer">
+        <DrawerApp />
+      </EnvironmentScope>
+    );
+  }
+
+  return <DrawerApp />;
+}
+
+mount(Fixture);
