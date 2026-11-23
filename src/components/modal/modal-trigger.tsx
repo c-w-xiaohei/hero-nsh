@@ -11,7 +11,9 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { createPressFeedback } from "../../primitives/pressable";
 import type { ModalPartDomProps } from "./modal-dom-props";
 import { ModalContext } from "./modal-context";
 import type { ModalSlots } from "./modal.styles";
@@ -58,6 +60,18 @@ export function ModalTrigger(props: ModalTriggerProps): JSX.Element {
   const isDisabled = () => props.disabled === true || props["aria-disabled"] === true;
   const isFocusVisible = computed(() => focused() && modality.isKeyboard());
 
+  // A-006: the press-feedback seam, gated on the environment's `input` axis
+  // plus this trigger's own disabled state. Under the default pointer
+  // environment `enabled` is false: `pressDown`/`pressUp` only forward,
+  // `hitSlop()` answers `undefined`, and the desktop sees nothing new. The
+  // `scale`/`highlightOpacity` channels stay unbound — the table's
+  // `active:scale-[0.97]` is already a legal touch pseudo-state and B(子按钮)
+  // only promises the press surface plus the hit area (alert-dialog 同构裁定).
+  const input = createInput();
+  const feedback = createPressFeedback({
+    enabled: () => input() === "touch" && !isDisabled(),
+  });
+
   // R-001 … R-002: the slot classes carry the cursor, the transition timing and
   // the disabled / pressed looks; the caller's classes come later and win.
   const classes = computed(() =>
@@ -94,6 +108,10 @@ export function ModalTrigger(props: ModalTriggerProps): JSX.Element {
   };
 
   const handlePressDown = (event: PressEvent) => {
+    // The seam runs first: `enabled` already carries the disabled gate, so a
+    // gated press records nothing here (adapt sheet A-006).
+    feedback.pressDown(event);
+
     if (isDisabled()) {
       return;
     }
@@ -103,6 +121,10 @@ export function ModalTrigger(props: ModalTriggerProps): JSX.Element {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // Unconditional at the chain's head: release and cancel alike clear the
+    // seam's state (adapt sheet A-006).
+    feedback.pressUp(event);
+
     if (isDisabled()) {
       return;
     }
@@ -138,6 +160,13 @@ export function ModalTrigger(props: ModalTriggerProps): JSX.Element {
     props.ref?.(node);
   };
 
+  // The seam reads the laid-out box for `bounds`/`hitSlop`/`scale` before
+  // the caller's own `onLayout` sees the event.
+  const handleLayout = (event: Parameters<NonNullable<typeof props.onLayout>>[0]) => {
+    feedback.layout(event);
+    props.onLayout?.(event);
+  };
+
   // R-004: the focus ring only for keyboard focus. Upstream's
   // `:not([data-focused])` branch has no state channel here (port sheet).
   const classList = computed(() => ({
@@ -171,6 +200,10 @@ export function ModalTrigger(props: ModalTriggerProps): JSX.Element {
       onBlur={handleBlur}
       onMouseEnter={props.onMouseEnter}
       onMouseLeave={props.onMouseLeave}
+      onLayout={handleLayout}
+      // A-006: the invisible hit area is a view prop tv() cannot produce, so
+      // it comes from the seam — `undefined` under the pointer environment.
+      hitSlop={feedback.hitSlop()}
     >
       {renderTriggerChildren(props.children)}
     </View>
