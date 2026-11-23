@@ -74,6 +74,18 @@ export const SelectTriggerContext = context<
 >(undefined);
 
 /**
+ * The container `Select.Popover` mounted a subtree under (A-002's three
+ * carriers). Each branch re-provides this around its own copy of the popover
+ * children so a part inside — a probe, a future part — knows which retained
+ * carrier it belongs to: the branches all stay mounted while only one shows.
+ */
+export type SelectCarrier = "panel" | "sheet" | "fullscreen";
+
+export const SelectCarrierContext = context<SelectCarrier | undefined>(
+  undefined,
+);
+
+/**
  * What `Select.Root` provides to every part. HeroUI reaches the same state
  * through React Aria's `SelectStateContext` and its own three contexts; NSH has
  * no DOM, so the parts read this one and the overlay trigger's context.
@@ -109,6 +121,32 @@ export interface SelectContextValue {
   selectionMode: Accessor<SelectionMode>;
 
   disallowEmptySelection: Accessor<boolean>;
+
+  /**
+   * The carrier `Select.Popover` last resolved (A-002). Each carrier branch
+   * keeps its own `ListBox` mounted, so this picks which registration `list` /
+   * `listControls` / `selectionManager` mean.
+   */
+  activeCarrier: Accessor<SelectCarrier | undefined>;
+
+  /** `Select.Popover` reports the carrier this open latched — and, while
+   * closed, the one the next open will latch. */
+  setActiveCarrier: (carrier: SelectCarrier) => void;
+
+  /**
+   * A carrier branch's `ListBox` reports its state and focus controls here,
+   * under the carrier name: the field holds one registration per retained
+   * branch and forwards the active carrier's to the list owner, so the
+   * resolved list is always the visible one. Returns the unregister, run
+   * when the copy unmounts (A-002's retained-mount corollary, realized
+   * inside this unit: `createSelectState` / `ListOwner` keep their
+   * single-list contract).
+   */
+  registerCarrierList: (
+    carrier: SelectCarrier,
+    state: ListState,
+    controls: ListOwnerListControls,
+  ) => () => void;
 
   /** The list's state, once the ListBox inside the popover registered it. */
   list: Accessor<ListState | undefined>;

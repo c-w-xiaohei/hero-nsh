@@ -18,6 +18,8 @@ import {
 } from "nsh";
 
 import {
+  createDensity,
+  createInput,
   createInteractionModality,
   createOverlayTrigger,
   createSelectState,
@@ -40,6 +42,7 @@ import type { FieldState } from "../label/context";
 import { formatListText } from "./select-list-format";
 import {
   SelectContext,
+  type SelectCarrier,
   type SelectContextValue,
   type SelectSelectedItem,
   type SelectSlots,
@@ -85,7 +88,10 @@ export interface SelectRenderProps {
  * `onChange` aliases. When an alias and its official name are both present the
  * official one wins, as React Aria's `useControlledState` does.
  */
-export interface SelectRootProps<T = unknown> extends SelectVariants {
+export interface SelectRootProps<T = unknown>
+  // A-001: `input`/`density` are environment axes the root feeds itself —
+  // they never reach the public props surface (button A-006's same Omit).
+  extends Omit<SelectVariants, "input" | "density"> {
   /** The field's parts; a one-parameter function is a render prop (D17). */
   children?: JSX.Element | ((values: SelectRenderProps) => JSX.Element);
 
@@ -312,7 +318,19 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
   const selectionMode = (): SelectionMode => local.selectionMode ?? "single";
   const isMultiple = () => selectionMode() === "multiple";
 
-  const slots = computed(() => selectVariants({ variant: variant(), fullWidth: fullWidth() }));
+  // A-001: the two environment axes, resolved once under this root's owner
+  // scope and fed into the one `selectVariants` call every slot reads.
+  const input = createInput();
+  const density = createDensity();
+
+  const slots = computed(() =>
+    selectVariants({
+      variant: variant(),
+      fullWidth: fullWidth(),
+      input: input(),
+      density: density(),
+    }),
+  );
 
   /* -------------------------------------------------------------------------------------------
    * Field state
@@ -384,11 +402,67 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
     onOpenChange: (open) => local.onOpenChange?.(open),
   });
 
+  // A-002's retained-mount corollary: the popover's carriers each keep their
+  // own ListBox mounted, so the popover names the carrier it resolved and the
+  // registrations below forward that branch's list. The tag tracks
+  // `presentation()` continuously — while closed it previews the carrier the
+  // next open will latch, so `open()`'s `markFocus` (which runs before
+  // `setIsOpen` commits) already resolves the copy the open is about to show.
+  const activeCarrier = signal<SelectCarrier | undefined>(undefined);
+
   const selectState = createSelectState({
     isOpen: overlay.isOpen,
     setIsOpen: overlay.setIsOpen,
     collection: () => selectState.list()?.collection(),
     selectionManager: () => selectState.list()?.selectionManager(),
+  });
+
+  // The per-carrier registrations: `registerCarrierList` files a branch's
+  // (state, controls) under its carrier name, and this effect forwards the
+  // active carrier's entry to the owner — the cleanup the effect's return
+  // value is un-registers it first, so the owner always resolves exactly the
+  // visible branch's list. `createSelectState` keeps its single-slot
+  // contract; the three-copy dispatch lives here, inside the unit.
+  interface CarrierListEntry {
+    state: ListState;
+    controls: ListOwnerListControls;
+  }
+
+  const carrierLists = signal<ReadonlyMap<SelectCarrier, CarrierListEntry>>(
+    new Map(),
+  );
+
+  const registerCarrierList = (
+    carrier: SelectCarrier,
+    state: ListState,
+    controls: ListOwnerListControls,
+  ): (() => void) => {
+    const entry: CarrierListEntry = { state, controls };
+
+    carrierLists.update((current) => new Map(current).set(carrier, entry));
+
+    return () => {
+      carrierLists.update((current) => {
+        if (current.get(carrier) !== entry) {
+          return current;
+        }
+
+        const next = new Map(current);
+        next.delete(carrier);
+        return next;
+      });
+    };
+  };
+
+  effect(() => {
+    const carrier = activeCarrier();
+    const entry = carrier === undefined ? undefined : carrierLists().get(carrier);
+
+    if (carrier === undefined || entry === undefined) {
+      return;
+    }
+
+    return selectState.registerList(entry.state, entry.controls);
   });
 
   const { list, controls: listControls, open, close, toggle } = selectState;
@@ -630,6 +704,9 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
     open,
     close,
     toggle,
+    activeCarrier,
+    setActiveCarrier: (carrier) => activeCarrier.set(carrier),
+    registerCarrierList,
     selectionMode,
     disallowEmptySelection: () => local.disallowEmptySelection ?? false,
     list,

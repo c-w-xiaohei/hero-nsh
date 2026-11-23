@@ -11,6 +11,7 @@ import type {
 import {
   cleanup,
   computed,
+  createAnimatedValue,
   effect,
   reduceMotion,
   signal,
@@ -20,12 +21,16 @@ import {
 import type { Accessor } from "nsh";
 
 import {
+  createInput,
   createKeymapScope,
+  createPressFeedback,
   createTypeSelect,
   isKeyboardPress,
   type KeyboardDelegate,
   ListKeyboardDelegate,
   OverlayTriggerContext,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
 } from "../../primitives";
 import { renderChildren } from "../list-box/children";
 import {
@@ -232,6 +237,33 @@ export function SelectTrigger(props: SelectTriggerProps): JSX.Element {
   const isDisabled = () => local.isDisabled ?? select.isDisabled();
   const isOpen = select.isOpen;
 
+  // A-007: the press-feedback seam, gated on `input() === "touch"` and the
+  // field's disabled flag — under a pointer environment it is a physical
+  // no-op, so the desktop event chain below is verbatim. `feedback.isPressed`
+  // is its own canonical channel and never merges into the render-prop
+  // `isPressed`; `scale`/`highlightOpacity`/`rippleProgress` stay unbound —
+  // the trigger has no new press-visual contract (date-picker A-005's twin).
+  const input = createInput();
+  const enabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({ enabled });
+
+  // The seam's read half for consumers (list-box A-004 / accordion's
+  // convention): a part or probe reads the animated channels here; no
+  // overlay mounts by default, so `highlightOpacity` / `rippleProgress`
+  // are fresh channels held at 0.
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   const hovered = signal(false);
   const pressed = signal(false);
   const focused = signal(false);
@@ -348,6 +380,9 @@ export function SelectTrigger(props: SelectTriggerProps): JSX.Element {
       return;
     }
 
+    // A-007: after the disabled early-out, before the channel's own notes —
+    // a gated (pointer) call is a no-op inside.
+    feedback.pressDown(event);
     notePress(event);
     pressed.set(true);
     local.onPressStart?.(event);
@@ -356,6 +391,11 @@ export function SelectTrigger(props: SelectTriggerProps): JSX.Element {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-007: end and cancel share `onPressUp`; the seam resets first, before
+    // the `pressed` flag clears — a press the host released or cancelled
+    // completes the same round-trip (list-box A-002).
+    feedback.pressUp(event);
+
     if (pressed()) {
       pressed.set(false);
       local.onPressChange?.(false);
@@ -381,6 +421,10 @@ export function SelectTrigger(props: SelectTriggerProps): JSX.Element {
       select.noteKeyboard();
       select.toggle("first");
     } else {
+      // A-007: the host can drop the release edge after a cancelled press
+      // (list-box A-002 measured), so a non-keyboard activation completes the
+      // seam's round-trip itself — the same fallback, at the same point.
+      feedback.pressUp(event);
       select.notePointer();
       select.toggle(true);
     }
@@ -400,7 +444,11 @@ export function SelectTrigger(props: SelectTriggerProps): JSX.Element {
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
-    if (isDisabled() || hovered()) {
+    // A-009: a touch environment has no hover semantics — the JS `hovered`
+    // flag and the hover event chain stay silent so the `bg-field-hover`
+    // paint can never stick (list-box A-005's same rule; the raw mouse
+    // callbacks above still forward on every input).
+    if (input() === "touch" || isDisabled() || hovered()) {
       return;
     }
 
@@ -412,7 +460,7 @@ export function SelectTrigger(props: SelectTriggerProps): JSX.Element {
   const handleMouseLeave = (event: NshMouseEvent) => {
     local.onMouseLeave?.(event);
 
-    if (!hovered()) {
+    if (input() === "touch" || !hovered()) {
       return;
     }
 
@@ -648,9 +696,21 @@ export function SelectTrigger(props: SelectTriggerProps): JSX.Element {
         onMouseLeave={handleMouseLeave}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        onLayout={local.onLayout}
+        // A-007: the invisible half of the hit area — the seam's computed
+        // slop, `undefined` while gated off or the view already reaches the
+        // 44pt target (`min-h-11` under touch covers the height for the
+        // standard trigger; a narrower one still gets the expansion).
+        hitSlop={feedback.hitSlop()}
+        onLayout={(event) => {
+          // A-007: `bounds` feeds `hitSlop`, so the seam reads the layout
+          // first.
+          feedback.layout(event);
+          local.onLayout?.(event);
+        }}
       >
-        {content()}
+        <PressableFeedbackContext.Provider value={feedbackValue}>
+          {content()}
+        </PressableFeedbackContext.Provider>
       </View>
     </SelectTriggerContext.Provider>
   );
