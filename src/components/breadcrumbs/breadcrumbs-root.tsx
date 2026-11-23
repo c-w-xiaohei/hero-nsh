@@ -25,6 +25,7 @@ import {
   type BreadcrumbsVariants,
 } from "./breadcrumbs.styles";
 import type { AriaProps, DataProps, GlobalDomProps } from "./dom-props";
+import { densityKey } from "../../tokens/density";
 
 /**
  * The props of `Breadcrumbs.Root` (= `Breadcrumbs`): HeroUI 3.2.7's
@@ -37,7 +38,7 @@ import type { AriaProps, DataProps, GlobalDomProps } from "./dom-props";
  * registers itself instead (port sheet section 2).
  */
 export interface BreadcrumbsRootProps<T = unknown>
-  extends BreadcrumbsVariants,
+  extends Omit<BreadcrumbsVariants, "input" | "density">,
     AriaProps,
     DataProps,
     GlobalDomProps {
@@ -146,7 +147,7 @@ export function BreadcrumbsRoot<T = unknown>(
   // here stays consistent with whatever scope the Root mounted under.
   const input = createInput();
   const density = createDensity();
-  const slots = breadcrumbsVariants({ input: input(), density: density() });
+  const slots = breadcrumbsVariants({ input: input(), density: densityKey(density()) });
 
   /**
    * One registered item: its key and, for a dynamic `items` collection, the

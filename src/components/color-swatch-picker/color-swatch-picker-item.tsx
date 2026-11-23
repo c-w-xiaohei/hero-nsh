@@ -47,6 +47,7 @@ import {
 } from "./color-swatch-picker-context";
 import { renderChildren } from "./children";
 import { colorSwatchPickerVariants } from "./color-swatch-picker.styles";
+import { densityKey } from "../../tokens/density";
 
 /** The live state HeroUI hands to an item's children, `className` and `style`. */
 export interface ColorSwatchPickerItemRenderProps {
@@ -309,7 +310,7 @@ export function ColorSwatchPickerItem(
       // A-001: the environment axes — `input` carries the 44pt item
       // minimum, `density` the row gap.
       input: input(),
-      density: density(),
+      density: densityKey(density()),
     }),
   );
 

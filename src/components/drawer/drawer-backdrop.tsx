@@ -29,6 +29,15 @@ export interface DrawerBackdropProps extends Omit<ViewProps, "children" | "class
   render?: unknown;
   slot?: string;
   ref?: (node: import("nsh").ViewRef) => void;
+  /**
+   * The touch-only swipe-to-dismiss master switch (adapt sheet §3): under
+   * `input === "touch"` a bottom, dismissable drawer's handle and panel take
+   * a drag that pulls the panel down and releases it closed. `false` turns
+   * that gesture off without touching outside-press or Escape dismissal —
+   * and under a pointer environment the gesture never mounts either way.
+   * @default true
+   */
+  isSwipeable?: boolean;
 }
 
 /** What the layer below reads; kept as accessors so a signalled value stays live. */
@@ -101,26 +110,7 @@ function DrawerLayer(props: DrawerLayerProps): JSX.Element {
   );
 }
 
-/*
- * The additive `isSwipeable` rides the call surface as an inline
- * intersection: the adapt sheet declares it for `DrawerBackdropProps` but
- * writes the `prop` cell as `` `DrawerBackdropProps.isSwipeable` ``, so gate
- * M5's declaration lookup cannot match it on the named interface (the fixer
- * may not edit sheets; toast and alert-dialog do the same move).
- * `DrawerBackdropProps` itself stays byte-identical to its desktop contract;
- * callers pass the key exactly as the sheet specifies.
- */
-export function DrawerBackdrop(props: DrawerBackdropProps & {
-  /**
-   * The touch-only swipe-to-dismiss master switch (adapt sheet §3): under
-   * `input === "touch"` a bottom, dismissable drawer's handle and panel take
-   * a drag that pulls the panel down and releases it closed. `false` turns
-   * that gesture off without touching outside-press or Escape dismissal —
-   * and under a pointer environment the gesture never mounts either way.
-   * @default true
-   */
-  isSwipeable?: boolean;
-}): JSX.Element {
+export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
   const parent = DrawerContext();
   const parentOverlay = OverlayTriggerContext();
   const local = createDrawerState({

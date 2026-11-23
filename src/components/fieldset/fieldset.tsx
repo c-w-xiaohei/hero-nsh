@@ -14,6 +14,7 @@ import { renderChildren } from "./children";
 import { FieldsetContext, type FieldsetContextValue } from "./context";
 import type { FieldsetDomProps } from "./fieldset-dom-props";
 import { fieldsetVariants } from "./fieldset.styles";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * Fieldset Root
@@ -122,7 +123,7 @@ export function FieldsetRoot(props: FieldsetRootProps): JSX.Element {
   // the environment accessor — `compact` tightens it, `default` and the
   // desktop host keep the upstream 24.
   const classes = computed(() =>
-    fieldsetVariants({ density: density() }).base({
+    fieldsetVariants({ density: densityKey(density()) }).base({
       className: local.className,
     }),
   );

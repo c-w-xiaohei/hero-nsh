@@ -47,7 +47,7 @@ export interface LinkRenderProps {
  * compiling; port sheet §1.1 and §8 list what each can and cannot do here.
  */
 export interface LinkRootProps
-  extends LinkVariants,
+  extends Omit<LinkVariants, "input" | "density">,
     AriaProps,
     DataProps,
     GlobalDomProps,

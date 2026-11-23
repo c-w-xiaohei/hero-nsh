@@ -473,9 +473,18 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
   // the host's native recognizer owns the touches from its own ~10-point
   // threshold, so claiming must not wait for a displacement floor (the
   // sheet-handoff measurement a wait loses).
+  //
+  // `enabled` holds only the input axis: `{...pan.panHandlers()}` mounts the
+  // listeners at mount time, so a prop that can flip at runtime (`isDisabled`)
+  // must gate the claim, not the mount — a slider mounted disabled and later
+  // enabled would otherwise have no listeners to recover.
   const pan = createPan({
-    enabled: seamEnabled,
+    enabled: () => input() === "touch",
     shouldClaim: (_event, gesture) => {
+      if (isDisabled()) {
+        return false;
+      }
+
       const along = isVertical() ? gesture.dy : gesture.dx;
       const across = isVertical() ? gesture.dx : gesture.dy;
 

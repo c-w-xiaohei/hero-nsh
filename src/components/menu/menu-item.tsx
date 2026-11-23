@@ -52,6 +52,7 @@ import {
   MenuSectionContext,
 } from "./menu-context";
 import { menuItemVariants, type MenuItemVariants } from "./menu.styles";
+import { densityKey } from "../../tokens/density";
 
 /** The live state HeroUI hands to item children, `className` and `style`. */
 export interface MenuItemRenderProps {
@@ -96,7 +97,8 @@ const NEUTRAL_RENDER_PROPS: MenuItemRenderProps = {
 /** `http:`, `mailto:`, `tel:` …: what `openUrl` accepts; `#anchor` is not. */
 const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:/i;
 
-export interface MenuItemRootProps<T = unknown> extends MenuItemVariants {
+export interface MenuItemRootProps<T = unknown>
+  extends Omit<MenuItemVariants, "input" | "density"> {
   /** The row content, or a render function called once with accessor values. */
   children?: JSX.Element | ((values: MenuItemRenderProps) => JSX.Element);
 
@@ -473,7 +475,7 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
     menuItemVariants({
       variant: variant(),
       input: input(),
-      density: density(),
+      density: densityKey(density()),
     }),
   );
 
@@ -731,6 +733,15 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
   };
 
   const handlePress = (event?: PressEvent) => {
+    // A-003: on this host a drag away from the row reports the release's
+    // `onPress` without an `onPressUp` first (the row's press chain is
+    // down→press with no up, the same gap list-box-item A-002 records), so a
+    // commit also ends the seam's press — `isPressed` can never outlive the
+    // activation.
+    if (event && !isKeyboardPress(event)) {
+      feedback.pressUp(event);
+    }
+
     pointerPressed.set(false);
     activate(
       event && isKeyboardPress(event) ? "keyboard" : "pointer",

@@ -336,10 +336,16 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
   // and this pan's move claim decides on the first dominant frame — along the
   // travel axis only, so a cross-axis swipe is left to the surrounding Scroll
   // (the host's native recognizer claims at ~10 points; a floor would arrive
-  // after it).
+  // after it). `enabled` holds only the input axis — the mount-time listener
+  // spread cannot re-arm a runtime `isDisabled` flip, so disabled gates the
+  // claim (slider-thumb A-003 precedent).
   const pan = createPan({
-    enabled: seamEnabled,
+    enabled: () => input() === "touch",
     shouldClaim: (event, gesture) => {
+      if (slider?.isDisabled() ?? false) {
+        return false;
+      }
+
       // The move negotiation asks this ancestor's capture predicate before
       // the thumb's own, on every move frame — a touch that went down inside
       // the thumb's slop-expanded hit area is the thumb's drag (the delta

@@ -49,6 +49,7 @@ import {
   type SelectStateFacade,
 } from "./select-context";
 import { selectVariants, type SelectVariants } from "./select.styles";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * Render props
@@ -328,7 +329,7 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
       variant: variant(),
       fullWidth: fullWidth(),
       input: input(),
-      density: density(),
+      density: densityKey(density()),
     }),
   );
 

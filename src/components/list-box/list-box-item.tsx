@@ -44,6 +44,7 @@ import {
   ListBoxSectionContext,
 } from "./list-box-context";
 import { listboxItemVariants, type ListBoxItemVariants } from "./list-box.styles";
+import { densityKey } from "../../tokens/density";
 
 /** The live state HeroUI hands to item children, `className` and `style`. */
 export interface ListBoxItemRenderProps {
@@ -80,7 +81,8 @@ const NEUTRAL_RENDER_PROPS: ListBoxItemRenderProps = {
   isDropTarget: () => false,
 };
 
-export interface ListBoxItemRootProps<T = unknown> extends ListBoxItemVariants {
+export interface ListBoxItemRootProps<T = unknown>
+  extends Omit<ListBoxItemVariants, "input" | "density"> {
   children?: JSX.Element | ((values: ListBoxItemRenderProps) => JSX.Element);
 
   className?: string | ((values: ListBoxItemRenderProps) => string);
@@ -382,7 +384,7 @@ export function ListBoxItemRoot<T>(
     listboxItemVariants({
       variant: variant(),
       input: input(),
-      density: density(),
+      density: densityKey(density()),
     }),
   );
 

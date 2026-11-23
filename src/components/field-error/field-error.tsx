@@ -10,6 +10,7 @@ import type {
 import { createDensity } from "../../primitives/environment";
 import { FieldErrorContext } from "./context";
 import { fieldErrorVariants } from "./field-error.styles";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * Render props
@@ -296,7 +297,7 @@ export function FieldErrorRoot(props: FieldErrorRootProps): JSX.Element {
     // A-002: the `density` cell owns the block's padding; the environment
     // accessor feeds it, callers never see a density prop.
     return fieldErrorVariants({
-      density: density(),
+      density: densityKey(density()),
       className: [container, className()]
         .filter((part): part is string => typeof part === "string" && part.length > 0)
         .join(" "),

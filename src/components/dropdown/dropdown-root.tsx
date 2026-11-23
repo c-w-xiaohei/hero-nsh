@@ -13,6 +13,7 @@ import type {
 } from "./dropdown-context";
 import { DropdownContext } from "./dropdown-context";
 import { dropdownVariants } from "./dropdown.styles";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * Root
@@ -158,7 +159,7 @@ export function DropdownRoot(props: DropdownRootProps) {
   const density = createDensity();
 
   const slots = computed(() =>
-    dropdownVariants({ input: input(), density: density() }),
+    dropdownVariants({ input: input(), density: densityKey(density()) }),
   );
 
   const contextValue: DropdownContextValue = {

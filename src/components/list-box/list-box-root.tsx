@@ -53,6 +53,7 @@ import {
   sortByRenderedOrder,
 } from "./list-box-context";
 import { listboxVariants, type ListBoxVariants } from "./list-box.styles";
+import { densityKey } from "../../tokens/density";
 
 /** The live state HeroUI hands to `renderEmptyState`, `className` and `style`. */
 export interface ListBoxRenderProps {
@@ -66,7 +67,8 @@ export interface ListBoxRenderProps {
   state: ListState;
 }
 
-export interface ListBoxRootProps<T = unknown> extends ListBoxVariants {
+export interface ListBoxRootProps<T = unknown>
+  extends Omit<ListBoxVariants, "input" | "density"> {
   /**
    * Static options and sections, or with `items`, the render function called
    * once per entry. Read once, inside the context provider (research 4.1).
@@ -804,7 +806,7 @@ export function ListBoxRoot<T>(
       listboxVariants({
         variant: variant(),
         input: input(),
-        density: density(),
+        density: densityKey(density()),
       }),
       container?.listClass?.(),
       resolvedClassName(),

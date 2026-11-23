@@ -15,6 +15,15 @@ import { modalBodyAfterHeaderClasses, modalVariants } from "./modal.styles";
 export interface ModalBodyProps extends ModalPartDomProps {
   /** A DOM tab stop upstream; a view is one through `focusable` (below). */
   tabIndex?: number;
+
+  /**
+   * Called on the `inside` Scroll's `onScroll`, after the modal's own
+   * scroll-position reporting (adapt sheet A-005): the swipe's claim gate
+   * hears the offset before the caller does. Under `scroll="outside"` the
+   * body is a plain `View` and the prop is accepted but never fires — the
+   * carrier's own Scroll reports instead.
+   */
+  onScroll?: (event: ScrollEvent) => void;
 }
 
 /**
@@ -32,21 +41,7 @@ export interface ModalBodyProps extends ModalPartDomProps {
  * R-058 `.modal__header + .modal__body` → `mt-2`: the body asks the Dialog's
  * registration table which part was written before it.
  */
-export function ModalBody(
-  props: ModalBodyProps & {
-    /**
-     * Called on the `inside` Scroll's `onScroll`, after the modal's own
-     * scroll-position reporting (adapt sheet A-005): the swipe's claim gate
-     * hears the offset before the caller does. Under `scroll="outside"` the
-     * body is a plain `View` and the prop is accepted but never fires — the
-     * carrier's own Scroll reports instead. Rides an inline intersection:
-     * the sheet's `prop` cell carries a `（ModalBodyProps）` suffix that
-     * gate M5's declaration lookup cannot match (same move as the
-     * Backdrop's `presentation`/`isSwipeable`).
-     */
-    onScroll?: (event: ScrollEvent) => void;
-  },
-): JSX.Element {
+export function ModalBody(props: ModalBodyProps): JSX.Element {
   const [local, rest] = split(props, [
     "children",
     "className",

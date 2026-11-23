@@ -9,6 +9,7 @@ import type { Color } from "../color-swatch";
 import { parseColor } from "../color-swatch";
 import { ColorSwatchPickerContext, ColorSwatchPickerItemContext } from "./color-swatch-picker-context";
 import { colorSwatchPickerVariants } from "./color-swatch-picker.styles";
+import { densityKey } from "../../tokens/density";
 
 /** The value HeroUI's `ColorSwatch` render props carry. */
 export interface ColorSwatchPickerSwatchRenderProps {
@@ -113,7 +114,7 @@ export function ColorSwatchPickerSwatch(
       size: root?.size() ?? "md",
       variant: root?.variant() ?? "circle",
       input: input(),
-      density: density(),
+      density: densityKey(density()),
     }),
   );
 

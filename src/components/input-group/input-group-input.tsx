@@ -112,6 +112,12 @@ export function InputGroupInput(props: InputGroupInputProps): JSX.Element {
     {
       multiline: false,
       usesRows: false,
+      // A-004 (residual, sheet §8): the shared control reads the same
+      // environment input axis as the group's hover gates above — passing it
+      // through `config.input` keeps the control's own `hovered` signal, and
+      // therefore the `isHovered` render-prop, honest under touch (textfield
+      // input.tsx precedent).
+      input,
       // The group owns every state class (R-011 … R-014, R-033 … R-036).
       stateClasses: false,
       // R-015 plus the two `:has()` rules the affixes report: R-016 drops the

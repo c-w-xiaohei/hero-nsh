@@ -75,6 +75,15 @@ export interface ToastProps<T extends object = ToastContentValue>
 
   /** Forwarded to the root `View` as a callback, never as a ref store. */
   ref?: (node: ViewRef) => void;
+
+  /**
+   * Whether this toast can be swiped closed; overrides the provider's
+   * stack-level default (`ToastProviderProps.isSwipeable`). The gesture
+   * only exists where `input === "touch"` — under a pointer environment
+   * no listener is mounted, whatever the prop says.
+   * @default true
+   */
+  isSwipeable?: boolean;
 }
 
 /** No exiting keys, shared so the fallback set is not rebuilt on every read. */
@@ -94,26 +103,8 @@ const EMPTY_EXITING_KEYS: ReadonlySet<string> = new Set();
  * It provides `ToastItemContext` and therefore reads `props.children` inside
  * the provider, at the placement (common rules, provider exception).
  */
-/*
- * The additive `isSwipeable` rides the call surface as an inline
- * intersection: the adapt sheet declares it for `ToastProps` but writes the
- * `prop` cell as `` `ToastProps.isSwipeable` ``, so gate M5's declaration
- * lookup cannot match it on the named interface (the fixer may not edit
- * sheets; the alert-dialog r2b fix does the same move). `ToastProps` itself
- * stays byte-identical to its desktop contract; callers pass the key exactly
- * as the sheet specifies.
- */
 export function ToastRoot<T extends object = ToastContentValue>(
-  props: ToastProps<T> & {
-    /**
-     * Whether this toast can be swiped closed; overrides the provider's
-     * stack-level default (`ToastProviderProps.isSwipeable`). The gesture
-     * only exists where `input === "touch"` — under a pointer environment
-     * no listener is mounted, whatever the prop says.
-     * @default true
-     */
-    isSwipeable?: boolean;
-  },
+  props: ToastProps<T>,
 ): JSX.Element {
   const [local, rest] = split(props, [
     "toast",

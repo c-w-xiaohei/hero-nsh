@@ -14,6 +14,7 @@ import {
   ColorSwatchPickerItemContext,
 } from "./color-swatch-picker-context";
 import { colorSwatchPickerVariants } from "./color-swatch-picker.styles";
+import { densityKey } from "../../tokens/density";
 
 /** The indicator's children: nodes, or a render function of the item's state. */
 export type ColorSwatchPickerIndicatorChildren =
@@ -140,7 +141,7 @@ export function ColorSwatchPickerIndicator(
       size: root?.size() ?? "md",
       variant: root?.variant() ?? "circle",
       input: input(),
-      density: density(),
+      density: densityKey(density()),
     }),
   );
 

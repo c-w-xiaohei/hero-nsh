@@ -11,6 +11,7 @@ import type { AvatarGroupVariants, AvatarVariants } from "./avatar.styles";
 import type { AriaProps, DataProps, GlobalDomProps } from "./avatar-dom-props";
 import { viewProps } from "./avatar-dom-props";
 import { joinClassNames } from "./class-names";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * AvatarGroup Root
@@ -125,7 +126,7 @@ export function AvatarGroupRoot(props: AvatarGroupRootProps): JSX.Element {
     avatarGroupVariants({
       isGrid: isGrid(),
       overlap: overlap(),
-      density: density(),
+      density: densityKey(density()),
     }),
   );
 

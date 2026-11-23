@@ -45,6 +45,7 @@ import type {
 } from "./color-swatch-picker-context";
 import { ColorSwatchPickerContext } from "./color-swatch-picker-context";
 import { colorSwatchPickerVariants } from "./color-swatch-picker.styles";
+import { densityKey } from "../../tokens/density";
 
 /** The live state HeroUI hands to the root's `className` and `style`. */
 export interface ColorSwatchPickerRenderProps {
@@ -361,7 +362,7 @@ export function ColorSwatchPickerRoot(
       size: size(),
       variant: variant(),
       input: input(),
-      density: density(),
+      density: densityKey(density()),
     }),
   );
 

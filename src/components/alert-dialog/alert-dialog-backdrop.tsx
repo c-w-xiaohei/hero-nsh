@@ -98,6 +98,26 @@ export interface AlertDialogBackdropProps
   /** A DOM id upstream; maps to `nativeID`. */
   id?: string;
 
+  /**
+   * The container the alert dialog presents as. `"auto"` (the default)
+   * picks the bottom-docked `"sheet"` under a touch environment on a
+   * compact window and the centered `"panel"` everywhere else; a
+   * `"panel"` / `"sheet"` pin decides outright. The value latches on the
+   * open edge and holds until close, so a rotation cannot swap the
+   * container under the user's hands (A-001).
+   */
+  presentation?: AlertDialogPresentation | "auto";
+
+  /**
+   * Whether the dialog may be dismissed by dragging it downward (A-004).
+   * Alert dialogs require an explicit action, so unlike the Native
+   * `Dialog.Content isSwipeable` this defaults to `false`; the gesture
+   * only attaches when this *and* `isDismissable` are set and the
+   * resolved presentation is `"sheet"` under a touch environment — it
+   * never exists under a pointer.
+   */
+  isSwipeable?: boolean;
+
   /** Accepted, no effect: NSH has no DOM attribute channel. */
   [key: `data-${string}`]: unknown;
 }
@@ -130,27 +150,7 @@ const SWIPE_DISMISS_VELOCITY = 0.5;
  * specifies.
  */
 export function AlertDialogBackdrop(
-  props: AlertDialogBackdropProps & {
-    /**
-     * The container the alert dialog presents as. `"auto"` (the default)
-     * picks the bottom-docked `"sheet"` under a touch environment on a
-     * compact window and the centered `"panel"` everywhere else; a
-     * `"panel"` / `"sheet"` pin decides outright. The value latches on the
-     * open edge and holds until close, so a rotation cannot swap the
-     * container under the user's hands (A-001).
-     */
-    presentation?: AlertDialogPresentation | "auto";
-
-    /**
-     * Whether the dialog may be dismissed by dragging it downward (A-004).
-     * Alert dialogs require an explicit action, so unlike the Native
-     * `Dialog.Content isSwipeable` this defaults to `false`; the gesture
-     * only attaches when this *and* `isDismissable` are set and the
-     * resolved presentation is `"sheet"` under a touch environment — it
-     * never exists under a pointer.
-     */
-    isSwipeable?: boolean;
-  },
+  props: AlertDialogBackdropProps,
 ): JSX.Element {
   const parent = AlertDialogContext();
 
@@ -245,19 +245,27 @@ export function AlertDialogBackdrop(
     // The release settles one of two ways: past half the card height, or a
     // fast enough fling (`vy` arrives in points per second; the threshold is
     // the sheet family's 0.5 points per millisecond), it dismisses; anything
-    // else — and every terminate — snaps back to rest.
+    // else — and every terminate — snaps back to rest. The half-height arm
+    // requires the height to have actually reported (`cardHeight` starts at 0
+    // and never resets, so without the guard any release before the first
+    // layout would read as "past half" and dismiss). A dismissing release
+    // keeps the offset where the finger left it through the fade — resetting
+    // first made the card visibly snap-jump before exiting (modal precedent).
     onDragEnd: (_event, gesture, terminated) => {
-      swipeOffset.set(0);
-
       if (terminated) {
+        swipeOffset.set(0);
         return;
       }
 
-      if (
-        gesture.dy >= cardHeight() / 2 ||
-        gesture.vy / 1000 >= SWIPE_DISMISS_VELOCITY
-      ) {
+      const height = cardHeight();
+      const dismisses =
+        (height > 0 && gesture.dy >= height / 2) ||
+        gesture.vy / 1000 >= SWIPE_DISMISS_VELOCITY;
+
+      if (dismisses) {
         close();
+      } else {
+        swipeOffset.set(0);
       }
     },
   });

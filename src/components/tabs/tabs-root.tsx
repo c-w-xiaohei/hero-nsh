@@ -16,6 +16,7 @@ import {
 } from "./tabs-context";
 import { type TabsKey, decodeTabKey, encodeTabKey } from "./tabs-key";
 import { tabsVariants } from "./tabs.styles";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * Props
@@ -221,7 +222,7 @@ export function TabsRoot(props: TabsRootProps): JSX.Element {
       variant: variant(),
       orientation: orientation(),
       input: input(),
-      density: density(),
+      density: densityKey(density()),
     }),
   );
 

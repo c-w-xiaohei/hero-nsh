@@ -88,6 +88,10 @@ export function InputGroupTextArea(props: InputGroupTextAreaProps): JSX.Element 
     {
       multiline: true,
       usesRows: true,
+      // A-004 (residual, sheet §8): same environment input axis as the
+      // group's hover gates — keeps the shared control's `isHovered`
+      // render-prop honest under touch.
+      input,
       // The group owns every state class, exactly as for the single-line input.
       stateClasses: false,
       // R-015 / R-020: the input slot plus the textarea's minimum height.

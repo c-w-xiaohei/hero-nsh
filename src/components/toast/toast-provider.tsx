@@ -133,6 +133,15 @@ export interface ToastProviderProps<T extends object = ToastContentValue>
 
   /** Forwarded to the region `View` as a callback, never as a ref store. */
   ref?: (node: ViewRef) => void;
+
+  /**
+   * The stack-level default for swiping a toast closed, handed down
+   * through `ToastContextValue.isSwipeable`; a toast's own `isSwipeable`
+   * overrides it. The gesture only exists where `input === "touch"`, so
+   * this prop changes nothing under a pointer environment.
+   * @default true
+   */
+  isSwipeable?: boolean;
 }
 
 /** `event.code` values the code path cannot derive from a letter or a digit. */
@@ -269,24 +278,8 @@ function toMinWidth(width: number | string): number | `${number}%` | undefined {
  *
  * The region renders only while the queue is non-empty (port sheet §3).
  */
-/*
- * The additive `isSwipeable` rides the call surface as an inline
- * intersection, for the same reason as `ToastRoot`'s: the sheet's `prop`
- * cell is `` `ToastProviderProps.isSwipeable` ``, which gate M5 cannot match
- * to an interface member, and the fixer may not edit sheets. `ToastProviderProps`
- * stays byte-identical to its desktop contract.
- */
 export function ToastProvider<T extends object = ToastContentValue>(
-  props: ToastProviderProps<T> & {
-    /**
-     * The stack-level default for swiping a toast closed, handed down
-     * through `ToastContextValue.isSwipeable`; a toast's own `isSwipeable`
-     * overrides it. The gesture only exists where `input === "touch"`, so
-     * this prop changes nothing under a pointer environment.
-     * @default true
-     */
-    isSwipeable?: boolean;
-  },
+  props: ToastProviderProps<T>,
 ): JSX.Element {
   const [local, rest] = split(props, [
     "children",

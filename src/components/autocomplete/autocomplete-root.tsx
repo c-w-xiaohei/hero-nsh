@@ -52,6 +52,7 @@ import {
   autocompleteVariants,
   type AutocompleteVariants,
 } from "./autocomplete.styles";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * Render props
@@ -366,7 +367,7 @@ export function AutocompleteRoot<T>(props: AutocompleteRootProps<T>): JSX.Elemen
       variant: variant(),
       fullWidth: fullWidth(),
       input: input(),
-      density: density(),
+      density: densityKey(density()),
     }),
   );
 

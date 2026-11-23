@@ -100,7 +100,7 @@ export type ComboBoxSelection<M extends "single" | "multiple" = "single"> =
 export interface ComboBoxRootProps<
   T extends object = object,
   M extends "single" | "multiple" = "single",
-> extends ComboBoxVariants {
+> extends Omit<ComboBoxVariants, "input"> {
   /**
    * The variant dimension (`"primary"` by default). HeroUI 3.2.7's variant
    * table and CSS carry no `secondary` branch, so it makes no class; it is

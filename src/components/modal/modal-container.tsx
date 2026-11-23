@@ -36,14 +36,7 @@ export interface ModalContainerProps
 }
 
 /** Modal.Container / ModalContainer: the positioning wrapper for the dialog. */
-export function ModalContainer(
-  props: ModalContainerProps & {
-    /** See `ModalBackdrop` — kept on the type surface the sheet declares. */
-    presentation?: ModalPresentation | "auto";
-    /** See `ModalBackdrop` — stripped by `split` below like the other overlay props. */
-    isSwipeable?: boolean;
-  },
-): JSX.Element {
+export function ModalContainer(props: ModalContainerProps): JSX.Element {
   const [local, rest] = split(props, [
     "children",
     "className",

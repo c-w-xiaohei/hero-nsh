@@ -10,6 +10,7 @@ import { joinClassNames } from "./class-names";
 import { AlertContext, type AlertContextValue, type AlertStatus } from "./context";
 import { createDensity } from "../../primitives/environment";
 import { SurfaceContext, type SurfaceContextValue } from "../surface";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * Alert Root
@@ -121,7 +122,7 @@ export function AlertRoot(props: AlertRootProps): JSX.Element {
 
   // R-001 … R-020 and A-001 resolve through the same table for the root and
   // every part.
-  const slots = computed(() => alertVariants({ status: status(), density: density() }));
+  const slots = computed(() => alertVariants({ status: status(), density: densityKey(density()) }));
 
   const contextValue: AlertContextValue = { slots, status };
 

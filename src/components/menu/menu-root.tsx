@@ -53,13 +53,15 @@ import {
   sortByRenderedOrder,
 } from "./menu-context";
 import { menuVariants, type MenuVariants } from "./menu.styles";
+import { densityKey } from "../../tokens/density";
 
 /** The live state HeroUI hands to `className`, `style` and the empty state. */
 export interface MenuRenderProps {
   isEmpty: Accessor<boolean>;
 }
 
-export interface MenuRootProps<T = unknown> extends MenuVariants {
+export interface MenuRootProps<T = unknown>
+  extends Omit<MenuVariants, "input" | "density"> {
   /**
    * Static entries and sections, or with `items`, the render function called
    * once per entry. Read once, inside the context provider (research 4.1).
@@ -605,7 +607,7 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
   const density = createDensity();
 
   const classes = computed(() =>
-    [menuVariants({ density: density() }), resolvedClassName()]
+    [menuVariants({ density: densityKey(density()) }), resolvedClassName()]
       .filter((part): part is string => typeof part === "string" && part.length > 0)
       .join(" "),
   );
