@@ -7,7 +7,7 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, effect, reduceMotion, signal, split, Overlay } from "nsh";
+import { cleanup, computed, effect, reduceMotion, signal, split, Overlay, View } from "nsh";
 
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
@@ -560,12 +560,14 @@ export function DatePickerPopover(props: DatePickerPopoverProps): JSX.Element {
     triggerRef: () => undefined,
   };
 
-  // A-011: the carrier probes. Each branch derives its `testID` from the
-  // caller's — `<id>-panel` on the anchored overlay, `<id>-sheet` on the
-  // Sheet panel — so `app.shows`/`count` can tell which carrier the resolved
-  // presentation mounted (the `arrow` part's `<id>-default` convention;
-  // §8 registers the observable-id change). `nativeID` keeps its verbatim
-  // mapping.
+  // A-011: the carrier probes. The caller's `testID` keeps its verbatim seat
+  // on the layer element itself (the `arrow` part's `<id>-default`
+  // convention: the base id never moves), while each carrier mounts a
+  // derived probe — `<id>-panel` on the underlay of the anchored chain (a
+  // hidden marker view when `isNonModal` removes the underlay), `<id>-sheet`
+  // on the Sheet panel — so `app.shows`/`count` can still tell which carrier
+  // the resolved presentation mounted (§8 registers the derived ids).
+  // `nativeID` keeps its verbatim mapping.
   const panelTestID = () => (local.testID !== undefined ? `${local.testID}-panel` : undefined);
   const sheetTestID = () => (local.testID !== undefined ? `${local.testID}-sheet` : undefined);
 
@@ -582,7 +584,7 @@ export function DatePickerPopover(props: DatePickerPopoverProps): JSX.Element {
       offset={local.offset ?? 8}
       margin={local.containerPadding ?? 12}
       focusable={true}
-      testID={panelTestID()}
+      testID={local.testID}
       nativeID={local.id ?? local.nativeID}
       accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel ?? picker.labelText()}
       class={classes()}
@@ -608,20 +610,31 @@ export function DatePickerPopover(props: DatePickerPopoverProps): JSX.Element {
   // modal underlay plus the anchored content overlay. `"panel"` *is* the
   // upstream layer, so nothing about its structure changes.
   const panelBranch = (
-    <If when={!isNonModal()} else={contentOverlay}>
-      <Overlay
-        class="inset-0"
-        classList={underlayClassList()}
-        focusable={false}
-        onPress={() => {
-          if (isOpen()) {
-            setOpen(false);
-          }
-        }}
-      >
-        {contentOverlay}
-      </Overlay>
-    </If>
+    <>
+      {/* `-panel` probe for the underlay-free chain: the modal path's
+          carrier probe sits on the underlay itself; with `isNonModal` there
+          is no underlay, so an empty marker view carries the derived id —
+          pointer-events-free, zero-size, so visible size and presses are
+          untouched. */}
+      <If when={isNonModal()}>
+        <View testID={panelTestID()} style={{ width: 1, height: 1 }} class="pointer-events-none" />
+      </If>
+      <If when={!isNonModal()} else={contentOverlay}>
+        <Overlay
+          class="inset-0"
+          classList={underlayClassList()}
+          focusable={false}
+          testID={panelTestID()}
+          onPress={() => {
+            if (isOpen()) {
+              setOpen(false);
+            }
+          }}
+        >
+          {contentOverlay}
+        </Overlay>
+      </If>
+    </>
   );
 
   return (
