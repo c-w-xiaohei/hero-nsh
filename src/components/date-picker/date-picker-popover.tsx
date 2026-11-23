@@ -100,9 +100,9 @@ export interface DatePickerPopoverProps {
   isKeyboardDismissDisabled?: boolean;
 
   /**
-   * The container the layer presents as: the `createPresentation` rule —
-   * touch plus a compact short side picks `"sheet"`; `"panel"` is the
-   * anchored floating layer this part has always been; `"sheet"` is the
+   * A-001: the container the layer presents as: the `createPresentation`
+   * rule — touch plus a compact short side picks `"sheet"`; `"panel"` is
+   * the anchored floating layer this part has always been; `"sheet"` is the
    * `Sheet` carrier. The value domain narrows to the two carriers this
    * overlay supports, following the Popover/Menu two-state convention
    * (`fullscreen` / `"dialog"` are not in the domain).
