@@ -2,7 +2,15 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, shadow } from "../../tokens/geometry";
+// `ease.smooth` and `shadow.overlay.both` of `src/tokens/geometry.ts` written
+// out: the M2 class walker imports this file through Node ESM, which does not
+// resolve extensionless relative specifiers, so the geometry module cannot be
+// imported from a `.styles.ts`. Same pattern as `switch.styles.ts` /
+// `alert-dialog.styles.ts`; keep in sync with `SHADOW_VALUES.overlay` and
+// `EASE_VALUES`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const SHADOW_OVERLAY_BOTH =
+  "shadow-[0_2px_8px_0_rgba(0,0,0,0.06),0_-6px_12px_0_rgba(0,0,0,0.03),0_14px_28px_0_rgba(0,0,0,0.08)] dark:shadow-[0_0_1px_0_rgba(255,255,255,0.3)_inset]";
 
 /**
  * ComboBox's variant table, mirroring `@heroui/styles` 3.2.7
@@ -53,8 +61,8 @@ export const comboBoxVariants = tv({
     // R-022: the popover is not a focus stop (the input keeps the focus), so
     // upstream's `outline-none` is only a fallback here.
     popover: [
-      `flex flex-col overflow-hidden bg-overlay p-0 text-sm rounded-[22px] ${shadow.overlay.both} outline-none`,
-      `duration-150 ${ease.smooth}`,
+      `flex flex-col overflow-hidden bg-overlay p-0 text-sm rounded-[22px] ${SHADOW_OVERLAY_BOTH} outline-none`,
+      `duration-150 ${EASE_SMOOTH}`,
     ].join(" "),
   },
   defaultVariants: {
