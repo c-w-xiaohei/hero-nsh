@@ -600,10 +600,6 @@ function MobileSubmenuCase() {
               testID="dd-sub"
               presentation={carrier()}
               onLayout={boxProbe("sub-scroll")}
-              className={(values: { placement: () => unknown }) => {
-                probe("subpos")({ placement: values.placement() });
-                return "";
-              }}
             >
               <Dropdown.Menu onAction={(key: unknown) => action(key)}>
                 <Dropdown.Item id="share-x" textValue="Share to X">

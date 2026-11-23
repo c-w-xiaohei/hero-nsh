@@ -16,8 +16,12 @@ export type DropdownTriggerMode = "press" | "longPress" | "contextMenu";
  * React Aria's `MenuTrigger` context.
  */
 export interface DropdownContextValue {
-  /** The variant slots, resolved once per root. */
-  slots: DropdownSlots;
+  /**
+   * The variant slots, resolved for this instance. The accessor stays live
+   * (the `input`/`density` variant axes read the environment), so a part
+   * reads it where its classes bind, as `TableContext.slots` does.
+   */
+  slots: Accessor<DropdownSlots>;
 
   /** The shared open state, or `undefined` in a scope with no opinion. */
   isOpen: Accessor<boolean | undefined>;
@@ -77,6 +81,13 @@ export interface DropdownPopoverContextValue {
 
   /** This layer's open state. */
   isOpen: Accessor<boolean>;
+
+  /**
+   * The carrier this layer presents as (A-002). `Dropdown.SubmenuTrigger`
+   * reads it for the sheet-mismatch dev warning (A-011); it is an internal
+   * channel, not part of `index.ts`'s public surface.
+   */
+  presentation: Accessor<"panel" | "sheet">;
 }
 
 export const DropdownPopoverContext = context<

@@ -41,11 +41,38 @@ export const dropdownVariants = tv({
       `bg-overlay p-0 text-sm text-overlay-foreground rounded-[22px] ${shadow.overlay.both} duration-150 ${ease.smooth}`,
     // R-031 `.dropdown__popover [data-slot="dropdown-menu"]` → `p-1.5
     // outline-none`, written by `Dropdown.Menu` after Menu's own base classes
-    // (later wins, so it overrides `.menu`'s `p-1`).
+    // (later wins, so it overrides `.menu`'s `p-1`) — `p-1.5` moved into the
+    // `density` axis below (A-001).
     // R-033 `.dropdown__menu` → `gap-0.5` (the other declarations of that
     // block are already in Menu's base: `relative flex w-full flex-col`,
-    // `overflow-clip` → `overflow-hidden`).
-    menu: "p-1.5 outline-none gap-0.5",
+    // `overflow-clip` → `overflow-hidden`) — `gap-0.5` moved with `p-1.5`.
+    menu: "outline-none",
+  },
+  defaultVariants: {
+    input: "pointer",
+    density: "default",
+  },
+  variants: {
+    // A-001: the `input` axis is wired for the uniform `{input, density}`
+    // call the Root feeds every axis'd table, but this table has no cell to
+    // land: the trigger's `scale-[0.97]` press visual is JS `pressed()`
+    // driven (no `hover:`/`active:` pseudo-state to move) and its hit
+    // expansion goes through the trigger's `createPressFeedback` half
+    // (A-006), so both cells stay empty.
+    input: {
+      pointer: {},
+      touch: {},
+    },
+    // A-001: the `density` axis owns the menu row spacing — `p-1.5 gap-0.5`
+    // moved out of the slot base. Spacing literals have no density-token
+    // exit (list-box A-001 the same reason), and menu row spacing is the
+    // visible face of collection density, which is why this table gets a
+    // `density` axis at all. `default` is the shipped value; `compact`
+    // tightens one step.
+    density: {
+      default: { menu: "p-1.5 gap-0.5" },
+      compact: { menu: "p-1 gap-0" },
+    },
   },
 });
 

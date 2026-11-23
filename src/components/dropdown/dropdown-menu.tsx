@@ -37,7 +37,7 @@ export function DropdownMenu<T>(props: DropdownMenuProps<T>) {
   const popover = DropdownPopoverContext();
   const submenu = DropdownSubmenuLayerContext();
 
-  const slots = dropdown?.slots ?? dropdownVariants();
+  const slots = () => dropdown?.slots() ?? dropdownVariants();
 
   // R-034: `.dropdown__menu [data-slot="separator"]` is the same rule MenuRoot
   // already hands every Separator (`ms-[3%] w-[94%]`), so this part adds no
@@ -57,7 +57,7 @@ export function DropdownMenu<T>(props: DropdownMenuProps<T>) {
     const value = props.className;
     const resolved = typeof value === "function" ? value(values) : value;
 
-    return [slots.menu(), resolved ?? ""]
+    return [slots().menu(), resolved ?? ""]
       .filter((part): part is string => typeof part === "string" && part.length > 0)
       .join(" ");
   };
