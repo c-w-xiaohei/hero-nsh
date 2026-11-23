@@ -1,6 +1,9 @@
-import { host, mount, signal, Text, View } from "nsh";
-import { Description, Label, Tag, TagGroup } from "@heroui/react";
+import { effect, host, mount, signal, Text, View } from "nsh";
+import type { JSX } from "nsh";
+import { Description, EnvironmentScope, Label, Tag, TagGroup } from "@heroui/react";
 import type { SelectionValue } from "@heroui/react";
+import { PressableFeedbackContext } from "../src/primitives/pressable";
+import type { PressableFeedbackContextValue } from "../src/primitives/pressable";
 import { probe } from "@scenario/probe";
 
 /*
@@ -51,7 +54,31 @@ import { probe } from "@scenario/probe";
  *   live-children              a tag whose plain children read a signal, plus
  *                              an Update button (X-001)
  *   press-log                  single News / Travel, the rows' press lifecycle
- *                              routed to probes (X-002)
+ *                              routed to probes (X-002, M-007's `events` order)
+ *
+ * Mobile-layer params (adapt sheet §4):
+ *   scope     "" = the host's default environment (pointer — the
+ *             desktop-parity side); "touch" wraps the case in
+ *             EnvironmentScope(input="touch"), the injected environment the
+ *             assertions drive.
+ *   probe     "1" mounts the seam surface: a `CtxProbe` inside a probed row or
+ *             remove button (reads `PressableFeedbackContext` — the row and
+ *             the remove button each wrap their view, so a child reads the
+ *             live channels of the seam above it) plus a `ctx-sample` sibling
+ *             button that reads the AnimatedValue channels on demand.
+ *             Reports: `ctx-env` (gate/hitSlop at mount), `ctx-pressed`
+ *             (isPressed edges), `ctx-state`/`ctx-channels` (pressed / scale /
+ *             hitSlop / origin / bounds). Off by default so the text surface
+ *             is unchanged.
+ *   feedback-row      single selectable News / Travel, News probed (M-002)
+ *   feedback-static   selectionMode none + no action: a static row, probed
+ *                     (M-003 — the seam's hitSlop gate)
+ *   remove-probe      removable Cat, the probe inside Tag.RemoveButton
+ *                     (M-009 — the button's own seam)
+ *   group-disabled    TagGroup isDisabled: every key disabled, press/remove
+ *                     inert (A-008, M-006, M-013)
+ *   row-hover         a row rendering its isHovered marker and hover callback
+ *                     probes (A-004, M-005)
  *
  * The focus marker `▶` stands in for `document.activeElement`: focus is
  * virtual, the row that holds `focusedKey` reads it from `isFocused`. The
@@ -95,6 +122,129 @@ function onRemove(keys: "all" | Iterable<unknown>): void {
 }
 
 /* -------------------------------------------------------------------------------------------------
+ * Environment injection + seam probe (the mobile layer's observation surface)
+ * -----------------------------------------------------------------------------------------------*/
+
+function Scoped(props: { children?: JSX.Element }) {
+  return String(host.params.scope ?? "") === "touch" ? (
+    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
+
+function probeOn() {
+  return String(host.params.probe ?? "") === "1";
+}
+
+// The last mounted probe's context value, kept for `ctx-sample` — presses
+// that never raise the seam's `isPressed` edge (the default pointer
+// environment) still leave observable channel values.
+let rowCtx: PressableFeedbackContextValue | null = null;
+
+// `tag` labels the report so a case with several probes (row vs remove
+// button) can tell them apart; each mobile case mounts exactly one.
+function CtxProbe(props: { tag?: string }) {
+  const ctx = PressableFeedbackContext();
+  const reportPressed = probe("ctx-pressed");
+  const reportState = probe("ctx-state");
+  const reportEnv = probe("ctx-env");
+
+  effect(() => {
+    rowCtx = ctx;
+  });
+
+  // Mount-time environment of the seam: the effective gate and the computed
+  // hitSlop (undefined until `onLayout` reports the bounds, so this effect
+  // re-reports on the layout edge too).
+  effect(() => {
+    void ctx.bounds();
+    reportEnv({
+      tag: props.tag,
+      enabled: ctx.enabled(),
+      hitSlop: ctx.hitSlop() ?? null,
+      bounds: ctx.bounds(),
+    });
+  });
+
+  const sample = () => {
+    void ctx.pressed.getValue().then((pressed) => {
+      void ctx.scale.getValue().then((scale) => {
+        reportState({
+          tag: props.tag,
+          pressed,
+          scale,
+          isPressed: ctx.isPressed(),
+          hitSlop: ctx.hitSlop() ?? null,
+          origin: ctx.pressOrigin(),
+          bounds: ctx.bounds(),
+          enabled: ctx.enabled(),
+        });
+      });
+    });
+  };
+
+  // Both the edge and deferred samples, so a held press catches mid-run and
+  // settled values (the switch fixture's cadence).
+  effect(() => {
+    reportPressed(ctx.isPressed());
+    setTimeout(sample, 600);
+    setTimeout(sample, 1500);
+  });
+
+  // Polling sampler: on `--target web` the edge effect above only ever sees
+  // the settled flag — `pressDown`/`pressUp` land inside one press tick — so
+  // a `isPressed: true` mid-press sample must come from reading the flag on
+  // a clock.
+  effect(() => {
+    const timer = setInterval(() => {
+      if (ctx.isPressed()) {
+        sample();
+      }
+    }, 200);
+
+    return () => clearInterval(timer);
+  });
+
+  return <Text>{ctx.isPressed() ? "seam-pressed" : "seam-idle"}</Text>;
+}
+
+/** Mounts `CtxProbe` inside a row only when `probe=1` asks for it. */
+function SeamProbe(props: { tag?: string }) {
+  return probeOn() ? <CtxProbe tag={props.tag} /> : null;
+}
+
+function SampleButton() {
+  const reportChannels = probe("ctx-channels");
+
+  const sampleChannels = () => {
+    const c = rowCtx;
+    if (c === null) {
+      return;
+    }
+    void c.pressed.getValue().then((pressed) => {
+      void c.scale.getValue().then((scale) => {
+        reportChannels({
+          pressed,
+          scale,
+          isPressed: c.isPressed(),
+          hitSlop: c.hitSlop() ?? null,
+          origin: c.pressOrigin(),
+          bounds: c.bounds(),
+          enabled: c.enabled(),
+        });
+      });
+    });
+  };
+
+  return probeOn() ? (
+    <View testID="ctx-sample" role="button" class="p-2" onPress={sampleChannels}>
+      <Text>ctx-sample</Text>
+    </View>
+  ) : null;
+}
+
+/* -------------------------------------------------------------------------------------------------
  * Rows
  * -----------------------------------------------------------------------------------------------*/
 
@@ -104,23 +254,72 @@ function MarkedRow(props: {
   isDisabled?: boolean;
   removes?: boolean;
   presses?: boolean;
+  probed?: boolean;
+  laysOut?: boolean;
 }) {
+  const reportEvent = probe("events");
+
   return (
     <Tag
       id={props.id}
       textValue={props.label}
       isDisabled={props.isDisabled}
-      onPress={props.presses ? probe("press") : undefined}
-      onPressStart={props.presses ? probe("pressStart") : undefined}
-      onPressUp={props.presses ? probe("pressUp") : undefined}
-      onPressEnd={props.presses ? probe("pressEnd") : undefined}
-      onPressChange={props.presses ? probe("pressChange") : undefined}
+      onLayout={props.laysOut ? layoutProbe(props.id) : undefined}
+      onPress={
+        props.presses
+          ? (e) => {
+              probe("press")(e);
+              reportEvent("press");
+            }
+          : undefined
+      }
+      onPressStart={
+        props.presses
+          ? (e) => {
+              probe("pressStart")(e);
+              reportEvent("pressStart");
+            }
+          : undefined
+      }
+      onPressUp={
+        props.presses
+          ? (e) => {
+              probe("pressUp")(e);
+              reportEvent("pressUp");
+            }
+          : undefined
+      }
+      onPressEnd={
+        props.presses
+          ? (e) => {
+              probe("pressEnd")(e);
+              reportEvent("pressEnd");
+            }
+          : undefined
+      }
+      onPressChange={
+        props.presses
+          ? (isPressed) => {
+              probe("pressChange")(isPressed);
+              reportEvent(`pressChange(${isPressed})`);
+            }
+          : undefined
+      }
+      onPressDown={
+        props.presses
+          ? (e) => {
+              probe("pressDown")(e);
+              reportEvent("pressDown");
+            }
+          : undefined
+      }
     >
       {(values) => [
         <Text>{props.label}</Text>,
         <Text>{values.isFocused() ? "▶" : ""}</Text>,
         <Text>{values.isSelected() ? "✓" : ""}</Text>,
         ...(props.removes ? [<Tag.RemoveButton />] : []),
+        ...(props.probed ? [<SeamProbe tag={props.id} />] : []),
       ]}
     </Tag>
   );
@@ -136,7 +335,7 @@ function PlainRow(props: { id: string; label: string; isDisabled?: boolean }) {
 
 function MarkedGroup(props: {
   mode?: "none" | "single" | "multiple";
-  rows: { id: string; label: string; isDisabled?: boolean }[];
+  rows: { id: string; label: string; isDisabled?: boolean; probed?: boolean }[];
   selectedKeys?: SelectionValue;
   defaultSelectedKeys?: SelectionValue;
   disallowEmptySelection?: boolean;
@@ -154,7 +353,12 @@ function MarkedGroup(props: {
     >
       <TagGroup.List>
         {props.rows.map((row) => (
-          <MarkedRow id={row.id} label={row.label} isDisabled={row.isDisabled} />
+          <MarkedRow
+            id={row.id}
+            label={row.label}
+            isDisabled={row.isDisabled}
+            probed={row.probed}
+          />
         ))}
       </TagGroup.List>
     </TagGroup>
@@ -337,7 +541,108 @@ function PressLog() {
   );
 }
 
-function Fixture() {
+/* -------------------------------------------------------------------------------------------------
+ * Mobile-layer cases (adapt sheet §4)
+ * -----------------------------------------------------------------------------------------------*/
+
+// A probed, selectable row — the seam's target half (M-002, M-004, M-010's
+// same press behaviour under both environments). `laysOut` feeds the row's
+// bounds to the layout probe so M-004 can compare the two environments.
+function FeedbackRow() {
+  return (
+    <>
+      <TagGroup aria-label="Options" selectionMode="single" onSelectionChange={onSelectionChange}>
+        <TagGroup.List>
+          <MarkedRow id="news" label="News" probed laysOut />
+          <MarkedRow id="travel" label="Travel" laysOut />
+        </TagGroup.List>
+      </TagGroup>
+      <SampleButton />
+    </>
+  );
+}
+
+// A static row — selection "none" and no onAction, so the seam's hitSlop
+// accessor gate keeps `hitSlop()` undefined even under touch (M-003).
+function FeedbackStatic() {
+  return (
+    <>
+      <TagGroup aria-label="Labels" selectionMode="none">
+        <TagGroup.List>
+          <MarkedRow id="news" label="News" probed />
+        </TagGroup.List>
+      </TagGroup>
+      <SampleButton />
+    </>
+  );
+}
+
+// The probe inside `Tag.RemoveButton`'s children reads the button's own seam
+// (A-006) — the children replace the glyph while `probe=1` runs.
+function RemoveProbe() {
+  return (
+    <>
+      <TagGroup aria-label="Animals" selectionMode="single" onRemove={onRemove}>
+        <TagGroup.List>
+          <Tag id="cat" textValue="Cat">
+            Cat
+            <Tag.RemoveButton>
+              {probeOn() ? <CtxProbe tag="remove" /> : <Text>×</Text>}
+            </Tag.RemoveButton>
+          </Tag>
+        </TagGroup.List>
+      </TagGroup>
+      <SampleButton />
+    </>
+  );
+}
+
+// A-008: the group-level `isDisabled` — every key reports disabled, so a row
+// press selects nothing and the remove button's press removes nothing.
+function GroupDisabled() {
+  return (
+    <TagGroup
+      testID="tag-group"
+      aria-label="Animals"
+      selectionMode="single"
+      isDisabled
+      onRemove={onRemove}
+      onSelectionChange={onSelectionChange}
+    >
+      <TagGroup.List>
+        <MarkedRow id="cat" label="Cat" removes probed />
+        <MarkedRow id="dog" label="Dog" removes />
+      </TagGroup.List>
+    </TagGroup>
+  );
+}
+
+// A-004: the hover marker — `Hovered` only ever shows on a pointer hover;
+// under touch the flag never sets (the `hover:` class is gated out too).
+function RowHover() {
+  return (
+    <>
+      <TagGroup aria-label="Options" selectionMode="single">
+        <TagGroup.List>
+          <Tag
+            id="news"
+            textValue="News"
+            onHoverStart={probe("hoverStart")}
+            onHoverEnd={probe("hoverEnd")}
+          >
+            {(values) => [
+              <Text>News</Text>,
+              <Text>{values.isHovered() ? "Hovered" : "Idle"}</Text>,
+            ]}
+          </Tag>
+        </TagGroup.List>
+      </TagGroup>
+      <View testID="away" class="size-8 bg-default" />
+    </>
+  );
+}
+
+function CaseBody() {
   const name = String(host.params.case ?? "selection-log");
 
   if (name === "selection-log") {
@@ -450,7 +755,9 @@ function Fixture() {
     return (
       <MarkedGroup
         rows={[
-          { id: "news", label: "News" },
+          // `probed` mounts the seam probe inside the disabled row (M-006):
+          // only under `probe=1`, so the existing T-013 surface is unchanged.
+          { id: "news", label: "News", probed: true },
           { id: "travel", label: "Travel" },
         ]}
         disabledKeys={["news"]}
@@ -500,7 +807,7 @@ function Fixture() {
     return (
       <TagGroup aria-label="Categories" selectionMode="single" size="lg" variant="surface">
         <TagGroup.List>
-          <Tag id="news" textValue="News">
+          <Tag id="news" textValue="News" onLayout={layoutProbe("news")}>
             News
           </Tag>
         </TagGroup.List>
@@ -538,7 +845,38 @@ function Fixture() {
     return <PressLog />;
   }
 
+  if (name === "feedback-row") {
+    return <FeedbackRow />;
+  }
+
+  if (name === "feedback-static") {
+    return <FeedbackStatic />;
+  }
+
+  if (name === "remove-probe") {
+    return <RemoveProbe />;
+  }
+
+  if (name === "group-disabled") {
+    return <GroupDisabled />;
+  }
+
+  if (name === "row-hover") {
+    return <RowHover />;
+  }
+
   return <MarkedGroup rows={ONE_TWO_THREE} />;
+}
+
+// Every case mounts inside `Scoped`, so `scope=touch` works uniformly — the
+// injected environment the mobile assertions drive (the default "" is the
+// host's own environment, the desktop-parity half).
+function Fixture() {
+  return (
+    <Scoped>
+      <CaseBody />
+    </Scoped>
+  );
 }
 
 mount(Fixture);
