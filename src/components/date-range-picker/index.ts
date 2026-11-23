@@ -28,6 +28,12 @@ import {
  * component itself) plus the trigger, its indicator, the range separator and
  * the calendar layer, each reachable as `DateRangePicker.Part` and also
  * exported by name.
+ *
+ * A-011: the harness-side 接轴 spot of adapt sheet date-range-picker.md is
+ * realized in `harness/date-range-picker.fixtures.tsx` — the `Scoped` wrapper
+ * (host.params `input`/`width`/`density` → `EnvironmentScope`) around every
+ * case, the `presentation`/`nonmodal`/`kd`/`kt`/`readonly`/`disabled`
+ * parameters, and the `drp-popover-panel`/`drp-popover-sheet` carrier probes.
  */
 export const DateRangePicker = Object.assign(DateRangePickerRoot, {
   Root: DateRangePickerRoot,
