@@ -705,8 +705,8 @@ export function DropdownPopover(props: DropdownPopoverProps) {
    * the caller's class/style) and the id / testID / label forwards;
    * `SheetDialog` is the panel — the `SheetContentPanContext` supply point,
    * which is what lets the content area drag the detent and arbitrate with
-   * `SheetBody`'s paired Scroll under touch (`panHandlers()` is an empty
-   * object under pointer, so no gesture path exists there); `SheetBody`
+   * `SheetBody`'s paired Scroll under touch (its pan handlers spread to an
+   * empty object under pointer, so no gesture path exists there); `SheetBody`
    * wraps the same `content` subtree, replacing the panel branch's `Scroll`
    * with its own paired one — the `DropdownPopoverContext.Provider` chain
    * inside it is unchanged. `local.isEntering`/`isExiting`/
