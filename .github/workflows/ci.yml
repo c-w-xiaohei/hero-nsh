@@ -42,17 +42,14 @@ jobs:
 
   headless:
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 2]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - name: Tests
         shell: bash
         run: |
-          bash .github/scripts/test.sh headless ${{ matrix.shard }} ${{ strategy.job-total }} 2>&1 | tee "$RUNNER_TEMP/tests.log"
+          set -o pipefail
+          bash .github/scripts/test.sh headless 2>&1 | tee "$RUNNER_TEMP/tests.log"
           # An unknown class builds, passes and renders wrong; the warning is
           # the only signal. The tests run with no "tailwind" block in
           # harness/nsh.json, so a class that needs one shows up here.

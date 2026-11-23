@@ -23,14 +23,21 @@ selected=()
 index=0
 while IFS= read -r file; do
   [[ -n "$file" ]] || continue
-  case "${file##*/}" in
+  name=${file##*/}
+  case "$name" in
+    *.ios.test.*) targets=' ios ' ;;
+    *.android.test.*) targets=' android ' ;;
+    *.mobile.*)
+      # These mobile files use desktop/headless tooling for local development.
+      case "$name" in
+        *.headless.test.*|*.web.test.*|*.browser.test.*|*.windows.test.*) continue ;;
+      esac
+      targets=' ios android '
+      ;;
     *.headless.test.*) targets=' headless ' ;;
     *.web.test.*|*.browser.test.*) targets=' web ' ;;
     *.windows.test.*) targets=' windows ' ;;
-    *.ios.test.*) targets=' ios ' ;;
-    *.android.test.*) targets=' android ' ;;
-    *.mobile.test.*) targets=' headless web ' ;;
-    *) targets=' headless windows ' ;;
+    *) targets=' windows ' ;; # Default desktop suite, run once.
   esac
   [[ $targets == *" $target "* ]] || continue
   if (( index % shard_count == shard )); then
