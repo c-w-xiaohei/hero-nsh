@@ -6,8 +6,14 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, split, View } from "nsh";
+import { cleanup, computed, createAnimatedValue, split, View } from "nsh";
 
+import {
+  createInput,
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives";
 import { renderChildren } from "../list-box/children";
 import { SelectContext, SelectTriggerContext } from "./select-context";
 
@@ -83,6 +89,31 @@ export function SelectClearButton(props: SelectClearButtonProps): JSX.Element {
   const isDisabled = () => trigger?.isDisabled() ?? select.isDisabled();
   const isEmpty = select.isSelectionEmpty;
 
+  // A-008: the press-feedback seam's invisible half only — `hitSlop` plus the
+  // `layout` read that feeds it (popover-trigger A-005's two-channel wiring).
+  // `isEmpty` folds into the gate: an empty field's `pointer-events-none` has
+  // no press to report, so the accessor stays `undefined` there. Under a
+  // pointer environment every accessor is inert.
+  const input = createInput();
+  const enabled = () => input() === "touch" && !isDisabled() && !isEmpty();
+  const feedback = createPressFeedback({ enabled });
+
+  // The context mirrors the trigger's convention so a part or probe can read
+  // the accessor values; nothing else consumes the channels (`pressDown` /
+  // `pressUp` stay unwired — R-027's `active:` class owns the press look).
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   // R-024: this registration is what enables the trigger's Backspace / Delete
   // shortcut, counted so two buttons cannot switch it off between them.
   cleanup(select.registerClearButton());
@@ -122,11 +153,16 @@ export function SelectClearButton(props: SelectClearButtonProps): JSX.Element {
   // R-022: the visible box stays 20pt and a child view widens the pointer
   // target to 24pt (WCAG 2.5.8). The child is what the pointer hits, so it
   // routes to the same entry instead of relying on the parent's press.
+  // A-008: 24pt is below the touch minimum, so the seam expands this view's
+  // hit area invisibly — the painted box stays 20pt, `hitSlop` is `undefined`
+  // while gated (pointer, disabled or empty).
   const hitArea = () => (
     <View
       class="absolute -inset-0.5"
       focusable={false}
       disabled={isDisabled()}
+      hitSlop={feedback.hitSlop()}
+      onLayout={feedback.layout}
       onPress={clear}
       onPressDown={handlePressDown}
       onMouseEnter={handleMouseEnter}
@@ -188,8 +224,10 @@ export function SelectClearButton(props: SelectClearButtonProps): JSX.Element {
       onMouseLeave={handleMouseLeave}
       onLayout={local.onLayout}
     >
-      {content()}
-      {hitArea()}
+      <PressableFeedbackContext.Provider value={feedbackValue}>
+        {content()}
+        {hitArea()}
+      </PressableFeedbackContext.Provider>
     </View>
   );
 }

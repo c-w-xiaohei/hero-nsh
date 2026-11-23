@@ -20,7 +20,7 @@
  * and the close that releases the focused key so a hidden list holds no ring.
  */
 
-import { type Accessor, cleanup, effect, signal } from "nsh";
+import { type Accessor, cleanup, computed, effect, signal } from "nsh";
 
 import type { Collection, CollectionNode } from "../collection";
 import type { FocusStrategy, MultipleSelectionManager } from "../selection";
@@ -46,6 +46,17 @@ export interface CreateSelectStateProps {
    * (port sheet §5, third change). Defaults to the list's `focusList`.
    */
   focusTarget?: () => void;
+
+  /**
+   * The tag the resolved registration must match, when the field can hold
+   * more than one registered list. Select's three carrier branches each keep
+   * their own `ListBox` mounted (an element mounts under one parent only), so
+   * registration carries the carrier it belongs to and the owner resolves the
+   * one the current presentation uses — the visible list is the one that saw
+   * the selection, keeps `findItem` and takes the focus placement
+   * (adapt-sheets/select.md A-002's retained-mount corollary).
+   */
+  activeTag?: Accessor<string | undefined>;
 }
 
 export interface CreateSelectStateResult {
@@ -61,10 +72,16 @@ export interface CreateSelectStateResult {
   /** The list's focus callbacks, or `undefined` before the first open. */
   controls: Accessor<ListOwnerListControls | undefined>;
 
-  /** Called by the list: reports its state and focus callbacks. */
+  /**
+   * Called by the list: reports its state and focus callbacks. `tag` names
+   * which of the field's lists this is (Select's per-carrier ListBox); the
+   * resolved pair follows `activeTag` when it is set, the latest registration
+   * otherwise.
+   */
   registerList: (
     state: ListState,
     controls: ListOwnerListControls,
+    tag?: string,
   ) => () => void;
 
   /**
@@ -89,25 +106,47 @@ export interface CreateSelectStateResult {
 export function createSelectState(
   props: CreateSelectStateProps,
 ): CreateSelectStateResult {
-  const list = signal<ListState | undefined>(undefined);
-  const controls = signal<ListOwnerListControls | undefined>(undefined);
+  // Every list the field holds: Select's carriers mount one `ListBox` each,
+  // so registration is a stack, not a slot. The resolved pair is the last
+  // entry whose tag matches `activeTag`, the last entry when no tag was
+  // named — the single-list callers see exactly the old behavior.
+  interface RegisteredList {
+    state: ListState;
+    controls: ListOwnerListControls;
+    tag: string | undefined;
+  }
+
+  const entries = signal<readonly RegisteredList[]>([]);
+  const resolve = (): RegisteredList | undefined => {
+    const registered = entries();
+    const tag = props.activeTag?.();
+
+    if (tag !== undefined) {
+      for (let index = registered.length - 1; index >= 0; index -= 1) {
+        if (registered[index].tag === tag) {
+          return registered[index];
+        }
+      }
+    }
+
+    return registered[registered.length - 1];
+  };
+
+  const list = computed(() => resolve()?.state);
+  const controls = computed(() => resolve()?.controls);
   const focusStrategy = signal<FocusStrategy | undefined>(undefined);
 
   const registerList = (
     state: ListState,
     listControls: ListOwnerListControls,
+    tag?: string,
   ) => {
-    list.set(state);
-    controls.set(listControls);
+    const entry: RegisteredList = { state, controls: listControls, tag };
+
+    entries.update((current) => [...current, entry]);
 
     return () => {
-      if (list() === state) {
-        list.set(undefined);
-      }
-
-      if (controls() === listControls) {
-        controls.set(undefined);
-      }
+      entries.update((current) => current.filter((item) => item !== entry));
     };
   };
 

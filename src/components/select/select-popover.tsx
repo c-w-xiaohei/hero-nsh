@@ -7,11 +7,22 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { computed, effect, Overlay, Scroll, signal, split } from "nsh";
+import { computed, effect, Overlay, Scroll, signal, split, View, windowSize } from "nsh";
 
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
+import type { OverlayTriggerContextValue } from "../../primitives/create-overlay-trigger";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { createPresentation } from "../../primitives/presentation";
+import {
+  ListOwnerContext,
+  type ListOwner,
+} from "../../primitives";
+import { SheetBody } from "../sheet/sheet-body";
+import { SheetContent } from "../sheet/sheet-content";
+import { SheetBackdrop } from "../sheet/sheet-backdrop";
+import { SheetDialog } from "../sheet/sheet-dialog";
+import { SheetRoot } from "../sheet/sheet-root";
 import { renderChildren } from "../list-box/children";
 import {
   ListBoxContainerContext,
@@ -22,7 +33,11 @@ import type {
   PopoverSide,
 } from "../popover/popover-placement";
 import { resolvePopoverPlacement } from "../popover/popover-placement";
-import { SelectContext } from "./select-context";
+import {
+  SelectCarrierContext,
+  SelectContext,
+  type SelectCarrier,
+} from "./select-context";
 
 /* -------------------------------------------------------------------------------------------------
  * Render props
@@ -89,6 +104,18 @@ export interface SelectPopoverProps {
 
   /** Skips the enter and exit phases entirely. */
   shouldSkipAnimation?: boolean;
+
+  /**
+   * The container the popover presents as (A-002). `"auto"` runs the shared
+   * `createPresentation` rule — touch plus a compact short side picks
+   * `"sheet"`, everything else `"panel"`. `"panel"` is the anchored overlay
+   * upstream calls `'popover'`; `"sheet"` is the `Sheet` carrier upstream
+   * calls `'bottom-sheet'`; `"fullscreen"` is the centered dialog upstream
+   * calls `'dialog'` (Native `SelectContent`'s three states, action-list §4).
+   * The single prop sits on the part that owns the carrier — upstream splits
+   * it across `SelectRoot` / `SelectContent` (§8).
+   */
+  presentation?: "auto" | "panel" | "sheet" | "fullscreen";
 
   /** The name of the trigger, for render values (default `"Select"`). */
   trigger?: string;
@@ -159,6 +186,7 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
     "isEntering",
     "isExiting",
     "shouldSkipAnimation",
+    "presentation",
     "trigger",
     "triggerRef",
     "UNSTABLE_portalContainer",
@@ -230,6 +258,53 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
     isEntering: () => props.isEntering,
     isExiting: () => props.isExiting,
   });
+
+  /* -------------------------------------------------------------------------------------------
+   * Presentation: which of the three carriers the open popover takes (A-003).
+   * The value evaluates once on `isOpen`'s false→true edge and latches until
+   * close — a rotation can never swap the container mid-open.
+   *
+   * `isNonModal` folds into the pin: a non-modal popover has no sheet / dialog
+   * semantics (upstream's two non-panel carriers are always modal), so under
+   * `"auto"` it resolves to `"panel"`; an explicit `presentation="sheet"` /
+   * `"fullscreen"` still pins, the caller's stated intent winning over the
+   * derived rule (popover / date-picker's same ruling, sheet §6 margin note).
+   * ----------------------------------------------------------------------------------------- */
+  const presentation = createPresentation<"panel" | "sheet" | "fullscreen">({
+    pin: () =>
+      isNonModal() &&
+      (props.presentation === undefined || props.presentation === "auto")
+        ? "panel"
+        : props.presentation,
+    isOpen,
+    allowed: () => ["panel", "sheet", "fullscreen"],
+  });
+
+  // A-002's retained-mount corollary: each carrier branch below holds its own
+  // ListBox (an element mounts under one parent only, so no shared node can
+  // travel between carriers), and all three register with the field. The
+  // branch whose `carrier` tag matches the carrier this open resolved is the
+  // registration `selectionManager` / `findItem` / the focus placement read —
+  // set on the open edge so a closed field keeps the carrier its last open
+  // used (the value read-back and typeahead contract of the retained list).
+  const owner = ListOwnerContext();
+
+  effect(() => {
+    if (isOpen()) {
+      select.setActiveCarrier(presentation());
+    }
+  });
+
+  // The owner the children inside `carrier`'s branch see: identical to the
+  // field's except registration carries the branch's tag.
+  const carrierOwner = (carrier: SelectCarrier): ListOwner | undefined =>
+    owner === undefined
+      ? undefined
+      : {
+          ...owner,
+          registerList: (state, controls) =>
+            owner.registerList(state, controls, carrier),
+        };
 
   const resolved = computed(() => resolvePopoverPlacement(props.placement));
   const positionedSide = signal<PopoverSide | undefined>(undefined);
@@ -390,19 +465,49 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
     }
   };
 
-  // One read of `props.children`, at the placement inside the container that
-  // tells the list which classes and switches it gets.
-  const list = (
-    <Scroll
-      scrollbar={true}
-      class="w-full"
-      style={scrollStyle()}
-      onLayout={local.onLayout}
-    >
-      <ListBoxContainerContext.Provider value={containerValue}>
-        {renderChildren(local.children)}
-      </ListBoxContainerContext.Provider>
-    </Scroll>
+  // A-004/A-005/A-006: the carrier probes. Each branch derives its `testID`
+  // from the caller's — `<id>-panel` on the anchored overlay, `<id>-sheet` on
+  // the SheetContent, `<id>-dialog` on the fullscreen box — so `shows`/`count`
+  // discriminate which carrier `presentation` mounted (the popover unit's
+  // `<id>-default` convention).
+  const panelTestID = () =>
+    local.testID !== undefined ? `${local.testID}-panel` : undefined;
+  const sheetTestID = () =>
+    local.testID !== undefined ? `${local.testID}-sheet` : undefined;
+  const dialogTestID = () =>
+    local.testID !== undefined ? `${local.testID}-dialog` : undefined;
+
+  /* Scoped trigger context (popover A-003's controller ruling): inside the
+   * Sheet carrier a Button / ListBox must not pose as the sheet's own trigger
+   * or close the wrong channel — `isOpen` reports "no opinion" (`undefined`),
+   * `close` still reaches this popover's `close`, and registration is inert.
+   * Re-supplied inside `SheetContent` where `SheetRoot`'s own context would
+   * otherwise shadow the field's. */
+  const scopedTrigger: OverlayTriggerContextValue = {
+    isOpen: () => undefined,
+    setIsOpen: () => {},
+    toggle: () => {},
+    close: () => close(),
+    registerTrigger: () => () => {},
+    triggerRef: () => undefined,
+  };
+
+  // One read of `props.children` per carrier, at the placement inside the
+  // container that tells the list which classes and switches it gets. A
+  // factory, not a shared element: an element node mounts under one parent
+  // only, so each retained carrier branch holds its own copy of the subtree
+  // — a shared node left the panel's Scroll empty (the later branch
+  // references claimed it first). The carrier-scoped providers name which
+  // copy this is: `SelectCarrierContext` for parts that ask, and the wrapped
+  // owner so the copy's ListBox registers under this carrier's tag.
+  const list = (carrier: SelectCarrier) => (
+    <SelectCarrierContext.Provider value={carrier}>
+      <ListOwnerContext.Provider value={carrierOwner(carrier)}>
+        <ListBoxContainerContext.Provider value={containerValue}>
+          {renderChildren(local.children)}
+        </ListBoxContainerContext.Provider>
+      </ListOwnerContext.Provider>
+    </SelectCarrierContext.Provider>
   );
 
   const contentOverlay = (
@@ -413,7 +518,7 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
       align={resolved().align}
       offset={local.offset ?? 8}
       margin={local.containerPadding ?? 12}
-      testID={local.testID}
+      testID={panelTestID()}
       nativeID={local.id ?? local.nativeID}
       accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel}
       class={classes()}
@@ -422,18 +527,27 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
       onPressOutside={isOpen() ? close : undefined}
       onCancel={isOpen() ? handleCancel : undefined}
       onPosition={handlePosition}
+      onLayout={local.onLayout}
     >
-      {list}
+      <Scroll
+        scrollbar={true}
+        class="w-full"
+        style={scrollStyle()}
+      >
+        {list("panel")}
+      </Scroll>
     </Overlay>
   );
 
-  // The modal underlay: the second overlay that absorbs presses outside the
-  // list, as RAC's `usePopover` underlay. It has to be the outer overlay with
-  // the content nested inside it (two sibling overlays both claim the press on
-  // the web target). It exists only while something is shown: the closed
-  // field keeps the content mounted in the tree, but hidden, so the list's
-  // collection survives (port sheet §5, third and sixth changes).
-  return (
+  // A-004: the panel branch is the pre-existing render chain, verbatim — the
+  // modal underlay plus the anchored content overlay. `"panel"` *is* the
+  // upstream popover, so nothing about its structure changes; `measureAnchor`
+  // / `handlePosition` / `transformOrigin` / `triggerWidth` / `availableHeight`
+  // are only referenced on this carrier. The underlay exists only while
+  // something is shown: the closed field keeps the content mounted in the
+  // tree, but hidden, so the list's collection survives (port sheet §5, third
+  // and sixth changes).
+  const panelBranch = (
     <If when={!isNonModal()} else={contentOverlay}>
       <Overlay
         class="inset-0"
@@ -450,6 +564,157 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
       >
         {contentOverlay}
       </Overlay>
+    </If>
+  );
+
+  /* A-005: the sheet carrier composes the existing Sheet parts, upstream's
+   * `bottom-sheet` state. The popover keeps owning the open state — `SheetRoot`
+   * is a controlled shell fed `isOpen`, and a sheet dismissal (backdrop press,
+   * swipe, Escape) reports `onOpenChange(false)` into the same `close()` the
+   * underlay and `handleCancel` take, which still runs the two write paths
+   * (`setOwnIsOpen` + `select.close()`).
+   *
+   * `SheetBackdrop` gets `isExiting` forced: the select contract keeps the
+   * list mounted across every close (typeahead / first focus / `Value`
+   * read-back), and on this carrier only the backdrop's retention keeps the
+   * subtree — without it a once-opened sheet would unmount the `ListBox`,
+   * unregister the collection and lose `selectionManager` (the heaviest
+   * ruling of this unit, sheet §6 margin note; `isExiting` is the existing
+   * `retentionProps` / Native `forceMount` counterpart — no new prop).
+   * `isKeyboardDismissDisabled` goes with it so the contract prop gates
+   * Escape on this carrier exactly as `handleCancel` gates it on the panel
+   * chain.
+   *
+   * `SheetContent` carries the popover's own look and the id / testID / label
+   * forwards; `SheetDialog` is the panel — the `SheetContentPanContext`
+   * supply point, which is what makes the sheet input scenario participate
+   * in G (content-area pan + `keyboardDismissMode: "interactive"` reaching
+   * `SheetBody`'s paired Scroll through `scrollProps`); `SheetBody` wraps the
+   * same `{list}` subtree, replacing the panel branch's `Scroll` slot for
+   * slot. `props.isExiting` / `isEntering` / `shouldSkipAnimation` are not
+   * forwarded: the carrier always retains its mount, so the caller's exit
+   * intent has no semantics here (§8). */
+  const sheetBranch = (
+    <SheetRoot
+      isOpen={isOpen()}
+      onOpenChange={(open) => {
+        if (!open) {
+          close();
+        }
+      }}
+    >
+      <SheetBackdrop
+        isExiting={true}
+        isKeyboardDismissDisabled={isKeyboardDismissDisabled()}
+        testID={
+          local.testID !== undefined ? `${local.testID}-backdrop` : undefined
+        }
+      >
+        <SheetContent
+          ref={(node) => local.ref?.(node)}
+          testID={sheetTestID()}
+          nativeID={local.id ?? local.nativeID}
+          accessibilityLabel={
+            local["aria-label"] ?? local.accessibilityLabel
+          }
+          className={classes()}
+          style={resolvedStyle()}
+        >
+          <OverlayTriggerContext.Provider value={scopedTrigger}>
+            <SheetDialog>
+              <SheetBody>{list("sheet")}</SheetBody>
+            </SheetDialog>
+          </OverlayTriggerContext.Provider>
+        </SheetContent>
+      </SheetBackdrop>
+    </SheetRoot>
+  );
+
+  /* A-006: the fullscreen carrier, upstream's `dialog` state — Native's
+   * `SelectContentDialog` wrapper is an absolute-fill layer with a centered
+   * content box and no anchor geometry. Here it is the same two-Overlay chain
+   * the panel draws — a dead underlay layer plus an inner `Overlay` as the
+   * box — except the inner one is un-anchored (`anchor` `null` → a
+   * `position: fixed` box of the root view) and centers itself the way the
+   * codebase's centered boxes do: `left-1/2 top-1/2` plus the two
+   * `-translate-*-1/2` classes (a translate percentage is of the view's own
+   * box). `inset-0 m-auto` was the first attempt and it stretches instead of
+   * centering: the four inset pins fix the box's height to the window's, so
+   * `m-auto` centres only the maxHeight slack — the box reported 12→756 on a
+   * 768 viewport, no "outside" worth the name. `w-full` gives it the content
+   * width, the content gives the height.
+   *
+   * The box carries the popover look, the id / testID / label / ref forwards
+   * and the same `hidden` class semantics; its bounds come from the viewport
+   * inset by `containerPadding` — `availableHeight`'s counterpart on a
+   * carrier with no placement (§8). The dismissal channels are the panel's,
+   * verbatim: `onPressOutside` and `onCancel` — an overlay's own surface is
+   * not a press target in NSH (measured: neither `onPress` on an `Overlay`
+   * nor on a paint `View` inside it ever fires for the `app.press` that
+   * resolves to the page; only `onPressOutside` sees it). The inner overlay
+   * goes inert with `pointer-events-none` while closed, so the exit hold
+   * never covers the trigger; the outer underlay keeps the retention and
+   * press pass-through rules the panel's underlay has. Retention is the
+   * panel's: `hidden`, not unmount. */
+  const dialogInset = () => (local.containerPadding ?? 12) * 2;
+  const dialogStyle = (): StyleProp<ViewStyle> => [
+    TRANSITION_STYLE,
+    presence.isExiting() ? EXIT_DURATION_STYLE : undefined,
+    {
+      maxWidth: windowSize().width - dialogInset(),
+      maxHeight: windowSize().height - dialogInset(),
+      minWidth: triggerWidth(),
+    },
+    resolvedStyle(),
+  ];
+
+  const fullscreenBranch = (
+    <Overlay
+      class="inset-0"
+      classList={{
+        hidden: !presence.isPresent(),
+        "pointer-events-none": !isOpen(),
+      }}
+      focusable={false}
+    >
+      <Overlay
+        ref={(node) => local.ref?.(node)}
+        anchor={null}
+        class={`left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full ${classes()}`}
+        classList={{ ...classList(), "pointer-events-none": !isOpen() }}
+        style={dialogStyle()}
+        testID={dialogTestID()}
+        nativeID={local.id ?? local.nativeID}
+        accessibilityLabel={
+          local["aria-label"] ?? local.accessibilityLabel
+        }
+        onPressOutside={isOpen() ? close : undefined}
+        onCancel={isOpen() ? handleCancel : undefined}
+        onLayout={local.onLayout}
+      >
+        <Scroll
+          scrollbar={true}
+          class="w-full"
+          style={{
+            maxHeight: windowSize().height - dialogInset(),
+          }}
+        >
+          {list("fullscreen")}
+        </Scroll>
+      </Overlay>
+    </Overlay>
+  );
+
+  return (
+    <If
+      when={presentation() === "sheet"}
+      else={
+        <If when={presentation() === "fullscreen"} else={panelBranch}>
+          {fullscreenBranch}
+        </If>
+      }
+    >
+      {sheetBranch}
     </If>
   );
 }

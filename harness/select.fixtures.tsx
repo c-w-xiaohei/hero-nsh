@@ -1,5 +1,23 @@
-import { host, mount, signal, Text, View } from "nsh";
-import { Description, FieldError, Label, ListBox, Select } from "@heroui/react";
+import { effect, host, mount, signal, Text, View } from "nsh";
+import type { JSX } from "nsh";
+import { Input } from "nsh/base";
+import {
+  Description,
+  EnvironmentScope,
+  FieldError,
+  Label,
+  ListBox,
+  PressableFeedbackContext,
+  Select,
+} from "@heroui/react";
+import type {
+  EnvironmentDensity,
+  EnvironmentInput,
+  EnvironmentWidth,
+  PressableFeedbackContextValue,
+} from "@heroui/react";
+import { SheetContentPanContext } from "../src/components/sheet/create-sheet-detent";
+import { SelectCarrierContext } from "../src/components/select/select-context";
 import { probe } from "@scenario/probe";
 
 /*
@@ -54,6 +72,32 @@ import { probe } from "@scenario/probe";
  * It sits next to harness/nsh.json on purpose: NSH takes the entry's own
  * directory as the app root, so an entry under harness/tests/... finds no
  * nsh.json and loses the `@heroui/react` alias and the theme.
+ *
+ * Mobile layer (adapt sheet A-013): `Scoped` wraps the whole app in an
+ * `EnvironmentScope` fed by `host.params.input` / `width` / `density` (absent
+ * fields inherit the host baseline — the scope always mounts, never a bare
+ * fragment: the popover unit measured a fragment wrapper breaking the
+ * exit-hold unmount). The rest of the params parameterize `Select.Popover`
+ * and the probes:
+ *
+ *   presentation   "panel"|"sheet"|"fullscreen" pins the carrier (auto otherwise);
+ *   nonmodal="1"   mounts `isNonModal`;            kbdDismiss="1" mounts
+ *                  `isKeyboardDismissDisabled`;
+ *   kbd="1"        puts a base `Input` above the ListBox — the sheet input
+ *                  scenario whose paired Scroll dismisses the keyboard;
+ *   narrow="1"     shrinks the trigger below 44pt so the seam computes slop;
+ *   keepopen="1"   mounts `selectionMode="multiple"` (selection keeps the
+ *                  popover open);
+ *   ctx2="1"       swaps the clear icon for a `PressableFeedbackContext`
+ *                  probe (`ctx2-*` channels) reading the ClearButton's seam.
+ *
+ * Probes: `testID="sel-pop"` derives `id:sel-pop-panel` / `-sheet` / `-dialog`
+ * per carrier; `layout` reports the trigger and popover boxes; `events` the
+ * trigger's down/up/press sequence; `ctx-env`/`ctx-pressed`/`ctx-state`/
+ * `ctx-channels` sample the trigger's `PressableFeedbackContext` (the
+ * accordion/list-box convention) with `ctx-sample` as the on-demand sampler;
+ * `pan` reports `SheetContentPanContext` key counts and
+ * `keyboardDismissMode` inside the popover children (−1 outside a Dialog).
  */
 
 type ItemData = { id: string; name: string };
@@ -99,6 +143,173 @@ function normalizeSelection(value: unknown, multiple: boolean): unknown {
 /* -------------------------------------------------------------------------------------------------
  * Rows
  * -----------------------------------------------------------------------------------------------*/
+
+/* -------------------------------------------------------------------------------------------------
+ * EnvironmentScope wrapper (A-013) — every case mounts inside it; fields the
+ * params do not name keep the host's own environment.
+ * -----------------------------------------------------------------------------------------------*/
+
+function Scoped(props: { children?: JSX.Element }) {
+  const input = host.params.input;
+  const width = host.params.width;
+  const density = host.params.density;
+
+  return (
+    <EnvironmentScope
+      input={input === undefined ? undefined : (String(input) as EnvironmentInput)}
+      width={width === undefined ? undefined : (String(width) as EnvironmentWidth)}
+      density={
+        density === undefined ? undefined : (String(density) as EnvironmentDensity)
+      }
+    >
+      {props.children}
+    </EnvironmentScope>
+  );
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Probes (A-013)
+ * -----------------------------------------------------------------------------------------------*/
+
+type LayoutEvent = {
+  bounds: {
+    origin: { x: number; y: number };
+    size: { width: number; height: number };
+  };
+};
+
+/** A bounds report named `name`, so `layout` calls discriminate the views. */
+function boxProbe(name: string) {
+  return (event: LayoutEvent) =>
+    probe("layout")({
+      name,
+      x: event.bounds.origin.x,
+      y: event.bounds.origin.y,
+      width: event.bounds.size.width,
+      height: event.bounds.size.height,
+    });
+}
+
+/** The live `PressableFeedbackContext` the `ctx-sample` button reads. */
+let triggerCtx: PressableFeedbackContextValue | null = null;
+let clearCtx: PressableFeedbackContextValue | null = null;
+
+/** Samples one `PressableFeedbackContext` into the named probe channels. */
+function CtxProbe(props: { prefix: string; set: (ctx: PressableFeedbackContextValue | null) => void }) {
+  const ctx = PressableFeedbackContext();
+  const reportPressed = probe(`${props.prefix}-pressed`);
+  const reportState = probe(`${props.prefix}-state`);
+  const reportEnv = probe(`${props.prefix}-env`);
+
+  effect(() => {
+    props.set(ctx);
+  });
+
+  effect(() => {
+    reportEnv({
+      enabled: ctx.enabled(),
+      hitSlop: ctx.hitSlop() ?? null,
+    });
+  });
+
+  const sample = () => {
+    void ctx.pressed.getValue().then((pressed) => {
+      void ctx.scale.getValue().then((scale) => {
+        reportState({
+          seamPressed: ctx.isPressed(),
+          pressed,
+          scale,
+          origin: ctx.pressOrigin(),
+          hitSlop: ctx.hitSlop() ?? null,
+          bounds: ctx.bounds(),
+          enabled: ctx.enabled(),
+        });
+      });
+    });
+  };
+
+  effect(() => {
+    const seam = ctx.isPressed();
+    reportPressed({ seam });
+    setTimeout(sample, 600);
+    setTimeout(sample, 1500);
+  });
+
+  return null;
+}
+
+/** The `ctx-channels` / `ctx2-channels` on-demand read, after a press: a
+ * gated press never raises the `isPressed` edge, so the timed samples alone
+ * cannot prove the channels stayed at rest. */
+function sampleChannels() {
+  const report = probe("ctx-channels");
+  const ctx = triggerCtx;
+  if (ctx === null) {
+    return;
+  }
+  void ctx.pressed.getValue().then((pressed) => {
+    void ctx.scale.getValue().then((scale) => {
+      report({
+        seamPressed: ctx.isPressed(),
+        pressed,
+        scale,
+        origin: ctx.pressOrigin(),
+        hitSlop: ctx.hitSlop() ?? null,
+        enabled: ctx.enabled(),
+      });
+    });
+  });
+}
+
+function sampleClearChannels() {
+  const report = probe("ctx2-channels");
+  const ctx = clearCtx;
+  if (ctx === null) {
+    return;
+  }
+  void ctx.pressed.getValue().then((pressed) => {
+    void ctx.scale.getValue().then((scale) => {
+      report({
+        seamPressed: ctx.isPressed(),
+        pressed,
+        scale,
+        origin: ctx.pressOrigin(),
+        hitSlop: ctx.hitSlop() ?? null,
+        bounds: ctx.bounds(),
+        enabled: ctx.enabled(),
+      });
+    });
+  });
+}
+
+/** The `SheetContentPanContext` a sheet-carried popover's children sit in:
+ * `panKeys` / `scrollKeys` count the resolved prop keys (−1 where no Dialog
+ * supplied the context at all — the panel and fullscreen carriers).
+ *
+ * Every carrier branch keeps its own copy of the popover's children mounted
+ * (an element mounts under one parent only), so three of these run at once
+ * and the sheet copy is the only one inside `SheetDialog`'s provider.
+ * `carrier` is the branch's `SelectCarrierContext` (`"panel"` / `"sheet"` /
+ * `"fullscreen"`), which is what the assertions discriminate on — record
+ * order across the branches is not stable. */
+function PanProbe() {
+  const contentPan = SheetContentPanContext();
+  const carrier = SelectCarrierContext();
+  const report = probe("pan");
+
+  effect(() => {
+    const scroll = contentPan?.scrollProps() ?? {};
+    report({
+      carrier: carrier ?? null,
+      panKeys: contentPan ? Object.keys(contentPan.panHandlers()).length : -1,
+      scrollKeys: contentPan ? Object.keys(scroll).length : -1,
+      keyboardDismissMode:
+        (scroll as { keyboardDismissMode?: string }).keyboardDismissMode ?? null,
+    });
+  });
+
+  return null;
+}
 
 function Row(props: { item: ItemData }) {
   return (
@@ -150,11 +361,29 @@ type CaseProps = {
   onSelection?: (value: unknown) => void;
 };
 
+function param(name: string): string {
+  return String(host.params[name] ?? "");
+}
+
 function Case(props: CaseProps) {
+  // A-013: `keepopen="1"` mounts the multiple-selection path — selecting a
+  // row keeps the popover open, which is what a retained sheet carrier must
+  // survive (M-009).
+  const multiple = () => props.multiple === true || param("keepopen") === "1";
+
   const recordSelection = (value: unknown) => {
-    probe("selectionChange")(normalizeSelection(value, props.multiple === true));
+    probe("selectionChange")(normalizeSelection(value, multiple()));
     props.onSelection?.(value);
   };
+
+  // The mobile params (A-013): the carrier pin, the dismissal gates, the
+  // input scenario, the sub-44pt trigger and the probe switches.
+  const presentation = param("presentation");
+  const narrow = param("narrow") === "1";
+  const layout = param("layout") === "1";
+  const hover = param("hover") === "1";
+  const ctx2 = param("ctx2") === "1";
+  const kbd = param("kbd") === "1";
 
   return (
     <View class="w-64 items-start gap-2">
@@ -165,46 +394,82 @@ function Case(props: CaseProps) {
         className={props.clear ? "w-[256px]" : undefined}
         placeholder={props.placeholder}
         aria-label={props.ariaLabel}
-        selectionMode={props.multiple ? "multiple" : "single"}
+        selectionMode={multiple() ? "multiple" : "single"}
         isDisabled={props.disabled}
         isInvalid={props.invalid}
         disabledKeys={props.disabledKeys}
         disallowEmptySelection={props.disallowEmpty}
         defaultOpen={props.defaultOpen}
         isOpen={props.open}
-        defaultSelectedKey={props.multiple ? undefined : props.defaultKey}
-        defaultSelectedKeys={props.multiple ? props.defaultKeys : undefined}
+        defaultSelectedKey={multiple() ? undefined : props.defaultKey}
+        defaultSelectedKeys={multiple() ? props.defaultKeys : undefined}
         selectedKey={
-          props.multiple || props.alias ? undefined : props.selectedKey
+          multiple() || props.alias ? undefined : props.selectedKey
         }
-        selectedKeys={props.multiple ? props.selectedKeys : undefined}
-        value={props.alias && !props.multiple ? props.valueKey : undefined}
+        selectedKeys={multiple() ? props.selectedKeys : undefined}
+        value={props.alias && !multiple() ? props.valueKey : undefined}
         onSelectionChange={props.alias ? undefined : recordSelection}
         onChange={props.alias ? recordSelection : undefined}
         onClear={probe("clear")}
         onOpenChange={probe("openChange")}
+        onLayout={layout ? boxProbe("root") : undefined}
       >
         {props.label ? <Label>{props.label}</Label> : null}
         <Select.Trigger
           testID="select-trigger"
           isDisabled={props.triggerDisabled}
+          // A-013 `narrow`: both dims under the 44pt touch minimum — the
+          // `min-h-6` class wins over the trigger's `min-h-9` base cell and
+          // the touch `min-h-11` cell (the caller's class lands last).
+          className={narrow ? "min-h-6 w-10" : undefined}
+          onPressDown={() => probe("events")("down")}
+          onPressUp={() => probe("events")("up")}
+          onPress={() => probe("events")("press")}
           onFocus={probe("triggerFocus")}
           onBlur={probe("triggerBlur")}
+          onHoverStart={hover ? () => probe("hover")("start") : undefined}
+          onHoverEnd={hover ? () => probe("hover")("end") : undefined}
+          onHoverChange={
+            hover ? (value) => probe("hover")({ kind: "change", value }) : undefined
+          }
+          onMouseEnter={hover ? () => probe("hover")("enter") : undefined}
+          onMouseLeave={hover ? () => probe("hover")("leave") : undefined}
+          onLayout={layout ? boxProbe("trigger") : undefined}
         >
-          <Select.Value />
-          {props.clear ? (
-            <Select.ClearButton testID="select-clear-button">
-              {props.customIcon ? <Text>×</Text> : undefined}
-            </Select.ClearButton>
-          ) : null}
-          <Select.Indicator />
+          {(values) => [
+            <Select.Value />,
+            hover ? <Text>{values.isHovered() ? "hov" : ""}</Text> : null,
+            props.clear ? (
+              <Select.ClearButton testID="select-clear-button">
+                {ctx2 ? (
+                  <CtxProbe prefix="ctx2" set={(ctx) => (clearCtx = ctx)} />
+                ) : props.customIcon ? (
+                  <Text>×</Text>
+                ) : undefined}
+              </Select.ClearButton>
+            ) : null,
+            <Select.Indicator />,
+            <CtxProbe prefix="ctx" set={(ctx) => (triggerCtx = ctx)} />,
+          ]}
         </Select.Trigger>
-        <Select.Popover>
+        <Select.Popover
+          testID="sel-pop"
+          presentation={
+            presentation === ""
+              ? undefined
+              : (presentation as "auto" | "panel" | "sheet" | "fullscreen")
+          }
+          isNonModal={param("nonmodal") === "1" || undefined}
+          isKeyboardDismissDisabled={param("kbdDismiss") === "1" || undefined}
+          onLayout={layout ? boxProbe("pop") : undefined}
+        >
+          {kbd ? <Input accessibilityLabel="Search options" /> : null}
           <ListBox onFocus={probe("listFocus")} items={props.itemsProp ? props.data : undefined}>
             {props.itemsProp
               ? (item: ItemData) => <Row item={item} />
               : props.data.map((item) => <Row item={item} />)}
           </ListBox>
+          <PanProbe />
         </Select.Popover>
         {props.description ? <Description>{props.description}</Description> : null}
         {props.error ? <FieldError>{props.error}</FieldError> : null}
@@ -212,6 +477,14 @@ function Case(props: CaseProps) {
       {props.outside ? (
         <View testID="outside" role="button" onPress={() => undefined}>
           <Text>Outside</Text>
+        </View>
+      ) : null}
+      <View testID="ctx-sample" role="button" class="p-2" onPress={sampleChannels}>
+        <Text>ctx-sample</Text>
+      </View>
+      {props.clear ? (
+        <View testID="ctx2-sample" role="button" class="p-2" onPress={sampleClearChannels}>
+          <Text>ctx2-sample</Text>
         </View>
       ) : null}
     </View>
@@ -425,4 +698,12 @@ function Fixture() {
   return <Case {...STATES_CASE} label="State" />;
 }
 
-mount(Fixture);
+function Root() {
+  return (
+    <Scoped>
+      <Fixture />
+    </Scoped>
+  );
+}
+
+mount(Root);

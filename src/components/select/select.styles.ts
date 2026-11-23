@@ -11,16 +11,20 @@ import { ease, radius, shadow } from "../../tokens/geometry";
  * D18 drops the BEM class names, so each slot carries the declarations the
  * block applied).
  *
- * Two dimensions, as upstream: `variant` (`primary` / `secondary`, the latter
+ * Four dimensions now: `variant` (`primary` / `secondary`, the latter
  * swaps the trigger's background) and `fullWidth` (the root and the trigger
- * grow to the field's width).
+ * grow to the field's width) as upstream; `input` and `density` as the two
+ * environment axes (adapt sheet A-001) — `input` owns interaction usability
+ * (the 44pt touch minimum on the trigger, hover dependence on the clear
+ * button), `density` the spacing literals.
  */
 export const selectVariants = tv({
   slots: {
     // R-001: `.select` → `flex flex-col gap-1`. R-003 (`w-fit` on the label) is
-    // deleted: NSH's text sizes to its content.
+    // deleted: NSH's text sizes to its content. `gap-1` moved into the
+    // `density` axis below (A-001).
     // R-049: `.select--full-width` → `w-full`, on the `fullWidth` dimension.
-    base: "flex flex-col gap-1",
+    base: "flex flex-col",
     // R-004: `.select__trigger` → the 36pt field button. `border-0` is
     // deliberate: upstream's default theme has `--field-border-width: 0px`, so
     // the resting trigger draws no line, and `border` would add 2pt of height.
@@ -34,9 +38,9 @@ export const selectVariants = tv({
     // `transition-colors` omits the shadow and `transition-all` adds radius and
     // border width.
     // R-050: `.select__trigger--full-width` → `w-full`, on the `fullWidth`
-    // dimension.
+    // dimension. `px-3 py-2` moved into the `density` axis (A-001).
     trigger: [
-      `relative flex min-h-9 items-center ${radius.field} border-0 border-field-border bg-field px-3 py-2 text-sm text-field-foreground ${shadow.field.both} select-none cursor-pointer`,
+      `relative flex min-h-9 items-center ${radius.field} border-0 border-field-border bg-field text-sm text-field-foreground ${shadow.field.both} select-none cursor-pointer`,
       `duration-150 ${ease.smooth} motion-reduce:transition-none`,
     ].join(" "),
     // R-018: `.select__value` → `flex-1 text-start text-base text-current
@@ -60,10 +64,9 @@ export const selectVariants = tv({
     // carries the transition on `:not([data-empty])`.
     clearButton: [
       "relative flex size-5 shrink-0 origin-center items-center justify-center self-center rounded-xl bg-transparent p-1 text-muted select-none cursor-pointer",
-      // R-026: `@media (hover: hover) { &:hover }` → the native hover variant;
-      // the clear button has no child whose hover must be excluded.
-      "hover:bg-default-hover",
-      // R-027: `:active` → `transform: scale(0.93)`.
+      // R-027: `:active` → `transform: scale(0.93)`. It stays in the base:
+      // upstream's `:active` is not hover-gated, and the JS `pressed` channel
+      // has no second writer to it.
       "active:scale-[0.93]",
       `transition-opacity duration-150 ${ease.smooth} motion-reduce:transition-none`,
     ].join(" "),
@@ -82,6 +85,8 @@ export const selectVariants = tv({
   defaultVariants: {
     fullWidth: false,
     variant: "primary",
+    input: "pointer",
+    density: "default",
   },
   variants: {
     fullWidth: {
@@ -100,6 +105,37 @@ export const selectVariants = tv({
       // into classes.
       secondary: {
         trigger: "shadow-none bg-default",
+      },
+    },
+    // A-001: the `input` axis owns interaction usability. On the trigger the
+    // touch cell carries the visible half of the 44pt minimum
+    // (`MIN_HIT_TARGET_BY_DENSITY`'s default row; the invisible `hitSlop`
+    // half lives in the trigger's `createPressFeedback` seam). On the clear
+    // button R-026's `hover:bg-default-hover` moves under `pointer`: a hover
+    // dependency resolves only where a pointer exists, and web's sticky
+    // hover would otherwise keep the tint after a touch press (close-button
+    // A-001's same move). `touch` is empty: R-027's `active:` scale is the
+    // press channel there (popover-trigger A-005's twin).
+    input: {
+      pointer: {
+        clearButton: "hover:bg-default-hover",
+      },
+      touch: {
+        trigger: "min-h-11",
+      },
+    },
+    // A-001: the `density` axis owns the spacing literals — `gap-1` on the
+    // root and `px-3 py-2` on the trigger moved out of the base because
+    // spacing literals have no token exit (list-box A-001's same reason).
+    // `default` is the shipped value; `compact` tightens each one step.
+    density: {
+      default: {
+        base: "gap-1",
+        trigger: "px-3 py-2",
+      },
+      compact: {
+        base: "gap-0.5",
+        trigger: "px-2 py-1",
       },
     },
   },

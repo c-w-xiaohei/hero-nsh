@@ -18,6 +18,8 @@ import {
 } from "nsh";
 
 import {
+  createDensity,
+  createInput,
   createInteractionModality,
   createOverlayTrigger,
   createSelectState,
@@ -40,6 +42,7 @@ import type { FieldState } from "../label/context";
 import { formatListText } from "./select-list-format";
 import {
   SelectContext,
+  type SelectCarrier,
   type SelectContextValue,
   type SelectSelectedItem,
   type SelectSlots,
@@ -85,7 +88,10 @@ export interface SelectRenderProps {
  * `onChange` aliases. When an alias and its official name are both present the
  * official one wins, as React Aria's `useControlledState` does.
  */
-export interface SelectRootProps<T = unknown> extends SelectVariants {
+export interface SelectRootProps<T = unknown>
+  // A-001: `input`/`density` are environment axes the root feeds itself —
+  // they never reach the public props surface (button A-006's same Omit).
+  extends Omit<SelectVariants, "input" | "density"> {
   /** The field's parts; a one-parameter function is a render prop (D17). */
   children?: JSX.Element | ((values: SelectRenderProps) => JSX.Element);
 
@@ -312,7 +318,19 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
   const selectionMode = (): SelectionMode => local.selectionMode ?? "single";
   const isMultiple = () => selectionMode() === "multiple";
 
-  const slots = computed(() => selectVariants({ variant: variant(), fullWidth: fullWidth() }));
+  // A-001: the two environment axes, resolved once under this root's owner
+  // scope and fed into the one `selectVariants` call every slot reads.
+  const input = createInput();
+  const density = createDensity();
+
+  const slots = computed(() =>
+    selectVariants({
+      variant: variant(),
+      fullWidth: fullWidth(),
+      input: input(),
+      density: density(),
+    }),
+  );
 
   /* -------------------------------------------------------------------------------------------
    * Field state
@@ -384,11 +402,17 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
     onOpenChange: (open) => local.onOpenChange?.(open),
   });
 
+  // A-002's retained-mount corollary: the popover's carriers each keep their
+  // own ListBox mounted, so the popover names the carrier it last opened with
+  // and the registrations below resolve that branch's list.
+  const activeCarrier = signal<SelectCarrier | undefined>(undefined);
+
   const selectState = createSelectState({
     isOpen: overlay.isOpen,
     setIsOpen: overlay.setIsOpen,
     collection: () => selectState.list()?.collection(),
     selectionManager: () => selectState.list()?.selectionManager(),
+    activeTag: () => activeCarrier(),
   });
 
   const { list, controls: listControls, open, close, toggle } = selectState;
@@ -555,8 +579,11 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
     closeOnSelection: () => !isMultiple(),
     close,
     isActive: overlay.isOpen,
-    registerList: (state: ListState, controls: ListOwnerListControls) =>
-      selectState.registerList(state, controls),
+    registerList: (
+      state: ListState,
+      controls: ListOwnerListControls,
+      tag?: string,
+    ) => selectState.registerList(state, controls, tag),
   };
 
   /* -------------------------------------------------------------------------------------------
@@ -630,6 +657,8 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
     open,
     close,
     toggle,
+    activeCarrier,
+    setActiveCarrier: (carrier) => activeCarrier.set(carrier),
     selectionMode,
     disallowEmptySelection: () => local.disallowEmptySelection ?? false,
     list,
