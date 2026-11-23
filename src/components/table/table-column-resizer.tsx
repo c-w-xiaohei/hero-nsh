@@ -11,10 +11,14 @@ import type {
 import { cleanup, computed, signal, split, View } from "nsh";
 
 import { createKeymapScope, isKeyboardPress } from "../../primitives";
+import { createInput } from "../../primitives/environment";
+import { createPan } from "../../primitives/pan";
+import { createPressFeedback } from "../../primitives/pressable";
 import { renderPartChildren } from "./table-children";
 import {
   TableColumnContext,
   TableContext,
+  TableResizerContext,
   TableStateContext,
   claimPress,
 } from "./table-context";
@@ -106,6 +110,22 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
   const focused = signal(false);
   const keyboardResizing = signal(false);
 
+  // A-004 / A-005 / A-006: the `input` axis feeds the touch-only seams of
+  // this part — the `createPressFeedback` hit-area expansion, the
+  // `createPan` horizontal-claim drag and the hover suppression below.
+  const input = createInput();
+
+  // A-004: the press-feedback seam, consuming only its `hitSlop`/`layout`
+  // half-channels (the slider A-001 precedent): the 17 px hit band has no
+  // press-visual contract of its own — begin/end drag is the existing
+  // channel — so `pressDown`/`pressUp`/`scale` and the
+  // `PressableFeedbackContext` provider stay unwired. Under `touch` the
+  // computed slop pads the band's sides out to ≥44 pt; under `pointer`
+  // the accessor answers `undefined` and nothing changes.
+  const feedback = createPressFeedback({
+    enabled: () => input() === "touch",
+  });
+
   let dragStartX: number | undefined;
   let dragStartWidth = 0;
   /**
@@ -115,6 +135,15 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
    * the drag only when no pan followed it.
    */
   let panActive = false;
+  // A-005: whether a gesture was ever claimed this press (JS pan or native
+  // `onPan*`), and whether any move travelled — the two vetoes of the tap
+  // synthesis `onPressUp` performs under touch (a vertical drag the pan
+  // yields to the Scroll, or a claimed-then-terminated gesture, must not
+  // report a `begin`/`end` pair).
+  let panClaimed = false;
+  let gestureTravelled = false;
+  // The press-down position, for the tap displacement check.
+  let pressPosition: { x: number; y: number } | undefined;
 
   const columnModel = computed(() => state.collection().columnByKey.get(column.columnKey));
 
@@ -198,9 +227,20 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
     // resizer takes the focus itself, as the hidden input does upstream. The
     // modality is the pointer's, so no focus ring appears (R-056).
     node?.focus();
+    panClaimed = false;
+    gestureTravelled = false;
+    pressPosition = event.pagePosition;
     dragStartX = event.pagePosition.x;
     dragStartWidth = currentWidth();
-    layout.beginResize(column.columnKey);
+
+    // A-005: under touch the JS pan owns the drag, so `beginResize` is
+    // deferred to its `onDragStart` — a vertical gesture the claim yields to
+    // the Scroll would otherwise leave a residual `resizingColumn` behind
+    // (which also disables the grid keymap through `keysFree`). The pointer
+    // chain keeps the press-time `onResizeStart` it always had.
+    if (input() !== "touch") {
+      layout.beginResize(column.columnKey);
+    }
   };
 
   const endDrag = () => {
@@ -221,6 +261,8 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
   };
 
   const handlePanEnd = (event: PanEvent) => {
+    // Mounted for the pointer path only (see the JSX gate): under touch the
+    // JS `createPan` owns every side of the drag.
     if (dragStartX != null && !event.cancelled) {
       layout.resizeTo(column.columnKey, dragStartWidth + event.translation.x);
     }
@@ -234,6 +276,54 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
 
     layout.resizeTo(column.columnKey, (width || columnModel()?.minWidth || 0) + delta);
   };
+
+  // A-005: the touch drag path. `createPan` claims on the first move frame
+  // whose travel is more horizontal than vertical — no displacement
+  // threshold, which would let the claim arrive late enough to hand the
+  // responder to nothing (the sheet-handoff §5 dead-lock measurement). A
+  // first-frame vertical gesture fails `shouldClaim` and the touch falls
+  // through to the outer Scroll untouched. `onDrag*` mirror the existing
+  // `onPan*` body's semantics one for one: the drag start begins the resize,
+  // each frame writes `dragStartWidth + dx` and the end commits the release
+  // translation (or only restores on a terminate). Under `pointer` the seam
+  // is disabled and `panHandlers()` spreads nothing at all.
+  const pan = createPan({
+    enabled: () => input() === "touch",
+    shouldClaim: (_event, gesture) => {
+      if (gesture.dx !== 0 || gesture.dy !== 0) {
+        gestureTravelled = true;
+      }
+
+      return gesture.dx !== 0 && Math.abs(gesture.dx) > Math.abs(gesture.dy);
+    },
+    onDragStart: () => {
+      panActive = true;
+      panClaimed = true;
+      dragStartX = dragStartX ?? 0;
+      dragStartWidth = currentWidth();
+
+      // The press already began the resize only on the pointer path; on
+      // touch this claim is what begins it, and a gesture that claimed after
+      // a stray native `onPanStart` must not report a second `onResizeStart`.
+      if (layout.resizingColumn() !== column.columnKey) {
+        layout.beginResize(column.columnKey);
+      }
+    },
+    onDrag: (_event, gesture) => {
+      if (dragStartX == null) {
+        return;
+      }
+
+      layout.resizeTo(column.columnKey, dragStartWidth + gesture.dx);
+    },
+    onDragEnd: (_event, gesture, terminated) => {
+      if (dragStartX != null && !terminated) {
+        layout.resizeTo(column.columnKey, dragStartWidth + gesture.dx);
+      }
+
+      endDrag();
+    },
+  });
 
   const stopKeyboardResize = () => {
     keyboardResizing.set(false);
@@ -298,7 +388,11 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
       accessibilityLabel={local["aria-label"]}
       role="adjustable"
       accessibilityValue={{ text: `${Math.round(currentWidth())} px` }}
-      onLayout={local.onLayout}
+      onLayout={(event) => {
+        // A-004: the measured band feeds the seam's `hitSlop` computation.
+        feedback.layout(event);
+        local.onLayout?.(event);
+      }}
       onFocus={() => {
         focused.set(true);
         state.noteFocus();
@@ -316,11 +410,17 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
         local.onBlur?.();
       }}
       onMouseEnter={(event) => {
-        hovered.set(true);
+        // A-006: under touch the hover state stays off entirely — the raw
+        // host callbacks still forward.
+        if (input() !== "touch") {
+          hovered.set(true);
+        }
         local.onMouseEnter?.(event);
       }}
       onMouseLeave={(event) => {
-        hovered.set(false);
+        if (input() !== "touch") {
+          hovered.set(false);
+        }
         local.onMouseLeave?.(event);
       }}
       onMouseMove={handleMouseMove}
@@ -334,6 +434,23 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
         // A pan reports its own end after this event; only a press without a
         // pan is finished here (see `panActive`).
         if (!keyboardResizing() && !panActive) {
+          // A-005: under touch `beginResize` is deferred to the pan's claim,
+          // so a zero-displacement tap would otherwise never report the
+          // `onResizeStart`/`onResizeEnd` pair a desktop tap reports. The
+          // pair is synthesized here — but only for a real tap: a claimed
+          // pan, a yielded vertical drag (`gestureTravelled`) or an event
+          // whose position moved off the press point is not a tap.
+          if (
+            input() === "touch" &&
+            !panClaimed &&
+            !gestureTravelled &&
+            pressPosition != null &&
+            Math.abs((event.pagePosition?.x ?? pressPosition.x) - pressPosition.x) <= 2 &&
+            Math.abs((event.pagePosition?.y ?? pressPosition.y) - pressPosition.y) <= 2
+          ) {
+            layout.beginResize(column.columnKey);
+          }
+
           endDrag();
         }
 
@@ -343,24 +460,45 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
         claimPress(event);
         local.onPress?.(event);
       }}
-      onPanStart={(event) => {
-        panActive = true;
-        dragStartX = dragStartX ?? 0;
-        dragStartWidth = currentWidth();
+      // A-005: under touch the native `onPan*` props stay unmounted — the
+      // measured host attaches a real recognizer to them that claims any
+      // drag on the hit area (a vertical drag included) and never yields
+      // it to the outer Scroll, so a yielded gesture would die in the
+      // resizer (the M-008 dead-gesture measurement). The props are the
+      // pointer path's and mount exactly as before there; under touch the
+      // JS `createPan` owns the drag semantics and `local.onPan*` is a
+      // channel touch does not guarantee (§6).
+      onPanStart={
+        input() === "touch"
+          ? undefined
+          : (event: PanEvent) => {
+              panActive = true;
+              panClaimed = true;
+              dragStartX = dragStartX ?? 0;
+              dragStartWidth = currentWidth();
 
-        // The press already began the resize; the pan is the same gesture and
-        // must not report a second `onResizeStart`.
-        if (layout.resizingColumn() !== column.columnKey) {
-          layout.beginResize(column.columnKey);
-        }
+              // The press already began the resize; the pan is the same
+              // gesture and must not report a second `onResizeStart`.
+              if (layout.resizingColumn() !== column.columnKey) {
+                layout.beginResize(column.columnKey);
+              }
 
-        local.onPanStart?.(event);
-      }}
-      onPanEnd={handlePanEnd}
+              local.onPanStart?.(event);
+            }
+      }
+      onPanEnd={input() === "touch" ? undefined : handlePanEnd}
+      {...pan.panHandlers()}
+      // A-004: the touch hit-area expansion — `undefined` under pointer, so
+      // the desktop band keeps its exact 17 px contract.
+      hitSlop={feedback.hitSlop()}
       class={classes()}
       style={resolvedStyle()}
     >
-      {renderPartChildren(local.children as JSX.Element, renderProps)}
+      <TableResizerContext.Provider
+        value={{ enabled: () => input() === "touch", feedback, pan }}
+      >
+        {renderPartChildren(local.children as JSX.Element, renderProps)}
+      </TableResizerContext.Provider>
       <View accessibilityElementsHidden class={barClasses()} />
     </View>
   );

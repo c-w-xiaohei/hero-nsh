@@ -89,3 +89,13 @@ export type {
 export { searchFieldVariants } from "./search-field.styles";
 
 export type { SearchFieldVariants } from "./search-field.styles";
+
+// A-011: this harness-side 接轴 spot of adapt sheet search-field.md is
+// realized outside this directory — `harness/search-field.fixtures.tsx` (the
+// `Scoped` wrapper feeding `host.params.scope` into `EnvironmentScope`, and
+// the `basic`/`layout`/`hover`/`submit`/`clear`/`readonly`/`disabled`/
+// `empty-escape` cases with their storage, onLayout and render-prop probes
+// the M-001…M-010 assertions read). The gate's marker scan only sees
+// `src/components/search-field/`, so the record lives here (date-input-group
+// A-011 precedent). The fixture carries its own A-011 annotations at each
+// site.

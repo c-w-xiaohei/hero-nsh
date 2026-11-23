@@ -65,6 +65,14 @@ export type {
 export type { InputRootProps, InputRootProps as InputProps } from "./input";
 export type { TextAreaRootProps, TextAreaRootProps as TextAreaProps } from "./textarea";
 
+// A-008: this harness-side 接轴 spot of adapt sheet textfield.md is realized
+// outside this directory — `harness/textfield.fixtures.tsx` (the `Scoped`
+// wrapper feeding `host.params.scope` into `EnvironmentScope`, and the
+// `submit`/`submit-standalone`/`submit-textarea`/`hover`/`layout`/`keyboard`
+// cases whose probes the M-001…M-006 assertions read). The gate's marker
+// scan only sees `src/components/textfield/`, so the record lives here; the
+// fixture carries its own A-008 annotations at each site.
+
 /* -------------------------------------------------------------------------------------------------
  * Context
  * -----------------------------------------------------------------------------------------------*/

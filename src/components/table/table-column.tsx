@@ -1,7 +1,13 @@
 import type { Bounds, JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh";
-import { cleanup, computed, signal, split, View } from "nsh";
+import { cleanup, computed, createAnimatedValue, signal, split, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives";
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { renderPartChildren, textOf } from "./table-children";
 import {
   TableColumnContext,
@@ -102,6 +108,32 @@ export function TableColumn(props: TableColumnProps) {
   const isHovered = signal(false);
   const isPressed = signal(false);
 
+  // A-003 / A-006: the `input` axis gates the press-feedback seam, the
+  // `hover:text-foreground` class and the hover writes below.
+  const input = createInput();
+
+  // A-003: the touch-gated press-feedback seam, keyed on `input` alone — the
+  // column has no `isDisabled` channel, and its press contract is its
+  // `isPressed` flag (a non-sortable column still presses without sorting).
+  // `hitSlop` stays unbound for the same reason as the row: A-001 lifts the
+  // header cells to ≥44 pt and lateral slop would intrude on the next
+  // column's band and the resizer's hit area.
+  const feedbackEnabled = () => input() === "touch";
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
+
+  const pressFeedbackContextValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: feedbackEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   const model = computed(() => state.collection().columnByKey.get(columnKey));
   const isFocused = computed(() => state.isColumnFocused(columnKey));
   const isFocusVisible = computed(() => isFocused() && table.isKeyboard());
@@ -175,7 +207,11 @@ export function TableColumn(props: TableColumnProps) {
   const stateClasses = computed(() =>
     [
       // R-021 / R-022: a sortable column is interactive and darkens its label.
-      local.allowsSorting === true ? "cursor-pointer hover:text-foreground" : "",
+      // A-006: the `hover:` half is a hover dependency — under touch the
+      // class never resolves, so a web sticky hover cannot survive a press.
+      local.allowsSorting === true && input() !== "touch"
+        ? "cursor-pointer hover:text-foreground"
+        : "",
       // R-023: the keyboard focus ring.
       isFocusVisible() ? "rounded-lg outline-none inset-ring-2 inset-ring-focus" : "",
       positionClasses(),
@@ -200,6 +236,9 @@ export function TableColumn(props: TableColumnProps) {
 
   const handlePressDown = (event: PressEvent) => {
     isPressed.set(true);
+    // A-003: the seam sees the press after the flag, before the modality
+    // write — it gates itself on `enabled`.
+    feedback.pressDown(event);
 
     if (isKeyboardPress(event)) {
       modality.setKeyboardModality();
@@ -211,6 +250,8 @@ export function TableColumn(props: TableColumnProps) {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-003: the seam's end edge — release and cancel share `onPressUp`.
+    feedback.pressUp(event);
     isPressed.set(false);
     local.onPressUp?.(event);
   };
@@ -251,6 +292,8 @@ export function TableColumn(props: TableColumnProps) {
   };
 
   const handleLayout = (event: { bounds: Bounds }) => {
+    // A-003: the measured box feeds the seam's `bounds` first.
+    feedback.layout(event);
     local.onLayout?.(event);
   };
 
@@ -295,13 +338,17 @@ export function TableColumn(props: TableColumnProps) {
         }}
         onMouseEnter={(event) => {
           // RAC enables hover on a column only while it can sort (§2, hover).
-          if (local.allowsSorting === true) {
+          // A-006: under touch the state never writes at all; the raw host
+          // callbacks still forward.
+          if (input() !== "touch" && local.allowsSorting === true) {
             isHovered.set(true);
           }
           local.onMouseEnter?.(event);
         }}
         onMouseLeave={(event) => {
-          isHovered.set(false);
+          if (input() !== "touch") {
+            isHovered.set(false);
+          }
           local.onMouseLeave?.(event);
         }}
         onPressDown={handlePressDown}
@@ -312,7 +359,11 @@ export function TableColumn(props: TableColumnProps) {
           .join(" ")}
         style={resolvedStyle()}
       >
-        {renderPartChildren(local.children as JSX.Element, renderProps)}
+        {/* A-003: the seam's context covers the label and a composed
+            `SortableColumnHeader` subtree; the divider stays outside it. */}
+        <PressableFeedbackContext.Provider value={pressFeedbackContextValue}>
+          {renderPartChildren(local.children as JSX.Element, renderProps)}
+        </PressableFeedbackContext.Provider>
         <If when={showDivider()}>
           <View class="pointer-events-none absolute end-0 top-1/2 h-4 w-px -translate-y-1/2 rounded-sm bg-separator" />
         </If>

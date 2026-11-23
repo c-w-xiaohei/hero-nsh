@@ -125,6 +125,13 @@ export interface TextFieldContextValue {
   onSelectionChange?: (event: { start: number; end: number }) => void;
 
   /**
+   * A-005: Return / the submit key fired in one of the field's inputs —
+   * the field's own `onSubmit`, run before the input's local one. Optional,
+   * like the other event fan-outs above.
+   */
+  onSubmit?: (event: { text: string }) => void;
+
+  /**
    * Extra classes the owning composite field adds to the input, after the
    * input's own classes and before the caller's `className` (ComboBox's
    * `min-w-0 flex-1 pe-7`, port sheet §5, second change).

@@ -9,6 +9,7 @@ import type {
 } from "nsh";
 import { computed, signal, split, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { joinClassNames } from "./class-names";
 import {
   type AriaProps,
@@ -189,6 +190,10 @@ export function SearchFieldGroup(props: SearchFieldGroupProps): JSX.Element {
   // (research 4.6).
   const field = SearchFieldContext();
 
+  // A-002: the `input` axis — under touch the group keeps hover off entirely
+  // (the `input` axis owns "no hover dependence").
+  const input = createInput();
+
   // --- Effective state ------------------------------------------------------
   // Explicit prop, then `aria-*` / `data-*` (the two upstream also reads), then
   // the field root. `??`, not `||`, so an explicit `false` wins.
@@ -310,8 +315,13 @@ export function SearchFieldGroup(props: SearchFieldGroupProps): JSX.Element {
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
+    // A-002: under touch the `hovered` signal and the `useHover` callbacks
+    // stay off entirely, so web's sticky hover cannot pin `bg-field-hover` /
+    // `bg-default-hover` after a press (a `hover:` class could not be
+    // suppressed from the table — the fill is signal-painted). `onMouseEnter`
+    // still reported above: it is a host event, not a `useHover` callback.
     // React Aria's `useHover({ isDisabled })`: a disabled group never hovers.
-    if (isDisabled() || hovered()) {
+    if (input() === "touch" || isDisabled() || hovered()) {
       return;
     }
 

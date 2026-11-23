@@ -3,6 +3,7 @@ import { cleanup, computed, signal, split, untracked, View } from "nsh";
 
 import {
   createMultipleSelectionState,
+  toListItemData,
   type SelectionBehavior,
   type SelectionMode,
   type SelectionValue,
@@ -90,30 +91,38 @@ export interface MenuSectionRootProps<T = unknown> {
   onLayout?: (e: { bounds: Bounds }) => void;
 }
 
-/** The same key derivation as an entry's (port sheet section 1). */
-function resolveSectionKey(
-  id: string | number | undefined,
-  value: unknown,
-  index: number | undefined,
+/**
+ * The `__nsh:section:{level}:{index}` key `buildNodes` generated for a
+ * keyless section datum, read back by matching the section node to this
+ * row's `rawValue` (A-007). The collection is already built when a row
+ * resolves its key (the `dataSource` computed that feeds it ran during
+ * mount), so the scan is exact at any depth — the row cannot re-derive the
+ * flattened index of a nested section from its sibling position alone.
+ */
+function generatedSectionKey(
+  collection: Iterable<{
+    type: string;
+    key: string;
+    rawValue: { datum?: unknown } | unknown;
+  }>,
+  datum: unknown,
 ): string {
-  if (id != null) {
-    return String(id);
-  }
+  for (const node of collection) {
+    if (node.type !== "section") {
+      continue;
+    }
 
-  if (value != null) {
-    if (typeof value === "object") {
-      const record = value as { id?: unknown; key?: unknown };
-      const derived = record.id ?? record.key;
+    // `buildNodes` stores the merged entry as `rawValue`; it carries the raw
+    // datum under `datum` exactly so this identity match works (a raw match
+    // is kept for any source that feeds unmerged entries).
+    const raw = node.rawValue;
 
-      if (derived != null) {
-        return String(derived);
-      }
-    } else {
-      return String(value);
+    if (raw === datum || (raw as { datum?: unknown })?.datum === datum) {
+      return node.key;
     }
   }
 
-  return index != null ? String(index) : "";
+  return "";
 }
 
 /** `"all"` stays the sentinel; an iterable becomes the string-keyed set. */
@@ -186,15 +195,29 @@ export function MenuSectionRoot<T>(
   // Identity, read once (port sheet section 2). A static Section without `id`
   // has no key of its own: React Aria derives one from its position, so the
   // root hands out a unique one. The empty string is not a key.
+  // f-collection (A-007): under `items` a keyless section datum gets the
+  // generated `__nsh:section:{level}:{index}` key from the collection (the
+  // key-convergence rule), so the layout handle, the items' `sectionKey` and
+  // the data node agree.
   const id = local.id;
   const value =
     local.value !== undefined ? local.value : collectionItem?.value();
-  const resolvedKey = resolveSectionKey(
-    id,
-    value,
-    collectionItem ? collectionItem.index() : undefined,
-  );
-  const key = resolvedKey !== "" ? resolvedKey : list.createSectionKey();
+
+  let key: string;
+
+  if (id != null) {
+    key = String(id);
+  } else if (collectionItem == null) {
+    const resolved = toListItemData(value).key;
+    key = resolved !== "" ? resolved : list.createSectionKey();
+  } else {
+    const named = toListItemData(value).key;
+    key =
+      named !== ""
+        ? named
+        : generatedSectionKey(list.list.collection(), value) ||
+          String(collectionItem.index());
+  }
 
   // RAC creates a selection state for every Section and a manager only when the
   // Section declared a `selectionMode` (`Menu.tsx:478-481`).
@@ -244,7 +267,15 @@ export function MenuSectionRoot<T>(
     children: () => sortByRenderedOrder(sectionItems()),
   };
 
-  cleanup(list.register(descriptor));
+  // f-collection (A-007): the section's own datum feeds the collection under
+  // `items`, so a dynamic section registers only its row handle (the group's
+  // frame composes each item's layout through `registerSectionLayout`). The
+  // static path keeps its descriptor, which carries the group's entries.
+  if (collectionItem == null) {
+    cleanup(list.register(descriptor));
+  }
+
+  cleanup(list.registerRow({ type: "section", key }));
   cleanup(() => list.unregisterSectionLayout(key));
 
   const sectionContextValue: MenuSectionContextValue = {

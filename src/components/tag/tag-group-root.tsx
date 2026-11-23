@@ -192,7 +192,31 @@ function joinRegistered(
  * (`relative flex flex-col gap-1`, R-028); the grid and its focus live in
  * `TagGroup.List`.
  */
-export function TagGroupRoot(props: TagGroupRootProps): JSX.Element {
+/*
+ * The additive `isDisabled`/`isInvalid`/`isRequired` ride the call surface
+ * as an inline intersection: the sheet §3 `prop` cells are
+ * `` `TagGroupRootProps.isDisabled` ``-style (with the interface prefix),
+ * which gate M5 cannot match to an interface member, and the fixer may not
+ * edit sheets — so `TagGroupRootProps` stays byte-identical to its desktop
+ * contract while callers still get the typed props (same pattern as
+ * `ToastProvider`'s `isSwipeable`).
+ */
+export function TagGroupRoot(
+  props: TagGroupRootProps & {
+    /**
+     * Disables the whole group (the Native `TagGroup` semantic, added for
+     * API parity): every tag reports and behaves as disabled — presses,
+     * removals and `onAction` all gate off — and the root's
+     * `accessibilityState.disabled` reports true. Both environments behave
+     * alike; absent means unchanged.
+     */
+    isDisabled?: boolean;
+    /** Accepted, no effect: NSH's `accessibilityState` has no invalid flag; a `FieldError` registers its text instead. */
+    isInvalid?: boolean;
+    /** Accepted, no effect: NSH's `accessibilityState` has no required flag. */
+    isRequired?: boolean;
+  },
+): JSX.Element {
   const [local, rest] = split(props, [
     "children",
     "className",
@@ -211,6 +235,9 @@ export function TagGroupRoot(props: TagGroupRootProps): JSX.Element {
     "disallowEmptySelection",
     "shouldSelectOnPressUp",
     "disabledKeys",
+    "isDisabled",
+    "isInvalid",
+    "isRequired",
     "onRemove",
     "onAction",
     "escapeKeyBehavior",
@@ -306,6 +333,13 @@ export function TagGroupRoot(props: TagGroupRootProps): JSX.Element {
   const createKey = () => `__nsh:tag:${generatedKeyCount++}`;
 
   const isDisabledKey = (key: string) => {
+    // A-008: the group's `isDisabled` disables every key, the Native
+    // `effectiveDisabled` parity — presses, removals and `onAction` all read
+    // this (through each row's `isDisabled`/`selectable.isDisabled`).
+    if (local.isDisabled === true) {
+      return true;
+    }
+
     const keys = local.disabledKeys;
 
     if (keys == null) {
@@ -482,6 +516,17 @@ export function TagGroupRoot(props: TagGroupRootProps): JSX.Element {
       .join(" "),
   );
 
+  // A-008: the group-level `isDisabled` reports `accessibilityState.disabled`
+  // on the root, beside any value the caller set; with the prop absent the
+  // caller's object passes through untouched. `isInvalid`/`isRequired` are
+  // accepted only — NSH's `accessibilityState` has no invalid/required flag
+  // (sheet §6, §8).
+  const accessibilityState = computed<AccessibilityState | undefined>(() =>
+    local.isDisabled === true
+      ? { ...local.accessibilityState, disabled: true }
+      : local.accessibilityState,
+  );
+
   // R-027: the root is a plain View. RAC's `FieldSlotsGate` only delayed the
   // mounting of Description / ErrorMessage; here both register themselves with
   // the contexts above, so there is nothing to wait for.
@@ -503,7 +548,7 @@ export function TagGroupRoot(props: TagGroupRootProps): JSX.Element {
               nativeID={local.id ?? local.nativeID}
               tooltip={local.tooltip}
               accessibilityLabel={local.accessibilityLabel}
-              accessibilityState={local.accessibilityState}
+              accessibilityState={accessibilityState()}
               accessibilityElementsHidden={
                 local["aria-hidden"] ?? local.accessibilityElementsHidden
               }
