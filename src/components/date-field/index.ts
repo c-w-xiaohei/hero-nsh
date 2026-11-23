@@ -23,6 +23,15 @@ import type { DateFieldRenderProps, DateFieldRootProps } from "./date-field-root
  * `DateValue` to the field state, and the six `date-input-group` parts bound by
  * identity, exactly as upstream's `index.ts:17-25` does. Every part is a real
  * component, usable as `DateField.Group` and as `DateInputGroupRoot`.
+ *
+ * A-002: `DateField.Segment` IS `DateInputGroupSegment` — the touch editing
+ * channel, the `input` axis' 44 pt hit area and the `keyboardType` resolution
+ * all arrive by identity through this binding; the unit adds no axis or prop
+ * of its own.
+ *
+ * A-007: the mobile fixture's `Scoped` wrapper injects
+ * `EnvironmentScope input="touch"`; these parts' own `createInput()` reads
+ * resolve it, so no component code reads the environment itself.
  */
 export const DateField = Object.assign(DateFieldRoot, {
   Root: DateFieldRoot,
