@@ -32,6 +32,17 @@ export const drawerVariants = tv({
     closeTrigger: "absolute z-10 end-4 top-4",
   },
   variants: {
+    // A-004: the `input` axis of the encapsulation model — `input` owns
+    // interaction usability. `touch` gives the handle its 44 pt visible hit
+    // minimum (the same `min-h-11` switch's `content` slot takes) because the
+    // handle becomes the bottom drawer's drag surface on touch; `pointer`
+    // keeps the content-sized handle, so the default environment sees no
+    // change. There is no `density` axis: the handle is a hit-area question,
+    // not a spacing preset.
+    input: {
+      pointer: {},
+      touch: { handle: "min-h-11" },
+    },
     placement: {
       bottom: { dialog: "w-full max-h-[85%] rounded-t-2xl" },
       top: { dialog: "w-full max-h-[85%] rounded-b-2xl pb-2", handle: "pb-0" },
@@ -44,7 +55,7 @@ export const drawerVariants = tv({
       blur: { backdrop: "bg-backdrop backdrop-blur-md" },
     },
   },
-  defaultVariants: { placement: "bottom", variant: "opaque" },
+  defaultVariants: { input: "pointer", placement: "bottom", variant: "opaque" },
 });
 
 /**

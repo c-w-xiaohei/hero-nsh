@@ -14,7 +14,7 @@ export interface DrawerBodyProps extends Omit<ScrollProps, "children" | "class" 
 
 /** R-025: Drawer.Body's content sizing and typography. R-043/R-044: native vertical scrolling replaces CSS overflow and touch-action. */
 export function DrawerBody(props: DrawerBodyProps): JSX.Element {
-  const [local, rest] = split(props, ["children", "className", "render", "ref"] as const);
+  const [local, rest] = split(props, ["children", "className", "render", "ref", "onScroll"] as const);
   const context = DrawerContext();
   const slots = () => context?.slots() ?? drawerVariants();
 
@@ -29,7 +29,19 @@ export function DrawerBody(props: DrawerBodyProps): JSX.Element {
   );
 
   return (
-    <Scroll {...rest} ref={(node) => local.ref?.(node)} class={classes()} horizontal={false}>
+    <Scroll
+      {...rest}
+      ref={(node) => local.ref?.(node)}
+      class={classes()}
+      horizontal={false}
+      // A-003: the offset is the panel-drag handoff's "at the start edge"
+      // input — reported first, then forwarded to the caller's own handler
+      // with the event unchanged.
+      onScroll={(event) => {
+        context?.reportScrollOffset?.(event.offset);
+        local.onScroll?.(event);
+      }}
+    >
       {typeof local.children === "string" || typeof local.children === "number" ? (
         <Text>{local.children}</Text>
       ) : local.children}
