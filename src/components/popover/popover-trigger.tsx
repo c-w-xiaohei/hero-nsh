@@ -15,6 +15,8 @@ import {
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { renderChildren } from "./children";
 import type { PopoverContextValue } from "./popover-context";
 import { PopoverContext } from "./popover-context";
@@ -99,6 +101,19 @@ export function PopoverTrigger(props: PopoverTriggerProps) {
   const isDisabled = () => props.disabled ?? props["aria-disabled"] === true;
   const isFocusVisible = computed(() => focused() && modality.isKeyboard());
 
+  // A-005: the invisible half of the touch hit-area path. `hitSlop` is a view
+  // prop tv() cannot produce, so the trigger's shrink-to-content box (the
+  // `inline-block w-fit` slot classes) gets its expansion here — only while
+  // `input` is "touch": under the default pointer environment `enabled` is
+  // false and `hitSlop()` answers `undefined`, so the desktop surface pays
+  // nothing. `scale`/`highlightOpacity` are deliberately not bound: the
+  // trigger relays a press onto arbitrary child content, whose own feedback
+  // is that content's business (the close-button A-002 ruling).
+  const input = createInput();
+  const feedback = createPressFeedback({
+    enabled: () => input() === "touch" && !isDisabled(),
+  });
+
   const classes = () => [slots.trigger(), props.className ?? ""].filter((part) => part !== "").join(" ");
 
   // R-018 / R-019: one property list, one curve; `motion-reduce` is a class but
@@ -130,6 +145,10 @@ export function PopoverTrigger(props: PopoverTriggerProps) {
   };
 
   const handlePressDown = (event: PressEvent) => {
+    // A-005: the seam hears every press down; its `enabled` gate decides
+    // whether it records. Under pointer or while disabled this is a no-op.
+    feedback.pressDown(event);
+
     if (isDisabled()) {
       return;
     }
@@ -139,6 +158,10 @@ export function PopoverTrigger(props: PopoverTriggerProps) {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-005: unconditional — `pressUp` clears the seam's press origin on
+    // every release and cancel alike (close-button's solved pattern).
+    feedback.pressUp(event);
+
     if (isDisabled()) {
       return;
     }
@@ -206,6 +229,10 @@ export function PopoverTrigger(props: PopoverTriggerProps) {
       onBlur={handleBlur}
       onMouseEnter={props.onMouseEnter}
       onMouseLeave={props.onMouseLeave}
+      // A-005: hitSlop is the view prop only the seam may write (no prop
+      // addition); `layout` keeps its measured bounds honest.
+      hitSlop={feedback.hitSlop()}
+      onLayout={feedback.layout}
     >
       {renderChildren(props.children)}
     </View>
