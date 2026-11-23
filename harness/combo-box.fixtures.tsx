@@ -12,6 +12,7 @@ import {
   Label,
   ListBox,
   PressableFeedbackContext,
+  TextFieldContext,
 } from "@heroui/react";
 import type {
   EnvironmentDensity,
@@ -66,6 +67,10 @@ import { probe } from "@scenario/probe";
  *   items-40          forty rows and a Continue button (T-012)
  *   outside           the animals plus an outside view above the field (T-030)
  *   modal             a ComboBox inside an open nsh/base Dialog (T-011)
+ *   b-mobile           the mobile probes: `cb` carrier, `ctx` seam reads,
+ *                      `trigger-box` bounds, `focusedKey`, `fieldCtx`
+ *   b-exit             ownsState `isOpen` + `isExiting`/`shouldSkipAnimation`
+ *                      driven by host.send (M-014's presence sample)
  *
  * It sits next to harness/nsh.json on purpose: NSH takes the entry's own
  * directory as the app root, so an entry under harness/tests/... finds no
@@ -94,8 +99,8 @@ import { probe } from "@scenario/probe";
  * to the hitSlop formula), `cb` on the Popover (which derives `id:cb-panel`
  * / `id:cb-sheet` on the mounted carrier), the `ctx`/`ctx-pressed`/
  * `ctx-channels` seam reads (`CtxProbe` samples `PressableFeedbackContext`,
- * `ctx-sample` samples on demand), and `focusedKey` (the virtual-focus key,
- * read off `ComboBoxContext`).
+ * `host.send("ctx.sample")` samples on demand), and `focusedKey` (the
+ * virtual-focus key, read off `ComboBoxContext`).
  * -----------------------------------------------------------------------------------------------*/
 
 function param(name: string): string {
@@ -168,7 +173,10 @@ function CtxProbe() {
 
 /* On-demand channel read for the negative half: a gated press never raises
  * the seam's `isPressed` edge, so `ctx-pressed` alone cannot prove the
- * channels stayed at rest — `ctx-sample` samples them after the press. */
+ * channels stayed at rest — `ctx-sample` samples them after the press.
+ * Driven by `host.send("ctx.sample")` (registered below): a plain View
+ * `onPress` trigger resolved on web without firing, and a host event is
+ * target-independent. */
 function sampleChannels() {
   const report = probe("ctx-channels");
   const c = triggerCtx;
@@ -197,6 +205,26 @@ function FocusedKeyProbe() {
 
   effect(() => {
     report(combo?.focusedKey() ?? null);
+  });
+
+  return null;
+}
+
+/* Reports the field context's keyboard-facing accessors — the G channel's
+ * readback half (M-010): the Root's `autoComplete` prop lands on
+ * `TextFieldContext.autoComplete`, and the caller `Input`'s own
+ * `enterKeyHint`/`inputMode` resolve through the same context when the field
+ * does not set them. */
+function FieldCtxProbe() {
+  const field = TextFieldContext();
+  const report = probe("fieldCtx");
+
+  effect(() => {
+    report({
+      autoComplete: field?.autoComplete() ?? null,
+      inputMode: field?.inputMode() ?? null,
+      enterKeyHint: field?.enterKeyHint() ?? null,
+    });
   });
 
   return null;
@@ -250,7 +278,12 @@ function normalizeSelection(value: unknown, multiple: boolean): unknown {
 
 function Row(props: { item: ItemData }) {
   return (
-    <ListBox.Item id={props.item.id} textValue={props.item.name} aria-label={props.item.name}>
+    <ListBox.Item
+      id={props.item.id}
+      textValue={props.item.name}
+      aria-label={props.item.name}
+      onLayout={boxProbe(`row-${props.item.id}`)}
+    >
       {(values) => [
         <Text>{values.isFocused() ? `${props.item.name}*` : props.item.name}</Text>,
         <ListBox.ItemIndicator>
@@ -307,6 +340,16 @@ function Combo(props: ComboProps) {
       : (param("presentation") as "auto" | "panel" | "sheet");
   const modal = () => param("modal") === "1";
   const hidden = signal<string[]>(param("hide") === "" ? [] : [param("hide")]);
+  // More mobile params (M-009/M-010/M-014): `mt` fills the root's
+  // `menuTrigger` when the case does not set one, `ac`/`selkey` feed the
+  // deprecated-spelling halves of the selection contract, `kb` gates the
+  // panel's Escape channel and `own` gives the Popover its own open state.
+  const menuTrigger = () =>
+    props.menuTrigger ??
+    (param("mt") === ""
+      ? undefined
+      : (param("mt") as "focus" | "input" | "manual"));
+  const own = () => param("own") === "1";
 
   return (
     <View class="w-[256px] items-start gap-2">
@@ -322,12 +365,14 @@ function Combo(props: ComboProps) {
         isDisabled={props.disabled}
         isInvalid={props.invalid}
         disabledKeys={props.disabledKeys}
-        menuTrigger={props.menuTrigger}
+        menuTrigger={menuTrigger()}
         allowsCustomValue={props.allowsCustomValue}
         allowsEmptyCollection={props.allowsEmpty}
         defaultFilter={props.defaultFilter}
         isReadOnly={props.readOnly}
         shouldFocusWrap={props.shouldFocusWrap}
+        autoComplete={param("ac") === "" ? undefined : param("ac")}
+        selectedKey={param("selkey") === "" ? undefined : param("selkey")}
         items={props.itemsProp ? props.items : undefined}
         defaultItems={props.defaultItems ? props.items : undefined}
         defaultValue={props.multiple ? props.defaultKeys : props.defaultKey}
@@ -345,6 +390,7 @@ function Combo(props: ComboProps) {
         onFocusChange={(value: boolean) => probe("focusChange")(value)}
       >
         {props.bMobile ? <FocusedKeyProbe /> : null}
+        {props.bMobile ? <FieldCtxProbe /> : null}
         <Label>{props.label ?? "Favorite Animal"}</Label>
         <ComboBox.InputGroup>
           <Input
@@ -355,6 +401,13 @@ function Combo(props: ComboProps) {
             enterKeyHint={host.params.ekh === undefined ? undefined : (param("ekh") as never)}
             inputMode={host.params.im === undefined ? undefined : (param("im") as never)}
             masked={param("mask") === "1" ? true : undefined}
+            autoCorrect={param("acorr") === "" ? undefined : param("acorr")}
+            autoCapitalize={param("acap") === "" ? undefined : param("acap")}
+            submitBehavior={
+              param("sb") === ""
+                ? undefined
+                : (param("sb") as "submit" | "blurAndSubmit" | "newline")
+            }
             onFocus={probe("inputFocus")}
             onBlur={probe("inputBlur")}
           />
@@ -378,6 +431,11 @@ function Combo(props: ComboProps) {
           testID={props.bMobile ? "cb" : undefined}
           presentation={presentation()}
           isNonModal={modal() ? false : undefined}
+          isKeyboardDismissDisabled={param("kb") === "1" || undefined}
+          defaultOpen={own() || undefined}
+          onOpenChange={
+            own() ? (value: boolean) => probe("ownOpenChange")(value) : undefined
+          }
         >
           <ListBox>
             {props.itemsProp || props.defaultItems
@@ -505,6 +563,61 @@ function AsyncInputCase() {
 }
 
 /* -------------------------------------------------------------------------------------------------
+ * b-exit case (M-014's ownsState / presence sample)
+ *
+ * `isOpen` is controlled by `open`, so the Popover owns its state
+ * (`ownsState`) and `host.send("combo.close"/"combo.reopen")` drives the
+ * edges the assertions read. `hold`="1" forces `isExiting` on the close
+ * edge (the retained-mount half), `skip`="1" sets `shouldSkipAnimation`
+ * (the instant-unmount half); `ownOpenChange` records the popover's own
+ * `onOpenChange`. An `outside` pressable sits above the field so the
+ * panel's `handlePressOutside` has a target.
+ * -----------------------------------------------------------------------------------------------*/
+
+function ExitCase() {
+  const skip = param("skip") === "1";
+  const hold = param("hold") === "1";
+  const open = signal(param("ownopen") !== "0");
+  const exiting = signal(false);
+  const report = probe("ownOpenChange");
+
+  host.on("combo.close", () => {
+    exiting.set(true);
+    open.set(false);
+  });
+  host.on("combo.reopen", () => {
+    open.set(true);
+    exiting.set(false);
+  });
+
+  return (
+    <View class="w-[256px] items-start gap-2">
+      <View testID="outside" role="button" onPress={() => undefined}>
+        <Text>Outside</Text>
+      </View>
+      <ComboBox className="w-[256px]">
+        <ComboBox.InputGroup>
+          <Input testID="combo-box-input" placeholder="Search animals..." />
+          <ComboBox.Trigger testID="combo-box-trigger" />
+        </ComboBox.InputGroup>
+        <ComboBox.Popover
+          isOpen={open()}
+          isExiting={hold ? exiting() : undefined}
+          shouldSkipAnimation={skip || undefined}
+          onOpenChange={(value: boolean) => report(value)}
+        >
+          <ListBox>
+            {PETS.map((item) => (
+              <Row item={item} />
+            ))}
+          </ListBox>
+        </ComboBox.Popover>
+      </ComboBox>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------------------------------
  * Case selector
  * -----------------------------------------------------------------------------------------------*/
 
@@ -607,7 +720,7 @@ function Case() {
   }
 
   if (name === "custom-value") {
-    return <Combo allowsCustomValue items={PETS} />;
+    return <Combo allowsCustomValue items={PETS} outside={param("out") === "1"} />;
   }
 
   if (name === "filter-contains") {
@@ -619,7 +732,17 @@ function Case() {
   }
 
   if (name === "items") {
-    return <Combo items={ITEMS} itemsProp label="Label" placeholder="Placeholder" showValue />;
+    return (
+      <Combo
+        bMobile={param("bm") === "1"}
+        defaultKey={param("dk") === "" ? undefined : param("dk")}
+        items={ITEMS}
+        itemsProp
+        label="Label"
+        placeholder="Placeholder"
+        showValue
+      />
+    );
   }
 
   if (name === "default-items") {
@@ -672,11 +795,12 @@ function Case() {
     return (
       <View class="items-start gap-4 p-4">
         <Combo bMobile items={PETS} />
-        <View testID="ctx-sample" role="button" class="p-2" onPress={sampleChannels}>
-          <Text>ctx-sample</Text>
-        </View>
       </View>
     );
+  }
+
+  if (name === "b-exit") {
+    return <ExitCase />;
   }
 
   return <Combo items={PETS} />;
@@ -691,5 +815,9 @@ function Fixture() {
     </Scoped>
   );
 }
+
+// The `ctx-channels` on-demand sample (M-002's negative half): a host event,
+// not a pressable — target-independent.
+host.on("ctx.sample", sampleChannels);
 
 mount(Fixture);
