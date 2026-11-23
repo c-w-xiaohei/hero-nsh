@@ -4,12 +4,14 @@ import { callsOf } from "../../helpers/calls";
 
 /*
  * Web-only half of adapt-sheets/modal.md M-005 (A-004): the "short pull
- * released gently settles back" assertion. On headless every synthesized
- * `app.drag` release carries flick velocity above the 500 pt/s dismiss
- * bound — measured: even dy=30 dismisses — so the settle branch is only
- * reachable where the host's release is gentler, which is the web target
- * (the same split alert-dialog's M-005 took, measured there: "the web
- * host's gentler release reaches the settle branch").
+ * released gently settles back" assertion. `app.drag` moves the finger 10 pt
+ * per display frame, so the release velocity scales with the drag's frame
+ * count — dy=60 flings past the 500 pt/s dismiss bound and dismisses on both
+ * targets (the headless file's dismiss half), while dy≤25 stays under it and
+ * settles back. Measured by the alert-dialog unit's M-005: dy=28 dismisses,
+ * dy=20 settles, headless and web alike — so this file's pull uses dy=20 to
+ * keep the settle branch reachable everywhere, pinned to `platform:"web"`
+ * per the file-naming convention (the headless file owns the dismiss half).
  */
 
 type SwipeRecord = {
@@ -59,7 +61,7 @@ describe("modal mobile (web)", () => {
 
     await app.clock?.runFor(400);
 
-    await app.drag("id:mo-card", { y: 60 });
+    await app.drag("id:mo-card", { y: 20 });
     await app.clock?.runFor(400);
 
     const swipes = swipeRecords(app);
