@@ -63,9 +63,7 @@ export interface CreateDateRangeFieldStateProps {
    * second argument; a field state only ever asks about one day, so it gets
    * `null` there (port sheet §1.2).
    */
-  isDateUnavailable?: Accessor<
-    ((date: DateValue, anchorDate: CalendarDate | null) => boolean) | undefined
-  >;
+  isDateUnavailable?: Accessor<((date: DateValue, anchorDate: CalendarDate | null) => boolean) | undefined>;
 
   /** Builds the calendar system both fields display. */
   createCalendar?: Accessor<((name: CalendarIdentifier) => Calendar) | undefined>;
