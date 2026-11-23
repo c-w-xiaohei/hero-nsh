@@ -540,6 +540,7 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
   // own end; this finger's ledger entry is only forgotten. Under pointer the
   // bare chain committed on release and this handler adds nothing.
   const handleTouchEnd = (event: GestureResponderEvent) => {
+    setThumbHitArea(null);
     local.onTouchEnd?.(event);
 
     if (input() !== "touch") {
@@ -562,6 +563,7 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
   };
 
   const handleTouchCancel = (event: GestureResponderEvent) => {
+    setThumbHitArea(null);
     local.onTouchCancel?.(event);
     releaseSliderTouch(event.identifier);
   };

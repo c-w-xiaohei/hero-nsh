@@ -53,6 +53,26 @@ function heldSamples(app: App): CtxState[] {
 }
 
 describe("button mobile (headless)", () => {
+  test("mounted button switches from highlight to ripple", async () => {
+    const app = await openButton("basic", {
+      scope: "touch",
+      preset: "scale-highlight",
+      switchPreset: "1",
+    });
+
+    await app.dragAndHold("id:btn", { x: 0, y: 0 });
+    await app.waitUntil(() => heldSamples(app).length > 0);
+    expect(heldSamples(app).at(-1)!.highlight).toBeGreaterThan(0);
+    const samples = heldSamples(app).length;
+    await app.drop();
+
+    await app.press("id:switch-preset");
+    await app.dragAndHold("id:btn", { x: 0, y: 0 });
+    await app.waitUntil(() => heldSamples(app).length > samples);
+    expect(heldSamples(app).at(-1)!.ripple).toBeGreaterThan(0);
+    await app.drop();
+  });
+
   // adapt-sheets/button.md M-011 (A-003, A-004): with no EnvironmentScope an
   // ios host derives `input()==="touch"`, so the seam's `enabled` gate holds
   // and a real press produces the full pressed roundtrip — the

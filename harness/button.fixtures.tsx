@@ -1,4 +1,4 @@
-import { effect, host, mount, Text, View } from "nsh";
+import { effect, host, mount, signal, Text, View } from "nsh";
 import type { Component, JSX, PressEvent } from "nsh";
 import {
   Button,
@@ -167,6 +167,7 @@ function BasicCase() {
   const icon = String(host.params.icon ?? "") === "1";
   const variant = String(host.params.variant ?? "");
   const preset = String(host.params.preset ?? "");
+  const useRipple = signal(false);
   const anim = String(host.params.anim ?? "");
   const pending = String(host.params.pending ?? "") === "1";
   const disabled = String(host.params.disabled ?? "") === "1";
@@ -249,7 +250,7 @@ function BasicCase() {
                 | "danger-soft")
         }
         feedbackVariant={
-          preset === ""
+          useRipple() ? "scale-ripple" : preset === ""
             ? undefined
             : (preset as
                 | "auto"
@@ -281,6 +282,9 @@ function BasicCase() {
         {icon ? <Text>i</Text> : <Text>Save</Text>}
       </Button>
       <Btn id="ctx-sample" onPress={sampleChannels} />
+      {host.params.switchPreset === "1" ? (
+        <Btn id="switch-preset" onPress={() => useRipple.set(true)} />
+      ) : null}
     </>
   );
 }

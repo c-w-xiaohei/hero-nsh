@@ -387,6 +387,7 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
   // ledger — and claimed or not, the thumb ends the propagation so the track
   // cannot also commit the same finger.
   const handleTouchEnd = (event: GestureResponderEvent) => {
+    setThumbHitArea(null);
     // The caller's raw touch callback is always reported; the tap commit
     // below is the touch-only half.
     local.onTouchEnd?.(event);
@@ -411,6 +412,7 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
   };
 
   const handleTouchCancel = (event: GestureResponderEvent) => {
+    setThumbHitArea(null);
     releaseSliderTouch(event.identifier);
     local.onTouchCancel?.(event);
   };

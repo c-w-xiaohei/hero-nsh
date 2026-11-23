@@ -195,6 +195,17 @@ describe("color-slider mobile", () => {
     expect(vTrack.bounds.width + vSlop.left + vSlop.right).toBeGreaterThanOrEqual(44);
   });
 
+  test("track drag can start where the thumb was before a drag", async () => {
+    const app = await openSlider("mobile", { scope: "touch", value: "hsl(180, 100%, 50%)" });
+    await app.drag("id:thumb", { x: 80, y: 0 });
+    expect(onChangeHues(app).at(-1)!).toBeGreaterThan(235);
+
+    const changes = onChangeHues(app).length;
+    await app.drag("id:track", { x: -60, y: 0 });
+    expect(onChangeHues(app).length).toBeGreaterThan(changes + 1);
+    expect(onChangeHues(app).at(-1)!).toBeLessThan(180);
+  });
+
   // adapt-sheets/color-slider.md M-003 (A-003, A-004), claim-direction half:
   // under touch with no surrounding Scroll, an axial drag on either part is
   // claimed by the pan — `onChange` reports per frame, `onChangeEnd` fires

@@ -210,12 +210,6 @@ export function PressableFeedbackHighlight(
     "timingConfig",
     { duration: 200 },
   );
-  const backgroundColor = getAnimationValueProperty(
-    animationConfig?.backgroundColor,
-    "value",
-    themeToken("foreground"),
-  );
-
   const disabled = () =>
     getIsAnimationDisabledValue({
       isAnimationDisabled,
@@ -231,6 +225,11 @@ export function PressableFeedbackHighlight(
   });
 
   const style = (): StyleProp<ViewStyle> => {
+    const backgroundColor = getAnimationValueProperty(
+      getAnimationState(local.animation).animationConfig?.backgroundColor,
+      "value",
+      themeToken("foreground"),
+    );
     if ((local.isAnimatedStyleActive ?? true) === false) {
       return [{ backgroundColor }, local.style];
     }
@@ -291,11 +290,6 @@ export function PressableFeedbackRipple(
       isAllAnimationsDisabled: ctx.isAllAnimationsDisabled(),
     });
 
-  const backgroundColor = getAnimationValueProperty(
-    animationConfig?.backgroundColor,
-    "value",
-    themeToken("foreground"),
-  );
   const opacityValues = getAnimationValueProperty(
     animationConfig?.opacity,
     "value",
@@ -404,6 +398,11 @@ export function PressableFeedbackRipple(
   });
 
   const style = (): StyleProp<ViewStyle> => {
+    const backgroundColor = getAnimationValueProperty(
+      getAnimationState(local.animation).animationConfig?.backgroundColor,
+      "value",
+      themeToken("foreground"),
+    );
     const circle = {
       position: "absolute" as const,
       ...geometry(),

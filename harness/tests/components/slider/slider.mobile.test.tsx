@@ -188,6 +188,17 @@ describe("slider mobile", () => {
     expect(vTrack.bounds!.width + (vSlop.left ?? 0) + (vSlop.right ?? 0)).toBeGreaterThanOrEqual(44);
   });
 
+  test("track drag can start where the thumb was before a drag", async () => {
+    const app = await openSlider("mobile", { scope: "touch", defaultValue: "50" });
+    await app.drag("id:thumb", { x: 100, y: 0 });
+    expect(onChangeValues(app).at(-1)!).toBeGreaterThan(65);
+
+    const changes = onChangeValues(app).length;
+    await app.drag("id:track", { x: -60, y: 0 });
+    expect(onChangeValues(app).length).toBeGreaterThan(changes + 1);
+    expect(onChangeValues(app).at(-1)!).toBeLessThan(50);
+  });
+
   // adapt-sheets/slider.md M-003 (A-003, A-004), claim-direction half:
   // under touch with no surrounding Scroll, an axial drag on either part is
   // claimed by the pan — `onChange` reports per frame, `onChangeEnd` fires

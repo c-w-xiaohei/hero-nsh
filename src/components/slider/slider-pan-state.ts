@@ -68,7 +68,7 @@ let thumbHitArea: {
   height: number;
 } | null = null;
 
-/** Registers the thumb's slop-expanded frame in surface coordinates; `null` on unmount. */
+/** Registers the thumb's slop-expanded frame in surface coordinates until touch end, cancel or unmount. */
 export function setThumbHitArea(
   area: { x: number; y: number; width: number; height: number } | null,
 ): void {

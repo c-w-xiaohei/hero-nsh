@@ -353,7 +353,7 @@ export function ButtonRoot(
     }
   };
 
-  const highlightAnimation = (() => {
+  const highlightAnimation = computed(() => {
     if (preset() !== "scale-highlight") {
       return undefined;
     }
@@ -381,13 +381,13 @@ export function ButtonRoot(
     }
 
     return base;
-  })();
+  });
 
   // Upstream's `rippleAnimationConfig` (`button.tsx:192-230`): same tint and
   // merge order as the highlight — button defaults fill the channels the
   // caller's `ripple` config leaves alone (the opacity peak is the part's
   // own `[0, 0.1, 0]` for the same reason as the highlight's).
-  const rippleAnimation = (() => {
+  const rippleAnimation = computed(() => {
     if (preset() !== "scale-ripple") {
       return undefined;
     }
@@ -417,7 +417,7 @@ export function ButtonRoot(
     }
 
     return base;
-  })();
+  });
 
   const renderProps: ButtonRenderProps = {
     isHovered,
@@ -750,11 +750,11 @@ export function ButtonRoot(
             take presses. The Provider wraps the root View outright (the same
             shape `PressableFeedback` uses): a Provider nested inside the root
             View leaves children outside its scope on the web host. */}
-        <If when={preset() === "scale-highlight" && highlightAnimation !== undefined}>
-          <PressableFeedback.Highlight animation={highlightAnimation} />
+        <If when={highlightAnimation() !== undefined}>
+          <PressableFeedback.Highlight animation={highlightAnimation()} />
         </If>
-        <If when={preset() === "scale-ripple" && rippleAnimation !== undefined}>
-          <PressableFeedback.Ripple animation={rippleAnimation} />
+        <If when={rippleAnimation() !== undefined}>
+          <PressableFeedback.Ripple animation={rippleAnimation()} />
         </If>
         {renderContent(props.children)}
       </View>
