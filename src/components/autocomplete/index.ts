@@ -28,6 +28,17 @@ import {
   type AutocompleteValueRenderProps,
 } from "./autocomplete-value";
 
+// A-013 / A-014: the two harness-side 接轴 spots of adapt sheet
+// autocomplete.md §2 are realized outside this directory —
+// `harness/autocomplete.fixtures.tsx` (`Scoped` always mounting
+// `EnvironmentScope` plus the `m-*` cases and `ctx-*`/`layout`/`hover`
+// probes) and `harness/tests/components/autocomplete/autocomplete.mobile.test.tsx`
+// + `.mobile.headless.test.tsx` (the desktop-pinned, dual-environment
+// M-assertions). The gate's marker scan only sees
+// `src/components/autocomplete/`, so the record lives here (typography /
+// e-parts same convention). What they probe — every part this file
+// exports — stays environment-invariant at the contract surface.
+
 /* -------------------------------------------------------------------------------------------------
  * Compound component
  * -------------------------------------------------------------------------------------------------*/

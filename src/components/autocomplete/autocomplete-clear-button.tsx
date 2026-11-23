@@ -6,8 +6,14 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, split, View } from "nsh";
+import { cleanup, computed, createAnimatedValue, split, View } from "nsh";
 
+import { createInput, isKeyboardPress } from "../../primitives";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { renderChildren } from "../list-box/children";
 import { AutocompleteContext, AutocompleteTriggerContext } from "./autocomplete-context";
 
@@ -93,6 +99,33 @@ export function AutocompleteClearButton(
   const isDisabled = () => trigger?.isDisabled() ?? autocomplete.isDisabled();
   const isEmpty = autocomplete.isSelectionEmpty;
 
+  // A-003: the `input` environment axis gates the press-feedback seam — under
+  // the default pointer environment it is a physical no-op, so the desktop
+  // press chain below is untouched. `isEmpty` joins the gate: an invisible,
+  // pointer-inert button does not expand its hit area.
+  const input = createInput();
+  const seamEnabled = () =>
+    input() === "touch" && !isDisabled() && !isEmpty();
+  const feedback = createPressFeedback({ enabled: seamEnabled });
+
+  // A-004: the seam's read half for consumers — a part or a probe that needs
+  // the animated channels reads this context instead (list-box A-004, tabs
+  // A-003 the same). No Highlight / Ripple / Scale overlay mounts by default:
+  // `active:scale-[0.93]` (R-044) already paints the press, and a caller that
+  // wants more composes a part into the button's children.
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: seamEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   // R-041: the root counts the mounted clear buttons; a field with one clears
   // from the keyboard (Select's Backspace shortcut uses the same registration).
   cleanup(autocomplete.registerClearButton());
@@ -100,7 +133,15 @@ export function AutocompleteClearButton(
   // R-006: the trigger suppresses its own hover while this button holds the
   // pointer (`:has(.autocomplete__clear-button:hover)`). The pointer leaves the
   // button when it goes anywhere else, and an unmount releases it too.
-  const handleMouseEnter = () => trigger?.setClearHovered(true);
+  // A-004: a touch environment has no hover semantics — `clearHovered` never
+  // sets, so the `:has(:hover)` suppression the trigger mirrors stays off.
+  const handleMouseEnter = () => {
+    if (input() === "touch") {
+      return;
+    }
+
+    trigger?.setClearHovered(true);
+  };
   const handleMouseLeave = () => trigger?.setClearHovered(false);
 
   cleanup(() => trigger?.setClearHovered(false));
@@ -109,6 +150,15 @@ export function AutocompleteClearButton(
   // `pointer-events: none` upstream; both are also gated here, because the
   // press still arrives on hosts that do not honour the class.
   const handlePress = (event: PressEvent) => {
+    // A-003: a commit also ends the seam's press — on this host a press that
+    // resolves without `onPressUp` (drag-away release) still fires `onPress`,
+    // so the flag can never outlive the activation (list-box A-002 the same
+    // 兜底). A keyboard payload — if the host ever routes one — is not a seam
+    // press and leaves the channels alone.
+    if (!isKeyboardPress(event)) {
+      feedback.pressUp(event);
+    }
+
     if (isDisabled()) {
       return;
     }
@@ -129,7 +179,24 @@ export function AutocompleteClearButton(
       return;
     }
 
+    // A-003: the seam's press edge, before `onPointerDown` forwards — a gated
+    // (pointer) call is a no-op inside.
+    feedback.pressDown(event);
+
     local.onPointerDown?.(event);
+  };
+
+  // A-003: release and cancel share `onPressUp` (the host does not distinguish
+  // them), and the seam resets on either.
+  const handlePressUp = (event: PressEvent) => {
+    feedback.pressUp(event);
+  };
+
+  const handleLayout = (event: { bounds: Bounds }) => {
+    // A-003: the seam's `bounds` feeds `hitSlop` and `scale`, so it reads the
+    // layout first, before the caller's handler.
+    feedback.layout(event);
+    local.onLayout?.(event);
   };
 
   // R-042: the built-in cross is the 14pt CloseIcon this button's stylesheet
@@ -193,11 +260,21 @@ export function AutocompleteClearButton(
       style={local.style}
       onPress={handlePress}
       onPressDown={handlePressDown}
+      onPressUp={handlePressUp}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onLayout={local.onLayout}
+      onLayout={handleLayout}
+      // A-003: the view-prop half of the hit area — the seam's computed slop
+      // (`size-5`'s 20pt box toward the 44pt target), `undefined` while gated
+      // off. The component takes no `hitSlop` prop.
+      hitSlop={feedback.hitSlop()}
     >
-      {content()}
+      {/* A-004: children resolve exactly once, inside the provider — the same
+          read `content()` always made, now under the seam's context so a part
+          or a probe can read the live channels. */}
+      <PressableFeedbackContext.Provider value={feedbackValue}>
+        {content()}
+      </PressableFeedbackContext.Provider>
     </View>
   );
 }

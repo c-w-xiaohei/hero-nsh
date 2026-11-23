@@ -18,6 +18,8 @@ import {
 } from "nsh";
 
 import {
+  createDensity,
+  createInput,
   createInteractionModality,
   createOverlayTrigger,
   createSelectState,
@@ -89,7 +91,12 @@ export interface AutocompleteRenderProps {
  * on the field's public surface when a caller writes them on the root, and
  * they must take effect (port sheet §1, §4b).
  */
-export interface AutocompleteRootProps<T = unknown> extends AutocompleteVariants {
+export interface AutocompleteRootProps<T = unknown>
+  // A-016: `Omit` keeps the environment axes off the props surface — `input` /
+  // `density` are fed by `createInput()` / `createDensity()` below, never
+  // written by a caller (button A-006 the same ruling). `variant` /
+  // `fullWidth` stay the public surface.
+  extends Omit<AutocompleteVariants, "input" | "density"> {
   /** The field's parts; a one-parameter function is a render prop (D17). */
   children?: JSX.Element | ((values: AutocompleteRenderProps) => JSX.Element);
 
@@ -348,8 +355,19 @@ export function AutocompleteRoot<T>(props: AutocompleteRootProps<T>): JSX.Elemen
   const selectionMode = (): SelectionMode => local.selectionMode ?? "single";
   const isMultiple = () => selectionMode() === "multiple";
 
+  // A-001: the environment's two variant axes — `input` drives the touch hit
+  // minimum and the hover-class gating, `density` the spacing cells. One read
+  // each, fed to the table next to the upstream dimensions.
+  const input = createInput();
+  const density = createDensity();
+
   const slots = computed(() =>
-    autocompleteVariants({ variant: variant(), fullWidth: fullWidth() }),
+    autocompleteVariants({
+      variant: variant(),
+      fullWidth: fullWidth(),
+      input: input(),
+      density: density(),
+    }),
   );
 
   /* -------------------------------------------------------------------------------------------
