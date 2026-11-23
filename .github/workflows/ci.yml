@@ -8,8 +8,11 @@ name: CI
 # one (Windows, where a second run would take the focus the cases assert).
 #
 # What runs where is the file name: `.headless.` needs the headless engine,
-# `.web.` needs a browser, `.windows.` needs Win32, everything else runs on the
-# headless engine and on Windows.
+# `.web.` needs a browser, `.windows.` needs Win32, `.ios.` needs the iOS
+# simulator, `.android.` needs an Android emulator or device; everything else
+# runs on the headless engine and on Windows. The phone jobs no-op while no
+# file carries their suffix — the harness' `.ios.`/`.android.` layer is the
+# host-gap acceptance lane, not a default suite.
 
 on:
   push:
@@ -62,6 +65,7 @@ jobs:
           set -o pipefail
           find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \
             ! -name '*.web.test.*' ! -name '*.browser.test.*' ! -name '*.windows.test.*' \
+            ! -name '*.ios.test.*' ! -name '*.android.test.*' \
             | sort | awk -v s='${{ matrix.shard }}' 'NR % 3 == s' \
             | xargs -r -n1 -P4 nsh test 2>&1 | tee "$RUNNER_TEMP/tests.log"
           # An unknown class builds, passes and renders wrong; the warning is
@@ -104,10 +108,56 @@ jobs:
         run: |
           files=($(find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \
             ! -name '*.headless.test.*' ! -name '*.web.test.*' ! -name '*.browser.test.*' \
+            ! -name '*.ios.test.*' ! -name '*.android.test.*' \
             | sort))
           for ((i = ${{ matrix.shard }}; i < ${#files[@]}; i += 3)); do
             nsh test "${files[$i]}" --target windows
           done
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - name: iOS tests
+        run: |
+          files=($(find harness/tests \( -name '*.ios.test.tsx' -o -name '*.ios.test.ts' \) | sort))
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No .ios. test files; the iOS lane stays empty."
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            nsh test "$f" --target ios
+          done
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - id: android-files
+        name: Discover .android. tests
+        run: |
+          count=$(find harness/tests \( -name '*.android.test.tsx' -o -name '*.android.test.ts' \) | wc -l)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          if [ "$count" -eq 0 ]; then
+            echo "No .android. test files; the Android lane stays empty."
+          fi
+      - name: Android runtime
+        if: steps.android-files.outputs.count != '0'
+        run: nsh component add android
+      - name: Android emulator
+        if: steps.android-files.outputs.count != '0'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            files=($(find harness/tests \( -name '*.android.test.tsx' -o -name '*.android.test.ts' \) | sort))
+            for f in "${files[@]}"; do
+              nsh test "$f" --target android
+            done
 
   packaging:
     runs-on: ubuntu-24.04
