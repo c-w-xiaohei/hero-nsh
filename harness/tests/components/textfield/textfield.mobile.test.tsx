@@ -1,0 +1,391 @@
+import { describe, expect, open, test } from "nsh/test";
+import type { App, OpenOptions } from "nsh/test";
+import { calls, callsOf } from "../../helpers/calls";
+
+/*
+ * Mobile assertions for the textfield adapt unit
+ * (adapt-sheets/textfield.md §4, M-001…M-007). One file for headless+web:
+ * every assertion reads what `nsh/test` observes — `shows`, `value`,
+ * `enabled`, `onLayout` bounds probes and the Storage probe calls — and
+ * `host.params.scope` picks the environment, so the dual-environment rows
+ * run identically on both targets. The file pins `platform: "windows"` so
+ * the default half is `platform.desktop` (pointer) on headless and web
+ * alike; the ios host-derivation half (M-008) lives in
+ * `textfield.mobile.headless.test.tsx`.
+ *
+ * The probes live in `harness/textfield.fixtures.tsx`:
+ *   `layout`   Input / TextArea `onLayout` bounds — the touch `min-h-11`
+ *              hit face vs the pointer row (M-001).
+ *   `hover`    the Input's `isHovered` className render-prop record plus
+ *              `onHoverStart`/`onHoverEnd`/`onHoverChange` and the
+ *              `onMouseEnter`/`onMouseLeave` pass-through probes, with
+ *              `hover-away` as the leave target (M-002).
+ *   `submit`   TextField + Label + Input: root `field-submit`, input
+ *              `onSubmit` / `onChange` / `onBlur` / `onFocus` probes;
+ *              `submitBehavior` / `enterKeyHint` / `returnKeyType` params
+ *              (M-003, M-006).
+ *   `submit-standalone`  a bare Input with the same submit probes
+ *              (M-003, M-006).
+ *   `submit-textarea`  a TextArea with `onSubmit` / `onChange` / `onBlur`
+ *              probes and the `submitBehavior` param ("" = "newline")
+ *              (M-004, M-006).
+ *   `keyboard`  one Input whose `keyboardType` / `inputMode` /
+ *              `enterKeyHint` / `autoComplete` / `autoCorrect` /
+ *              `autoCapitalize` / `maxLength` come from host.params, with
+ *              an `onChange` probe (M-005, M-006).
+ *   `baseline`  the M-007 default-environment contract in one mount:
+ *              `onFocusChange`, controlled write-back refusal, `masked` /
+ *              `type="password"`, Label / Description / FieldError texts,
+ *              the invalid render and the TextArea rows height; the
+ *              composition fan-out stays on the `composition` case.
+ */
+
+type Params = Record<string, string>;
+
+function openCase(
+  name: string,
+  params: Params = {},
+  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
+): Promise<App> {
+  return open("../../../textfield.fixtures.tsx", {
+    // The default half of the sheet's dual environment is
+    // `platform.desktop` === true — the same host the desktop contract runs
+    // on (a bare `nsh test` headless host reports `desktop: false`).
+    // `EnvironmentScope` supplies the injected touch half.
+    platform: "windows",
+    width: 1024,
+    height: 768,
+    locale: "en-US",
+    ...options,
+    host: { params: { case: name, ...params } },
+  });
+}
+
+type LayoutEntry = { width: number; height: number };
+type HoverRecord = { isHovered: boolean };
+type ChangeRecord = { value: string };
+
+function lastLayout(app: App, name: string): LayoutEntry {
+  return callsOf(app, name).at(-1)![0] as LayoutEntry;
+}
+
+function hoverRecords(app: App): HoverRecord[] {
+  return callsOf(app, "input-class").map((c) => c[0] as HoverRecord);
+}
+
+async function waitLayout(app: App): Promise<void> {
+  await app.waitUntil(
+    () => callsOf(app, "input-layout").length > 0 && callsOf(app, "textarea-layout").length > 0,
+  );
+}
+
+describe("textfield mobile", () => {
+  // adapt-sheets/textfield.md M-001 (A-001, A-002): the `input` axis'
+  // `min-h-11` lifts the Input's row to the 44 pt touch target; the same
+  // row stays below that floor under pointer — the pointer cell is empty
+  // (desktop zero drift). The exact pointer height is host-dependent
+  // (33 px headless, 36 px web — font metrics), so the assertion stops at
+  // the floor, not a pixel value (the sheet's "40pt" was the py-2
+  // estimate). The TextArea's touch cell is empty by the sheet's
+  // conservative ruling, so its rows height is identical in both
+  // environments.
+  test("M-001 touch lifts the Input row to 44pt; pointer stays below the floor; TextArea unchanged", async () => {
+    const touch = await openCase("layout", { scope: "touch" });
+    await waitLayout(touch);
+    expect(lastLayout(touch, "input-layout").height).toBeGreaterThanOrEqual(44);
+    expect(lastLayout(touch, "textarea-layout").height).toBe(56);
+
+    const pointer = await openCase("layout");
+    await waitLayout(pointer);
+    expect(lastLayout(pointer, "input-layout").height).toBeLessThan(44);
+    expect(lastLayout(pointer, "textarea-layout").height).toBe(56);
+  }, 120_000);
+
+  // adapt-sheets/textfield.md M-002 (A-003): under touch neither a hover
+  // nor a press (whose sticky web hover is the registered hazard) raises
+  // `isHovered` — every className render-prop record stays false and the
+  // three `onHover*` callbacks record nothing. The host's own
+  // `onMouseEnter` / `onMouseLeave` pass-throughs still fire (A-003 keeps
+  // them), which is also what proves the hover was really delivered.
+  // Under pointer the hover round-trips exactly as on desktop.
+  test("M-002 injected touch suppresses the hover face; pointer keeps the round-trip", async () => {
+    const touch = await openCase("hover", { scope: "touch" });
+
+    await touch.hover("id:name");
+    await touch.press("id:name");
+    await touch.hover("id:hover-away");
+    await touch.waitUntil(() => callsOf(touch, "onMouseLeave").length > 0);
+
+    expect(hoverRecords(touch).length).toBeGreaterThan(0);
+    expect(hoverRecords(touch).every((r) => r.isHovered === false)).toBe(true);
+    expect(callsOf(touch, "onHoverStart")).toHaveLength(0);
+    expect(callsOf(touch, "onHoverEnd")).toHaveLength(0);
+    expect(callsOf(touch, "onHoverChange")).toHaveLength(0);
+    expect(callsOf(touch, "onMouseEnter").length).toBeGreaterThanOrEqual(1);
+    expect(callsOf(touch, "onMouseLeave").length).toBeGreaterThanOrEqual(1);
+
+    const pointer = await openCase("hover");
+
+    await pointer.hover("id:name");
+    await pointer.waitUntil(() => hoverRecords(pointer).at(-1)?.isHovered === true);
+    expect(callsOf(pointer, "onHoverStart").length).toBeGreaterThanOrEqual(1);
+    expect(callsOf(pointer, "onHoverChange")).toEqual([[true]]);
+    expect(callsOf(pointer, "onMouseEnter").length).toBeGreaterThanOrEqual(1);
+
+    await pointer.hover("id:hover-away");
+    await pointer.waitUntil(() => callsOf(pointer, "onHoverEnd").length > 0);
+    expect(hoverRecords(pointer).at(-1)?.isHovered).toBe(false);
+    expect(callsOf(pointer, "onHoverChange")).toEqual([[true], [false]]);
+    expect(callsOf(pointer, "onMouseLeave").length).toBeGreaterThanOrEqual(1);
+  }, 120_000);
+
+  // adapt-sheets/textfield.md M-003 (A-004, A-005): the declared `onSubmit`
+  // rides the host channel in both environments — `app.submit` reports it
+  // exactly once with `{ text }` = the current text, the single-line
+  // default `submitBehavior="submit"` keeps the focus (no `onBlur` record,
+  // the focus-query gap's registered degradation — a second `app.type`
+  // still lands in the same input), and inside a field the root's
+  // `onSubmit` runs before the input's local one. An explicit
+  // `submitBehavior="blurAndSubmit"` fires `onBlur` once. One scope per
+  // test: three sequential web hosts per scope is what the target
+  // tolerates (the color-input-group M-008 split).
+  async function assertSubmitChain(params: Params) {
+    const field = await openCase("submit", params);
+    await field.type("id:name", "hello");
+    await field.submit("id:name");
+    await field.waitUntil(() => callsOf(field, "onSubmit").length === 1);
+
+    expect(callsOf(field, "field-submit")).toHaveLength(1);
+    expect(callsOf(field, "field-submit")[0][0]).toEqual({ text: "hello" });
+    expect(callsOf(field, "onSubmit")).toHaveLength(1);
+    expect(callsOf(field, "onSubmit")[0][0]).toEqual({ text: "hello" });
+    const names = calls(field).map((c) => c.name);
+    expect(names.indexOf("field-submit")).toBeLessThan(names.indexOf("onSubmit"));
+    expect(callsOf(field, "onBlur")).toHaveLength(0);
+
+    await field.type("id:name", " world");
+    expect(field.value("id:name")).toBe("hello world");
+
+    const standalone = await openCase("submit-standalone", params);
+    await standalone.type("id:name", "hey");
+    await standalone.submit("id:name");
+    await standalone.waitUntil(() => callsOf(standalone, "onSubmit").length === 1);
+
+    expect(callsOf(standalone, "onSubmit")).toHaveLength(1);
+    expect(callsOf(standalone, "onSubmit")[0][0]).toEqual({ text: "hey" });
+    expect(callsOf(standalone, "onBlur")).toHaveLength(0);
+
+    await standalone.type("id:name", "!");
+    expect(standalone.value("id:name")).toBe("hey!");
+
+    const blur = await openCase("submit-standalone", {
+      ...params,
+      submitBehavior: "blurAndSubmit",
+    });
+    await blur.type("id:name", "x");
+    await blur.submit("id:name");
+    await blur.waitUntil(() => callsOf(blur, "onSubmit").length === 1);
+
+    expect(callsOf(blur, "onSubmit")).toHaveLength(1);
+    expect(callsOf(blur, "onBlur")).toHaveLength(1);
+  }
+
+  test("M-003 submit chain: once with { text }, focus kept, field before input (pointer scope)", async () => {
+    await assertSubmitChain({});
+  }, 120_000);
+
+  test("M-003 submit chain: once with { text }, focus kept, field before input (touch scope)", async () => {
+    await assertSubmitChain({ scope: "touch" });
+  }, 120_000);
+
+  // adapt-sheets/textfield.md M-004 (A-004): the TextArea's two submit
+  // modes diverge in both environments — `submitBehavior="newline"` (the
+  // default) makes `app.submit` insert a line break (`onChange` tail value
+  // contains `\n`) and never fires `onSubmit`; an explicit `"submit"`
+  // reports `onSubmit` once and inserts nothing. One scope per test, the
+  // same web-target split as M-003 / M-006.
+  async function assertTextAreaSubmitModes(params: Params) {
+    const newline = await openCase("submit-textarea", params);
+    await newline.type("id:bio", "ab");
+    await newline.submit("id:bio");
+    await newline.wait(100);
+
+    expect(callsOf(newline, "onSubmit")).toHaveLength(0);
+    const lastChange = callsOf(newline, "onChange").at(-1)![0] as ChangeRecord;
+    expect(lastChange.value).toContain("\n");
+
+    const submit = await openCase("submit-textarea", {
+      ...params,
+      submitBehavior: "submit",
+    });
+    await submit.type("id:bio", "ab");
+    await submit.submit("id:bio");
+    await submit.waitUntil(() => callsOf(submit, "onSubmit").length === 1);
+
+    expect(callsOf(submit, "onSubmit")).toHaveLength(1);
+    expect(callsOf(submit, "onSubmit")[0][0]).toEqual({ text: "ab" });
+    const changes = callsOf(submit, "onChange").map((c) => c[0] as ChangeRecord);
+    expect(changes.every((c) => !c.value.includes("\n"))).toBe(true);
+  }
+
+  test("M-004 TextArea submit modes: newline inserts a break, submit reports once (pointer scope)", async () => {
+    await assertTextAreaSubmitModes({});
+  }, 120_000);
+
+  test("M-004 TextArea submit modes: newline inserts a break, submit reports once (touch scope)", async () => {
+    await assertTextAreaSubmitModes({ scope: "touch" });
+  }, 120_000);
+
+  // adapt-sheets/textfield.md M-005 (A-006): every keyboard / autofill
+  // parameter the sheet lists mounts through the existing forwarding
+  // chain in both environments — `app.type` → `onChange` still works, and
+  // `maxLength=4` clips the sixth character. Resolution values and the
+  // soft-keyboard labels themselves are the sheet §6 host gap: asserted
+  // here is mount + channel, not the keyboard. One scope per test, the
+  // same web-target split as M-003.
+  async function assertKeyboardChannel(params: Params) {
+    const app = await openCase("keyboard", {
+      ...params,
+      keyboardType: "numeric",
+      inputMode: "decimal",
+      enterKeyHint: "go",
+      autoComplete: "off",
+      autoCorrect: "off",
+      autoCapitalize: "none",
+    });
+    expect(app.shows("id:name")).toBe(true);
+    await app.type("id:name", "abc");
+    expect(app.value("id:name")).toBe("abc");
+    expect((callsOf(app, "onChange").at(-1)![0] as ChangeRecord).value).toBe("abc");
+
+    const done = await openCase("keyboard", { ...params, enterKeyHint: "done" });
+    expect(done.shows("id:name")).toBe(true);
+    await done.type("id:name", "z");
+    expect(done.value("id:name")).toBe("z");
+
+    const max = await openCase("keyboard", { ...params, maxLength: "4" });
+    await max.type("id:name", "abcdef");
+    expect(max.value("id:name")).toBe("abcd");
+  }
+
+  test("M-005 keyboard and autofill params mount and stay editable (pointer scope)", async () => {
+    await assertKeyboardChannel({});
+  }, 120_000);
+
+  test("M-005 keyboard and autofill params mount and stay editable (touch scope)", async () => {
+    await assertKeyboardChannel({ scope: "touch" });
+  }, 120_000);
+
+  // adapt-sheets/textfield.md M-006 (A-008): this file is the assertion
+  // carrier — `Scoped` mounts both environments and every probe surface
+  // the rows above read (`input-layout` / `textarea-layout`, the hover
+  // trio + mouse pass-throughs + `input-class`, `field-submit` /
+  // `onSubmit` / `onBlur`, `onChange`) records through `app.storage()`,
+  // so a silent fixture regression cannot pass the other rows vacuously.
+  // Under touch the `onHover*` probes stay silent by design (M-002), so
+  // that half proves the hover channel with the mouse pass-throughs.
+  async function assertFixtureSurface(params: Params) {
+    const layout = await openCase("layout", params);
+    await waitLayout(layout);
+    expect(callsOf(layout, "input-layout").length).toBeGreaterThan(0);
+    expect(callsOf(layout, "textarea-layout").length).toBeGreaterThan(0);
+
+    const hover = await openCase("hover", params);
+    await hover.hover("id:name");
+    await hover.hover("id:hover-away");
+    await hover.waitUntil(() => callsOf(hover, "onMouseLeave").length > 0);
+    expect(hoverRecords(hover).length).toBeGreaterThan(0);
+    expect(callsOf(hover, "onMouseEnter").length).toBeGreaterThanOrEqual(1);
+
+    const submit = await openCase("submit", params);
+    await submit.type("id:name", "x");
+    await submit.submit("id:name");
+    await submit.waitUntil(() => callsOf(submit, "onSubmit").length === 1);
+    expect(callsOf(submit, "field-submit")).toHaveLength(1);
+
+    const standalone = await openCase("submit-standalone", params);
+    await standalone.type("id:name", "y");
+    await standalone.submit("id:name");
+    await standalone.waitUntil(() => callsOf(standalone, "onSubmit").length === 1);
+
+    const textarea = await openCase("submit-textarea", params);
+    await textarea.type("id:bio", "q");
+    await textarea.submit("id:bio");
+    await textarea.wait(100);
+    expect(callsOf(textarea, "onChange").length).toBeGreaterThan(0);
+
+    const keyboard = await openCase("keyboard", params);
+    await keyboard.type("id:name", "ab");
+    expect(callsOf(keyboard, "onChange").length).toBeGreaterThan(0);
+  }
+
+  test("M-006 fixture entry: every case mounts and records (pointer scope)", async () => {
+    await assertFixtureSurface({});
+  }, 120_000);
+
+  test("M-006 fixture entry: every case mounts and records (touch scope)", async () => {
+    await assertFixtureSurface({ scope: "touch" });
+  }, 120_000);
+
+  // adapt-sheets/textfield.md M-007 (基线): the default environment keeps
+  // the desktop contract the existing `textfield.heroui.test.tsx` /
+  // `textarea.heroui.test.tsx` pin — the `onChange` sequence, the
+  // controlled write-back refusal (owner keeps "Ada" while the attempted
+  // "Ada!" is only reported), `focus`/`blur` → `onFocusChange`, the Label
+  // reaching the input as its name, the Description / FieldError texts,
+  // the invalid render, `masked` / `type="password"` mounts, and the
+  // TextArea's rows height + Enter line break. The composition fan-out is
+  // the `composition` case's X-001 assertion, re-read here; the read-only
+  // files stay green untouched.
+  test("M-007 baseline: default environment keeps the desktop contract", async () => {
+    const app = await openCase("baseline");
+
+    // Label → accessible name; Description + FieldError texts; invalid render.
+    expect(app.shows("label:Baseline name")).toBe(true);
+    expect(app.texts()).toContain("Baseline hint");
+    expect(app.texts()).toContain("Baseline error");
+
+    // onChange sequence (root string payload) + input { value } payload,
+    // then focus → onFocusChange(true).
+    await app.type("id:baseline-name", "Bo");
+    await app.waitUntil(() => callsOf(app, "onFocusChange").length === 1);
+    const rootChanges = callsOf(app, "root-change").map((c) => c[0]);
+    expect(rootChanges.length).toBeGreaterThanOrEqual(2);
+    expect(rootChanges.at(-1)).toBe("Bo");
+    expect(callsOf(app, "onFocusChange")).toEqual([[true]]);
+
+    // Controlled write-back refusal: the owner never writes, so the host
+    // text is corrected back to "Ada" while "Ada!" is only reported.
+    await app.type("id:baseline-controlled-input", "!");
+    await app.waitUntil(() => callsOf(app, "onFocusChange").length === 2);
+    expect(app.value("id:baseline-controlled-input")).toBe("Ada");
+    expect(callsOf(app, "controlled-change").at(-1)![0]).toBe("Ada!");
+    expect(callsOf(app, "onFocusChange")).toEqual([[true], [false]]);
+
+    // masked / type="password" mount and edit through the same channel.
+    expect(app.enabled("id:baseline-password")).toBe(true);
+    expect(app.enabled("id:baseline-masked")).toBe(true);
+    await app.type("id:baseline-password", "s3cret");
+    expect(app.value("id:baseline-password")).toBe("s3cret");
+    expect((callsOf(app, "onChange").at(-1)![0] as ChangeRecord).value).toBe("s3cret");
+    await app.type("id:baseline-masked", "hide");
+    expect(app.value("id:baseline-masked")).toBe("hide");
+
+    // TextArea rows height (rows={3} → 76 px on the desktop host) and the
+    // Enter line break stays in the value.
+    await app.type("id:baseline-bio", "a\nb");
+    expect(app.value("id:baseline-bio")).toContain("\n");
+    await app.waitUntil(() => callsOf(app, "baseline-textarea-layout").length > 0);
+    expect(lastLayout(app, "baseline-textarea-layout").height).toBe(76);
+
+    // Composition fan-out (X-001): start / update / end all reach the
+    // root's onCompositionChange through the field context.
+    const composition = await openCase("composition");
+    await composition.press("id:compose");
+    const phases = callsOf(composition, "onCompositionChange");
+    expect(phases).toHaveLength(3);
+    expect(phases[0]).toEqual([{ composing: true, text: "n" }]);
+    expect(phases[1]).toEqual([{ composing: true, text: "ni" }]);
+    expect(phases[2]).toEqual([{ composing: false, text: "" }]);
+  }, 120_000);
+});

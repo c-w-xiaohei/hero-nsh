@@ -1,5 +1,6 @@
 import type { JSX } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import type { TextControlCommonProps } from "./text-control";
 import { renderTextControl } from "./text-control";
 import { inputVariants } from "./input.styles";
@@ -54,11 +55,18 @@ export interface InputRootProps extends TextControlCommonProps {
  * root's and follows it, so a controlled field has exactly one source of truth.
  */
 export function InputRoot(props: InputRootProps): JSX.Element {
+  // A-002: the `input` variant axis reads the environment, never a prop or
+  // `platform`; the shared control consumes it for the variant table and
+  // the hover gate (A-003).
+  const input = createInput();
+
   return renderTextControl(props, {
     multiline: false,
     usesRows: false,
+    input,
     // R-017 / R-018 / R-022 live in `input.styles.ts`; the state classes are
     // computed in `text-control.tsx` (R-012 … R-015, R-019 … R-021).
-    baseClass: ({ fullWidth, variant }) => inputVariants({ fullWidth, variant }),
+    baseClass: ({ fullWidth, variant, input: axis }) =>
+      inputVariants({ fullWidth, variant, input: axis }),
   });
 }
