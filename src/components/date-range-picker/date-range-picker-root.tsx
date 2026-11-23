@@ -604,6 +604,8 @@ export function DateRangePickerRoot(props: DateRangePickerRootProps): JSX.Elemen
   // R-002 / R-003: `.date-range-picker .date-input-group__suffix` and `__prefix`
   // turn `pointer-events-none` into `auto`. A descendant selector has no NSH
   // counterpart, so the picker tells the group's affixes through this context.
+  // A-007: the same flag is the mobile "inherit" channel — the group's
+  // `input×interactive` affix cells expand these to 44pt under touch.
   const affixContext = () => true;
 
   /* -------------------------------------------------------------------------------------------
@@ -657,6 +659,10 @@ export function DateRangePickerRoot(props: DateRangePickerRootProps): JSX.Elemen
 
   return (
     <DateRangePickerContext.Provider value={pickerContext}>
+      {/* A-006: the G/B(inherit) channel — `rangeState.field` is slot-aware;
+          `DateField.Input slot="start"|"end"` binds its own side through
+          `forSlot`, so the group's `dig-seg-*` soft-keyboard channels and
+          the `keyboardType` context reach each side with zero wiring here. */}
       <DateInputGroupFieldContext.Provider value={state}>
         <FieldContext.Provider value={fieldState}>
           <DescriptionContext.Provider value={descriptionState}>

@@ -230,7 +230,52 @@ export function createDateRangeFieldState(
     },
   });
 
-  const pick = (slot: string | undefined): DateFieldState => (slot === "end" ? end : start);
+  // A-013: a key that auto-advances (a full typing buffer, Backspace at a
+  // placeholder) and the arrow keys run `focusAdjacent`, whose `focus()` call
+  // dispatches the leaving segment's blur before the arriving segment's focus
+  // lands. That transient is read two ways: the group's `isFocusWithin` dips
+  // and its commit boundary fires `field.commit()` mid-edit, and the blur's
+  // `focusSegment(null)` report lands after the move already recorded the new
+  // segment (a focus-first host order would erase it again). `focusMoveInFlight`
+  // brackets every entry that can move the focus — `type` and `backspace`
+  // reach `focusAdjacent` through the inner state's own closure, so the window
+  // wraps the whole call, not the `focusAdjacent` member — and both sides
+  // share it, since an end-side move trips the group's single `field.commit`
+  // the same way.
+  let focusMoveInFlight = false;
+
+  const duringFocusMove = <T>(run: () => T): T => {
+    const previous = focusMoveInFlight;
+
+    focusMoveInFlight = true;
+
+    try {
+      return run();
+    } finally {
+      focusMoveInFlight = previous;
+    }
+  };
+
+  const side = (real: DateFieldState): DateFieldState => ({
+    ...real,
+    focusSegment: (segment) => {
+      if (segment === null && focusMoveInFlight) {
+        return;
+      }
+
+      real.focusSegment(segment);
+    },
+    focusAdjacent: (direction) => duringFocusMove(() => real.focusAdjacent(direction)),
+    focusLast: () => duringFocusMove(() => real.focusLast()),
+    type: (segment, key) => duringFocusMove(() => real.type(segment, key)),
+    backspace: (segment) => duringFocusMove(() => real.backspace(segment)),
+  });
+
+  const startSide = side(start);
+  const endSide = side(end);
+
+  const pick = (slot: string | undefined): DateFieldState =>
+    slot === "end" ? endSide : startSide;
 
   // The group's own readers ask without a slot: an invalid side makes the pair
   // invalid, and the messages of both sides are the field's (port sheet §2).
@@ -257,18 +302,18 @@ export function createDateRangeFieldState(
     // hands it `forSlot`); the handle's own call clears both sides.
     focusSegment: (segment) => {
       if (segment === null) {
-        start.focusSegment(null);
-        end.focusSegment(null);
+        startSide.focusSegment(null);
+        endSide.focusSegment(null);
 
         return;
       }
 
       const belongsToStart = start.segments().some((candidate) => candidate === segment);
 
-      (belongsToStart ? start : end).focusSegment(segment);
+      (belongsToStart ? startSide : endSide).focusSegment(segment);
     },
-    focusAdjacent: (direction) => start.focusAdjacent(direction),
-    focusLast: () => start.focusLast(),
+    focusAdjacent: (direction) => startSide.focusAdjacent(direction),
+    focusLast: () => startSide.focusLast(),
     registerSegmentElement: (type, getNode) => start.registerSegmentElement(type, getNode),
     increment: (segment) => start.increment(segment),
     decrement: (segment) => start.decrement(segment),
@@ -276,11 +321,19 @@ export function createDateRangeFieldState(
     decrementPage: (segment) => start.decrementPage(segment),
     incrementToMax: (segment) => start.incrementToMax(segment),
     decrementToMin: (segment) => start.decrementToMin(segment),
-    type: (segment, key) => start.type(segment, key),
-    backspace: (segment) => start.backspace(segment),
+    type: (segment, key) => startSide.type(segment, key),
+    backspace: (segment) => startSide.backspace(segment),
     clear: (segment) => start.clear(segment),
-    // The group commits when the focus leaves either side.
+    // The group commits when the focus leaves either side. A-013: a commit the
+    // group's blur boundary fires while a `focusAdjacent` move is still
+    // dispatching is the dip, not a leave — React Aria's `onBlurWithin` never
+    // sees it — so it is dropped here instead of clamping a mid-edit
+    // IncompleteDate (February 30th → 28th ahead of Enter).
     commit: () => {
+      if (focusMoveInFlight) {
+        return;
+      }
+
       start.commit();
       end.commit();
     },
@@ -288,5 +341,5 @@ export function createDateRangeFieldState(
     forSlot: (slot) => pick(slot),
   };
 
-  return { field, start, end, range: rangeValue, setRange };
+  return { field, start: startSide, end: endSide, range: rangeValue, setRange };
 }
