@@ -26,9 +26,12 @@ import {
  * `id:drp-popover-panel` on the anchored overlay, `id:drp-popover-sheet` on
  * the Sheet panel (adapt sheet §8's registered observable-id change).
  *
- * The `platform: "windows"` pin is load-bearing: without it `pnpm test`
- * lands the app on the phone-sized engine where `input` defaults to touch
- * and every pointer-default assertion inverts under the suite (_common.md).
+ * The `input:"pointer"` + `width:"regular"` injection is load-bearing the
+ * way the old `platform: "windows"` pin was: `open()` platform/width/height
+ * options are rejected on ios/android, so the desktop-parity environment
+ * comes from `host.params` → `EnvironmentScope`; without it the host
+ * defaults `input` to touch and every pointer-default assertion inverts
+ * under the suite (_common.md).
  *
  * Every assertion reads what `nsh/test` can observe — `shows`, `count`,
  * `enabled`, `texts`, `onLayout` bounds probes and the `@scenario/probe`
@@ -42,15 +45,19 @@ type Params = Record<string, string>;
 function openDrp(
   caseName: string,
   params: Params = {},
-  options: Omit<OpenOptions, "host"> = {},
+  options: Pick<OpenOptions, "clock"> = {},
 ): Promise<App> {
   return open("../../../date-range-picker.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     locale: "en-US",
     ...options,
-    host: { params: { case: caseName, ...params } },
+    host: {
+      params: {
+        case: caseName,
+        input: "pointer",
+        width: "regular",
+        ...params,
+      },
+    },
   });
 }
 

@@ -22,6 +22,8 @@ import { probe } from "@scenario/probe";
  *             verbatim firing order. Params: `scope` ("touch" wraps the case
  *             in `EnvironmentScope input="touch"`), `slop` (explicit
  *             `hitSlop`, M-002), `pending` ("1" → `isPending`, M-006).
+ *             The test-only `testInput` ("pointer"/"touch") injects an outer
+ *             EnvironmentScope input.
  *   disabled  Same probes on an `isDisabled` button whose render-prop child
  *             prints the disabled state (M-003). Params: `scope`.
  */
@@ -30,11 +32,23 @@ type Scope = "" | "touch";
 
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "") as Scope;
+  // Test-harness environment param (only the mobile tests set it —
+  // absent keeps the host-derived default): `testInput` injects an outer
+  // EnvironmentScope input so the pointer baseline is host-independent
+  // (inner `scope` overrides still win).
+  const testInput = String(host.params.testInput ?? "");
 
-  return scope === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  const body =
+    scope === "touch" ? (
+      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+    ) : (
+      <>{props.children}</>
+    );
+
+  return testInput === "pointer" || testInput === "touch" ? (
+    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
   ) : (
-    <>{props.children}</>
+    body
   );
 }
 

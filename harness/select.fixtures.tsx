@@ -443,7 +443,14 @@ function Case(props: CaseProps) {
   ];
 
   return (
-    <View class="w-64 items-start gap-2">
+    // `h-full` under `layout=1` makes this root column a window-sized
+    // reference (`stage`): the fullscreen carrier's centering (M-010) needs
+    // a viewport bound, which none of root/trigger/pop supplies. Width and
+    // children are unchanged; only the unused vertical stretch is new.
+    <View
+      class={`w-64 items-start gap-2${layout ? " h-full" : ""}`}
+      onLayout={layout ? boxProbe("stage") : undefined}
+    >
       <Select
         // A ClearButton makes the trigger's centre land inside its 24pt hit
         // area when the root shrink-wraps, so the root takes the width

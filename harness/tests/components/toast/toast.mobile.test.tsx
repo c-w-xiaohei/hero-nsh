@@ -1,15 +1,7 @@
-import { describe, expect, test } from "nsh/test";
+import { describe, expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
-import {
-  advance,
-  closeToast,
-  DEFAULT_TOAST_TIMEOUT,
-  lastCall,
-  openToast,
-  settleExit,
-  showToast,
-} from "../../testers/toast";
+import { advance, settleExit } from "../../testers/toast";
 
 /*
  * Mobile assertions for the toast adapt unit (action D: touch swipe to
@@ -50,11 +42,26 @@ import {
  * Each row's `onClose` probe is per-index (`onClose-0`, `onClose-1`, …),
  * which tells the tests which toast a gesture closed.
  *
- * The desktop pin is `platform: "windows"` (pointer input, 1024×768), the
- * w1 convention `openToast` supplies. The keyboard-focus baseline opens
- * `platform: "web"` — the focus-capable host — the same channel
- * tabs.mobile.test.tsx uses inside a dual-target file.
+ * The `scope:"pointer"` default replaces `openToast`'s `platform:"windows"`
+ * pin — `open()` platform/width/height options are rejected on ios/android,
+ * so the pointer environment is injected per open through `host.params`.
+ * The M-008 baseline halves ride `app.hover`/Tab focus (desktop/web-only)
+ * and live in `toast.mobile.web.test.tsx`.
  */
+
+/** The local opener: `openToast`'s shape minus the windows pin — same
+ * manual clock and `reducedMotion:false`, with `scope` injected through
+ * `host.params` ("pointer" default, per-test override). */
+function openToastMobile(
+  caseName: string,
+  params: Record<string, string | number | boolean> = {},
+): Promise<App> {
+  return open("../../../toast.fixtures.tsx", {
+    clock: {},
+    reducedMotion: false,
+    host: { params: { case: caseName, scope: "pointer", ...params } },
+  });
+}
 
 type SwipeRecord = {
   key: string;
@@ -104,7 +111,7 @@ describe("toast mobile", () => {
     // `swipe-mixed` mounts the inert stack ("Base", timeout 0) and the
     // timed stack ("Hold", timeout 1000) side by side — one open, both
     // halves of the row.
-    const app = await openToast("swipe-mixed");
+    const app = await openToastMobile("swipe-mixed");
 
     await app.waitUntil(() => swipeCalls(app, "base").length > 0);
     const initial = swipeCalls(app, "base")[0]!;
@@ -142,9 +149,7 @@ describe("toast mobile", () => {
   // the entry's own `onClose` fires once, the exit hold plays, and the
   // sibling toast stays mounted and becomes the front row.
   test("M-002 touch + bottom: a downward drag past the threshold closes through the queue", async () => {
-    const app = await openToast("swipe", {
-      params: { count: 2, scope: "touch" },
-    });
+    const app = await openToastMobile("swipe", { count: 2, scope: "touch" });
 
     await app.waitUntil(() => callsOf(app, "swipe").length >= 2);
     expect(app.count("role:alert")).toBe(2);
@@ -178,7 +183,7 @@ describe("toast mobile", () => {
   test("M-004 touch + top placements: an upward drag dismisses, alignment normalized", async () => {
     // `swipe-top-dual` mounts the "top" and "top start" stacks (tags
     // "top"/"ts", close probes `onClose-0`/`onCloseS-0`) under one open.
-    const app = await openToast("swipe-top-dual");
+    const app = await openToastMobile("swipe-top-dual");
 
     await app.waitUntil(() => swipeCalls(app, "top").length > 0);
     await app.waitUntil(() => swipeCalls(app, "ts").length > 0);
@@ -207,7 +212,7 @@ describe("toast mobile", () => {
   // 0, and the toast never closes (the counter-direction branch owns the
   // release whatever velocity the host synthesizes).
   test("M-005 touch + bottom: a reverse drag rubber-bands within 40pt and springs back", async () => {
-    const app = await openToast("swipe", { params: { scope: "touch" } });
+    const app = await openToastMobile("swipe", { scope: "touch" });
 
     await app.waitUntil(() => callsOf(app, "swipe").length > 0);
 
@@ -235,7 +240,7 @@ describe("toast mobile", () => {
     // `itemSwipeable` → `isSwipeable={false}` on the Toast) and the
     // provider-default opt-out ("Prov", provider `isSwipeable={false}`)
     // as sibling touch stacks under one open.
-    const app = await openToast("swipe-off");
+    const app = await openToastMobile("swipe-off");
 
     await app.waitUntil(() => swipeCalls(app, "item").length > 0);
     await app.waitUntil(() => swipeCalls(app, "provider").length > 0);
@@ -262,99 +267,10 @@ describe("toast mobile", () => {
     expect(app.count("role:alert")).toBe(2);
   }, 120_000);
 
-  // adapt-sheets/toast.md M-008 (基线): the existing behaviours are
-  // unchanged in both environments — the default pointer side and the
-  // injected touch side answer identically. Sequential opens exhaust the
-  // web target's browser pool (the M3 gate run proved it, the same host
-  // count color-input-group hit), so the queue behaviours replay as phases
-  // over the fixture's single `baseline` mount — one open per scope — and
-  // the focus half keeps its own `platform:"web"` app.
-  test("M-008 baseline: queue, close, timeout, hover and cap semantics hold in both environments", async () => {
-    for (const scope of [undefined, "touch"] as const) {
-      const params: Record<string, string | number | boolean> = scope
-        ? { scope }
-        : {};
-      const app = await openToast("baseline", { params });
-
-      // T-049: `timeout: 0` never counts down — the seeded Persistent toast
-      // is still there well past the default timeout's span.
-      expect(app.shows("text:Persistent")).toBe(true);
-      await advance(app, 1500);
-      expect(app.shows("role:alert")).toBe(true);
-
-      // T-012/T-050: the CloseButton closes through the queue, onClose once.
-      await closeToast(app);
-      expect(callsOf(app, "onCloseP")).toHaveLength(1);
-      // Move the pointer off the stack so no interaction suspension survives.
-      await app.hover("role:button[Outside]");
-      await settleExit(app);
-      expect(app.count("role:alert")).toBe(0);
-
-      // T-051: queue.close(key) through the queue.
-      await showToast(app, "Show");
-      await showToast(app, "Close toast");
-      expect(callsOf(app, "onCloseK")).toHaveLength(1);
-      await settleExit(app);
-      expect(app.count("role:alert")).toBe(0);
-
-      // T-013: the default timeout expires on schedule.
-      await showToast(app, "Show Timed");
-      await advance(app, DEFAULT_TOAST_TIMEOUT);
-      await settleExit(app);
-      expect(app.count("role:alert")).toBe(0);
-
-      // T-062: hovering the stack suspends the countdown, leaving resumes.
-      await showToast(app, "Show Hover");
-      await app.hover("role:alert");
-      await advance(app, 1000);
-      expect(app.shows("text:Hoverable")).toBe(true);
-      await app.hover("role:button[Outside]");
-      await advance(app, 1100);
-      await settleExit(app);
-      expect(app.count("text:Hoverable")).toBe(0);
-
-      // T-059: toasts past maxVisibleToasts stay mounted and hidden.
-      await showToast(app, "Show Cap");
-      expect(app.count("role:alert")).toBe(4);
-
-      // T-018: queue.clear() closes every toast, each onClose once.
-      await showToast(app, "Clear");
-      expect(callsOf(app, "onCloseCap")).toHaveLength(4);
-      await settleExit(app);
-      expect(app.count("role:alert")).toBe(0);
-    }
-  }, 120_000);
-
-  // adapt-sheets/toast.md M-008 (基线), focus half — T-020/T-022: the focus
-  // handoff — Tab reaches region → frontmost toast → its close button;
-  // closing the focused toast moves focus to the remaining one.
-  // `platform: "web"` is the focus-capable host (the same channel
-  // tabs.mobile.test.tsx uses); `scope` still injects the environment, so
-  // the touch half runs the identical keyboard path. Each environment gets
-  // its own page, NOT one mount for both: on the web host the keyboard's
-  // focus record dies with the provider's programmatic handoff once the
-  // tree around it changes (measured on `focus-dual`: every Tab after the
-  // unmount produced nothing), so a second environment can only ever be
-  // asserted in a fresh page.
-  test("M-008 baseline: focus handoff holds in both environments", async () => {
-    for (const scope of [undefined, "touch"] as const) {
-      const app = await openToast("focus-stack", {
-        params: { count: 2, ...(scope ? { scope } : {}) },
-        platform: "web",
-      });
-
-      await app.keyboard.press("tab");
-      await app.keyboard.press("tab");
-      expect(lastCall(app, "toast-focus-")).toBe("toast-focus-Second");
-
-      await app.keyboard.press("tab");
-      await app.keyboard.press("enter");
-      expect(lastCall(app, "toast-focus-")).toBe("toast-focus-First");
-
-      await settleExit(app);
-      expect(app.shows("text:Second")).toBe(false);
-    }
-  }, 120_000);
+  // adapt-sheets/toast.md M-008 (基线): the existing behaviours — the
+  // queue/close/timeout/hover/cap replay and the Tab focus handoff — ride
+  // `app.hover` and `keyboard.press("tab")` focus moves, which are
+  // desktop/web-only. Both halves live in toast.mobile.web.test.tsx.
 
   // adapt-sheets/toast.md M-009 (A-001): the swipe writes only the `dragY`
   // transform channel — a counter-direction drag on the front toast
@@ -363,9 +279,7 @@ describe("toast mobile", () => {
   // mount/collapse rules (`maxVisibleToasts`, the notification count)
   // answer exactly as before.
   test("M-009 touch: swipe writes only dragY — stacking heights and queue rules hold", async () => {
-    const app = await openToast("swipe", {
-      params: { count: 2, scope: "touch" },
-    });
+    const app = await openToastMobile("swipe", { count: 2, scope: "touch" });
 
     await app.waitUntil(() => callsOf(app, "swipe").length >= 2);
     await app.waitUntil(() => layoutCalls(app).length >= 2);
@@ -411,7 +325,7 @@ describe("toast mobile", () => {
     // `swipe-tri` mounts all three environments as sibling stacks — the
     // host default (tag "default"), an explicit pointer scope ("pointer")
     // and a touch scope ("touch") — under one open.
-    const app = await openToast("swipe-tri");
+    const app = await openToastMobile("swipe-tri");
 
     for (const tag of ["default", "pointer", "touch"] as const) {
       await app.waitUntil(() => swipeCalls(app, tag).length > 0);

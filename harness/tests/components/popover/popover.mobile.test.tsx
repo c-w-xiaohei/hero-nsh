@@ -1,12 +1,12 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { calls, callsOf } from "../../helpers/calls";
 import { popoverVariants } from "../../../../src/components/popover/popover.styles";
 
 /*
  * Mobile assertions for the popover adapt unit, one test per row of
  * adapt-sheets/popover.md §4: M-001, M-002, M-004, M-008, M-009, M-010,
- * M-011 and M-012 here (headless + web); M-003, M-005, M-006 and M-007 live
+ * M-011 and M-012 here (ios + android); M-003, M-005, M-006 and M-007 live
  * in `popover.mobile.headless.test.tsx` because they open
  * `platform: "ios"`, which `--target web` rejects.
  *
@@ -27,20 +27,24 @@ import { popoverVariants } from "../../../../src/components/popover/popover.styl
 
 type Params = Record<string, string>;
 
-// The default environment on both targets is pointer at 1024×768 — the
-// desktop-parity half of every row that does not inject.
+// The default environment is pointer at regular width — the desktop-parity
+// half of every row that does not inject, injected through `EnvironmentScope`
+// params because `open()` platform/width/height options are rejected on
+// ios/android (the old `platform:"windows"` pin's role).
 function openMobile(
   caseName: string,
   params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
 ): Promise<App> {
   return open("../../../popover.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
-    ...options,
-    host: { params: { case: caseName, ...params } },
+    host: {
+      params: {
+        case: caseName,
+        input: "pointer",
+        width: "regular",
+        ...params,
+      },
+    },
   });
 }
 

@@ -1,20 +1,25 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { calls, callsOf } from "../../helpers/calls";
 import { dayCellSelector } from "../../testers/calendar";
 
 /*
  * Mobile assertions for the calendar adapt unit — one test per row of
- * adapt-sheets/calendar.md §4 (M-001…M-011). One file for headless+web: every
- * assertion reads what `nsh/test` observes — `shows`, `count`, `enabled`,
- * `viewStyle`, `onLayout` probe payloads and `app.storage()` seam probes —
- * and `host.params.scope` picks the environment, so the dual-environment
- * rows run identically on both targets.
+ * adapt-sheets/calendar.md §4 (M-001…M-011) on every target, native
+ * ios/android included. Every assertion reads what `nsh/test` observes —
+ * `shows`, `count`, `enabled`, `viewStyle`, `onLayout` probe payloads and
+ * `app.storage()` seam probes — and `host.params.testInput` picks the
+ * environment, so the dual-environment rows run identically everywhere.
+ * M-004 (`app.hover` needs a mouse) lives in
+ * `calendar.mobile.headless.test.tsx`.
  *
  * The fixture is `harness/calendar.fixtures.tsx`, opened by `host.params`:
  * `case` (default/disabled/readonly/unavailable/range-start/multiple/
- * class-override/indicator/year-picker), `scope` ("" = host default pointer,
- * "touch" = EnvironmentScope input="touch"), `weekday`, `value`, `picker`.
+ * class-override/indicator/year-picker), `testInput` ("pointer"/"touch" =
+ * an outer EnvironmentScope input), `testWidth` (points bound on the block
+ * width, the native-safe stand-in for a window pin), `weekday`, `value`,
+ * `picker`. Native hosts fill the device screen and reject the
+ * `platform`/`width`/`height` open options, so this file carries none.
  *
  * Probe surfaces: layout (root/grid/nav/header/day/dot bounds),
  * `onChange`/`onFocusChange`/`cell-press`/`day-focus` (contract callbacks),
@@ -25,20 +30,9 @@ import { dayCellSelector } from "../../testers/calendar";
 
 type Params = Record<string, string>;
 
-function openCal(
-  caseName: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "width" | "height"> = {},
-): Promise<App> {
+function openCal(caseName: string, params: Params = {}): Promise<App> {
   return open("../../../calendar.fixtures.tsx", {
-    // The default half of the sheet's dual environment is `platform.desktop`
-    // === true — the same host the desktop contract runs on. `EnvironmentScope`
-    // supplies the injected touch half.
-    platform: "windows",
-    width: 1024,
-    height: 768,
     locale: "en-US",
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -75,7 +69,7 @@ type SeamState = {
   cells: ({ date: string } & Channel)[];
 };
 
-const BOTH: Params[] = [{}, { scope: "touch" }];
+const BOTH: Params[] = [{ testInput: "pointer" }, { testInput: "touch" }];
 
 function layoutEntries(app: App): LayoutEntry[] {
   return callsOf(app, "layout").map((c) => c[0] as LayoutEntry);
@@ -130,7 +124,7 @@ describe("calendar mobile", () => {
   // pointer default keeps `w-63`/252pt and 36pt cells. `aspect-square`
   // keeps each cell's height at its column width.
   test("M-001 touch root measures 308pt with 44pt cells, default keeps 252pt/36pt", async () => {
-    const touch = await openCal("default", { scope: "touch" });
+    const touch = await openCal("default", { testInput: "touch" });
     await waitForLayout(touch, "day-2026-08-15");
 
     const root = lastLayout(touch, "root");
@@ -140,7 +134,7 @@ describe("calendar mobile", () => {
     expect(cell.width).toBeGreaterThanOrEqual(43.5);
     expect(Math.abs(cell.height - cell.width)).toBeLessThanOrEqual(1.5);
 
-    const pointer = await openCal("default");
+    const pointer = await openCal("default", { testInput: "pointer" });
     await waitForLayout(pointer, "day-2026-08-15");
 
     const rootP = lastLayout(pointer, "root");
@@ -159,7 +153,7 @@ describe("calendar mobile", () => {
   // registered hitSlop gap means the probe reads the computed value, not a
   // view prop). The default environment keeps 24×24 with the seam gated off.
   test("M-002 touch nav buttons measure 44pt with the seam enabled, default keeps 24pt gated off", async () => {
-    const touch = await openCal("default", { scope: "touch" });
+    const touch = await openCal("default", { testInput: "touch" });
     await waitForLayout(touch, "nav-next");
     await touch.waitUntil(() => callsOf(touch, "seam-env").length > 0);
 
@@ -178,7 +172,7 @@ describe("calendar mobile", () => {
       expectNonNegativeSlop(ch!.hitSlop);
     }
 
-    const pointer = await openCal("default");
+    const pointer = await openCal("default", { testInput: "pointer" });
     await waitForLayout(pointer, "nav-next");
     await pointer.waitUntil(() => callsOf(pointer, "seam-env").length > 0);
 
@@ -205,8 +199,8 @@ describe("calendar mobile", () => {
   // environment the cell seam never engages — no `isPressed` edge, every
   // channel gated off, no hitSlop anywhere — while the press→select→onChange
   // contract is byte-identical to desktop.
-  test("M-003 default environment: cell seam never presses and selection is unchanged", async () => {
-    const app = await openCal("default");
+  test("M-003 pointer baseline: cell seam never presses and selection is unchanged", async () => {
+    const app = await openCal("default", { testInput: "pointer" });
     await waitForLayout(app, "day-2026-08-15");
 
     await app.press(dayCellSelector("2026-08-20"));
@@ -240,47 +234,21 @@ describe("calendar mobile", () => {
     }
   }, 120_000);
 
-  // adapt-sheets/calendar.md M-004 (A-001, A-005): under touch the cell's
-  // hover classes are not emitted at all (`input() !== "touch"` gate), so a
-  // hover — sticky on web — leaves no background path; the press still
-  // selects and the released style is the selection paint, never the hover
-  // paint. The default environment's hover is unchanged.
-  test("M-004 injected touch: hover leaves no background, press selects; pointer hover unchanged", async () => {
-    const touch = await openCal("default", { scope: "touch" });
-    await waitForLayout(touch, "day-2026-08-20");
-    const day = dayCellSelector("2026-08-20");
-    const button = "role:button[/August 20, 2026/]";
-
-    await touch.hover(day);
-    await touch.wait(100);
-    expect(touch.viewStyle(button)?.backgroundColor ?? null).toBeNull();
-
-    await touch.press(day);
-    await touch.waitUntil(() => callsOf(touch, "onChange").length === 1);
-    const afterPress = touch.viewStyle(button)?.backgroundColor ?? null;
-    expect(afterPress).not.toBeNull();
-
-    const pointer = await openCal("default");
-    await waitForLayout(pointer, "day-2026-08-20");
-    await pointer.hover(day);
-    await pointer.wait(100);
-    const hoverBg = pointer.viewStyle(button)?.backgroundColor ?? null;
-    expect(hoverBg).not.toBeNull();
-    // Whatever remains after the touch press is the selection paint — never
-    // the hover background the pointer environment resolves.
-    expect(afterPress).not.toBe(hoverBg);
-  }, 120_000);
+  // adapt-sheets/calendar.md M-004 (A-001, A-005) lives in
+  // `calendar.mobile.headless.test.tsx` — `app.hover` needs a mouse, so the
+  // row moved there whole rather than split.
 
   // adapt-sheets/calendar.md M-005 (A-007): at a 320px viewport both
   // environments render all seven columns and every row cell — the touch
   // columns keep their 44pt width even where the host clips the fixed-width
   // root — and a caller `className` width overrides the `input` axis.
-  test("M-005 320px viewport renders all columns in both environments; className width wins", async () => {
+  test("M-005 320pt block width renders all columns in both environments; className width wins", async () => {
     // Column widths at full render width are M-001's half (touch 44pt,
-    // pointer ~36pt); this row only needs the 320px viewport to keep all
+    // pointer ~36pt); this row only needs the 320pt bound — `testWidth`
+    // stands in for the viewport pin native hosts reject — to keep all
     // seven columns and every row cell in both environments.
     for (const params of BOTH) {
-      const app = await openCal("default", params, { width: 320, height: 568 });
+      const app = await openCal("default", { ...params, testWidth: "320" });
       await waitForLayout(app, "day-2026-08-15");
 
       expect(app.count("role:columnheader")).toBe(7);
@@ -375,7 +343,7 @@ describe("calendar mobile", () => {
       await app.wait(200);
       expect(callsOf(app, "onChange")).toHaveLength(0);
 
-      if (params.scope === "touch") {
+      if (params.testInput === "touch") {
         // The seam gate stays closed under touch too: every cell channel
         // reports `enabled === false`.
         await app.press("id:cal-sample");
@@ -395,7 +363,7 @@ describe("calendar mobile", () => {
   // press commits `onPress → selectDate → onChange` with the local callback
   // recorded before the state commit.
   test("M-007 injected touch: held press round-trips the seam, press commits in order", async () => {
-    const app = await openCal("default", { scope: "touch" });
+    const app = await openCal("default", { testInput: "touch" });
     await waitForLayout(app, "day-2026-08-20");
     const day = dayCellSelector("2026-08-20");
 
@@ -452,7 +420,7 @@ describe("calendar mobile", () => {
       expect(callsOf(app, "cell-press")).toHaveLength(0);
     }
 
-    const touch = await openCal("unavailable", { scope: "touch" });
+    const touch = await openCal("unavailable", { testInput: "touch" });
     await waitForLayout(touch, "day-2026-08-20");
     await touch.press("id:cal-sample");
     await touch.waitUntil(() => callsOf(touch, "seam-state").length > 0);
@@ -462,10 +430,13 @@ describe("calendar mobile", () => {
 
     // value == unavailable date: `isSelected` stays false — no cell carries
     // the ", selected" accessible-name suffix.
-    const combo = await openCal("unavailable", { value: "2026-08-20" });
+    const combo = await openCal("unavailable", {
+      testInput: "pointer",
+      value: "2026-08-20",
+    });
     await waitForLayout(combo, "day-2026-08-20");
     expect(combo.count("role:button[/selected/]")).toBe(0);
-    const control = await openCal("default");
+    const control = await openCal("default", { testInput: "pointer" });
     await waitForLayout(control, "day-2026-08-15");
     expect(control.count("role:button[/selected/]")).toBe(1);
   }, 120_000);
@@ -478,7 +449,7 @@ describe("calendar mobile", () => {
   // pageBehavior/selectionAlignment) keep their semantics through the
   // existing heroui suite this row samples.
   test("M-009 baseline: selection, paging, bounds, multiple mode and year picker hold", async () => {
-    const app = await openCal("default");
+    const app = await openCal("default", { testInput: "pointer" });
     await waitForLayout(app, "day-2026-08-15");
 
     await app.press(dayCellSelector("2026-08-20"));
@@ -494,11 +465,11 @@ describe("calendar mobile", () => {
     await app.press("role:button[/^Previous$/]");
     await app.waitFor("text:August 2026");
 
-    const edge = await openCal("range-start");
+    const edge = await openCal("range-start", { testInput: "pointer" });
     await waitForLayout(edge, "day-2020-01-15");
     expect(edge.enabled(dayCellSelector("2019-12-30"))).toBe(false);
 
-    const multiple = await openCal("multiple", { scope: "touch" });
+    const multiple = await openCal("multiple", { testInput: "touch" });
     await waitForLayout(multiple, "day-2026-08-15");
     await multiple.press(dayCellSelector("2026-08-20"));
     await multiple.waitUntil(() => callsOf(multiple, "onChange").length === 1);
@@ -516,7 +487,7 @@ describe("calendar mobile", () => {
       "2026-08-22",
     ]);
 
-    const picker = await openCal("year-picker");
+    const picker = await openCal("year-picker", { testInput: "pointer" });
     await waitForLayout(picker, "day-2026-08-15");
     await picker.press("role:button[/year selector/i]");
     await picker.waitFor("text:2020");
@@ -563,7 +534,10 @@ describe("calendar mobile", () => {
       await app.waitFor("text:September 2026");
     }
 
-    const narrow = await openCal("default", { weekday: "narrow" });
+    const narrow = await openCal("default", {
+      testInput: "pointer",
+      weekday: "narrow",
+    });
     await waitForLayout(narrow, "day-2026-08-15");
     expect(headNames(narrow)).toEqual([
       "header-F",
@@ -605,8 +579,8 @@ describe("calendar mobile", () => {
   // adapt-sheets/calendar.md M-011 (A-003, 负断言): under the default pointer
   // environment the nav-button seam never exists — hitSlop stays undefined,
   // `isPressed` never sets, bounds hold at 24×24 — while paging still works.
-  test("M-011 default environment: nav seam stays inert while paging works", async () => {
-    const app = await openCal("default");
+  test("M-011 pointer baseline: nav seam stays inert while paging works", async () => {
+    const app = await openCal("default", { testInput: "pointer" });
     await waitForLayout(app, "nav-next");
 
     for (const slot of ["nav-previous", "nav-next"] as const) {

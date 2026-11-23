@@ -1,5 +1,5 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 // Upstream imports the value model relatively (`./utils`); NSH bundles a test
 // file on its own and leaves the `@heroui/react` alias external, so import the
 // ported module directly instead (same as color-swatch.kobalte.test.tsx).
@@ -12,29 +12,28 @@ import { callsOf } from "../../helpers/calls";
  * 保留: the swatch is a pure display element — its size/shape table gains no
  * `input`/`density` axis, the checkerboard stays a fixed render structure, and
  * press props already reach the root `View` through `viewProps(rest)`. These
- * tests pin that unchanged contract on both ends: the default environment
- * (pointer on headless/web — the desktop-parity half) and an injected
- * `EnvironmentScope input="touch"`.
+ * tests pin that unchanged contract on both ends: the injected
+ * `EnvironmentScope input="pointer"` (the desktop-parity half) and the
+ * injected `EnvironmentScope input="touch"` (which a native phone's
+ * host-derived environment already is, so M-001 also runs uninjected).
  *
  * The fixture is `harness/color-swatch.fixtures.tsx`, opened by
  * `host.params.case` (`matrix` / `named` / `press`) plus `scope` ("touch"
- * wraps the case in `EnvironmentScope input="touch"`). Probes in
- * `app.storage()`: `layout` (per-swatch bounds) and `events` (the onPress
- * record).
+ * or "pointer" wraps the case in the matching `EnvironmentScope input`).
+ * Probes in `app.storage()`: `layout` (per-swatch bounds) and `events`
+ * (the onPress record).
+ *
+ * Native hosts fill the device screen, so the `platform:"windows"` /
+ * 1024×768 pin is gone: where a row compares environments the pointer
+ * half injects `scope="pointer"` explicitly — a native phone's
+ * host-derived input is touch, and the host-derived default half stays
+ * uninjected.
  */
 
 type Params = Record<string, string>;
 
-function openSwatch(
-  caseName: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openSwatch(caseName: string, params: Params = {}): Promise<App> {
   return open("../../../color-swatch.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -112,7 +111,7 @@ describe("color-swatch mobile", () => {
   // cell (no input/density axis engages on a static display part), and
   // `role=image` plus the name synthesis are unchanged.
   test("M-002 injected touch: matrix bounds identical to pointer, role=image and names unchanged", async () => {
-    const pointer = await openSwatch("matrix");
+    const pointer = await openSwatch("matrix", { scope: "pointer" });
     const touch = await openSwatch("matrix", { scope: "touch" });
     await pointer.waitUntil(() => callsOf(pointer, "layout").length >= 12);
     await touch.waitUntil(() => callsOf(touch, "layout").length >= 12);
@@ -141,8 +140,8 @@ describe("color-swatch mobile", () => {
   // same `viewProps` passthrough. The "external click target" boundary is
   // the caller's job, not an environment branch.
   test("M-003 press passthrough is environment-independent; a bare swatch has no press path", async () => {
-    for (const scope of ["", "touch"] as const) {
-      const app = await openSwatch("press", scope ? { scope } : {});
+    for (const scope of ["pointer", "touch"] as const) {
+      const app = await openSwatch("press", { scope });
 
       expect(app.count("role:image")).toBe(2);
       await expect(app.press("id:swatch-plain")).rejects.toMatchObject({

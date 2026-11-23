@@ -58,7 +58,7 @@ import { probe } from "@scenario/probe";
  *   ellipsis     fires if an Ellipsis ever reports a press (M-011).
  */
 
-type Scope = "" | "touch";
+type Scope = "" | "touch" | "pointer";
 
 type LayoutEvent = {
   bounds: {
@@ -70,8 +70,8 @@ type LayoutEvent = {
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "") as Scope;
 
-  return scope === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  return scope === "touch" || scope === "pointer" ? (
+    <EnvironmentScope input={scope}>{props.children}</EnvironmentScope>
   ) : (
     <>{props.children}</>
   );

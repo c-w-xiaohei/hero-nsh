@@ -38,6 +38,46 @@ function openModal(): Promise<App> {
   });
 }
 
+/** The shared file's default-shape open, pinned to web so `platform`,
+ * `width` and the size-axis measurement stay legal. */
+function openModalPointer(
+  params: Record<string, string | number | boolean> = {},
+): Promise<App> {
+  return open("../../../modal.fixtures.tsx", {
+    platform: "web",
+    width: 1024,
+    height: 768,
+    clock: {},
+    host: { params: { case: "basic", scope: "pointer", ...params } },
+  });
+}
+
+type LayoutRecord = {
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+function lastLayout(app: App, name: string): LayoutRecord {
+  const records = callsOf(app, "layout")
+    .map((args) => args[0] as LayoutRecord)
+    .filter((record) => record.name === name);
+  const last = records.at(-1);
+
+  if (!last) throw new Error(`no layout record for ${name}`);
+
+  return last;
+}
+
+/** The dialog's box in screen coordinates: container origin + dialog origin. */
+function absDialog(app: App): { width: number } {
+  const dialog = lastLayout(app, "dialog");
+
+  return { width: dialog.width };
+}
+
 function swipeRecords(app: App): SwipeRecord[] {
   return callsOf(app, "swipe").map((args) => args[0] as SwipeRecord);
 }
@@ -75,5 +115,24 @@ describe("modal mobile (web)", () => {
     expect(
       callsOf(app, "openChange").filter((args) => args[0] === false),
     ).toEqual([]);
+  }, 90_000);
+
+  // adapt-sheets/modal.md M-009 (baseline), the `size` axis: the max-w caps
+  // are observable as distinct widths only past 512 pt of window — on a
+  // phone-width screen every cap clamps to the same box, so the ordering
+  // half lives here (measured on the pinned host: xs 320, sm 384, md 448,
+  // lg 512, cover 944, full 1024 — the sm/md/lg run pins the ordering;
+  // cover/full are the w-full extremes).
+  test("M-009 baseline (web): the size axis keeps the sm/md/lg ordering", async () => {
+    const widths: Record<string, number> = {};
+    for (const size of ["sm", "md", "lg"] as const) {
+      const sized = await openModalPointer({ size });
+      await sized.clock?.runFor(400);
+      widths[size] = absDialog(sized).width;
+    }
+    expect(widths.sm).toBeLessThan(widths.md);
+    expect(widths.md).toBeLessThan(widths.lg);
+    expect(widths.md).toBeGreaterThan(400);
+    expect(widths.md).toBeLessThan(500);
   }, 90_000);
 });

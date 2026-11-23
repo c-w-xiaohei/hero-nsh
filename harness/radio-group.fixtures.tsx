@@ -23,6 +23,8 @@ import { probe } from "@scenario/probe";
  * host.params (the shape radio-group.mobile.test.tsx opens with):
  *   scope        "" = host default pointer environment, "touch" =
  *                `EnvironmentScope input="touch"`
+ *   testInput    "pointer"/"touch" — an outer EnvironmentScope input so the
+ *                pointer baseline is host-independent
  *   default      the group's defaultValue ("dogs" when absent)
  *   orientation  "vertical" (default) / "horizontal"
  *   disabled     group `isDisabled`
@@ -176,10 +178,23 @@ function PetGroup(props: GroupProps) {
  * -----------------------------------------------------------------------------------------------*/
 
 function Scoped(props: { children?: JSX.Element }) {
-  return String(host.params.scope ?? "") === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  // Test-harness environment param (only the mobile tests set it —
+  // absent keeps the host-derived default): `testInput` injects an outer
+  // EnvironmentScope input so the pointer baseline is host-independent
+  // (inner `scope` overrides still win).
+  const testInput = String(host.params.testInput ?? "");
+
+  const body =
+    String(host.params.scope ?? "") === "touch" ? (
+      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+    ) : (
+      <>{props.children}</>
+    );
+
+  return testInput === "pointer" || testInput === "touch" ? (
+    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
   ) : (
-    <>{props.children}</>
+    body
   );
 }
 

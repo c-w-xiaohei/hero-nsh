@@ -12,19 +12,18 @@ import { calls, callsOf } from "../../helpers/calls";
  * input/width), `presentation`, `dismissable`, `swipeable`, `open` ("0" starts
  * closed so `ad-trigger` opens) and `placement`.
  *
- * Every open pins `platform: "windows"` at 1024×768 — the desktop `pointer`
- * environment is the default half of each row, and `scope` injects the touch
- * half. The observation channel is what `nsh/test` sees: the `layout` probe's
- * per-part bounds, the `drag` probe (`panKeys` — 0 when the swipe gesture is
- * gated off, the physical-absence evidence — plus every offset the gesture
- * writes), the `events` probe (the trigger's press chain and the close
- * trigger's `closePress`), `openChange`, `shows`/`count`, and the merged
- * `calls()` stream for cross-probe ordering.
+ * The `scope:"pointer"` default replaces the old `platform:"windows"` pin —
+ * `open()` platform/width/height options are rejected on ios/android, so the
+ * desktop `pointer` half of each row is injected through `host.params.scope`
+ * and `scope` keeps injecting the touch half. Geometry reads the `container`
+ * layout record (the full-window positioning carrier) rather than viewport
+ * constants, because native screens vary. The observation channel is what
+ * `nsh/test` sees: the `layout` probe's per-part bounds, the `drag` probe
+ * (`panKeys` — 0 when the swipe gesture is gated off, the physical-absence
+ * evidence — plus every offset the gesture writes), the `events` probe (the
+ * trigger's press chain and the close trigger's `closePress`), `openChange`,
+ * `shows`/`count`, and the merged `calls()` stream for cross-probe ordering.
  */
-
-const VIEWPORT_W = 1024;
-const VIEWPORT_H = 768;
-const CENTER_Y = VIEWPORT_H / 2;
 
 type LayoutRecord = {
   name: string;
@@ -40,11 +39,8 @@ function openDialog(
   params: Record<string, string | number | boolean> = {},
 ): Promise<App> {
   return open("../../../alert-dialog.fixtures.tsx", {
-    platform: "windows",
-    width: VIEWPORT_W,
-    height: VIEWPORT_H,
     clock: {},
-    host: { params: { fixture: "geometry", ...params } },
+    host: { params: { fixture: "geometry", scope: "pointer", ...params } },
   });
 }
 
@@ -65,6 +61,12 @@ function lastLayout(app: App, name: string): LayoutRecord {
 
 function centerY(record: LayoutRecord): number {
   return record.y + record.height / 2;
+}
+
+/* The `container` record is the full-window positioning carrier — the
+ * viewport reference the VIEWPORT_W/H constants used to play. */
+function container(app: App): LayoutRecord {
+  return lastLayout(app, "container");
 }
 
 function dragRecords(app: App): DragRecord[] {
@@ -97,9 +99,12 @@ describe("alert-dialog mobile", () => {
     await settle(app, 300);
 
     const dialog = lastLayout(app, "dialog");
-    expect(Math.abs(dialog.y + dialog.height - VIEWPORT_H)).toBeLessThanOrEqual(4);
-    expect(dialog.width).toBeGreaterThan(VIEWPORT_W * 0.9);
-    expect(centerY(dialog)).toBeGreaterThan(CENTER_Y + 100);
+    const stage = container(app);
+    expect(
+      Math.abs(dialog.y + dialog.height - (stage.y + stage.height)),
+    ).toBeLessThanOrEqual(4);
+    expect(dialog.width).toBeGreaterThan(stage.width * 0.9);
+    expect(centerY(dialog)).toBeGreaterThan(centerY(stage) + 100);
   });
 
   // adapt-sheets/alert-dialog.md M-002 (A-001): a `"panel"` pin beats the
@@ -114,9 +119,10 @@ describe("alert-dialog mobile", () => {
     await settle(app, 300);
 
     const dialog = lastLayout(app, "dialog");
-    expect(Math.abs(centerY(dialog) - CENTER_Y)).toBeLessThanOrEqual(40);
-    // The `max-w-md` cap: far below the sheet's full-bleed ~1024.
-    expect(dialog.width).toBeLessThan(600);
+    const stage = container(app);
+    expect(Math.abs(centerY(dialog) - centerY(stage))).toBeLessThanOrEqual(40);
+    // The `max-w-md` cap: far below the sheet's full-bleed width.
+    expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
     expect(dialog.width).toBeGreaterThan(200);
   });
 
@@ -305,8 +311,9 @@ describe("alert-dialog mobile", () => {
     await settle(app, 300);
 
     const dialog = lastLayout(app, "dialog");
-    expect(Math.abs(centerY(dialog) - CENTER_Y)).toBeLessThanOrEqual(40);
-    expect(dialog.width).toBeLessThan(600);
+    const stage = container(app);
+    expect(Math.abs(centerY(dialog) - centerY(stage))).toBeLessThanOrEqual(40);
+    expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
 
     // `isKeyboardDismissDisabled=true`: Escape asks and is refused; `back()`
     // is attempted the same way — where the host cannot drive it the
@@ -353,16 +360,19 @@ describe("alert-dialog mobile", () => {
     const centerYOf = async (placement: string) => {
       const placed = await openDialog({ placement });
       await settle(placed, 300);
-      return centerY(lastLayout(placed, "dialog"));
+      return {
+        dialog: centerY(lastLayout(placed, "dialog")),
+        stage: centerY(container(placed)),
+      };
     };
 
-    const topY = await centerYOf("top");
-    const middleY = await centerYOf("center");
-    const bottomY = await centerYOf("bottom");
+    const top = await centerYOf("top");
+    const middle = await centerYOf("center");
+    const bottom = await centerYOf("bottom");
 
-    expect(topY).toBeLessThan(middleY - 60);
-    expect(bottomY).toBeGreaterThan(middleY + 60);
-    expect(Math.abs(middleY - CENTER_Y)).toBeLessThanOrEqual(40);
+    expect(top.dialog).toBeLessThan(middle.dialog - 60);
+    expect(bottom.dialog).toBeGreaterThan(middle.dialog + 60);
+    expect(Math.abs(middle.dialog - middle.stage)).toBeLessThanOrEqual(40);
   });
 
   // adapt-sheets/alert-dialog.md M-010 (baseline + A-004's fourth gate):
@@ -379,8 +389,9 @@ describe("alert-dialog mobile", () => {
     await settle(app, 300);
 
     const dialog = lastLayout(app, "dialog");
-    expect(Math.abs(centerY(dialog) - CENTER_Y)).toBeLessThanOrEqual(40);
-    expect(dialog.width).toBeLessThan(600);
+    const stage = container(app);
+    expect(Math.abs(centerY(dialog) - centerY(stage))).toBeLessThanOrEqual(40);
+    expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
 
     await app.drag("id:ad-card", { y: 200 });
     await settle(app, 120);
@@ -408,7 +419,8 @@ describe("alert-dialog mobile", () => {
 
     expect(pin).toBe("panel");
     const dialog = lastLayout(app, "dialog");
-    expect(Math.abs(centerY(dialog) - CENTER_Y)).toBeLessThanOrEqual(40);
-    expect(dialog.width).toBeLessThan(600);
+    const stage = container(app);
+    expect(Math.abs(centerY(dialog) - centerY(stage))).toBeLessThanOrEqual(40);
+    expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
   });
 });

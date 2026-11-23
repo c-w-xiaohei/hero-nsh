@@ -35,9 +35,10 @@ import { probe } from "@scenario/probe";
  *            (`swatch-press`).
  *
  * `host.params.scope` picks the `EnvironmentScope` wrapper ("" = host
- * default, "touch" = `input="touch"`), same convention as
- * `chip.fixtures.tsx`. No `case` keeps the original two-swatch layout T-003
- * measures.
+ * default, "touch" = `input="touch"`, "pointer" = `input="pointer"` — the
+ * explicit pointer baseline, since a native phone's host-derived input is
+ * touch), same convention as `chip.fixtures.tsx`. No `case` keeps the
+ * original two-swatch layout T-003 measures.
  */
 
 type LayoutEvent = {
@@ -58,13 +59,13 @@ function layoutProbe(name: string) {
     });
 }
 
-type Scope = "" | "touch";
+type Scope = "" | "touch" | "pointer";
 
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "") as Scope;
 
-  return scope === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  return scope === "touch" || scope === "pointer" ? (
+    <EnvironmentScope input={scope}>{props.children}</EnvironmentScope>
   ) : (
     <>{props.children}</>
   );

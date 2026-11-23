@@ -66,7 +66,7 @@ function layoutProbe(name: string) {
     });
 }
 
-type Scope = "" | "touch";
+type Scope = "" | "touch" | "pointer";
 
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "") as Scope;
@@ -74,7 +74,7 @@ function Scoped(props: { children?: JSX.Element }) {
 
   return (
     <EnvironmentScope
-      input={scope === "touch" ? "touch" : undefined}
+      input={scope === "touch" || scope === "pointer" ? scope : undefined}
       density={density === "compact" || density === "default" ? density : undefined}
     >
       {props.children}

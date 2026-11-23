@@ -1,4 +1,4 @@
-import { host, mount, Text, View } from "nsh";
+import { host, mount, platform, Text, View, windowSize } from "nsh";
 import type { Component, JSX, PressEvent } from "nsh";
 import {
   createDensity,
@@ -36,6 +36,9 @@ import { probe } from "@scenario/probe";
  * `host.params.scope` picks the `EnvironmentScope` wrapper the case mounts:
  *   (absent)   no scope — the host-derived default environment
  *   "touch"    EnvironmentScope input="touch" — a partial override
+ *   "pointer"  EnvironmentScope input="pointer" — the explicit pointer half
+ *              of pointer/touch comparisons (a real phone's default is
+ *              touch, so pointer is injected, never assumed)
  *   "density"  EnvironmentScope density="compact" — the non-default preset
  *   "nested"   EnvironmentScope input="touch" around an inner
  *              EnvironmentScope input="pointer" width="regular", with a second
@@ -88,6 +91,10 @@ function Scoped(props: { children?: JSX.Element }) {
   switch (scope) {
     case "touch":
       return <EnvironmentScope input="touch">{props.children}</EnvironmentScope>;
+    case "pointer":
+      return (
+        <EnvironmentScope input="pointer">{props.children}</EnvironmentScope>
+      );
     case "density":
       return (
         <EnvironmentScope density="compact">{props.children}</EnvironmentScope>
@@ -298,6 +305,18 @@ const cases: Record<string, Component> = {
 function Fixture() {
   const name = String(host.params.case ?? "fields");
   const Case = cases[name] ?? FieldsCase;
+
+  // The host's own report — platform facts and the real window size — so
+  // tests derive the expected default environment (input follows
+  // `platform.desktop`, width the window's short side) instead of pinning
+  // a desktop baseline a native phone cannot provide.
+  probe("env")({
+    os: platform.os,
+    desktop: platform.desktop,
+    idiom: platform.idiom,
+    w: windowSize().width,
+    h: windowSize().height,
+  });
 
   return <Case />;
 }

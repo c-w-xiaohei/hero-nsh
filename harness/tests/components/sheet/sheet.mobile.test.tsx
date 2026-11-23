@@ -10,12 +10,15 @@ import { callsOf } from "../../helpers/calls";
  * have no snap points (full detent; `handoff-locked` is `!isDismissable`,
  * so a release that would dismiss returns to rest instead).
  *
- * `host.params.scope="touch"` mounts the `EnvironmentScope input="touch"`
- * the assertions inject; its absence is the default pointer environment —
- * the desktop-parity baseline, including the negative assertion that the
- * content gesture path does not exist there. `app.drag` and `app.scroll`
- * drive the touches on headless and web alike, so this file is a
- * dual-target `.mobile.test.tsx`.
+ * `host.params.scope` mounts the `EnvironmentScope` the assertions inject —
+ * "touch" for the gesture halves, "pointer" (this file's default) for the
+ * desktop-parity baseline, including the negative assertion that the
+ * content gesture path does not exist there. `open()` platform/width/height
+ * options are rejected on ios/android, so the pointer environment is
+ * injected per open instead of pinned by `platform:"windows"`, and the
+ * detent lengths are read off the probe's own `detents` list rather than a
+ * fixed window height — native screens vary. `app.drag` and `app.scroll`
+ * drive the touches on the native targets as they did on headless.
  *
  * The observation channel is what `nsh/test` sees: the `detent` probe's
  * Storage records (`length`, `detents`, `isExpanded`, `atTop`, `dragging`
@@ -35,13 +38,13 @@ type DetentRecord = {
   scrollKeys: number;
 };
 
-function openSheet(caseName: string, scope?: "touch"): Promise<App> {
+function openSheet(
+  caseName: string,
+  scope: "touch" | "pointer" = "pointer",
+): Promise<App> {
   return open("../../../sheet.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
-    host: { params: { case: caseName, ...(scope ? { scope } : {}) } },
+    host: { params: { case: caseName, scope } },
   });
 }
 
@@ -159,7 +162,10 @@ describe("sheet-handoff", () => {
     expect(lastDetent(app).atTop).toBe(true);
 
     // A pull toward the close edge claims: the panel shrinks during the
-    // drag and no scroll event fires on its account.
+    // drag and no scroll event fires on its account. The rest length is the
+    // probe's own expanded detent, not a pinned window height — native
+    // screens vary.
+    const rest = Math.max(...lastDetent(app).detents);
     const scrolls = bodyScrollCount(app);
     const lengthsBefore = detentCalls(app).length;
     await app.drag("id:body", { x: 0, y: 120 });
@@ -168,7 +174,7 @@ describe("sheet-handoff", () => {
     expect(
       detentCalls(app)
         .slice(lengthsBefore)
-        .some((record) => record.length < 760),
+        .some((record) => record.length < rest - 10),
     ).toBe(true);
     expect(bodyScrollCount(app)).toBe(scrolls);
     expect(app.shows("id:dialog")).toBe(true);
@@ -193,10 +199,11 @@ describe("sheet-handoff", () => {
     // settle case at any drag length.
     const locked = await openSheet("handoff-locked", "touch");
     await settle(locked);
+    const rest = Math.max(...lastDetent(locked).detents);
     await locked.drag("id:body", { x: 0, y: 320 });
     await locked.clock?.runFor(600);
     expect(locked.shows("id:dialog")).toBe(true);
-    expect(lastDetent(locked).length).toBeGreaterThan(700);
+    expect(lastDetent(locked).length).toBeGreaterThan(rest * 0.9);
   });
 
   // adapt-sheets/sheet-handoff.md M-009 (A-005, negative): under the default
@@ -230,7 +237,7 @@ describe("sheet-handoff", () => {
   // scrollable rule is unchanged by the mechanism — frozen below the full
   // detent, free at it — in both environments.
   test("M-010 baseline: Body scrolls only at the full detent, in both environments", async () => {
-    for (const scope of [undefined, "touch"] as const) {
+    for (const scope of ["pointer", "touch"] as const) {
       const app = await openSheet("handoff", scope);
 
       await settle(app);
@@ -273,7 +280,7 @@ describe("sheet-handoff", () => {
   // channel itself — the detent probe reports the mount state, and the same
   // case mounts under the scope injection the other assertions use.
   test("M-013 observation channel: DetentProbe reports mount state, scope remounts", async () => {
-    for (const scope of [undefined, "touch"] as const) {
+    for (const scope of ["pointer", "touch"] as const) {
       const app = await openSheet("handoff", scope);
 
       await settle(app);

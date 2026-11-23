@@ -1,24 +1,29 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the slider adapt unit, one test per row of
- * adapt-sheets/slider.md §4 that the shared (headless + web) targets can
- * observe: M-001, M-002, M-003's claim-direction half, M-005…M-009 and
- * M-011/M-012. The Scroll-arbitration rows (M-004, M-010), M-003's
- * `dragAndHold` mid-drag sampling and M-009's held-drag half live in
- * `slider.mobile.headless.test.tsx`.
+ * adapt-sheets/slider.md §4 that the shared (native + headless + web)
+ * targets can observe: M-001, M-002, M-003's claim-direction half, M-005,
+ * M-007…M-009 (with M-011's press-channel rest fields folded into
+ * M-009's post-drag block) and M-012. The Scroll-arbitration rows
+ * (M-004, M-010), M-003's `dragAndHold` mid-drag sampling and M-009's
+ * held-drag half live in `slider.mobile.headless.test.tsx`.
  *
  * The fixture is `harness/slider.fixtures.tsx` — `case` picks the surface
  * (`mobile` for the seam/gesture probes, `scroll` unused here, `keyboard` /
- * `controlled` / `disabled` for the M-008 parity half), `scope="touch"`
- * mounts the `EnvironmentScope input="touch"` the touch assertions inject,
+ * `controlled` / `disabled` for the M-008 parity half), `scope` mounts an
+ * `EnvironmentScope input="touch"|"pointer"` the assertions inject,
  * `probe="1"` mounts the per-part `CtxProbe`s inside each part's own
  * `SliderSeamContext`, and `orientation` / `disabled` / `defaultValue` /
- * `step` / `minValue` / `maxValue` tune the slider. Every open pins
- * `platform:"windows", width:1024, height:768` — the desktop-parity
- * baseline; `scope` is the only environment switch.
+ * `step` / `minValue` / `maxValue` tune the slider. Native hosts fill the
+ * device screen, so the `platform:"windows"` / 1024×768 pin is gone: the
+ * desktop-parity baseline is the explicit `scope="pointer"` injection
+ * instead — without it a phone-derived input of touch would invert every
+ * pointer-default assertion. The hover rows (M-006), M-011's hover arm and
+ * M-008's `platform:"web"` keyboard half live in
+ * `slider.mobile.web.test.tsx`.
  *
  * The observation channel is what `nsh/test` sees: the `@scenario/probe`
  * records in `app.storage()` — `onChange`/`onChangeEnd` counts and payloads,
@@ -58,13 +63,8 @@ type LayoutEntry = { name: string; index: number; x: number; y: number; width: n
 function openSlider(
   caseName: string,
   params: Record<string, string | number | boolean> = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height" | "clock"> = {},
 ): Promise<App> {
   return open("../../../slider.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -286,50 +286,9 @@ describe("slider mobile", () => {
     expect(thumb.shows("id:output >> text:30")).toBe(true);
   });
 
-  // adapt-sheets/slider.md M-006 (A-005, A-006): under touch the hover
-  // signal stays off entirely — `app.hover` produces no hover probe and no
-  // `Hovered` marker, and a tap leaves nothing pinned — while the default
-  // environment keeps the full enter/leave roundtrip.
-  test("M-006 touch suppresses hover state and callbacks; pointer keeps the roundtrip", async () => {
-    const touch = await openSlider("mobile", { scope: "touch" });
-
-    await touch.hover("id:track");
-    await touch.hover("id:thumb");
-    await touch.wait(200);
-
-    expect(callsOf(touch, "trackHoverStart")).toHaveLength(0);
-    expect(callsOf(touch, "trackHoverChange")).toHaveLength(0);
-    expect(callsOf(touch, "trackHoverEnd")).toHaveLength(0);
-    expect(callsOf(touch, "thumbHoverStart")).toHaveLength(0);
-    expect(callsOf(touch, "thumbHoverChange")).toHaveLength(0);
-    expect(callsOf(touch, "thumbHoverEnd")).toHaveLength(0);
-    expect(touch.count("text:Hovered")).toBe(0);
-
-    // A tap afterwards leaves no sticky hover either (the web sticky-hover
-    // failure the gate exists for).
-    await touch.drag("id:track", { x: 0, y: 0 });
-    await touch.hover("id:track");
-    await touch.wait(200);
-    expect(callsOf(touch, "trackHoverStart")).toHaveLength(0);
-    expect(touch.count("text:Hovered")).toBe(0);
-
-    const pointer = await openSlider("mobile");
-    await pointer.hover("id:track");
-    await pointer.waitUntil(() => callsOf(pointer, "trackHoverStart").length >= 1);
-
-    expect(callsOf(pointer, "trackHoverChange").length).toBeGreaterThanOrEqual(1);
-    expect(pointer.count("text:Hovered")).toBe(1);
-
-    await pointer.hover("id:thumb");
-    await pointer.waitUntil(() => callsOf(pointer, "thumbHoverStart").length >= 1);
-    // The thumb sits inside the track's bounds, so hovering it does not
-    // end the track's hover — only leaving to the Output does.
-
-    await pointer.hover("id:output");
-    await pointer.waitUntil(() => callsOf(pointer, "thumbHoverEnd").length >= 1);
-    expect(callsOf(pointer, "trackHoverEnd").length).toBeGreaterThanOrEqual(1);
-    expect(pointer.count("text:Hovered")).toBe(0);
-  });
+  // adapt-sheets/slider.md M-006 (A-005, A-006): the hover-suppression row
+  // needs `app.hover`, which a phone has no mouse for — the whole row
+  // lives in `slider.mobile.web.test.tsx`.
 
   // adapt-sheets/slider.md M-007 (A-001…A-004): under touch with
   // `isDisabled` every seam gate closes — `enabled()` false, `hitSlop()`
@@ -366,28 +325,15 @@ describe("slider mobile", () => {
   });
 
   // adapt-sheets/slider.md M-008 (基线): the default pointer environment is
-  // untouched — keyboard commits one `onChangeEnd` per key, a track tap
-  // jumps and a thumb drag moves by delta, and the controlled/disabled
-  // cases keep their semantics. The keyboard half opens `platform:"web"`:
-  // a real Windows window gives keyboard focus only to Inputs (the
-  // heroui.web suite's registered host split), so the keymap assertions
-  // run where Tab reaches the thumb.
-  test("M-008 default pointer environment: keyboard, tap-jump, delta-drag and parity cases hold", async () => {
-    const kb = await openSlider("keyboard", {}, { platform: "web", clock: {} });
-    await kb.keyboard.press("tab");
-    expect(callsOf(kb, "onFocus")).toHaveLength(1);
-
-    for (const key of ["arrowright", "shift+arrowright", "pageup", "home"]) {
-      const before = callsOf(kb, "onChangeEnd").length;
-      await kb.keyboard.press(key);
-      await kb.clock!.runFor(20);
-      expect(callsOf(kb, "onChangeEnd").length).toBe(before + 1);
-    }
-    expect(callsOf(kb, "onChange").length).toBeGreaterThan(0);
-
+  // untouched — a track tap jumps, a thumb drag moves by delta, and the
+  // controlled/disabled cases keep their semantics. The keyboard half
+  // moved to `slider.mobile.web.test.tsx`: the keymap assertions need
+  // `platform:"web"`, where Tab reaches the thumb — a phone host has no
+  // Tab-focus path for it and the option itself is illegal on native.
+  test("M-008 default pointer environment: tap-jump, delta-drag and parity cases hold", async () => {
     // Track tap → press-jump + one onChangeEnd (zero-drag: `app.press`
     // cannot name the responder parts).
-    const tap = await openSlider("mobile");
+    const tap = await openSlider("mobile", { scope: "pointer" });
     await tap.drag("id:track", { x: 0, y: 0 });
     expect(callsOf(tap, "onChange").length).toBeGreaterThanOrEqual(1);
     const jumped = onChangeValues(tap).at(-1)!;
@@ -399,7 +345,7 @@ describe("slider mobile", () => {
     // grid so the ~3.7 pt half-thumb offset between a delta end (~46.0) and
     // a press-jump end (~49.5+) lands on different snap values — the window
     // [44.5, 46.25] only the delta sequence fits.
-    const drag = await openSlider("mobile", { step: 0.5 });
+    const drag = await openSlider("mobile", { scope: "pointer", step: 0.5 });
     await drag.drag("id:thumb", { x: 60, y: 0 });
     expect(callsOf(drag, "onChangeEnd")).toHaveLength(1);
     const values = onChangeValues(drag);
@@ -409,12 +355,12 @@ describe("slider mobile", () => {
     expect(values.at(-1)!).toBeLessThanOrEqual(46.25);
 
     // controlled: the force button still replaces the value.
-    const controlled = await openSlider("controlled");
+    const controlled = await openSlider("controlled", { scope: "pointer" });
     await controlled.press("id:force-60");
     expect(controlled.shows("id:output >> text:60")).toBe(true);
 
     // disabled: the thumb reports disabled and no gesture commits.
-    const disabled = await openSlider("disabled");
+    const disabled = await openSlider("disabled", { scope: "pointer" });
     expect(disabled.enabled("role:adjustable[Volume]")).toBe(false);
     await disabled.drag("id:thumb", { x: 60, y: 0 });
     expect(callsOf(disabled, "onChange")).toHaveLength(0);
@@ -427,7 +373,7 @@ describe("slider mobile", () => {
   // axis — the `min-*` hit expansion exists only as touch `hitSlop`,
   // never as a class).
   test("M-009 default pointer environment: isDragging settles, hitSlop stays undefined, geometry unchanged", async () => {
-    const app = await openSlider("mobile", { probe: "1" });
+    const app = await openSlider("mobile", { scope: "pointer", probe: "1" });
     await waitForSeams(app);
 
     await app.drag("id:thumb", { x: 60, y: 0 });
@@ -442,43 +388,27 @@ describe("slider mobile", () => {
     expect(track.enabled).toBe(false);
     expect(track.hitSlop).toBeNull();
 
-    // The layout bounds are the upstream sizes — no min-* class grew them.
-    expect(lastLayout(app, "thumb").width).toBe(28);
-    expect(lastLayout(app, "track").height).toBe(20);
-  });
-
-  // adapt-sheets/slider.md M-011 (A-001, A-002, 负断言): under the default
-  // pointer environment the feedback seam is physically inert —
-  // `hitSlop()` answers undefined, `isPressed`/`pressOrigin` never leave
-  // rest and `scale` stays 1 across tap, drag and hover — while the gesture
-  // semantics keep working (the M-008 half of the same evidence chain).
-  test("M-011 default pointer environment: the feedback seam stays inert across tap, drag and hover", async () => {
-    const app = await openSlider("mobile", { probe: "1" });
-    await waitForSeams(app);
-
-    // Tap (zero-drag), real drag and hover — the three paths a press
-    // feedback seam could observe.
-    await app.drag("id:track", { x: 0, y: 0 });
-    await app.drag("id:thumb", { x: 60, y: 0 });
-    await app.hover("id:track");
-    await app.wait(200);
-
+    // Every `ctx-env` record — before, during and after the drag — keeps
+    // the press-channel rest fields under pointer (the M-011 negative's
+    // native-portable half; the drag itself committed above, so the
+    // silence is not a dead seam).
     for (const part of ["thumb", "track"] as const) {
-      const records = ctxEnvAll(app, part);
-      expect(records.length).toBeGreaterThan(0);
-      for (const record of records) {
-        expect(record.enabled).toBe(false);
-        expect(record.hitSlop).toBeNull();
+      for (const record of ctxEnvAll(app, part)) {
         expect(record.isPressed ?? false).toBe(false);
         expect(record.pressOrigin ?? null).toBeNull();
         expect(record.scale ?? 1).toBe(1);
       }
     }
 
-    // The gestures themselves committed normally — the seam's silence is
-    // not a dead slider.
-    expect(callsOf(app, "onChangeEnd").length).toBeGreaterThanOrEqual(2);
+    // The layout bounds are the upstream sizes — no min-* class grew them.
+    expect(lastLayout(app, "thumb").width).toBe(28);
+    expect(lastLayout(app, "track").height).toBe(20);
   });
+
+  // adapt-sheets/slider.md M-011 (A-001, A-002, 负断言): the row's
+  // native-compatible half — the press-channel rest fields across every
+  // `ctx-env` record — is asserted inside M-009 above; the full row with
+  // its hover arm lives in `slider.mobile.web.test.tsx`.
 
   // adapt-sheets/slider.md M-012 (A-003, A-004, 负断言): under the default
   // pointer environment `panHandlers()` resolves to an empty object —
@@ -486,7 +416,7 @@ describe("slider mobile", () => {
   // `onResponder*` chain still commits taps and drags with the desktop
   // semantics.
   test("M-012 default pointer environment: panHandlers mount nothing while the bare responder chain commits", async () => {
-    const app = await openSlider("mobile", { probe: "1" });
+    const app = await openSlider("mobile", { scope: "pointer", probe: "1" });
     await waitForSeams(app);
 
     for (const part of ["thumb", "track"] as const) {

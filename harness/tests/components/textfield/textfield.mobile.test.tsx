@@ -1,17 +1,22 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { calls, callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the textfield adapt unit
- * (adapt-sheets/textfield.md §4, M-001…M-007). One file for headless+web:
- * every assertion reads what `nsh/test` observes — `shows`, `value`,
- * `enabled`, `onLayout` bounds probes and the Storage probe calls — and
- * `host.params.scope` picks the environment, so the dual-environment rows
- * run identically on both targets. The file pins `platform: "windows"` so
- * the default half is `platform.desktop` (pointer) on headless and web
- * alike; the ios host-derivation half (M-008) lives in
- * `textfield.mobile.headless.test.tsx`.
+ * (adapt-sheets/textfield.md §4): M-001, M-003…M-007 run here on the
+ * shared targets — headless, web and the native ios/android CI lanes —
+ * while M-002 (`app.hover` has no mouse channel on native) and M-008 (the
+ * `platform:"ios"` host derivation) live in
+ * `textfield.mobile.headless.test.tsx`. Every assertion reads what
+ * `nsh/test` observes — `shows`, `value`, `enabled`, `onLayout` bounds
+ * probes and the Storage probe calls — and `host.params.testInput` picks
+ * the environment explicitly ("pointer" is the host-independent
+ * desktop-parity baseline, "touch" wraps the case in `EnvironmentScope
+ * input="touch"`), so the dual-environment rows run identically on every
+ * target. Native hosts fill the device screen and reject the
+ * `platform`/`width`/`height` open options, so this file carries none;
+ * `locale:"en-US"` stays because the probes are locale-sensitive.
  *
  * The probes live in `harness/textfield.fixtures.tsx`:
  *   `layout`   Input / TextArea `onLayout` bounds — the touch `min-h-11`
@@ -19,7 +24,8 @@ import { calls, callsOf } from "../../helpers/calls";
  *   `hover`    the Input's `isHovered` className render-prop record plus
  *              `onHoverStart`/`onHoverEnd`/`onHoverChange` and the
  *              `onMouseEnter`/`onMouseLeave` pass-through probes, with
- *              `hover-away` as the leave target (M-002).
+ *              `hover-away` as the leave target (the headless M-002; the
+ *              shared M-006 only mounts it).
  *   `submit`   TextField + Label + Input: root `field-submit`, input
  *              `onSubmit` / `onChange` / `onBlur` / `onFocus` probes;
  *              `submitBehavior` / `enterKeyHint` / `returnKeyType` params
@@ -42,21 +48,9 @@ import { calls, callsOf } from "../../helpers/calls";
 
 type Params = Record<string, string>;
 
-function openCase(
-  name: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openCase(name: string, params: Params = {}): Promise<App> {
   return open("../../../textfield.fixtures.tsx", {
-    // The default half of the sheet's dual environment is
-    // `platform.desktop` === true — the same host the desktop contract runs
-    // on (a bare `nsh test` headless host reports `desktop: false`).
-    // `EnvironmentScope` supplies the injected touch half.
-    platform: "windows",
-    width: 1024,
-    height: 768,
     locale: "en-US",
-    ...options,
     host: { params: { case: name, ...params } },
   });
 }
@@ -90,54 +84,21 @@ describe("textfield mobile", () => {
   // conservative ruling, so its rows height is identical in both
   // environments.
   test("M-001 touch lifts the Input row to 44pt; pointer stays below the floor; TextArea unchanged", async () => {
-    const touch = await openCase("layout", { scope: "touch" });
+    const touch = await openCase("layout", { testInput: "touch" });
     await waitLayout(touch);
     expect(lastLayout(touch, "input-layout").height).toBeGreaterThanOrEqual(44);
     expect(lastLayout(touch, "textarea-layout").height).toBe(56);
 
-    const pointer = await openCase("layout");
+    const pointer = await openCase("layout", { testInput: "pointer" });
     await waitLayout(pointer);
     expect(lastLayout(pointer, "input-layout").height).toBeLessThan(44);
     expect(lastLayout(pointer, "textarea-layout").height).toBe(56);
   }, 120_000);
 
-  // adapt-sheets/textfield.md M-002 (A-003): under touch neither a hover
-  // nor a press (whose sticky web hover is the registered hazard) raises
-  // `isHovered` — every className render-prop record stays false and the
-  // three `onHover*` callbacks record nothing. The host's own
-  // `onMouseEnter` / `onMouseLeave` pass-throughs still fire (A-003 keeps
-  // them), which is also what proves the hover was really delivered.
-  // Under pointer the hover round-trips exactly as on desktop.
-  test("M-002 injected touch suppresses the hover face; pointer keeps the round-trip", async () => {
-    const touch = await openCase("hover", { scope: "touch" });
-
-    await touch.hover("id:name");
-    await touch.press("id:name");
-    await touch.hover("id:hover-away");
-    await touch.waitUntil(() => callsOf(touch, "onMouseLeave").length > 0);
-
-    expect(hoverRecords(touch).length).toBeGreaterThan(0);
-    expect(hoverRecords(touch).every((r) => r.isHovered === false)).toBe(true);
-    expect(callsOf(touch, "onHoverStart")).toHaveLength(0);
-    expect(callsOf(touch, "onHoverEnd")).toHaveLength(0);
-    expect(callsOf(touch, "onHoverChange")).toHaveLength(0);
-    expect(callsOf(touch, "onMouseEnter").length).toBeGreaterThanOrEqual(1);
-    expect(callsOf(touch, "onMouseLeave").length).toBeGreaterThanOrEqual(1);
-
-    const pointer = await openCase("hover");
-
-    await pointer.hover("id:name");
-    await pointer.waitUntil(() => hoverRecords(pointer).at(-1)?.isHovered === true);
-    expect(callsOf(pointer, "onHoverStart").length).toBeGreaterThanOrEqual(1);
-    expect(callsOf(pointer, "onHoverChange")).toEqual([[true]]);
-    expect(callsOf(pointer, "onMouseEnter").length).toBeGreaterThanOrEqual(1);
-
-    await pointer.hover("id:hover-away");
-    await pointer.waitUntil(() => callsOf(pointer, "onHoverEnd").length > 0);
-    expect(hoverRecords(pointer).at(-1)?.isHovered).toBe(false);
-    expect(callsOf(pointer, "onHoverChange")).toEqual([[true], [false]]);
-    expect(callsOf(pointer, "onMouseLeave").length).toBeGreaterThanOrEqual(1);
-  }, 120_000);
+  // adapt-sheets/textfield.md M-002 (A-003) lives in
+  // `textfield.mobile.headless.test.tsx` — `app.hover` needs a mouse
+  // channel the native ios/android targets do not have, so the row moved
+  // there whole rather than split.
 
   // adapt-sheets/textfield.md M-003 (A-004, A-005): the declared `onSubmit`
   // rides the host channel in both environments — `app.submit` reports it
@@ -191,11 +152,11 @@ describe("textfield mobile", () => {
   }
 
   test("M-003 submit chain: once with { text }, focus kept, field before input (pointer scope)", async () => {
-    await assertSubmitChain({});
+    await assertSubmitChain({ testInput: "pointer" });
   }, 120_000);
 
   test("M-003 submit chain: once with { text }, focus kept, field before input (touch scope)", async () => {
-    await assertSubmitChain({ scope: "touch" });
+    await assertSubmitChain({ testInput: "touch" });
   }, 120_000);
 
   // adapt-sheets/textfield.md M-004 (A-004): the TextArea's two submit
@@ -229,11 +190,11 @@ describe("textfield mobile", () => {
   }
 
   test("M-004 TextArea submit modes: newline inserts a break, submit reports once (pointer scope)", async () => {
-    await assertTextAreaSubmitModes({});
+    await assertTextAreaSubmitModes({ testInput: "pointer" });
   }, 120_000);
 
   test("M-004 TextArea submit modes: newline inserts a break, submit reports once (touch scope)", async () => {
-    await assertTextAreaSubmitModes({ scope: "touch" });
+    await assertTextAreaSubmitModes({ testInput: "touch" });
   }, 120_000);
 
   // adapt-sheets/textfield.md M-005 (A-006): every keyboard / autofill
@@ -269,21 +230,22 @@ describe("textfield mobile", () => {
   }
 
   test("M-005 keyboard and autofill params mount and stay editable (pointer scope)", async () => {
-    await assertKeyboardChannel({});
+    await assertKeyboardChannel({ testInput: "pointer" });
   }, 120_000);
 
   test("M-005 keyboard and autofill params mount and stay editable (touch scope)", async () => {
-    await assertKeyboardChannel({ scope: "touch" });
+    await assertKeyboardChannel({ testInput: "touch" });
   }, 120_000);
 
   // adapt-sheets/textfield.md M-006 (A-008): this file is the assertion
   // carrier — `Scoped` mounts both environments and every probe surface
-  // the rows above read (`input-layout` / `textarea-layout`, the hover
-  // trio + mouse pass-throughs + `input-class`, `field-submit` /
-  // `onSubmit` / `onBlur`, `onChange`) records through `app.storage()`,
-  // so a silent fixture regression cannot pass the other rows vacuously.
-  // Under touch the `onHover*` probes stay silent by design (M-002), so
-  // that half proves the hover channel with the mouse pass-throughs.
+  // the rows above read (`input-layout` / `textarea-layout`, the
+  // `input-class` render-prop records, `field-submit` / `onSubmit` /
+  // `onBlur`, `onChange`) records through `app.storage()`, so a silent
+  // fixture regression cannot pass the other rows vacuously. The hover
+  // case mounts and its render-prop probes record here; the live
+  // `app.hover` delivery behind them is the headless M-002's assertion
+  // (native has no mouse channel).
   async function assertFixtureSurface(params: Params) {
     const layout = await openCase("layout", params);
     await waitLayout(layout);
@@ -291,11 +253,8 @@ describe("textfield mobile", () => {
     expect(callsOf(layout, "textarea-layout").length).toBeGreaterThan(0);
 
     const hover = await openCase("hover", params);
-    await hover.hover("id:name");
-    await hover.hover("id:hover-away");
-    await hover.waitUntil(() => callsOf(hover, "onMouseLeave").length > 0);
+    await hover.waitUntil(() => hoverRecords(hover).length > 0);
     expect(hoverRecords(hover).length).toBeGreaterThan(0);
-    expect(callsOf(hover, "onMouseEnter").length).toBeGreaterThanOrEqual(1);
 
     const submit = await openCase("submit", params);
     await submit.type("id:name", "x");
@@ -320,11 +279,11 @@ describe("textfield mobile", () => {
   }
 
   test("M-006 fixture entry: every case mounts and records (pointer scope)", async () => {
-    await assertFixtureSurface({});
+    await assertFixtureSurface({ testInput: "pointer" });
   }, 120_000);
 
   test("M-006 fixture entry: every case mounts and records (touch scope)", async () => {
-    await assertFixtureSurface({ scope: "touch" });
+    await assertFixtureSurface({ testInput: "touch" });
   }, 120_000);
 
   // adapt-sheets/textfield.md M-007 (基线): the default environment keeps
@@ -338,7 +297,7 @@ describe("textfield mobile", () => {
   // the `composition` case's X-001 assertion, re-read here; the read-only
   // files stay green untouched.
   test("M-007 baseline: default environment keeps the desktop contract", async () => {
-    const app = await openCase("baseline");
+    const app = await openCase("baseline", { testInput: "pointer" });
 
     // Label → accessible name; Description + FieldError texts; invalid render.
     expect(app.shows("label:Baseline name")).toBe(true);
@@ -380,7 +339,7 @@ describe("textfield mobile", () => {
 
     // Composition fan-out (X-001): start / update / end all reach the
     // root's onCompositionChange through the field context.
-    const composition = await openCase("composition");
+    const composition = await openCase("composition", { testInput: "pointer" });
     await composition.press("id:compose");
     const phases = callsOf(composition, "onCompositionChange");
     expect(phases).toHaveLength(3);

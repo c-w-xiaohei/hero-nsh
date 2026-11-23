@@ -23,26 +23,34 @@ import { callsOf } from "../../helpers/calls";
  * end value degrades to mount + engaged-press evidence (sheet §5 already
  * sends the visual check to real devices).
  *
- * Both environments are covered in the same file: the default (pointer,
- * which is also the desktop-parity baseline) and the injected touch one.
+ * No `platform`/`width`/`height` open options: native iOS/Android hosts run
+ * this file with their real screen and platform and reject those options.
+ * Both environments are covered in the same file through `EnvironmentScope`
+ * injection — "pointer" for the inert-half rows (a real phone's default is
+ * touch, so the desktop-parity baseline is injected, never assumed) and
+ * "touch" for the engaged half. The host-derived default environment itself
+ * is pinned by M-016, which derives the expected gate from the fixture's
+ * `env` probe (the host's `platform` facts and real `windowSize`).
  */
 
 type Params = Record<string, string>;
 
 // `open` resolves its entry against the test file; this file sits three
 // levels below harness/, same as every other primitives test.
-function openPressable(
+async function openPressable(
   caseName: string,
   params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height" | "reducedMotion"> = {},
+  options: Pick<OpenOptions, "reducedMotion"> = {},
 ): Promise<App> {
-  return open("../../../pressable.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
+  const app = await open("../../../pressable.fixtures.tsx", {
     ...options,
     host: { params: { case: caseName, ...params } },
   });
+  // The fixture's mount-time `env` probe writes Storage asynchronously;
+  // `open` resolving does not guarantee the write is visible yet, and
+  // `derivedTouch` reads it unconditionally (M-016).
+  await app.waitUntil(() => callsOf(app, "env").length > 0);
+  return app;
 }
 
 type Edges = { top: number; right: number; bottom: number; left: number };
@@ -82,6 +90,24 @@ function lastOf<T>(app: App, name: string): T {
   return calls[calls.length - 1][0] as T;
 }
 
+type EnvReport = {
+  os: string;
+  desktop: boolean;
+  idiom: string;
+  w: number;
+  h: number;
+};
+
+/**
+ * Whether the host-derived default environment engages the seam: the gate
+ * is `input() === "touch"`, and the default input follows
+ * `platform.desktop` — true on a real phone or mobile-idiom web, false on
+ * desktops and desktop-idiom web.
+ */
+function derivedTouch(app: App): boolean {
+  return !(callsOf(app, "env").at(-1)?.[0] as EnvReport).desktop;
+}
+
 /*
  * Web runs are several times slower than headless (measured: single opens
  * take 8–20 s and multi-open tests exceed the 30 s default), so every test
@@ -110,11 +136,12 @@ async function holdSample(app: App): Promise<Sample> {
 
 describe("pressable-feedback", () => {
   // adapt-sheets/pressable-feedback.md M-001 (A-001, A-003, 负断言): under
-  // the default pointer environment the seam is a zero-cost pass-through —
+  // the pointer environment the seam is a zero-cost pass-through —
   // no isPressed, no hitSlop, scale pinned at 1 — while press events still
-  // reach the view (desktop zero change).
-  test("M-001 default environment: feedback is inert — no isPressed, no hitSlop, scale 1, presses still fire", async () => {
-    const app = await openPressable("factory");
+  // reach the view (desktop zero change). The pointer environment is
+  // injected explicitly: a real phone's default is touch.
+  test("M-001 pointer environment: feedback is inert — no isPressed, no hitSlop, scale 1, presses still fire", async () => {
+    const app = await openPressable("factory", { scope: "pointer" });
 
     await app.press("id:down");
     await app.waitUntil(() => callsOf(app, "change").length > 0);
@@ -133,7 +160,7 @@ describe("pressable-feedback", () => {
 
     // The consume shape proves the desktop half: a real view press still
     // fires onPress and the factory forwards the (disabled) change signal.
-    const consumer = await openPressable("consume");
+    const consumer = await openPressable("consume", { scope: "pointer" });
     await consumer.press("id:consume-root");
     await consumer.waitUntil(
       () => callsOf(consumer, "consume-press").length > 0,
@@ -497,9 +524,13 @@ describe("pressable-feedback", () => {
   }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-016 (A-009, A-010): the dual
-  // environment structure — default and EnvironmentScope(touch) — mounts and
-  // answers probes in the same file; the rows above are its content.
-  test("M-016 both environments mount and answer probes", async () => {
+  // environment structure — the host-derived default and
+  // EnvironmentScope(touch) — mounts and answers probes in the same file;
+  // the rows above are its content. The default half is also the native
+  // host-derivation pin: the seam's gate must follow the platform the host
+  // actually reports (engaged on a real phone, inert on a desktop/web
+  // host), which the `env` probe carries.
+  test("M-016 both environments mount and answer probes; the default gate follows the host platform", async () => {
     for (const scope of ["", "touch"] as const) {
       const app = await openPressable("factory", scope ? { scope } : {});
       await app.press("id:down");
@@ -507,17 +538,29 @@ describe("pressable-feedback", () => {
       const s = await sample(app);
       expect(typeof s.pressed).toBe("number");
       expect(typeof s.scale).toBe("number");
+
+      // Host-derived default: engaged exactly where platform.desktop is
+      // false. Injected touch: always engaged.
+      const expected = scope === "touch" ? true : derivedTouch(app);
+      expect(s.isPressed).toBe(expected);
     }
+
+    const root = await openPressable("component");
+    expect(
+      lastOf<{ enabled: boolean }>(root, "ctx-env").enabled,
+    ).toBe(derivedTouch(root));
   }, 120_000);
 
   // adapt-sheets/pressable-feedback.md M-017 (A-004, 负断言): under the
-  // default environment the touch-feedback path does not exist — the
+  // pointer environment the touch-feedback path does not exist — the
   // context's effective gate reports false, isPressed never rises through a
   // real press, and the parts stay mounted but inert. (`viewStyle` cannot
   // read the parts' AnimatedValue-bound opacity — a registered host gap —
   // so the negative assertion rides the canonical channel and the gate.)
-  test("M-017 default environment: the feedback gate stays closed through a real press", async () => {
-    const app = await openPressable("component");
+  // The pointer environment is injected explicitly: a real phone's default
+  // is touch, where the gate correctly opens.
+  test("M-017 pointer environment: the feedback gate stays closed through a real press", async () => {
+    const app = await openPressable("component", { scope: "pointer" });
 
     expect(app.shows("id:highlight")).toBe(true);
     expect(app.shows("id:ripple")).toBe(true);
@@ -555,14 +598,16 @@ describe("pressable-feedback", () => {
   // src/primitives/pressable/pressable-feedback-parts.tsx:344-371 —
   // pressDown() records pressOrigin before the enabled() early-return and
   // the disabled pressUp() branch returns without clearing it, so under the
-  // default pointer environment a real press leaves pressOrigin non-null;
+  // pointer environment a real press leaves pressOrigin non-null;
   // the Ripple part keys on ctx.pressOrigin() and never reads ctx.enabled(),
   // driving rippleProgress 0→1 — a radial-gradient overlay on desktop,
   // stuck at 1 because the origin never returns to null. Required behavior
   // (sheet A-004 "pointer 下全部静止", the M-017/M-008 gate intent): the seam
-  // is inert — pressOrigin stays null and the part channels hold 0.
-  test("M-901 default environment: a real press leaves pressOrigin null and the part channels at rest", async () => {
-    const app = await openPressable("component");
+  // is inert — pressOrigin stays null and the part channels hold 0. The
+  // pointer environment is injected explicitly (a real phone's default is
+  // touch, where the seam correctly engages).
+  test("M-901 pointer environment: a real press leaves pressOrigin null and the part channels at rest", async () => {
+    const app = await openPressable("component", { scope: "pointer" });
 
     await app.press("id:root");
     await app.waitUntil(() => callsOf(app, "events").length > 0);

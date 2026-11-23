@@ -10,14 +10,18 @@ import { calls, callsOf } from "../../helpers/calls";
  * `host.params.input` / `host.params.density`; "disabled" is the same row
  * with `isDisabled`.
  *
- * Absent params leave the host-derived environment — pointer + default
- * density on headless and web — which is the desktop-parity baseline every
- * assertion compares against. `platform:"windows"` is the pointer host both
- * targets share (the sheet.mobile.test.tsx convention). The observation
- * channel is what `nsh/test` sees: `spanStyle` for the resolved underline,
- * `enabled` for the disabled contract, `app.storage()` probe calls for the
- * onAction/onPress order, and `onLayout` bounds records for the
- * density/input axis checks.
+ * The host-derived environment differs per target — touch on ios/android,
+ * pointer on desktop and web — so the desktop-parity baseline every
+ * assertion compares against injects `input:"pointer"` explicitly.
+ * No `platform`/`width`/`height` open options: the native targets fill the
+ * device screen and reject them. The observation channel is what `nsh/test`
+ * sees: `spanStyle` for the resolved underline, `enabled` for the disabled
+ * contract, `app.storage()` probe calls for the onAction/onPress order, and
+ * `onLayout` bounds records for the density/input axis checks.
+ *
+ * One row is desktop-only: M-001's hover underline. `app.hover` does not
+ * exist on the native targets, so that half moved to
+ * `breadcrumbs.mobile.headless.test.tsx`, a local file CI never runs.
  */
 
 type Box = {
@@ -35,9 +39,6 @@ type EnvParams = {
 
 function openMobile(caseName: string, env: EnvParams = {}): Promise<App> {
   return open("../../../breadcrumbs.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
     host: {
       params: {
@@ -111,17 +112,9 @@ function separatorBox(app: App): { width: number; height: number } {
 describe("breadcrumbs mobile", () => {
   // adapt-sheets/breadcrumbs.md M-001 (A-001): pointer baseline — the link
   // slot keeps `hover:underline`, so hovering a non-current item underlines
-  // its label; the touch cell removes that dependency (M-002).
-  test("M-001 default pointer environment: hovering a non-current link underlines it", async () => {
-    const app = await openMobile("links");
-
-    const home = "id:item-home >> text:Home";
-    expect(app.spanStyle(home).underline).toBe(false);
-
-    await app.hover("role:link[Home]");
-
-    expect(app.spanStyle(home).underline).toBe(true);
-  });
+  // its label; the touch cell removes that dependency (M-002). Hovering is
+  // a desktop gesture the native targets cannot perform, so this row lives
+  // in `breadcrumbs.mobile.headless.test.tsx`.
 
   // adapt-sheets/breadcrumbs.md M-002 (A-001, A-003): injected touch — the
   // press fires the unchanged chain (`onAction` with the item's key, then
@@ -143,7 +136,7 @@ describe("breadcrumbs mobile", () => {
   // root `onAction(key)` then the caller's `onPress`, once per press — a
   // second press replays neither and the order never swaps.
   test("M-003 default environment: onAction precedes onPress once per press", async () => {
-    const app = await openMobile("links");
+    const app = await openMobile("links", { input: "pointer" });
 
     await app.press("role:link[Home]");
     await app.press("role:link[Products]");
@@ -161,14 +154,14 @@ describe("breadcrumbs mobile", () => {
   // every link. The existing .heroui/.kobalte files keep pinning the same
   // desktop contract; this asserts it on the fixture's own row.
   test("M-004 baseline: last item is current and isDisabled disables every link", async () => {
-    const app = await openMobile("links");
+    const app = await openMobile("links", { input: "pointer" });
 
     expect(app.spanStyle("id:item-current >> text:Laptop").color).not.toBe(
       app.spanStyle("id:item-home >> text:Home").color,
     );
     expect(app.enabled("role:link[Laptop]")).toBe(false);
 
-    const disabled = await openMobile("disabled");
+    const disabled = await openMobile("disabled", { input: "pointer" });
 
     for (const label of ["Home", "Products", "Laptop"]) {
       expect(disabled.enabled(`role:link[${label}]`)).toBe(false);
@@ -180,9 +173,15 @@ describe("breadcrumbs mobile", () => {
   // box one step (gap-1.5→gap-1, size-3→size-2.5), and an explicit
   // `density="default"` scope resolves to the same boxes as no scope.
   test("M-005 density compact shrinks the row gap and the separator box; explicit default matches", async () => {
-    const compact = await openMobile("links", { density: "compact" });
-    const plain = await openMobile("links");
-    const explicit = await openMobile("links", { density: "default" });
+    const compact = await openMobile("links", {
+      input: "pointer",
+      density: "compact",
+    });
+    const plain = await openMobile("links", { input: "pointer" });
+    const explicit = await openMobile("links", {
+      input: "pointer",
+      density: "default",
+    });
 
     await settleLayout(compact);
     await settleLayout(plain);
@@ -196,7 +195,8 @@ describe("breadcrumbs mobile", () => {
     expect(rowGaps(compact)).toEqual([4, 4]);
     expect(separatorBox(compact)).toEqual({ width: 10, height: 10 });
 
-    // An explicit default scope lays out exactly like the uninjected one.
+    // An explicit density="default" scope lays out exactly like the
+    // pointer baseline with no density cell.
     expect(boxSet(explicit)).toEqual(boxSet(plain));
   });
 
@@ -208,7 +208,7 @@ describe("breadcrumbs mobile", () => {
   // the item box already contains link + separator.
   test("M-006 injected touch changes no laid-out box", async () => {
     const touch = await openMobile("links", { input: "touch" });
-    const pointer = await openMobile("links");
+    const pointer = await openMobile("links", { input: "pointer" });
 
     await settleLayout(touch);
     await settleLayout(pointer);

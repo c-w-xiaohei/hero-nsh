@@ -7,18 +7,17 @@ import { callsOf } from "../../helpers/calls";
  * adapt-sheets/progress-circle.md §4 (M-001…M-007). The fixture is
  * `harness/progress-circle.fixtures.tsx`: `case` picks the mount
  * (paint/sizes/indeterminate/disabled), `host.params.input` /
- * `host.params.density` feed the `EnvironmentScope` wrapper; absent params
- * leave the host-derived environment — pointer + default density on a
- * desktop-pinned open — which is the desktop-parity baseline every
- * environment assertion compares against.
+ * `host.params.density` feed the `EnvironmentScope` wrapper. The axes are
+ * always explicit — `input:"pointer"` is the desktop-parity baseline every
+ * environment assertion compares against and `input:"touch"` the injected
+ * mobile half — because the host-derived default differs per target
+ * (touch on ios/android, pointer on desktop and web). No `platform`/`width`
+ * open options: native targets fill the device screen and reject them.
  *
  * ProgressCircle is a read-only meter: nothing adapts (every §2 seam is
  * 保留), so the mobile layer asserts sameness — the same track boxes, the
  * same recorded stroke shapes and paints, and no press path under the
- * injected touch environment. `platform:"windows"` is the pointer host both
- * targets share (the suite pin: without it a headless `pnpm test` run lands
- * on the phone-sized engine where `input` defaults to touch and the
- * baseline assertions invert).
+ * injected touch environment.
  */
 
 type EnvParams = {
@@ -28,9 +27,6 @@ type EnvParams = {
 
 function openCircle(caseName: string, env: EnvParams = {}): Promise<App> {
   return open("../../../progress-circle.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: {
       params: {
         case: caseName,
@@ -139,7 +135,7 @@ describe("progress-circle mobile", () => {
   // while the track ring strokes the same paint shape with an empty dash —
   // the T-003 paint channel re-run inside the mobile file.
   test("M-001 default environment: progressbar named, fill dashed with the color token, track solid", async () => {
-    const app = await openCircle("paint");
+    const app = await openCircle("paint", { input: "pointer" });
 
     expect(app.shows("role:progressbar[Loading]")).toBe(true);
 
@@ -156,20 +152,20 @@ describe("progress-circle mobile", () => {
   // variant contract), `indeterminate` mounts a visible progressbar with a
   // dashed fill, and `aria-disabled` reports a disabled progressbar.
   test("M-002 default environment: size boxes pinned, indeterminate mounts, aria-disabled disables", async () => {
-    const sizes = await openCircle("sizes");
+    const sizes = await openCircle("sizes", { input: "pointer" });
     await settleSizes(sizes);
 
     expect(trackSize(sizes, "track-sm")).toEqual({ width: 20, height: 20 });
     expect(trackSize(sizes, "track-md")).toEqual({ width: 28, height: 28 });
     expect(trackSize(sizes, "track-lg")).toEqual({ width: 36, height: 36 });
 
-    const indeterminate = await openCircle("indeterminate");
+    const indeterminate = await openCircle("indeterminate", { input: "pointer" });
     await settleStrokes(indeterminate);
 
     expect(indeterminate.shows("role:progressbar")).toBe(true);
     expect(paintSignature(indeterminate).fillDash).toHaveLength(2);
 
-    const disabled = await openCircle("disabled");
+    const disabled = await openCircle("disabled", { input: "pointer" });
 
     expect(disabled.shows("role:progressbar[Loading]")).toBe(true);
     expect(disabled.enabled("role:progressbar[Loading]")).toBe(false);
@@ -182,7 +178,7 @@ describe("progress-circle mobile", () => {
   // duties do not apply to a read-only meter).
   test("M-003 injected touch: track boxes and paint signature identical to the default environment", async () => {
     const touch = await openCircle("sizes", { input: "touch" });
-    const pointer = await openCircle("sizes");
+    const pointer = await openCircle("sizes", { input: "pointer" });
 
     await settleSizes(touch);
     await settleSizes(pointer);
@@ -190,7 +186,7 @@ describe("progress-circle mobile", () => {
     expect(boxSet(touch)).toEqual(boxSet(pointer));
 
     const touchPaint = await openCircle("paint", { input: "touch" });
-    const pointerPaint = await openCircle("paint");
+    const pointerPaint = await openCircle("paint", { input: "pointer" });
 
     await settleStrokes(touchPaint);
     await settleStrokes(pointerPaint);
@@ -215,16 +211,16 @@ describe("progress-circle mobile", () => {
   // geometry scales with the box), so boxes and the paint signature equal
   // the default environment's.
   test("M-004 injected compact density: track boxes and paint signature identical to the default environment", async () => {
-    const compact = await openCircle("sizes", { density: "compact" });
-    const baseline = await openCircle("sizes");
+    const compact = await openCircle("sizes", { input: "pointer", density: "compact" });
+    const baseline = await openCircle("sizes", { input: "pointer" });
 
     await settleSizes(compact);
     await settleSizes(baseline);
 
     expect(boxSet(compact)).toEqual(boxSet(baseline));
 
-    const compactPaint = await openCircle("paint", { density: "compact" });
-    const baselinePaint = await openCircle("paint");
+    const compactPaint = await openCircle("paint", { input: "pointer", density: "compact" });
+    const baselinePaint = await openCircle("paint", { input: "pointer" });
 
     await settleStrokes(compactPaint);
     await settleStrokes(baselinePaint);
@@ -256,26 +252,25 @@ describe("progress-circle mobile", () => {
   // `onLayout` probes write data the test can read back. Covered by
   // M-001…M-005 exercising all four cases; this pins the read-back shape.
   test("M-006 fixture channel: cases mount and probes write readable storage", async () => {
-    const paint = await openCircle("paint");
+    const paint = await openCircle("paint", { input: "pointer" });
     await settleStrokes(paint);
 
     expect(expectedPaint(paint).length).toBeGreaterThan(0);
     expect(strokes(paint).length).toBeGreaterThanOrEqual(2);
 
-    const sizes = await openCircle("sizes");
+    const sizes = await openCircle("sizes", { input: "pointer" });
     await settleSizes(sizes);
 
     expect(boxes(sizes).length).toBeGreaterThanOrEqual(3);
   });
 
-  // adapt-sheets/progress-circle.md M-007 (A-008): this file itself — every
-  // case opens through the same `platform:"windows"` 1024×768 pin, so the
-  // desktop baseline and the injected-environment mounts share one file
-  // under both the headless and the `--target web` runner; no
-  // `.headless.`/`.web.` split is needed because nothing injects a mobile
-  // platform or drags a held touch.
-  test("M-007 dual environment: the pinned open works under both runners", async () => {
-    const baseline = await openCircle("paint");
+  // adapt-sheets/progress-circle.md M-007 (A-008): this file itself — the
+  // baseline opens through the explicit pointer scope that replaces the old
+  // desktop pin, and the injected-environment mounts share one file under
+  // every target; no `.headless.`/`.web.` split is needed because nothing
+  // injects a mobile platform or drags a held touch.
+  test("M-007 dual environment: the scoped open works under every target", async () => {
+    const baseline = await openCircle("paint", { input: "pointer" });
     await settleStrokes(baseline);
     expect(baseline.shows("role:progressbar[Loading]")).toBe(true);
 

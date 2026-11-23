@@ -16,26 +16,25 @@ import { calls, callsOf } from "../../helpers/calls";
  * The fixture is `harness/scroll-shadow.fixtures.tsx` — `host.params.case`
  * picks the mount (`default`, `horizontal`, `fits`, `controlled`; an absent
  * case is the X-005 mask readout) and `input`/`density` feed
- * `EnvironmentScope` (absent = the host default, pointer — the
- * desktop-parity baseline). Probes in `app.storage()`: `layout` (the root's
+ * `EnvironmentScope`. The axes are always explicit — `input:"pointer"` is
+ * the desktop-parity baseline and `input:"touch"` the injected mobile
+ * half — because the host-derived default differs per target (touch on
+ * ios/android, pointer on desktop and web). Probes in `app.storage()`:
+ * `layout` (the root's
  * bounds box), `visibility` (`{state, render}` — the render count exposes a
  * stale `onVisibilityChange` prop, mirroring T-014), `scroll` (the
  * forwarded `onScroll`), `env` (the host platform report) and `scopeEnv`
  * (what `EnvironmentScope` resolved inside the mounted case).
  *
- * `open` keeps the w1 pin (`platform:"windows"`, 1024×768): without it the
- * headless engine lands on the phone host where `input` defaults to touch
- * and every pointer-default assertion inverts. No `ios`/`android` open and
- * no drag-dependent case, so this is a dual-target `.mobile.test.tsx`.
+ * No `platform`/`width` open options — native targets fill the device
+ * screen and reject them. No platform injection and no drag-dependent
+ * case, so this file runs on every target.
  */
 
 type Env = { input?: "touch" | "pointer"; density?: "compact" | "default" };
 
 function openShadow(caseName: string, env: Env = {}): Promise<App> {
   return open("../../../scroll-shadow.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: { params: { case: caseName, ...env } },
   });
 }
@@ -122,19 +121,19 @@ describe("scroll-shadow mobile", () => {
   // the same resting states the heroui suite pins (T-015/T-020/T-024),
   // with the root's bounds box reporting the mounted viewport.
   test("M-001 default environment: resting states bottom / right / none, root bounds recorded", async () => {
-    const app = await openShadow("default");
+    const app = await openShadow("default", { input: "pointer" });
     await app.waitFor("text:/^state:bottom@/");
     expect(app.shows("id:scroller")).toBe(true);
     expect(lastVisibility(app)).toBe("bottom");
     const box = layoutSet(app)["root"];
     expect(box).toHaveLength(1);
 
-    const horizontal = await openShadow("horizontal");
+    const horizontal = await openShadow("horizontal", { input: "pointer" });
     await horizontal.waitFor("text:state:right");
     expect(lastVisibility(horizontal)).toBe("right");
     expect(horizontal.shows("text:Cell 0")).toBe(true);
 
-    const fits = await openShadow("fits");
+    const fits = await openShadow("fits", { input: "pointer" });
     await fits.waitFor("text:state:none");
     expect(lastVisibility(fits)).toBe("none");
     expect(fits.shows("text:Short content")).toBe(true);
@@ -147,7 +146,7 @@ describe("scroll-shadow mobile", () => {
   // controlled case never fires the detection callback while `onScroll`
   // still passes through.
   test("M-002 default environment: passthrough chain, newest callback, controlled silence", async () => {
-    const app = await openShadow("default");
+    const app = await openShadow("default", { input: "pointer" });
     await app.waitFor("text:/^state:bottom@/");
 
     expect(callsOf(app, "layout")).not.toHaveLength(0);
@@ -163,7 +162,7 @@ describe("scroll-shadow mobile", () => {
     expect(lastVisibility(app)).toBe("top");
     expect(visibilityRecords(app).at(-1)?.render).toBe(2);
 
-    const controlled = await openShadow("controlled");
+    const controlled = await openShadow("controlled", { input: "pointer" });
     await controlled.press("role:button[Scroll]");
     expect(callsOf(controlled, "scroll")).not.toHaveLength(0);
     expect(callsOf(controlled, "visibility")).toHaveLength(0);
@@ -176,7 +175,7 @@ describe("scroll-shadow mobile", () => {
   // environment-invariant.
   test("M-003 injected touch: states, texts and bounds identical to the pointer baseline", async () => {
     for (const caseName of ["default", "horizontal", "fits"] as const) {
-      const pointer = await openShadow(caseName);
+      const pointer = await openShadow(caseName, { input: "pointer" });
       const touch = await openShadow(caseName, { input: "touch" });
 
       const resting =
@@ -200,7 +199,7 @@ describe("scroll-shadow mobile", () => {
   // so bounds and detection states match the default environment's
   // exactly.
   test("M-004 injected compact density: bounds and states identical to default", async () => {
-    const baseline = await openShadow("default");
+    const baseline = await openShadow("default", { input: "pointer" });
     await baseline.waitFor("text:/^state:bottom@/");
 
     const compact = await openShadow("default", {
@@ -243,7 +242,7 @@ describe("scroll-shadow mobile", () => {
   // that arbitration is sheet-handoff's; this component never grows a
   // `createPan`/`panActivation` path in any environment.
   test("M-008 pointer environment: pressing or dragging the root registers no gesture owner", async () => {
-    const app = await openShadow("default");
+    const app = await openShadow("default", { input: "pointer" });
     await app.waitFor("text:/^state:bottom@/");
 
     await expect(app.press("id:scroller")).rejects.toMatchObject({
@@ -264,7 +263,7 @@ describe("scroll-shadow mobile", () => {
   // branch is untouched (an absent `case` still prints `mask:auto:…`).
   test("M-006 fixture channels: every case mounts under the scope and the mask branch is unchanged", async () => {
     for (const caseName of ["default", "horizontal", "fits"] as const) {
-      const app = await openShadow(caseName);
+      const app = await openShadow(caseName, { input: "pointer" });
       expect(app.shows("id:scroller")).toBe(true);
       expect(callsOf(app, "layout")).not.toHaveLength(0);
       expect(scopeEnvOf(app)).toEqual({ input: "pointer", density: "default" });
@@ -276,28 +275,24 @@ describe("scroll-shadow mobile", () => {
     });
     expect(scopeEnvOf(touch)).toEqual({ input: "touch", density: "compact" });
 
-    const mask = await open("../../../scroll-shadow.fixtures.tsx", {
-      platform: "windows",
-      width: 1024,
-      height: 768,
-    });
+    const mask = await open("../../../scroll-shadow.fixtures.tsx");
     expect(mask.shows("text:/^mask:auto:/")).toBe(true);
     expect(mask.shows("text:/^mask:controlled:/")).toBe(true);
   }, 120_000);
 
-  // adapt-sheets/scroll-shadow.md M-007 (A-006): the desktop pin holds —
-  // the `env` probe reports `platform.desktop === true`, the desktop idiom
-  // and a resolved `input` of `"pointer"`, so the default environment
-  // really is the pointer baseline and the assertions mean the same thing
-  // on headless and web. `platform.os` is "windows" on the pinned headless
-  // engine; the web target always reports "web".
-  test("M-007 desktop pin: host reports a desktop platform and pointer input in the default environment", async () => {
-    const app = await openShadow("default");
+  // adapt-sheets/scroll-shadow.md M-007 (A-006): the `env` probe records the
+  // host-derived environment honestly — outside `ScopedMobile`, `input`
+  // follows `desktop` (pointer on desktop/web, touch on the phone hosts) —
+  // and the scope-resolved `scopeEnv` probe reports the explicit pointer
+  // scope the M-001…M-005 baselines inject. The desktop-host pin half,
+  // which only a desktop platform can satisfy, lives in
+  // `scroll-shadow.mobile.headless.test.tsx`.
+  test("M-007 env probes: host derivation and the pointer scope both report", async () => {
+    const app = await openShadow("default", { input: "pointer" });
     const env = envOf(app);
 
-    expect(env.desktop).toBe(true);
-    expect(env.idiom).toBe("desktop");
-    expect(env.input).toBe("pointer");
-    expect(["windows", "web"]).toContain(env.os);
+    expect(env.desktop).toBe(env.idiom === "desktop");
+    expect(env.input).toBe(env.desktop ? "pointer" : "touch");
+    expect(scopeEnvOf(app)).toEqual({ input: "pointer", density: "default" });
   }, 120_000);
 });

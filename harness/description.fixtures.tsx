@@ -70,16 +70,18 @@ function boxProbe(name: string) {
 
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "");
-  const touch = scope.split(",").includes("touch");
-  const density = scope.split(",").includes("density");
+  const tokens = scope.split(",");
+  const touch = tokens.includes("touch");
+  const pointer = tokens.includes("pointer");
+  const density = tokens.includes("density");
 
-  if (!touch && !density) {
+  if (!touch && !pointer && !density) {
     return <>{props.children}</>;
   }
 
   return (
     <EnvironmentScope
-      input={touch ? "touch" : undefined}
+      input={touch ? "touch" : pointer ? "pointer" : undefined}
       density={density ? "compact" : undefined}
     >
       {props.children}

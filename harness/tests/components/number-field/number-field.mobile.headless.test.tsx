@@ -3,12 +3,14 @@ import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
- * Headless mobile assertions for the number-field adapt unit — the M-012
- * row of adapt-sheets/number-field.md §4. Two halves only a headless ios
- * host can drive: `open({platform:"ios"})` derives `input()==="touch"`
- * from the platform with no `EnvironmentScope` (the `platform` option
- * rejects on `--target web`), and `dragAndHold`/`app.drag`/`drop` are the
- * only steps that hold a press open mid-gesture or cancel it.
+ * Headless mobile assertions for the number-field adapt unit — the rows of
+ * adapt-sheets/number-field.md §4 that need a capability only the headless
+ * engine has. Two halves only a headless ios host can drive:
+ * `open({platform:"ios"})` derives `input()==="touch"` from the platform
+ * with no `EnvironmentScope` (the `platform` option rejects on `--target
+ * web`), and `dragAndHold`/`app.drag`/`drop` are the only steps that hold a
+ * press open mid-gesture or cancel it (M-012). M-004 and M-011's hover half
+ * moved here from the shared file because `app.hover` needs a mouse.
  *
  * The fixture is `harness/number-field.fixtures.tsx`:
  *   case "press" probe=1 — both step buttons wired to the `events` sequence
@@ -49,6 +51,16 @@ function openField(caseName: string, params: Record<string, string> = {}): Promi
   });
 }
 
+/** The windows pin — `app.hover` needs the mouse-capable host. */
+function openPointer(caseName: string, params: Record<string, string> = {}): Promise<App> {
+  return open("../../../number-field.fixtures.tsx", {
+    platform: "windows",
+    width: 1024,
+    height: 768,
+    host: { params: { case: caseName, ...params } },
+  });
+}
+
 function seamEdges(app: App, name: string): boolean[] {
   return callsOf(app, "seam-edge")
     .map((c) => c[0] as SeamEdge)
@@ -73,6 +85,20 @@ function seamHolds(app: App, name: string, midHold: boolean): SeamHold[] {
 
 function holdSamples(app: App): HoldSample[] {
   return callsOf(app, "hold").map((c) => c[0] as HoldSample);
+}
+
+type HoverState = {
+  part: string;
+  isHovered?: boolean;
+  isFocused?: boolean;
+  isFocusWithin?: boolean;
+  isPressed?: boolean;
+};
+
+function hoverStates(app: App, part: string): HoverState[] {
+  return callsOf(app, "hover-state")
+    .map((c) => c[0] as HoverState)
+    .filter((s) => s.part === part);
 }
 
 function buttonPhases(app: App, name: string): string[] {
@@ -156,5 +182,57 @@ describe("number-field mobile (headless)", () => {
     const settled = seamHolds(drag, "inc", false).at(-1)!;
     expect(settled.seamPressed).toBe(false);
     expect(settled.scale).toBe(1);
+  }, 120_000);
+
+  // adapt-sheets/number-field.md M-004 (A-005): under touch the hover writes
+  // stay off on Group, Input and both step buttons — `app.hover` and a press
+  // leave `isHovered` false, no `onHover*` callback records, and the group's
+  // background never takes the hover fill (the web sticky-hover regression
+  // the axis exists to prevent). The pointer environment's hover
+  // round-trips. Moved from the shared file: `app.hover` needs a mouse.
+  test("M-004 injected touch suppresses hover on every part; pointer keeps it", async () => {
+    const touch = await openPointer("hover", { testInput: "touch" });
+    const baseBg = touch.viewStyle("id:nf-group")?.backgroundColor;
+
+    for (const selector of ["id:nf-group", "id:nf-input", "id:nf-dec", "id:nf-inc"]) {
+      await touch.hover(selector);
+    }
+    await touch.press("id:nf-inc");
+    await touch.wait(150);
+
+    // No hover callback ever fired and no render prop ever read hovered.
+    expect(callsOf(touch, "hover")).toHaveLength(0);
+    for (const part of ["group", "input", "dec", "inc"]) {
+      const states = hoverStates(touch, part);
+      expect(states.length).toBeGreaterThan(0);
+      expect(states.every((s) => s.isHovered === false)).toBe(true);
+    }
+    // The group's background never took the hover fill — before, during and
+    // after the press it reads the same color.
+    expect(touch.viewStyle("id:nf-group")?.backgroundColor).toBe(baseBg);
+
+    const pointer = await openPointer("hover", { testInput: "pointer" });
+    const pointerBase = pointer.viewStyle("id:nf-group")?.backgroundColor;
+
+    await pointer.hover("id:nf-group");
+    await pointer.waitUntil(() => callsOf(pointer, "hover").length > 0);
+
+    const hoverCalls = callsOf(pointer, "hover").map((c) => c as [string, string, unknown?]);
+    expect(hoverCalls).toContainEqual(["group", "start"]);
+    expect(hoverCalls).toContainEqual(["group", "change", true]);
+    expect(hoverStates(pointer, "group").some((s) => s.isHovered === true)).toBe(true);
+    const pointerHoverBg = pointer.viewStyle("id:nf-group")?.backgroundColor;
+    expect(pointerHoverBg).toBeDefined();
+    expect(pointerHoverBg).not.toBe(pointerBase);
+  }, 120_000);
+
+  // adapt-sheets/number-field.md M-011's hover half (A-012): the `hover`
+  // case's own `app.hover` record under pointer — the shared file proves
+  // the same carrier on both scopes without a mouse.
+  test("M-011 pointer: the hover case records the hover channel", async () => {
+    const hoverApp = await openPointer("hover", { testInput: "pointer" });
+    await hoverApp.hover("id:nf-group");
+    await hoverApp.wait(100);
+    expect(hoverStates(hoverApp, "group").length).toBeGreaterThan(0);
   }, 120_000);
 });

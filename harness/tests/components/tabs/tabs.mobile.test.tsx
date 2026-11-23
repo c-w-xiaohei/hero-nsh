@@ -1,14 +1,18 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
-import { focusTrail, panelText, selectionCalls, tab } from "../../testers/tabs";
+import { panelText, selectionCalls, tab } from "../../testers/tabs";
 
 /*
  * Mobile assertions for the tabs adapt unit, one test per row of
- * adapt-sheets/tabs.md §4 that the shared (headless + web) targets can
- * observe: M-001…M-008, M-010, M-011 and M-013. The held-press sampling,
- * `app.drag` and `platform:"ios"` halves live in
- * `tabs.mobile.headless.test.tsx`.
+ * adapt-sheets/tabs.md §4 that the shared (native + headless + web)
+ * targets can observe: M-001…M-003's touch half, M-005…M-008, M-010's
+ * press halves, M-011 and M-013. The held-press sampling, `app.drag` and
+ * `platform:"ios"` halves live in `tabs.mobile.headless.test.tsx`; the
+ * hover arms (M-003's pointer half + chevron hover-style read, M-004
+ * wholesale) and M-010's `platform:"web"` keyboard halves live in
+ * `tabs.mobile.web.test.tsx` (`app.hover` is desktop/web only and a
+ * `platform` pin is illegal on native).
  *
  * The fixture is `harness/tabs.fixtures.tsx`, opened by `host.params`:
  * `case` (`mobile` for the scroll/feedback geometry, the existing
@@ -51,13 +55,8 @@ type Params = Record<string, string>;
 function openTabs(
   caseName: string,
   params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
 ): Promise<App> {
   return open("../../../tabs.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -205,7 +204,7 @@ describe("tabs mobile", () => {
   // end → press → click`) and `onSelectionChange` behave exactly as on
   // desktop.
   test("M-001 default environment: the feedback seam is inert while the press contract holds", async () => {
-    const app = await openTabs("mobile");
+    const app = await openTabs("mobile", { input: "pointer" });
 
     await app.press("id:tab-t1");
     await app.waitUntil(() => eventsOf(app, "t1").length >= 8);
@@ -263,7 +262,7 @@ describe("tabs mobile", () => {
   // [292,340], viewport 280) lands the offset at 60, the smallest offset
   // that shows its end edge, not the touch path's centered 176.
   test("M-002 default environment: programmatic selection scrolls minimally, never centers", async () => {
-    const app = await openTabs("mobile");
+    const app = await openTabs("mobile", { input: "pointer" });
 
     await app.press("id:select-t7");
     const ms = await settleSelection(app, "t7");
@@ -277,41 +276,17 @@ describe("tabs mobile", () => {
     expect(Math.abs(vxOf(ms, "tab-t7") - 140)).toBeGreaterThan(30);
   }, 120_000);
 
-  // adapt-sheets/tabs.md M-003 (A-001): injected touch lifts the tab's
-  // visible hit minimum to 44 pt (`min-h-11` over `h-8`); the default
-  // environment keeps `h-8` (32 pt). Tab heights are read from the
-  // fixture's `layout` probe.
-  //
-  // The chevron half asserts what `nsh/test` can observe of the
-  // `min-h-11 min-w-11` / `size-4` cells: both chevrons mount, page and
-  // take input in each environment, and `hover:opacity-70` — moved into
-  // the `input: "pointer"` cell by A-001/A-002 — resolves only under
-  // pointer (`viewStyle().opacity` ≈ 0.7 hovered vs 1 under touch). The
-  // 44×44 box itself has no read channel: `app.press` resolves the named
-  // view and never reports same-container overlays as
-  // `ERR_NSH_TEST_COVERED`, `hover`/`drag` deliver occlusion-blind (both
-  // probed this round), and no `ref`/`onLayout` reaches
-  // `Tabs.ListContainer`'s internal chevron views — registered in adapt
-  // sheet §6; the exact bounds degrade to real-device acceptance, the
-  // same disposition `hitSlop` already carries.
-  test("M-003 touch lifts tabs to 44pt; chevrons keep the pointer-only hover style", async () => {
-    // Pointer half: the 32 pt tab and the chevron's hover style.
-    const pointer = await openTabs("mobile");
-    expect(lastLayout(pointer, "tab-t1").height).toBe(32);
-    expect(lastLayout(pointer, "tab-t1").width).toBe(48);
-
-    await pointer.press("id:tabs-scroll-next");
-    await settledMeasure(pointer);
-    expect(pointer.shows("id:tabs-scroll-prev")).toBe(true);
-    expect(pointer.shows("id:tabs-scroll-next")).toBe(true);
-    await pointer.hover("id:tabs-scroll-prev");
-    await pointer.wait(300);
-    const pointerOpacity = pointer.viewStyle("id:tabs-scroll-prev")?.opacity;
-    expect(pointerOpacity).toBeGreaterThan(0.6);
-    expect(pointerOpacity).toBeLessThan(0.8);
-
-    // Touch half: the 44 pt minimum, chevrons mounted and pressable, and
-    // no hover style under touch.
+  // adapt-sheets/tabs.md M-003 (A-001, native half): injected touch lifts
+  // the tab's visible hit minimum to 44 pt (`min-h-11` over `h-8`) and
+  // both scroll chevrons mount, page and take input — the press/
+  // `settledMeasure`/`shows`/`enabled` chain is native-compatible and
+  // asserted nowhere else on this file (M-011's chevron presses run under
+  // `input:"pointer"`). The pointer half and the chevron's pointer-only
+  // `hover:opacity-70` read need `app.hover` — a phone has no mouse — so
+  // the full row (both halves verbatim) lives in
+  // `tabs.mobile.web.test.tsx`; the registered no-read-channel note for
+  // the chevron's 44×44 box stands.
+  test("M-003 injected touch: tabs keep the 44pt minimum and both chevrons mount and take input", async () => {
     const touch = await openTabs("mobile", { input: "touch" });
     expect(lastLayout(touch, "tab-t1").height).toBeGreaterThanOrEqual(44);
     expect(lastLayout(touch, "tab-t1").width).toBe(48);
@@ -322,55 +297,11 @@ describe("tabs mobile", () => {
     expect(touch.shows("id:tabs-scroll-next")).toBe(true);
     expect(touch.enabled("id:tabs-scroll-prev")).toBe(true);
     expect(touch.enabled("id:tabs-scroll-next")).toBe(true);
-    await touch.hover("id:tabs-scroll-prev");
-    await touch.wait(300);
-    expect(touch.viewStyle("id:tabs-scroll-prev")?.opacity).toBe(1);
   }, 120_000);
 
-  // adapt-sheets/tabs.md M-004 (A-002): injected touch suppresses the hover
-  // dependency — `handleMouseEnter`/`Leave` neither write `hovered` nor
-  // report `onHoverStart`/`End`/`Change`, the render-prop `isHovered` stays
-  // false (web sticky hover cannot pin it), and `hover:opacity-70` is not
-  // emitted. The default environment keeps the full hover roundtrip.
-  test("M-004 touch suppresses hover state and callbacks; pointer keeps the roundtrip", async () => {
-    const touch = await openTabs("mobile", { input: "touch" });
-
-    await touch.hover("id:tab-t1");
-    await touch.wait(300);
-    await touch.press("id:tab-t1");
-    await touch.wait(300);
-
-    // No hover probe record of any kind for t1 — not on enter, not on the
-    // press that follows, not on a synthetic leave.
-    expect(callsOf(touch, "hover").filter((c) => (c[0] as { tab: string }).tab === "t1")).toHaveLength(0);
-    // The render-prop flag never rose: t1's state text keeps `H0`.
-    expect(touch.texts().some((t) => t.includes("H1"))).toBe(false);
-
-    const pointer = await openTabs("mobile");
-    await pointer.hover("id:tab-t1");
-    await pointer.wait(300);
-
-    const hoverCalls = callsOf(pointer, "hover").map((c) => c[0]) as {
-      tab: string;
-      kind: string;
-      value?: boolean;
-    }[];
-    expect(hoverCalls).toContainEqual({ tab: "t1", kind: "start" });
-    expect(hoverCalls).toContainEqual({ tab: "t1", kind: "change", value: true });
-    // t1 is the selected tab: H1 (hovered) P0 (not pressed) S1 D0.
-    expect(pointer.texts()).toContain("H1P0S1D0");
-
-    await pointer.hover("id:after");
-    await pointer.wait(300);
-    const afterCalls = callsOf(pointer, "hover").map((c) => c[0]) as {
-      tab: string;
-      kind: string;
-      value?: boolean;
-    }[];
-    expect(afterCalls).toContainEqual({ tab: "t1", kind: "end" });
-    expect(afterCalls).toContainEqual({ tab: "t1", kind: "change", value: false });
-    expect(pointer.texts()).toContain("H0P0S1D0");
-  }, 120_000);
+  // adapt-sheets/tabs.md M-004 (A-002): the hover-suppression row is
+  // `app.hover` end to end — the whole row lives in
+  // `tabs.mobile.web.test.tsx`.
 
   // adapt-sheets/tabs.md M-005 (A-003): injected touch engages the seam —
   // `isPressed` completes the true → false roundtrip through
@@ -475,8 +406,8 @@ describe("tabs mobile", () => {
   // the host (`ERR_NSH_TEST_DISABLED`), no `selectionChange` fires and no
   // `isPressed` edge runs. Asserted in both environments.
   test("M-007 disabled tab and disabled root refuse the press and silence the seam", async () => {
-    for (const scope of ["", "touch"] as const) {
-      const params = (extra: Params): Params => (scope ? { ...extra, input: "touch" } : extra);
+    for (const scope of ["pointer", "touch"] as const) {
+      const params = (extra: Params): Params => ({ ...extra, input: scope });
 
       const single = await openTabs("mobile", params({ tabdisabled: "1" }));
       expect(single.enabled("id:tab-t4")).toBe(false);
@@ -505,9 +436,9 @@ describe("tabs mobile", () => {
   // and its top margin (`mt-2` vs `mt-4`). The uninjected environment
   // resolves `default`, identical to the explicit `density="default"`.
   test("M-008 density compact tightens padding and panel spacing one step", async () => {
-    const compact = await openTabs("mobile", { density: "compact" });
-    const explicit = await openTabs("mobile", { density: "default" });
-    const bare = await openTabs("mobile");
+    const compact = await openTabs("mobile", { input: "pointer", density: "compact" });
+    const explicit = await openTabs("mobile", { input: "pointer", density: "default" });
+    const bare = await openTabs("mobile", { input: "pointer" });
 
     const innerWidth = (app: App) => lastLayout(app, "pxprobe-inner").width;
     const panelY = (app: App) => lastLayout(app, "panel-t1").y;
@@ -588,49 +519,10 @@ describe("tabs mobile", () => {
     expect(panelText(dflt, "Reports panel")).toBe(true);
     expect(selectionCalls(dflt)).toHaveLength(0);
 
-    // Keyboard activation on the web target under touch (T-011/T-015/T-017/
-    // T-018 duals): `keyboardActivation` semantics are input-independent.
-    const manual = await open("../../../tabs.fixtures.tsx", {
-      platform: "web",
-      host: { params: { case: "kobalte-manual", input: "touch" } },
-    });
-    await manual.keyboard.press("tab");
-    expect(focusTrail(manual)).toEqual(["overview"]);
-    expect(panelText(manual, "Overview panel")).toBe(true);
-
-    await manual.keyboard.press("arrowright");
-    expect(focusTrail(manual)).toEqual(["overview", "analytics"]);
-    expect(panelText(manual, "Overview panel")).toBe(true);
-    expect(selectionCalls(manual)).toHaveLength(0);
-
-    await manual.keyboard.press("arrowright");
-    await manual.keyboard.press("enter");
-    expect(panelText(manual, "Reports panel")).toBe(true);
-    expect(selectionCalls(manual)).toHaveLength(1);
-    expect(selectionCalls(manual)[0][0]).toBe("reports");
-
-    const auto = await open("../../../tabs.fixtures.tsx", {
-      platform: "web",
-      host: { params: { case: "kobalte-plain", input: "touch" } },
-    });
-    await auto.keyboard.press("tab");
-    await auto.keyboard.press("arrowright");
-    expect(panelText(auto, "Analytics panel")).toBe(true);
-    expect(panelText(auto, "Overview panel")).toBe(false);
-
-    const group = await open("../../../tabs.fixtures.tsx", {
-      platform: "web",
-      host: { params: { case: "kobalte-disabled-group", input: "touch" } },
-    });
-    await group.keyboard.press("tab");
-    expect(focusTrail(group)).toEqual(["after"]);
-
-    const dfltSel = await open("../../../tabs.fixtures.tsx", {
-      platform: "web",
-      host: { params: { case: "kobalte-default-analytics", input: "touch" } },
-    });
-    await dfltSel.keyboard.press("tab");
-    expect(focusTrail(dfltSel)).toEqual(["analytics"]);
+    // The keyboard-activation halves of this row (T-011/T-015/T-017/T-018
+    // duals) live in `tabs.mobile.web.test.tsx`: `platform:"web"` is the
+    // one host that moves view focus, and a `platform` pin is illegal on
+    // native.
   }, 120_000);
 
   // adapt-sheets/tabs.md M-011 (基线): desktop zero drift — the press
@@ -638,7 +530,7 @@ describe("tabs mobile", () => {
   // `scrollBy(0.8 page)` step and the `dir="rtl"` paging direction all
   // match the desktop assertions the existing files pin.
   test("M-011 pointer baseline: event order, selection payload, chevron step and rtl direction", async () => {
-    const app = await openTabs("mobile");
+    const app = await openTabs("mobile", { input: "pointer" });
 
     await app.press("id:tab-t2");
     // Web loses `press`/`click` when the selection swap replaces the tab
@@ -672,7 +564,7 @@ describe("tabs mobile", () => {
     // strip sits at x = maxScroll (content end = logical start), so
     // `scrollStart` is 0 and `tabs-scroll-prev` is legitimately hidden —
     // the chevron that can page from logical start is `tabs-scroll-next`.
-    const rtl = await openTabs("mobile", { rtl: "1" });
+    const rtl = await openTabs("mobile", { input: "pointer", rtl: "1" });
     await rtl.press("id:select-t5");
     await rtl.waitUntil(() => geoms(rtl).at(-1)?.selectedKey === "s:t5");
     const before = offsetOf(await settledMeasure(rtl));
@@ -687,7 +579,7 @@ describe("tabs mobile", () => {
   // answers every probe in both environments — no scope (pointer default),
   // `input="touch"` and `density="compact"`.
   test("M-013 the fixture mounts in every environment and every probe records", async () => {
-    for (const params of [{}, { input: "touch" }, { density: "compact" }] as Params[]) {
+    for (const params of [{ input: "pointer" }, { input: "touch" }, { input: "pointer", density: "compact" }] as Params[]) {
       const app = await openTabs("mobile", params);
       expect(app.shows("id:tab-t1")).toBe(true);
       expect(app.shows("id:tab-t5")).toBe(true);

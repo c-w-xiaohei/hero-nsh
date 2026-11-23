@@ -17,18 +17,21 @@ import { callsOf } from "../../helpers/calls";
  *
  * The seam is environment-agnostic by design: M-012 re-runs the M-001/M-002
  * scenario under `EnvironmentScope input="touch"` (`scope=touch` param) and
- * must read identically. Both file halves run headless and on `--target web`.
+ * must read identically. The file runs on native iOS/Android in CI and
+ * locally on headless and `--target web`.
  */
 
+// No `platform`/`width`/`height` open options: native iOS/Android hosts run
+// this file with their real screen and platform and reject those options.
+// The seam is environment-agnostic, so every assertion reads identically
+// under the host-derived environment; M-012 still injects
+// `EnvironmentScope input="touch"` explicitly.
 function openMobile(
   caseName: string,
   params: Record<string, string> = {},
   scope?: "touch",
 ): Promise<App> {
   return open("../../../list-box.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: {
       params: {
         case: caseName,

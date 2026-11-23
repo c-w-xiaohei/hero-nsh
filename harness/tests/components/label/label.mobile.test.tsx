@@ -1,5 +1,5 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { calls, callsOf } from "../../helpers/calls";
 
 /*
@@ -7,18 +7,19 @@ import { calls, callsOf } from "../../helpers/calls";
  * adapt-sheets/label.md §4 (M-001…M-009).
  *
  * The fixture is `harness/label.fixtures.tsx`, opened by `host.params`:
- * `case` (basic / states / field / no-field / all), `scope` ("" = host
- * default,
- * "touch" = `EnvironmentScope input="touch"`, "density" = `EnvironmentScope
- * density="compact"`), and the field case's `fieldRequired` / `fieldDisabled`
- * / `fieldInvalid` flags (M-008). Every open pins `platform:"windows"`,
- * 1024×768 — the pointer desktop baseline on both headless and web.
+ * `case` (basic / states / field / no-field / all), `scope` (comma tokens:
+ * "pointer"/"touch" = `EnvironmentScope input`, "density" =
+ * `EnvironmentScope density="compact"`), and the field case's
+ * `fieldRequired` / `fieldDisabled` / `fieldInvalid` flags (M-008).
+ * No `platform`/`width`/`height` open options — the native targets fill
+ * the device screen and reject them.
  *
  * Observation channels: `shows` / `texts` / `spanStyle` for the rendered
  * text, `viewStyle().opacity` for the disabled dim, `onLayout` bounds and
  * the `@scenario/probe` calls in `app.storage()` for the field channel and
- * the press triple. The default environment is the desktop-parity half of
- * every row; the injected scopes are the touch/density halves.
+ * the press triple. The injected `"pointer"` scope is the desktop-parity
+ * half of every row (explicit because the host-derived default differs
+ * per target); the `"touch"`/"density" scopes are the mobile halves.
  */
 
 type Params = Record<string, string>;
@@ -30,16 +31,8 @@ const DANGER = "#ff383cff";
 
 const FIELD_PROBES = ["pressFieldStart", "pressFieldUp", "focusField"] as const;
 
-function openLabel(
-  caseName: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openLabel(caseName: string, params: Params = {}): Promise<App> {
   return open("../../../label.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -89,8 +82,8 @@ describe("label mobile", () => {
   // adapt-sheets/label.md M-001 (基线): default pointer environment renders
   // the label exactly as before the port — text-sm (14pt) font-medium
   // foreground, and a real layout box.
-  test("M-001 default environment renders the baseline label", async () => {
-    const app = await openLabel("basic");
+  test("M-001 pointer baseline renders the baseline label", async () => {
+    const app = await openLabel("basic", { scope: "pointer" });
 
     expect(app.shows("text:Mobile label")).toBe(true);
     expect(app.texts()).toContain("Mobile label");
@@ -113,8 +106,8 @@ describe("label mobile", () => {
   // adapt-sheets/label.md M-002 (基线): the three appearance states are
   // unchanged — required draws the asterisk, disabled dims to opacity 0.5,
   // invalid paints danger.
-  test("M-002 default environment keeps the three appearance states", async () => {
-    const app = await openLabel("states");
+  test("M-002 pointer baseline keeps the three appearance states", async () => {
+    const app = await openLabel("states", { scope: "pointer" });
 
     expect(app.shows("text:/Required name\\*/")).toBe(true);
     expect(app.viewStyle("id:label-disabled")?.opacity).toBe(0.5);
@@ -125,8 +118,8 @@ describe("label mobile", () => {
   // the FieldContext channel exactly once per transition — start on press
   // down, up on release, focus on press — and the caller's own press triple
   // fires once each, in the same order as before the port.
-  test("M-003 default environment forwards the press to the field channel once", async () => {
-    const app = await openLabel("field");
+  test("M-003 pointer baseline forwards the press to the field channel once", async () => {
+    const app = await openLabel("field", { scope: "pointer" });
 
     expect(callsOf(app, "registerLabel")).toEqual([["Field label"]]);
 
@@ -155,7 +148,7 @@ describe("label mobile", () => {
       ["states", STATES_STYLES],
     ] as const) {
       const touch = await openLabel(caseName, { scope: "touch" });
-      const plain = await openLabel(caseName);
+      const plain = await openLabel(caseName, { scope: "pointer" });
 
       expect(snapshot(touch, [...selectors])).toEqual(
         snapshot(plain, [...selectors]),
@@ -171,8 +164,10 @@ describe("label mobile", () => {
       ["basic", BASIC_STYLES],
       ["states", STATES_STYLES],
     ] as const) {
-      const compact = await openLabel(caseName, { scope: "density" });
-      const plain = await openLabel(caseName);
+      const compact = await openLabel(caseName, {
+        scope: "pointer,density",
+      });
+      const plain = await openLabel(caseName, { scope: "pointer" });
 
       expect(snapshot(compact, [...selectors])).toEqual(
         snapshot(plain, [...selectors]),
@@ -258,7 +253,7 @@ describe("label mobile", () => {
       fieldInvalid: "1",
     };
 
-    const plain = await openLabel("field", params);
+    const plain = await openLabel("field", { ...params, scope: "pointer" });
     const touch = await openLabel("field", { ...params, scope: "touch" });
 
     const reads = (app: App) => ({
@@ -275,9 +270,8 @@ describe("label mobile", () => {
   }, 120_000);
 
   // adapt-sheets/label.md M-009 (A-007, A-008): delivery coverage — every
-  // case dispatches on `host.params.case`, the `scope` param mounts an
-  // `EnvironmentScope` ("" behaves as no wrapper), and the file pins
-  // windows/1024×768 so all of the above runs headless and web.
+  // case dispatches on `host.params.case` and the `scope` param mounts an
+  // `EnvironmentScope` whose tokens the file can compose per open.
   //
   // The sweep opens the aggregate `all` case once per scope (3 opens, not
   // 12): it mounts every case tree under one EnvironmentScope, and each of
@@ -294,7 +288,7 @@ describe("label mobile", () => {
       "no-field": "Plain label",
     };
 
-    for (const scope of ["", "touch", "density"]) {
+    for (const scope of ["pointer", "touch", "pointer,density"]) {
       const app = await openLabel("all", { scope });
       for (const text of Object.values(landmarks)) {
         expect(app.shows(`text:${text}`)).toBe(true);

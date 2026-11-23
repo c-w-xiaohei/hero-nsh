@@ -13,25 +13,24 @@ import { callsOf } from "../../helpers/calls";
  *
  * The fixture is `harness/kbd.fixtures.tsx` — `host.params.case` picks the
  * shape (`basic`, `keys`, `variants`, `inline`, `bare-text`, `title`) and
- * `input`/`density` feed `EnvironmentScope` (absent = the host default,
- * pointer — the desktop-parity baseline). Probes in `app.storage()`:
- * `layout` (each root's full bounds box) and `env` (the host's
- * `platform.os`/`desktop`/`idiom` plus the resolved default `input`, which
- * M-007's pin assertion reads).
+ * `input`/`density` feed `EnvironmentScope`. The host-derived default
+ * differs per target (touch on ios/android, pointer on desktop and web),
+ * so `input:"pointer"` is injected explicitly wherever the desktop-parity
+ * baseline is meant. Probes in `app.storage()`: `layout` (each root's full
+ * bounds box) and `env` (the host's platform report — it sits outside the
+ * scope, so it always reads host-derived values).
  *
- * `open` keeps the w1 pin (`platform:"windows"`, 1024×768): without it the
- * headless engine lands on the phone host where `input` defaults to touch
- * and every pointer-default assertion inverts. No `ios`/`android` open and
- * no drag case, so this is a dual-target `.mobile.test.tsx`.
+ * No `platform`/`width`/`height` open options — the native targets fill
+ * the device screen and reject them. Two rows moved to
+ * `kbd.mobile.headless.test.tsx`, a local file that keeps the
+ * `platform:"windows"` pin: M-006's hover tooltip (`app.hover` does not
+ * exist natively) and M-007's desktop-host pin assertion.
  */
 
-type Env = { input?: "touch"; density?: "compact" };
+type Env = { input?: "touch" | "pointer"; density?: "compact" };
 
 function openKbd(caseName: string, env: Env = {}): Promise<App> {
   return open("../../../kbd.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: { params: { case: caseName, ...env } },
   });
 }
@@ -83,17 +82,6 @@ function rootBox(app: App, name: string): LayoutEntry {
   return box;
 }
 
-type EnvReport = {
-  os: string;
-  desktop: boolean;
-  idiom: string;
-  input: string;
-};
-
-function envOf(app: App): EnvReport {
-  return callsOf(app, "env").at(-1)?.[0] as EnvReport;
-}
-
 /* The deduplicated `kbdKeysMap` glyph table (`win` repeats `⌘`, `alt`
  * repeats `⌥`): 23 `KbdKey`s mount, 21 distinct glyph texts show. */
 const GLYPHS = [
@@ -107,8 +95,8 @@ describe("kbd mobile", () => {
   // (`h-6`), the resolved span is 14 pt (`text-sm`), and `keys` mounts the
   // whole `kbdKeysMap` glyph table — the same render `kbd.heroui.test.tsx`
   // T-001 pins.
-  test("M-001 default environment: basic renders, root is 24pt, font is 14pt, keys table mounts", async () => {
-    const app = await openKbd("basic");
+  test("M-001 pointer baseline: basic renders, root is 24pt, font is 14pt, keys table mounts", async () => {
+    const app = await openKbd("basic", { input: "pointer" });
 
     expect(app.shows("id:kbd-basic")).toBe(true);
     expect(app.shows("text:⌘")).toBe(true);
@@ -118,7 +106,7 @@ describe("kbd mobile", () => {
     expect(box.height).toBe(24);
     expect(app.spanStyle("id:content-basic >> text:K").fontSize).toBe(14);
 
-    const keys = await openKbd("keys");
+    const keys = await openKbd("keys", { input: "pointer" });
     for (const key of GLYPHS) {
       expect(keys.shows(`text:${key}`)).toBe(true);
     }
@@ -128,20 +116,20 @@ describe("kbd mobile", () => {
   // number children render through `renderChildren`, both variant rows show
   // their children, and the inline Kbd shares the screen with its
   // surrounding text.
-  test("M-002 default environment: bare text, both variants, inline render", async () => {
-    const bare = await openKbd("bare-text");
+  test("M-002 pointer baseline: bare text, both variants, inline render", async () => {
+    const bare = await openKbd("bare-text", { input: "pointer" });
     expect(bare.shows("id:kbd-esc")).toBe(true);
     expect(bare.shows("text:Esc")).toBe(true);
     expect(bare.shows("id:kbd-num")).toBe(true);
     expect(bare.shows("text:42")).toBe(true);
 
-    const variants = await openKbd("variants");
+    const variants = await openKbd("variants", { input: "pointer" });
     expect(variants.shows("id:kbd-default")).toBe(true);
     expect(variants.shows("id:kbd-light")).toBe(true);
     expect(variants.shows("id:abbr-default >> text:⌘")).toBe(true);
     expect(variants.shows("id:abbr-light >> text:⌘")).toBe(true);
 
-    const inline = await openKbd("inline");
+    const inline = await openKbd("inline", { input: "pointer" });
     expect(inline.shows("id:kbd-inline")).toBe(true);
     expect(inline.shows("text:Esc")).toBe(true);
     expect(inline.texts().join("")).toContain("to close the dialog.");
@@ -159,7 +147,7 @@ describe("kbd mobile", () => {
       "inline",
       "bare-text",
     ] as const) {
-      const pointer = await openKbd(caseName);
+      const pointer = await openKbd(caseName, { input: "pointer" });
       const touch = await openKbd(caseName, { input: "touch" });
 
       expect(touch.texts()).toEqual(pointer.texts());
@@ -172,14 +160,14 @@ describe("kbd mobile", () => {
     expect(rootBox(touch, "kbd-basic").height).toBe(24);
   }, 120_000);
 
-  // adapt-sheets/kbd.md M-004 (A-001): injected `density="compact"` (with
-  // `input="touch"`, the mobile combination) — the component table has no
-  // density cell, so root bounds and the resolved span match the default
-  // environment's exactly: 24 pt tall, 14 pt, same texts.
+  // adapt-sheets/kbd.md M-004 (A-001): injected `density="compact"` (on the
+  // pointer baseline axis, same input on both sides) — the component table
+  // has no density cell, so root bounds and the resolved span match the
+  // default environment's exactly: 24 pt tall, 14 pt, same texts.
   test("M-004 injected compact density: bounds and span identical to default", async () => {
-    const baseline = await openKbd("basic");
+    const baseline = await openKbd("basic", { input: "pointer" });
     const compact = await openKbd("basic", {
-      input: "touch",
+      input: "pointer",
       density: "compact",
     });
 
@@ -209,38 +197,26 @@ describe("kbd mobile", () => {
   }, 120_000);
 
   // adapt-sheets/kbd.md M-006 (A-005): the `title` channel — the abbr's
-  // glyph mounts and the hover tooltip surfaces the same "Command" label
-  // in both environments (T-002's observable face), untouched by the
-  // injected input: the host's `hover`/`tooltip` channels are
-  // environment-independent.
-  test("M-006 title channel: glyph shows and the same tooltip surfaces in both environments", async () => {
-    for (const env of [{}, { input: "touch" } as Env] as const) {
+  // glyph mounts in both explicit environments; the hover tooltip that
+  // surfaces the "Command" label (T-002's observable face) is a desktop
+  // gesture the native targets cannot perform, so that arm lives in
+  // `kbd.mobile.headless.test.tsx`.
+  test("M-006 title channel: the glyph mounts in both environments", async () => {
+    for (const env of [
+      { input: "pointer" },
+      { input: "touch" },
+    ] as Env[]) {
       const app = await openKbd("title", env);
 
       expect(app.shows("id:abbr-title")).toBe(true);
       expect(app.shows("text:⌘")).toBe(true);
-
-      await app.hover("text:⌘");
-      await app.waitFor("text:Command", { timeout: 2000 });
-      expect(app.shows("text:Command")).toBe(true);
     }
   }, 120_000);
 
-  // adapt-sheets/kbd.md M-007 (A-006, A-007): the desktop pin holds — the
+  // adapt-sheets/kbd.md M-007 (A-006, A-007): the desktop-host pin — the
   // fixture's `env` probe reports `platform.desktop === true`, the desktop
-  // idiom and a resolved `input` of `"pointer"`, so the default environment
-  // really is the pointer baseline and M-001/M-002's assertions mean the
-  // same thing on headless and web (the unpinned headless engine would
-  // report the phone host). `platform.os` is "windows" on the pinned
-  // headless engine; the web target always reports "web" — the desktop
-  // idiom the `platform` option forces is what the pin buys there.
-  test("M-007 desktop pin: host reports a desktop platform and pointer input in the default environment", async () => {
-    const app = await openKbd("basic");
-    const env = envOf(app);
-
-    expect(env.desktop).toBe(true);
-    expect(env.idiom).toBe("desktop");
-    expect(env.input).toBe("pointer");
-    expect(["windows", "web"]).toContain(env.os);
-  }, 120_000);
+  // idiom and a resolved `input` of `"pointer"`. That only holds under the
+  // `platform:"windows"` pin the native targets reject (their hosts report
+  // a touch-derived input), so the row lives in
+  // `kbd.mobile.headless.test.tsx`.
 });

@@ -8,17 +8,18 @@ import { calls, callsOf } from "../../helpers/calls";
  * `harness/drawer.fixtures.tsx` — `basic` is the swipe surface, `scroll`
  * the tall Body for the atTop handoff, `sides` a non-bottom placement.
  *
- * `host.params.scope="touch"` mounts the `EnvironmentScope input="touch"`
- * the assertions inject; its absence is the default pointer environment —
- * the desktop-parity baseline, including the negative assertion that both
+ * `host.params.scope` mounts the `EnvironmentScope` the assertions inject —
+ * "touch" for the gesture halves, "pointer" (this file's default) for the
+ * desktop-parity baseline, including the negative assertion that both
  * gesture paths do not exist there (`keys=0`/`panelKeys=0`: the handlers
  * are physically absent, not registered-and-ignored).
  *
- * Every open pins `platform:"windows"` at 1024×768 — without the pin the
- * headless app lands on the phone-sized engine where the default input is
- * touch and every pointer-default assertion inverts (the M-001 convention).
- * `app.drag` drives the touches on headless and web alike, so this file is
- * a dual-target `.mobile.test.tsx`.
+ * `open()` platform/width/height options are rejected on ios/android, so
+ * the pointer environment is injected per open instead of pinned by
+ * `platform:"windows"` — the role the old pin played (without it the host
+ * defaults `input` to touch and every pointer-default assertion inverts).
+ * `app.drag` drives the touches on the native targets as it did on
+ * headless, so this file stays a shared `.mobile.test.tsx`.
  */
 
 type DragRecord = {
@@ -36,15 +37,12 @@ type LayoutRecord = {
 function openDrawer(
   caseName: string,
   params: Record<string, unknown> = {},
-  scope?: "touch" | "pointer",
+  scope: "touch" | "pointer" = "pointer",
 ): Promise<App> {
   return open("../../../drawer.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
     host: {
-      params: { case: caseName, ...(scope ? { scope } : {}), ...params },
+      params: { case: caseName, scope, ...params },
     },
   });
 }

@@ -202,6 +202,10 @@ function Scoped(props: { children?: JSX.Element }) {
     );
   }
 
+  if (scope === "pointer") {
+    return <EnvironmentScope input="pointer">{props.children}</EnvironmentScope>;
+  }
+
   // No fragment here: a `<>` boundary between the mount root and the tree
   // breaks the presented Dialog's owner chain — the modal opens but never
   // closes (measured on this fixture; the alert-dialog fixture hit the same

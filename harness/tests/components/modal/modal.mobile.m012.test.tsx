@@ -12,9 +12,6 @@ import { callsOf } from "../../helpers/calls";
  * test title of its own (the merged M-002 title left M-012 without one).
  */
 
-const VIEWPORT_W = 1024;
-const VIEWPORT_H = 768;
-
 type SwipeRecord = {
   presentation: string;
   panKeys: number;
@@ -28,9 +25,6 @@ describe("modal mobile", () => {
     async () => {
       const pin: ModalPresentation = "panel";
       const app = await open("../../../modal.fixtures.tsx", {
-        platform: "windows",
-        width: VIEWPORT_W,
-        height: VIEWPORT_H,
         clock: {},
         host: {
           params: { case: "basic", scope: "touch-compact", presentation: pin },

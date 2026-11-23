@@ -6,9 +6,10 @@ import { callsOf } from "../../helpers/calls";
  * Mobile assertions for the form adapt unit, one test per row of
  * adapt-sheets/form.md §4 (M-001…M-006). The fixture is
  * `harness/form.fixtures.tsx` — `case` picks the shape (basic / submit /
- * errors) and `scope` picks the environment (`"touch"` mounts
- * `EnvironmentScope input="touch"`; absent is the host default, pointer —
- * the desktop-parity baseline).
+ * errors) and `testInput` picks the environment through an outer
+ * `EnvironmentScope` ("pointer" is the host-independent desktop-parity
+ * baseline, "touch" the injected side; the host-derived default differs
+ * per target, so both halves are always explicit).
  *
  * Form's contract surface is observed through what `nsh/test` sees plus the
  * fixture's `probe()` records: `shows` for the named landmark and the error
@@ -17,44 +18,42 @@ import { callsOf } from "../../helpers/calls";
  * for Return in a field, bridged to `FormContext.submit()` inside the
  * fixture the way the field units will once they land (sheet A-005).
  *
- * Both environments are covered in the same file: `press`/`submit`/`shows`
- * behave the same on headless and web, so this is a dual-target
- * `.mobile.test.tsx`, pinned to `platform:"windows", 1024×768` like the
- * sibling `form.heroui.test.tsx` (an unpinned headless open would land on
- * the phone-sized engine where `input` defaults to touch and every
- * pointer-default assertion inverts).
+ * `press`/`submit`/`shows` behave the same on every target, so this is the
+ * shared `.mobile.test.tsx` and runs on native ios/android too — native
+ * hosts fill the device screen and reject the `platform`/`width`/`height`
+ * open options, so the file carries none.
  */
 
-function openForm(caseName: string, scope?: "touch"): Promise<App> {
+function openForm(caseName: string, input?: "pointer" | "touch"): Promise<App> {
   return open("../../../form.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    host: { params: { case: caseName, ...(scope ? { scope } : {}) } },
+    host: {
+      params: { case: caseName, ...(input ? { testInput: input } : {}) },
+    },
   });
 }
 
 describe("form", () => {
-  // adapt-sheets/form.md M-001 (A-001, A-007, 基线): under the default
-  // environment the named landmark, the field's accessible name and the
+  // adapt-sheets/form.md M-001 (A-001, A-007, 基线): under the injected
+  // pointer baseline the named landmark, the field's accessible name and the
   // error propagation render exactly as the desktop port asserts — the bare
   // container gained no class surface and the contract surface is
   // unchanged (T-001/T-003's sibling observations).
-  test("M-001 default environment: landmark, field and error propagation unchanged", async () => {
-    const basic = await openForm("basic");
+  test("M-001 pointer baseline: landmark, field and error propagation unchanged", async () => {
+    const basic = await openForm("basic", "pointer");
     expect(basic.shows("role:region[Profile]")).toBe(true);
     expect(basic.shows("label:Your name")).toBe(true);
 
-    const errors = await openForm("errors");
+    const errors = await openForm("errors", "pointer");
     expect(errors.shows("text:Name is required")).toBe(true);
   });
 
-  // adapt-sheets/form.md M-002 (A-004, 基线): under the default environment
+  // adapt-sheets/form.md M-002 (A-004, 基线): under the injected pointer
+  // baseline
   // pressing `Button type="submit"` reaches `FormContext.submit()` →
   // `onSubmit` exactly once — the submit entry inherits Button's work, and
   // the press path matches T-002's desktop observation.
-  test("M-002 default environment: Button submit press dispatches onSubmit once", async () => {
-    const app = await openForm("submit");
+  test("M-002 pointer baseline: Button submit press dispatches onSubmit once", async () => {
+    const app = await openForm("submit", "pointer");
 
     await app.press("role:button[Save]");
     await app.waitUntil(() => callsOf(app, "form.submit").length >= 1);
@@ -82,13 +81,13 @@ describe("form", () => {
     expect(callsOf(app, "form.submit")).toHaveLength(1);
   });
 
-  // adapt-sheets/form.md M-004 (A-005): under the default environment
+  // adapt-sheets/form.md M-004 (A-005): under the injected pointer
   // Return in the bridged field reaches `FormContext.submit()` → `onSubmit`
   // exactly once — keyboard submission shares the `submit → onSubmit`
   // channel with the press path, single event, single dispatch (the action
   // row's "验收键盘提交").
-  test("M-004 default environment: Return in the field dispatches onSubmit once", async () => {
-    const app = await openForm("submit");
+  test("M-004 pointer baseline: Return in the field dispatches onSubmit once", async () => {
+    const app = await openForm("submit", "pointer");
     expect(app.shows("label:Your name")).toBe(true);
 
     await app.submit("label:Your name");
@@ -112,12 +111,12 @@ describe("form", () => {
   });
 
   // adapt-sheets/form.md M-006 (A-008): the carrier itself works — the
-  // pinned desktop `open` succeeds on `form.fixtures.tsx`, the bridged
+  // `open` succeeds on `form.fixtures.tsx`, the bridged
   // field renders inside the form, and its `onSubmit` bridge is reachable
   // (the probe records M-004/M-005 read are the indirect proof; here the
   // mount and the field surface are asserted directly).
-  test("M-006 fixture carrier: pinned open mounts the bridged field in the submit case", async () => {
-    const app = await openForm("submit");
+  test("M-006 fixture carrier: the open mounts the bridged field in the submit case", async () => {
+    const app = await openForm("submit", "pointer");
 
     expect(app.shows("role:region[Profile]")).toBe(true);
     expect(app.shows("label:Your name")).toBe(true);

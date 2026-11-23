@@ -1,14 +1,17 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the checkbox adapt unit
- * (adapt-sheets/checkbox.md §4, M-001…M-010). One file for headless+web:
- * every assertion reads what `nsh/test` observes — `shows`, `texts`,
- * `enabled`, `onLayout` probe payloads and `app.storage()` probe calls —
- * and `host.params.scope` picks the environment, so the dual-environment
- * rows run identically on both targets.
+ * (adapt-sheets/checkbox.md §4, M-001…M-010) on every target, native
+ * ios/android included: every assertion reads what `nsh/test` observes —
+ * `shows`, `texts`, `enabled`, `onLayout` probe payloads and
+ * `app.storage()` probe calls — and `host.params.testInput` picks the
+ * environment explicitly ("pointer" is the desktop-parity baseline, "touch"
+ * the injected side), so the dual-environment rows run identically
+ * everywhere. M-004 and M-007's hover tail use `app.hover`, which needs a
+ * mouse — they live in `checkbox.mobile.headless.test.tsx`.
  *
  * The probes live in `harness/checkbox.fixtures.tsx`:
  *   `env`    the Content's registered seam channels — `input`, `hitSlop`,
@@ -25,20 +28,8 @@ import { callsOf } from "../../helpers/calls";
 
 type Params = Record<string, string>;
 
-function openCase(
-  name: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openCase(name: string, params: Params = {}): Promise<App> {
   return open("../../../checkbox.fixtures.tsx", {
-    // The default half of the sheet's dual environment is `platform.desktop`
-    // === true — the same host the desktop contract runs on (a bare `nsh
-    // test` headless host reports `desktop: false`). `EnvironmentScope`
-    // supplies the injected touch half.
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
     host: { params: { case: name, ...params } },
   });
 }
@@ -68,15 +59,15 @@ function kinds(app: App): string[] {
 }
 
 describe("checkbox mobile", () => {
-  // M-009 (A-005): the fixture's dual-environment channel — `scope` picks
-  // `EnvironmentScope input="touch"`, its absence the host default.
-  test("M-009 env probe reports pointer by default and touch under the injected scope", async () => {
-    const pointer = await openCase("row");
+  // M-009 (A-005): the fixture's dual-environment channel — `testInput`
+  // picks the outer `EnvironmentScope` input on both halves.
+  test("M-009 env probe reports pointer and touch under the injected inputs", async () => {
+    const pointer = await openCase("row", { testInput: "pointer" });
     await pointer.waitUntil(() => callsOf(pointer, "env").length > 0);
     expect(lastEnv(pointer).input).toBe("pointer");
     expect(lastEnv(pointer).enabled).toBe(false);
 
-    const touch = await openCase("row", { scope: "touch" });
+    const touch = await openCase("row", { testInput: "touch" });
     await touch.waitUntil(() => callsOf(touch, "env").length > 0);
     expect(lastEnv(touch).input).toBe("touch");
     expect(lastEnv(touch).enabled).toBe(true);
@@ -87,12 +78,12 @@ describe("checkbox mobile", () => {
   // height under pointer, and a row already taller than 44 pt is not
   // clamped or shrunk by the floor.
   test("M-001 short Content row measures at least 44pt under touch and stays short under pointer", async () => {
-    const touch = await openCase("row", { scope: "touch" });
+    const touch = await openCase("row", { testInput: "touch" });
     await touch.waitUntil(() => callsOf(touch, "layout").length > 0);
     const touchLayout = callsOf(touch, "layout").at(-1)![0] as { height: number };
     expect(touchLayout.height).toBeGreaterThanOrEqual(44);
 
-    const pointer = await openCase("row");
+    const pointer = await openCase("row", { testInput: "pointer" });
     await pointer.waitUntil(() => callsOf(pointer, "layout").length > 0);
     const pointerLayout = callsOf(pointer, "layout").at(-1)![0] as { height: number };
     expect(pointerLayout.height).toBeLessThan(44);
@@ -100,14 +91,14 @@ describe("checkbox mobile", () => {
     // The "taller content is not forced" half: `tall=1` stacks four text
     // lines inside the same Content — over 44 pt on its own — and `min-h-11`
     // must leave that height alone in both environments.
-    const tallTouch = await openCase("row", { scope: "touch", tall: "1" });
+    const tallTouch = await openCase("row", { testInput: "touch", tall: "1" });
     await tallTouch.waitUntil(() => callsOf(tallTouch, "layout").length > 0);
     const tallTouchLayout = callsOf(tallTouch, "layout").at(-1)![0] as {
       height: number;
     };
     expect(tallTouchLayout.height).toBeGreaterThan(44);
 
-    const tallPointer = await openCase("row", { tall: "1" });
+    const tallPointer = await openCase("row", { testInput: "pointer", tall: "1" });
     await tallPointer.waitUntil(() => callsOf(tallPointer, "layout").length > 0);
     const tallPointerLayout = callsOf(tallPointer, "layout").at(-1)![0] as {
       height: number;
@@ -115,12 +106,13 @@ describe("checkbox mobile", () => {
     expect(tallPointerLayout.height).toBe(tallTouchLayout.height);
   }, 120_000);
 
-  // M-002 (A-003, 负断言): the default environment leaves the seam inert —
+  // M-002 (A-003, 负断言): the injected pointer baseline leaves the seam
+  // inert —
   // `hitSlop` stays null, `seamPressed` never rises — while the press
   // contract round-trips exactly as on desktop: same lifecycle order, same
   // single toggle, same click tail (the seam is a physical no-op).
-  test("M-002 default environment: seam stays inert while the press contract holds", async () => {
-    const app = await openCase("row");
+  test("M-002 pointer baseline: seam stays inert while the press contract holds", async () => {
+    const app = await openCase("row", { testInput: "pointer" });
 
     await app.press("id:cb-row");
     await app.waitUntil(() => callsOf(app, "onChange").length === 1);
@@ -153,7 +145,7 @@ describe("checkbox mobile", () => {
   // press-change(false), press, the toggle's onChange, click — with the
   // seam's own flag rising on the held edge.
   test("M-003 injected touch: one press toggles exactly once with the contract order", async () => {
-    const app = await openCase("row", { scope: "touch" });
+    const app = await openCase("row", { testInput: "touch" });
 
     await app.press("id:cb-row");
     await app.waitUntil(() => callsOf(app, "onChange").length === 1);
@@ -175,42 +167,16 @@ describe("checkbox mobile", () => {
     expect(lastEnv(app).seamPressed).toBe(false);
   }, 120_000);
 
-  // M-004 (A-002): under touch the Control's hover effect cells stay off
-  // even while the raw hover signal still records — `app.hover` raises
-  // `rawHover` and the gated `effectHover` must not follow; a press that
-  // toggles selection leaves it off too (the sticky-hover half). Under
-  // pointer the same hover drives the effect exactly as on desktop.
-  test("M-004 injected touch: the gated hover effect stays off; pointer keeps it", async () => {
-    const touch = await openCase("row", { scope: "touch" });
-
-    // The hover signal itself is contract surface and still records under
-    // touch — only the Control's paint read is gated (A-002).
-    await touch.hover("id:cb-row");
-    await touch.waitUntil(() => envs(touch).some((s) => s.rawHover));
-    expect(envs(touch).every((s) => !s.effectHover)).toBe(true);
-
-    await touch.press("id:cb-row");
-    await touch.waitUntil(() => callsOf(touch, "onChange").length === 1);
-    expect(envs(touch).every((s) => !s.effectHover)).toBe(true);
-
-    const pointer = await openCase("row");
-    await pointer.hover("id:cb-row");
-    await pointer.waitUntil(() =>
-      envs(pointer).some((s) => s.rawHover && s.effectHover),
-    );
-    // Whatever the raw signal reports, the gated effect mirrors it under
-    // pointer — no suppression on the desktop half.
-    for (const s of envs(pointer)) {
-      expect(s.effectHover).toBe(s.rawHover);
-    }
-  }, 120_000);
+  // M-004 (A-002) lives in `checkbox.mobile.headless.test.tsx` —
+  // `app.hover` needs a mouse, so the row moved there whole rather than
+  // split.
 
   // M-005 (A-001, A-003): under touch the seam computes a real `hitSlop`
   // for a row still under the 44 pt target on an axis — `min-h-11` already
   // covers the height, so the tiny box leaves the width — and a press from
   // the row's center still toggles once.
   test("M-005 injected touch: hitSlop is computed and the press still lands", async () => {
-    const app = await openCase("row", { scope: "touch", box: "tiny" });
+    const app = await openCase("row", { testInput: "touch", box: "tiny" });
     await app.waitUntil(() =>
       envs(app).some((s) => s.hitSlop !== null),
     );
@@ -237,7 +203,7 @@ describe("checkbox mobile", () => {
   // paint is canvas-drawn — sheet §6's registered gap — so the commit value
   // is the observable half of "选中态随行 prop").
   test("M-006 ControlField checkbox default piece: one row press, one commit, no double toggle", async () => {
-    const app = await openCase("cf-checkbox", { scope: "touch" });
+    const app = await openCase("cf-checkbox", { testInput: "touch" });
 
     expect(app.shows("id:cf-checkbox-control")).toBe(true);
     expect(app.shows("id:cf-checkbox-indicator")).toBe(true);
@@ -251,7 +217,7 @@ describe("checkbox mobile", () => {
     // The same row driven selected: the commit reports the flip to false —
     // proof the row's `isSelected` prop reaches the single commit point.
     const selected = await openCase("cf-checkbox", {
-      scope: "touch",
+      testInput: "touch",
       selected: "1",
     });
     expect(selected.shows("id:cf-checkbox-control")).toBe(true);
@@ -273,50 +239,48 @@ describe("checkbox mobile", () => {
   // unchanged. Kept to one open per listed case: a dozen sequential web
   // hosts in one test exhausts the target.
   test("M-007 baseline: default environment keeps the desktop contract", async () => {
-    const log = await openCase("log");
+    const log = await openCase("log", { testInput: "pointer" });
     expect(log.shows("text:Unchecked")).toBe(true);
     await log.press("role:checkbox[Accept terms]");
     expect(log.shows("text:Checked")).toBe(true);
     expect(callsOf(log, "onChange")).toEqual([[true]]);
 
-    const defaultSelected = await openCase("default-selected");
+    const defaultSelected = await openCase("default-selected", { testInput: "pointer" });
     expect(defaultSelected.shows("text:Checked")).toBe(true);
 
-    const indeterminate = await openCase("indeterminate-toggle");
+    const indeterminate = await openCase("indeterminate-toggle", { testInput: "pointer" });
     expect(indeterminate.shows("text:Mixed")).toBe(true);
     await indeterminate.press("id:clear-indeterminate");
     expect(indeterminate.shows("text:NoMixed")).toBe(true);
 
-    const disabled = await openCase("disabled");
+    const disabled = await openCase("disabled", { testInput: "pointer" });
     expect(disabled.enabled("role:checkbox[Accept terms]")).toBe(false);
     await expect(disabled.press("role:checkbox[Accept terms]")).rejects.toMatchObject({
       code: "ERR_NSH_TEST_DISABLED",
     });
     expect(callsOf(disabled, "onChange")).toHaveLength(0);
 
-    const readonly = await openCase("readonly");
+    const readonly = await openCase("readonly", { testInput: "pointer" });
     await readonly.press("role:checkbox[Accept terms]");
     expect(readonly.shows("text:Checked")).toBe(true);
     expect(callsOf(readonly, "onChange")).toHaveLength(0);
 
-    const invalid = await openCase("invalid");
+    const invalid = await openCase("invalid", { testInput: "pointer" });
     expect(invalid.shows("text:ErrorMessage")).toBe(true);
 
-    const aria = await openCase("validation-aria");
+    const aria = await openCase("validation-aria", { testInput: "pointer" });
     expect(aria.shows("text:Subscribe to continue")).toBe(true);
 
-    const native = await openCase("validation-native");
+    const native = await openCase("validation-native", { testInput: "pointer" });
     expect(native.shows("text:Subscribe to continue")).toBe(false);
     await native.press("role:checkbox[Accept terms]");
     expect(native.shows("text:Subscribe to continue")).toBe(false);
     await native.press("role:checkbox[Accept terms]");
     expect(native.shows("text:Subscribe to continue")).toBe(true);
 
-    // The hover path is untouched on the desktop half: a hover on the mobile
-    // row case still raises the raw signal AND the gated effect read.
-    const row = await openCase("row");
-    await row.hover("id:cb-row");
-    await row.waitUntil(() => envs(row).some((s) => s.rawHover && s.effectHover));
+    // The hover tail (the desktop half still raises rawHover and the gated
+    // effect) lives in `checkbox.mobile.headless.test.tsx` — `app.hover`
+    // needs a mouse.
   }, 120_000);
 
   // M-008 (基线): the group path on both sides — one item press fires the
@@ -325,7 +289,7 @@ describe("checkbox mobile", () => {
   // item's own next value. (`slot="selection"` table checkboxes regress
   // through the existing table assertion files — sheet §4's note.)
   test("M-008 baseline: group items commit once per press in both environments", async () => {
-    for (const params of [{}, { scope: "touch" }] as Params[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const app = await openCase("group-log", params);
       await app.press("role:checkbox[Coding]");
       await app.waitUntil(() => callsOf(app, "groupChange").length === 1);
@@ -362,7 +326,7 @@ describe("checkbox mobile", () => {
   // — `env`, `events`, `layout`, `onChange` — records on both scopes, so a
   // silent fixture regression cannot pass the other rows vacuously.
   test("M-010 fixture entry: every probe records through open + host.params on both scopes", async () => {
-    for (const params of [{}, { scope: "touch" }] as Params[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const app = await openCase("row", params);
 
       expect(app.shows("id:cb-row")).toBe(true);
@@ -375,7 +339,7 @@ describe("checkbox mobile", () => {
       expect(kinds(app)).toContain("click");
       expect(callsOf(app, "layout").length).toBeGreaterThan(0);
       expect(envs(app).length).toBeGreaterThan(0);
-      expect(lastEnv(app).input).toBe(params.scope === "touch" ? "touch" : "pointer");
+      expect(lastEnv(app).input).toBe(params.testInput === "touch" ? "touch" : "pointer");
     }
   }, 120_000);
 });

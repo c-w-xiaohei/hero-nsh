@@ -1,14 +1,16 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { calls, callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the combo-box adapt unit, one test per row of
  * adapt-sheets/combo-box.md §4: M-001, M-002, M-003, M-004, M-007, M-008,
- * M-009, M-010, M-011, M-012, M-014 and M-015 here (headless + web);
- * M-005, M-006 and M-013 live in `combo-box.mobile.headless.test.tsx`
- * because they open `platform: "ios"` or drive `setViewport`, which
- * `--target web` rejects or cannot honor the same way.
+ * M-009, M-010, M-011, M-012, M-014 and M-015 here (ios + android). The
+ * M-011 hover-residue half and the M-014 Tab-focus handoff live in
+ * `combo-box.mobile.web.test.tsx` — `app.hover` and Tab focus traversal
+ * are desktop/web-only; M-005, M-006 and M-013 live in
+ * `combo-box.mobile.headless.test.tsx` because they open `platform: "ios"`
+ * or drive `setViewport`.
  *
  * The fixture is `harness/combo-box.fixtures.tsx`: every case sits inside
  * `Scoped` (`host.params.input`/`width`/`density` → `EnvironmentScope`,
@@ -20,10 +22,12 @@ import { calls, callsOf } from "../../helpers/calls";
  * `ctx-channels` seam reads, `focusedKey` and `fieldCtx`. `case: "b-exit"`
  * drives ownsState + `isExiting`/`shouldSkipAnimation` through `host.send`.
  *
- * The default environment on both targets is pointer at 1024×768 — the
- * desktop-parity half of every row that does not inject. `hitSlop` itself
- * has no `nsh/test` readout (sheet §6 host gap): the seam's computed value
- * is asserted through the `ctx`/`ctx-channels` probes and the trigger's
+ * The default environment is pointer at regular width — the desktop-parity
+ * half of every row that does not inject, injected through `host.params`
+ * because `open()` platform/width/height options are rejected on ios/android
+ * (the old `platform:"windows"` pin's role). `hitSlop` itself has no
+ * `nsh/test` readout (sheet §6 host gap): the seam's computed value is
+ * asserted through the `ctx`/`ctx-channels` probes and the trigger's
  * `onLayout` bounds; real hit expansion is real-device acceptance.
  */
 
@@ -34,15 +38,17 @@ const TOUCH_COMPACT_MODAL = { input: "touch", width: "compact", modal: "1" } as 
 function openCombo(
   caseName: string,
   params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
 ): Promise<App> {
   return open("../../../combo-box.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
-    ...options,
-    host: { params: { case: caseName, ...params } },
+    host: {
+      params: {
+        case: caseName,
+        input: "pointer",
+        width: "regular",
+        ...params,
+      },
+    },
   });
 }
 
@@ -478,28 +484,8 @@ describe("combo-box mobile", () => {
     // Hover residue: on web a press leaves the sticky hover painting; the
     // `input` axis keeps `hover:text-field-foreground` out of the touch
     // cell, so the trigger text keeps the placeholder colour throughout.
-    const webPointer = await openCombo("b-mobile", {}, { platform: "web" });
-    const webTouch = await openCombo("b-mobile", { input: "touch" }, { platform: "web" });
-    const selector = "id:combo-box-trigger >> text:seam-idle";
-
-    const pointerIdle = webPointer.spanStyle(selector).color;
-    await webPointer.hover("id:combo-box-trigger");
-    await webPointer.clock!.runFor(50);
-    const pointerHovered = webPointer.spanStyle(selector).color;
-    expect(pointerHovered).not.toBe(pointerIdle);
-    await webPointer.press("id:combo-box-trigger");
-    await webPointer.clock!.runFor(80);
-    expect(webPointer.spanStyle(selector).color).toBe(pointerHovered);
-
-    const touchIdle = webTouch.spanStyle(selector).color;
-    await webTouch.hover("id:combo-box-trigger");
-    await webTouch.clock!.runFor(50);
-    const touchHovered = webTouch.spanStyle(selector).color;
-    await webTouch.press("id:combo-box-trigger");
-    await webTouch.clock!.runFor(80);
-    expect(webTouch.spanStyle(selector).color).toBe(touchIdle);
-    expect(webTouch.spanStyle(selector).color).toBe(touchHovered);
-    expect(touchIdle).toBe(pointerIdle);
+    // `platform:"web"`/`app.hover`/`spanStyle` are web-only — that half lives
+    // in combo-box.mobile.web.test.tsx.
   });
 
   // adapt-sheets/combo-box.md M-012 (A-007): the F(消费) contract — rows
@@ -557,8 +543,9 @@ describe("combo-box mobile", () => {
   // sample — the pre-existing semantics the existing suites pin, re-asserted
   // here so the mobile file proves the adaptation changed nothing on the
   // pointer side. `accessibilityState.expanded` has no `nsh/test` readout
-  // (sheet §6) and stays with the existing tests; the blur-Tab guard runs
-  // through `keyboard.press("tab")`, which moves focus on both targets.
+  // (sheet §6) and stays with the existing tests; the blur-Tab guard needs
+  // `keyboard.press("tab")` to move focus, which is a focus-capable-host
+  // channel — it lives in combo-box.mobile.web.test.tsx.
   //
   // The row's sample is split over three tests: every `open` keeps its app
   // alive until the test ends, and the web target dies at roughly ten
@@ -654,20 +641,8 @@ describe("combo-box mobile", () => {
     const multiEmpty = await openCombo("multiple-log", {});
     expect(multiEmpty.shows("text:No animals selected")).toBe(true);
 
-    // Blur commit: Tab moves focus to the sibling input, which commits the
-    // highlighted key and hands the list off — the row's own guard.
-    const handoff = await openCombo("tab-handoff", {});
-    await handoff.press("id:first-input");
-    await handoff.waitFor("role:listbox");
-    await handoff.clock!.runFor(60);
-    await handoff.keyboard.press("arrowdown");
-    await handoff.clock!.runFor(50);
-    await handoff.keyboard.press("tab");
-    await handoff.clock!.runFor(150);
-    expect(callsOf(handoff, "firstInputBlur")).toHaveLength(1);
-    expect(callsOf(handoff, "secondInputFocus")).toHaveLength(1);
-    expect(handoff.value("id:first-input")).toBe("Cat");
-    expect(handoff.count("role:listbox")).toBe(1);
+    // Blur commit via Tab lives in combo-box.mobile.web.test.tsx — Tab
+    // focus traversal is a focus-capable-host channel ios/android reject.
 
     // Outside press is the commit-close channel: the text resets to the
     // selection-derived value and `onOpenChange(false)` lands once.

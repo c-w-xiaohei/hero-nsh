@@ -61,7 +61,8 @@ import { probe } from "@scenario/probe";
  * `host.params.scope` picks the environment: "" keeps the host default
  * (pointer on headless/web — the desktop-parity half), "touch" wraps the
  * case in `EnvironmentScope input="touch"` (same convention as
- * `link.fixtures.tsx` / `close-button.fixtures.tsx`).
+ * `link.fixtures.tsx` / `close-button.fixtures.tsx`). The test-only params
+ * `testInput` ("pointer"/"touch") inject an outer EnvironmentScope input.
  */
 
 type Scope = "" | "touch";
@@ -88,11 +89,23 @@ type InputValues = {
 // environment (close-button / date-input-group / number-field convention).
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "") as Scope;
+  // Test-harness environment param (only the mobile tests set it —
+  // absent keeps the host-derived default): `testInput` injects an outer
+  // EnvironmentScope input so the pointer baseline is host-independent
+  // (inner `scope` overrides still win).
+  const testInput = String(host.params.testInput ?? "");
 
-  return scope === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  const body =
+    scope === "touch" ? (
+      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+    ) : (
+      <>{props.children}</>
+    );
+
+  return testInput === "pointer" || testInput === "touch" ? (
+    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
   ) : (
-    <>{props.children}</>
+    body
   );
 }
 

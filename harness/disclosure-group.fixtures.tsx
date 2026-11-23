@@ -178,8 +178,8 @@ function Fixture() {
 function ScopedFixture() {
   const scope = String(host.params.scope ?? "");
 
-  return scope === "touch" ? (
-    <EnvironmentScope input="touch">
+  return scope === "touch" || scope === "pointer" ? (
+    <EnvironmentScope input={scope}>
       <Fixture />
     </EnvironmentScope>
   ) : (

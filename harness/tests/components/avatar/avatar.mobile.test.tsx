@@ -7,14 +7,17 @@ import { callsOf } from "../../helpers/calls";
  * adapt-sheets/avatar.md §4 (M-001…M-007). The fixture is
  * `harness/avatar.fixtures.tsx`: entries geometry-overlap / geometry-ring /
  * geometry-grid / geometry-sizes / geometry-count, with `host.params.scope`
- * ("touch" → `EnvironmentScope input="touch"`) and `host.params.density`
+ * ("pointer"/"touch" → `EnvironmentScope input`) and `host.params.density`
  * ("compact" → `density="compact"`) injecting the environment (A-007).
  *
- * Absent params leave the host-derived environment — pointer + default
- * density under `platform:"windows"` on both headless and web — which is the
- * desktop-parity baseline the density/input rows compare against. The
- * observation channel is what `nsh/test` sees: `onLayout` bounds records for
- * the geometry rows and `shows`/`texts` for the count and fallback rows.
+ * The host-derived environment differs per target — touch on ios/android,
+ * pointer on desktop and web — so the desktop-parity baseline every
+ * density/input row compares against injects `scope:"pointer"` explicitly.
+ * The observation channel is what `nsh/test` sees: `onLayout` bounds records
+ * for the geometry rows and `shows`/`texts` for the count and fallback rows.
+ *
+ * No `platform`/`width`/`height` open options: the native targets fill the
+ * device screen and reject them.
  */
 
 type LayoutCall = {
@@ -26,15 +29,12 @@ type LayoutCall = {
 };
 
 type EnvParams = {
-  scope?: "touch";
+  scope?: "touch" | "pointer";
   density?: "compact";
 };
 
 function openAvatar(fixture: string, env: EnvParams = {}): Promise<App> {
   return open("../../../avatar.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: {
       params: {
         fixture,
@@ -105,7 +105,10 @@ describe("avatar mobile", () => {
   // (40 + 8 = 48). The clip group in the same fixture keeps its 8pt overlap
   // geometry: clip-fifth stays on clip-first's row.
   test("M-001 density compact shrinks the grid gap and wrap offset; clip geometry unchanged", async () => {
-    const grid = await openAvatar("geometry-grid", { density: "compact" });
+    const grid = await openAvatar("geometry-grid", {
+      scope: "pointer",
+      density: "compact",
+    });
     await settleLayout(grid, GRID_NAMES);
 
     const first = lastLayout(grid, "grid-first");
@@ -118,7 +121,10 @@ describe("avatar mobile", () => {
     expect([fifth.x - first.x, fifth.y - first.y]).toEqual([0, 48]);
     expect(clipFifth.y - clipFirst.y).toBe(0);
 
-    const overlap = await openAvatar("geometry-overlap", { density: "compact" });
+    const overlap = await openAvatar("geometry-overlap", {
+      scope: "pointer",
+      density: "compact",
+    });
     await settleLayout(overlap, OVERLAP_NAMES);
 
     const oFirst = lastLayout(overlap, "first");
@@ -133,7 +139,10 @@ describe("avatar mobile", () => {
   // ring groups measure the same 32pt step under default and compact.
   test("M-002 overlap geometry is 32 under default and compact density", async () => {
     for (const fixture of ["geometry-overlap", "geometry-ring"] as const) {
-      for (const env of [{}, { density: "compact" as const }] as const) {
+      for (const env of [
+        { scope: "pointer" as const },
+        { scope: "pointer" as const, density: "compact" as const },
+      ]) {
         const app = await openAvatar(fixture, env);
         await settleLayout(app, OVERLAP_NAMES);
 
@@ -158,7 +167,7 @@ describe("avatar mobile", () => {
 
     for (const { fixture, names, texts: expectedTexts } of cases) {
       const touch = await openAvatar(fixture, { scope: "touch" });
-      const pointer = await openAvatar(fixture);
+      const pointer = await openAvatar(fixture, { scope: "pointer" });
 
       await settleLayout(touch, names);
       await settleLayout(pointer, names);
@@ -175,7 +184,10 @@ describe("avatar mobile", () => {
   // sm/md/lg resolve to 32/40/48 through the group context — and the density
   // preset must not rewrite it.
   test("M-004 density compact leaves the three size tiers at 32/40/48", async () => {
-    const app = await openAvatar("geometry-sizes", { density: "compact" });
+    const app = await openAvatar("geometry-sizes", {
+      scope: "pointer",
+      density: "compact",
+    });
     await settleLayout(app, SIZE_NAMES);
 
     expect(lastLayout(app, "sm").width).toBe(32);
@@ -189,14 +201,14 @@ describe("avatar mobile", () => {
   // group's `max` slicing with its automatic `+2` beside the explicit `9+`
   // count that suppresses the second group's auto count.
   test("M-005 baseline: sizes, grid wrap and max/+N counts under the default environment", async () => {
-    const sizes = await openAvatar("geometry-sizes");
+    const sizes = await openAvatar("geometry-sizes", { scope: "pointer" });
     await settleLayout(sizes, SIZE_NAMES);
 
     expect(lastLayout(sizes, "sm").width).toBe(32);
     expect(lastLayout(sizes, "md").width).toBe(40);
     expect(lastLayout(sizes, "lg").width).toBe(48);
 
-    const grid = await openAvatar("geometry-grid");
+    const grid = await openAvatar("geometry-grid", { scope: "pointer" });
     await settleLayout(grid, GRID_NAMES);
 
     const first = lastLayout(grid, "grid-first");
@@ -206,7 +218,7 @@ describe("avatar mobile", () => {
     expect([fifth.x - first.x, fifth.y - first.y]).toEqual([0, 52]);
     expect(lastLayout(grid, "clip-fifth").y - lastLayout(grid, "clip-first").y).toBe(0);
 
-    const count = await openAvatar("geometry-count");
+    const count = await openAvatar("geometry-count", { scope: "pointer" });
     await settleLayout(count, COUNT_NAMES);
 
     // max={2} of A–D shows A and B and appends the automatic "+2"; C and D are
@@ -230,7 +242,7 @@ describe("avatar mobile", () => {
   // texts are the same set the default environment renders.
   test("M-006 injected touch keeps the +N counts and fallback texts identical", async () => {
     const touch = await openAvatar("geometry-count", { scope: "touch" });
-    const pointer = await openAvatar("geometry-count");
+    const pointer = await openAvatar("geometry-count", { scope: "pointer" });
 
     await settleLayout(touch, COUNT_NAMES);
     await settleLayout(pointer, COUNT_NAMES);
@@ -244,11 +256,16 @@ describe("avatar mobile", () => {
     expect(touch.shows("text:E")).toBe(true);
   });
 
-  // adapt-sheets/avatar.md M-007 (A-007): the fixture's three injection
-  // levels — no params (host-derived), scope="touch", density="compact" —
-  // all mount and leave every layout/text probe readable.
-  test("M-007 all three injection levels mount with readable probes", async () => {
-    const levels: EnvParams[] = [{}, { scope: "touch" }, { density: "compact" }];
+  // adapt-sheets/avatar.md M-007 (A-007): the fixture's injection levels —
+  // host-derived, scope="pointer", scope="touch", density="compact" — all
+  // mount and leave every layout/text probe readable.
+  test("M-007 injection levels mount with readable probes", async () => {
+    const levels: EnvParams[] = [
+      {},
+      { scope: "pointer" },
+      { scope: "touch" },
+      { scope: "pointer", density: "compact" },
+    ];
 
     for (const env of levels) {
       const app = await openAvatar("geometry-grid", env);

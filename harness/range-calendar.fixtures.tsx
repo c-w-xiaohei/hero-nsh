@@ -42,8 +42,10 @@ import { createInput } from "../src/primitives/environment";
  *
  * host.params.scope picks the environment: "" = the host default (pointer on
  * headless/web — the desktop-parity half), "touch" wraps the tree in
- * EnvironmentScope(input="touch"). host.params.weekday switches the grid's
- * weekdayStyle on the default frame (M-013).
+ * EnvironmentScope(input="touch"). The test-only params `testInput`
+ * ("pointer"/"touch") inject an outer EnvironmentScope input and
+ * `testWidth` (points) bounds the block width. host.params.weekday switches
+ * the grid's weekdayStyle on the default frame (M-013).
  *
  * Probe surface, all through app.storage():
  *   layout            part bounds — "root", "grid", "grid-header",
@@ -360,11 +362,30 @@ function Frame(props: FrameProps) {
  * -----------------------------------------------------------------------------------------------*/
 
 function Scoped(props: { children?: JSX.Element }) {
-  return String(host.params.scope ?? "") === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
-  ) : (
-    <>{props.children}</>
-  );
+  // Test-harness environment params (only the mobile tests set them —
+  // absent keeps the host-derived default): `testInput` injects an outer
+  // EnvironmentScope input so the pointer baseline is host-independent
+  // (inner `scope` overrides still win); `testWidth` (points) wraps the
+  // mounted tree in a fixed-width View, standing in for the window pin
+  // native hosts reject.
+  const testInput = String(host.params.testInput ?? "");
+  const testWidth = Number(host.params.testWidth ?? 0);
+
+  const body =
+    String(host.params.scope ?? "") === "touch" ? (
+      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+    ) : (
+      <>{props.children}</>
+    );
+
+  const scoped =
+    testInput === "pointer" || testInput === "touch" ? (
+      <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
+    ) : (
+      body
+    );
+
+  return testWidth > 0 ? <View style={{ width: testWidth }}>{scoped}</View> : scoped;
 }
 
 /** Refuses 2026-08-12 and records the anchorDate the state hands it (M-010). */

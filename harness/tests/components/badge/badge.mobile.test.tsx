@@ -6,11 +6,12 @@ import { calls, callsOf } from "../../helpers/calls";
  * Mobile assertions for the badge adapt unit, one test per row of
  * adapt-sheets/badge.md §4 (M-001…M-005). The fixture is
  * `harness/badge.fixtures.tsx` opened with `host.params.case = "mobile"`:
- * `input` / `density` params feed an `EnvironmentScope`, and absent params
- * leave the host-derived environment — pointer + default density on the
- * `platform:"windows"` host both targets share (the breadcrumbs.mobile
- * convention) — which is the desktop-parity baseline every comparison runs
- * against.
+ * `input` / `density` params feed an `EnvironmentScope`. The axes are
+ * always explicit — `input:"pointer"` is the desktop-parity baseline
+ * every comparison runs against and `input:"touch"` the injected mobile
+ * half — because the host-derived default differs per target (touch on
+ * ios/android, pointer on desktop and web). No `platform`/`width` open
+ * options: native targets fill the device screen and reject them.
  *
  * Badge is action A, pure display: no input/density axis, no gesture, no
  * presentation container. The mobile rows therefore assert invariance —
@@ -43,9 +44,6 @@ type EnvParams = {
 
 function openBadge(env: EnvParams = {}): Promise<App> {
   return open("../../../badge.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: {
       params: {
         case: "mobile",
@@ -125,7 +123,7 @@ describe("badge mobile", () => {
   // pure function of the badge's size and is covered by the environment
   // invariance rows M-003/M-004.
   test("M-001 md badge hits the 28pt minimum box, label padding and corner placement hold", async () => {
-    const app = await openBadge();
+    const app = await openBadge({ input: "pointer" });
     await settleLayout(app);
 
     const md = lastBox(app, "root");
@@ -159,7 +157,7 @@ describe("badge mobile", () => {
   // the same on both targets: secondary keeps the base background and takes
   // the color's soft foreground (#1e63aeff for accent).
   test("M-002 sm/lg minimum boxes and the secondary accent paint resolve unchanged", async () => {
-    const app = await openBadge();
+    const app = await openBadge({ input: "pointer" });
     await settleLayout(app);
 
     const sm = lastBox(app, "root-sm");
@@ -178,7 +176,7 @@ describe("badge mobile", () => {
   // is identical to the pointer baseline.
   test("M-003 injected touch changes no bound and no text", async () => {
     const touch = await openBadge({ input: "touch" });
-    const pointer = await openBadge();
+    const pointer = await openBadge({ input: "pointer" });
 
     await settleLayout(touch);
     await settleLayout(pointer);
@@ -191,8 +189,8 @@ describe("badge mobile", () => {
   // through the token layer only; Badge's table has no density axis, so
   // `density="compact"` moves nothing either.
   test("M-004 injected compact density changes no bound and no text", async () => {
-    const compact = await openBadge({ density: "compact" });
-    const plain = await openBadge();
+    const compact = await openBadge({ input: "pointer", density: "compact" });
+    const plain = await openBadge({ input: "pointer" });
 
     await settleLayout(compact);
     await settleLayout(plain);
@@ -205,7 +203,7 @@ describe("badge mobile", () => {
   // may only record the caller's own `onPress`, once, and adds no callback
   // of its own under either environment; the layout does not move.
   test("M-005 press fires only the caller's onPress, once, in both environments", async () => {
-    for (const env of [{}, { input: "touch" } as const]) {
+    for (const env of [{ input: "pointer" }, { input: "touch" }] as EnvParams[]) {
       const app = await openBadge(env);
       await settleLayout(app);
 

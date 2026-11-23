@@ -1,24 +1,26 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { calls, callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the color-field adapt unit
- * (adapt-sheets/color-field.md §4, M-001…M-007, M-009, M-010). One file for
- * headless+web: every assertion reads what `nsh/test` observes — `shows`,
- * `value`, `enabled`, `onLayout` bounds and the Storage probe calls — and
- * `host.params.scope` picks the environment, so the dual-environment rows
- * run identically on both targets. The file pins `platform: "windows"` so
- * the default half is `platform.desktop` (pointer) on headless and web
- * alike; the injected touch half goes through the fixture's
- * `EnvironmentScope`.
+ * (adapt-sheets/color-field.md §4, M-001, M-003…M-007, M-009, M-010) on
+ * every target, native ios/android included: every assertion reads what
+ * `nsh/test` observes — `shows`, `value`, `enabled`, `onLayout` bounds and
+ * the Storage probe calls — and `host.params.testInput` picks the
+ * environment explicitly ("pointer" is the host-independent desktop-parity
+ * baseline, "touch" the injected side), so the dual-environment rows run
+ * identically everywhere. M-002 uses `app.hover`, which needs a mouse —
+ * it lives in `color-field.mobile.headless.test.tsx`. Native hosts fill
+ * the device screen and reject the `platform`/`width`/`height` open
+ * options, so this file carries none.
  *
  * The probes live in `harness/color-field.fixtures.tsx`:
  *   `layout`   the `ColorField.Group`'s `onLayout` bounds — the inherited
  *              `min-h-11` hit face vs the pointer 36 pt row (M-001).
  *   `hover`    the Group's `isHovered` render-prop record plus `onHover*` /
  *              `onMouse*` probes on Group and Input, and `onPress` probes
- *              on the affixes (M-002).
+ *              on the affixes (M-002, headless).
  *   `submit`   Root `onChange` (hex) plus Input `onSubmit` / `blur` /
  *              `focus` probes and an `outside` blur target; `sb` feeds the
  *              Input's explicit `submitBehavior` (M-003, M-004, M-007).
@@ -32,16 +34,8 @@ import { calls, callsOf } from "../../helpers/calls";
 
 type Params = Record<string, string>;
 
-function openCase(
-  name: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openCase(name: string, params: Params = {}): Promise<App> {
   return open("../../../color-field.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
     host: { params: { case: name, ...params } },
   });
 }
@@ -93,62 +87,18 @@ describe("color-field mobile", () => {
   // Group row past the 44 pt hit target; under the default pointer
   // environment the same row keeps its desktop 36 pt height (zero drift).
   test("M-001 touch scope lifts the group row to 44pt; pointer keeps 36pt", async () => {
-    const touch = await openCase("layout", { scope: "touch" });
+    const touch = await openCase("layout", { testInput: "touch" });
     await touch.waitUntil(() => callsOf(touch, "layout").length > 0);
     expect(lastGroupLayout(touch).height).toBeGreaterThanOrEqual(44);
 
-    const pointer = await openCase("layout");
+    const pointer = await openCase("layout", { testInput: "pointer" });
     await pointer.waitUntil(() => callsOf(pointer, "layout").length > 0);
     expect(lastGroupLayout(pointer).height).toBe(36);
   }, 120_000);
 
-  // adapt-sheets/color-field.md M-002 (A-004): under touch the group's
-  // hover face stays inert — pressing the input and hovering the group /
-  // input leave `isHovered` false and every `onHoverStart/End/Change`
-  // probe silent on both Group and Input (the JS signal behind the hover
-  // styles never rises, so no hover residue can paint — sticky hover
-  // included). The default environment keeps the desktop hover contract.
-  test("M-002 injected touch: press and hover never raise the field's hover face", async () => {
-    const touch = await openCase("hover", { scope: "touch" });
-
-    // The press is contact generation only: on headless it resolves to
-    // the Group (the fixture's `root-press` makes it the pressable
-    // ancestor), on web the click lands on the input itself — either way
-    // it must raise no hover face under touch.
-    await touch.press("id:color-input");
-    await touch.hover("id:group");
-    await touch.hover("id:color-input");
-
-    for (const name of [
-      "root-hover-start",
-      "root-hover-end",
-      "root-hover-change",
-      "input-hover-start",
-      "input-hover-end",
-      "input-hover-change",
-    ]) {
-      expect(callsOf(touch, name)).toHaveLength(0);
-    }
-    expect(rootClassRecords(touch).every((r) => !r.isHovered)).toBe(true);
-
-    const pointer = await openCase("hover");
-    await pointer.hover("id:group");
-    await pointer.waitUntil(() =>
-      rootClassRecords(pointer).some((r) => r.isHovered),
-    );
-    expect(callsOf(pointer, "root-hover-start")).toHaveLength(1);
-    expect(callsOf(pointer, "root-hover-change")).toEqual([[true]]);
-    expect(callsOf(pointer, "root-mouse-enter").length).toBeGreaterThanOrEqual(1);
-
-    // The input's own hover pair — `app.hover` delivers to the named view,
-    // so the input hears its own enter without leaving the group.
-    await pointer.hover("id:color-input");
-    await pointer.waitUntil(
-      () => callsOf(pointer, "input-hover-start").length > 0,
-      { timeout: 3_000 },
-    );
-    expect(callsOf(pointer, "input-hover-start").length).toBeGreaterThanOrEqual(1);
-  }, 120_000);
+  // adapt-sheets/color-field.md M-002 (A-004) lives in
+  // `color-field.mobile.headless.test.tsx` — `app.hover` needs a mouse, so
+  // the row moved there whole rather than split.
 
   // adapt-sheets/color-field.md M-003 (A-001, A-010): Enter runs the field
   // chain — `field.onSubmit` → `handle.commit()` — so `onChange` reports
@@ -157,7 +107,7 @@ describe("color-field mobile", () => {
   // `app.type` still lands in the same input (the focus-query gap's
   // registered degradation, sheet §6).
   test("M-003 Enter commits once through the field and keeps focus", async () => {
-    const app = await openCase("submit");
+    const app = await openCase("submit", { testInput: "pointer" });
 
     await app.clear("id:color-input");
     await app.type("id:color-input", "#22c55e");
@@ -188,7 +138,10 @@ describe("color-field mobile", () => {
   // `onSubmit`, and the host then blurs, so `blur` records once. The
   // field→local submit order is unchanged.
   test("M-004 explicit submitBehavior=blurAndSubmit wins: commit, submit, then blur", async () => {
-    const app = await openCase("submit", { sb: "blurAndSubmit" });
+    const app = await openCase("submit", {
+      testInput: "pointer",
+      sb: "blurAndSubmit",
+    });
 
     await app.clear("id:color-input");
     await app.type("id:color-input", "#ff0000");
@@ -211,7 +164,7 @@ describe("color-field mobile", () => {
   // Mounting is the channel assertion; what the soft keyboard labels with
   // them is a real-device acceptance item (sheet §6).
   test("M-005 every enterKeyHint / returnKeyType value mounts", async () => {
-    const app = await openCase("kbd");
+    const app = await openCase("kbd", { testInput: "pointer" });
 
     for (const hint of ["enter", "done", "go", "next", "previous", "search", "send"]) {
       expect(app.shows(`id:kh-${hint}`)).toBe(true);
@@ -232,7 +185,7 @@ describe("color-field mobile", () => {
   // (ERR_NSH_TEST_NOT_FOUND, the same form toolbar's bare-surface rows
   // use), and no probe records at all.
   test("M-006 affix and container presses find nothing in both environments", async () => {
-    for (const params of [{}, { scope: "touch" }] as Params[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const app = await openCase("prefix-suffix", params);
 
       await expect(app.press("text:#")).rejects.toMatchObject({
@@ -258,7 +211,7 @@ describe("color-field mobile", () => {
   test("M-007 spin keys step identically under touch and pointer", async () => {
     const expected = ["#0485f8", "#0485f7", "#000000", "#ffffff"];
 
-    for (const params of [{}, { scope: "touch" }] as Params[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const app = await openCase("submit", params);
 
       // An empty typing step takes the focus without touching the text.
@@ -281,11 +234,11 @@ describe("color-field mobile", () => {
   // and its recorders land in Storage, so a silent fixture regression
   // cannot pass the rows above vacuously.
   test("M-009 fixture entry: every case mounts and records (pointer scope)", async () => {
-    await assertFixtureSurface({});
+    await assertFixtureSurface({ testInput: "pointer" });
   }, 120_000);
 
   test("M-009 fixture entry: every case mounts and records (touch scope)", async () => {
-    await assertFixtureSurface({ scope: "touch" });
+    await assertFixtureSurface({ testInput: "touch" });
   }, 120_000);
 
   // adapt-sheets/color-field.md M-010 (基线): the default environment
@@ -295,7 +248,7 @@ describe("color-field mobile", () => {
   // (sequential opens exhaust the web target's browser pool, so the
   // whole row reads one app).
   test("M-010 baseline: default environment keeps the desktop contract", async () => {
-    const app = await openCase("baseline");
+    const app = await openCase("baseline", { testInput: "pointer" });
 
     // T-001 / T-008: the Label names the input, shows the required
     // asterisk, and the FieldError text mounts. The Description rides the

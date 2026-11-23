@@ -6,20 +6,24 @@ import { changeCount, lastChange, lastSegmentProps } from "../../testers/time-fi
 /*
  * Mobile assertions for the TimeField adapt unit (G+B(分段 target): the
  * soft-keyboard editing bridge and the completion behavior), one test per row
- * of adapt-sheets/time-field.md §4 that the shared targets (headless + web)
- * can observe: M-001 … M-006 and M-008 … M-010. The ios host-derivation half
- * (M-007) lives in `time-field.mobile.headless.test.tsx` because `open` accepts
+ * of adapt-sheets/time-field.md §4 that the shared targets — headless, web
+ * and the native ios/android CI lanes — can observe: M-001 … M-006 and
+ * M-008 … M-010. The ios host-derivation half (M-007) lives in
+ * `time-field.mobile.headless.test.tsx` because `open` accepts
  * `platform: "ios"` only on the headless target.
  *
  * The fixture is `harness/time-field.fixtures.tsx`, opened by `host.params`:
  * `case` (default / focus / readonly / disabled / required-invalid /
- * description / validation / granularity / keyboard-type / …) and `scope`
- * ("" = the host's pointer environment — the desktop-parity half — or "touch"
- * through `EnvironmentScope`).
+ * description / validation / granularity / keyboard-type / …) and `testInput`
+ * — an explicit environment pick the fixture reads only when provided
+ * ("pointer" is the host-independent desktop-parity baseline, "touch" wraps
+ * the case in `EnvironmentScope input="touch"`).
  *
- * The `platform: "windows"` pin is load-bearing: without it `pnpm test` lands
- * the app on the phone-sized engine where `input` defaults to touch and every
- * pointer-default assertion inverts under the suite (_common.md).
+ * Native hosts fill the device screen and reject the `platform` / `width` /
+ * `height` open options (`ERR_NSH_TEST_UNSUPPORTED`), so this file carries
+ * none: the old desktop pin's job — a pointer baseline the assertions can
+ * trust — is now `testInput:"pointer"` on every pointer open, and it binds
+ * identically on every target, native included.
  *
  * Every assertion reads what `nsh/test` can observe — `shows`, `count`,
  * `enabled`, `texts`, `onLayout` bounds probes and the `@scenario/probe` calls
@@ -31,9 +35,6 @@ type Params = Record<string, string>;
 
 function openCase(name: string, params: Params = {}): Promise<App> {
   return open("../../../time-field.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     locale: "en-US",
     host: { params: { case: name, ...params } },
   });
@@ -136,7 +137,7 @@ describe("time-field mobile", () => {
   // fixture's `onLayout` probes (`segment-bounds` wraps the segment because
   // Segment takes no `onLayout`, sheet §6 records the probe).
   test("M-001 touch raises group/segments to 44pt, pointer keeps the desktop metrics", async () => {
-    const touch = await openCase("default", { scope: "touch" });
+    const touch = await openCase("default", { testInput: "touch" });
     await touch.waitUntil(
       () => callsOf(touch, "group-bounds").length > 0 && callsOf(touch, "segment-bounds").length > 0,
     );
@@ -146,7 +147,7 @@ describe("time-field mobile", () => {
       expect(segmentBounds(touch, type).size.height).toBeGreaterThanOrEqual(44);
     }
 
-    const pointer = await openCase("default");
+    const pointer = await openCase("default", { testInput: "pointer" });
     await pointer.waitUntil(
       () => callsOf(pointer, "group-bounds").length > 0 && callsOf(pointer, "segment-bounds").length > 0,
     );
@@ -165,7 +166,7 @@ describe("time-field mobile", () => {
   // the blur runs the group's commit boundary, which may add at most one
   // submission and never a duplicate of the value already committed.
   test("M-002 injected touch: channel typing edits, Backspace deletes, Enter commits once", async () => {
-    const app = await openCase("focus", { scope: "touch" });
+    const app = await openCase("focus", { testInput: "touch" });
 
     expect(app.count("id:dig-seg-hour")).toBe(1);
     expect(app.count("id:dig-seg-minute")).toBe(1);
@@ -214,7 +215,7 @@ describe("time-field mobile", () => {
   // input mounts — the segment view itself takes the focus and the keymap
   // digits still drive `field.type`.
   test("M-003 default environment: no channel mounts, view focus and keymap unchanged", async () => {
-    const app = await openCase("focus");
+    const app = await openCase("focus", { testInput: "pointer" });
 
     expect(app.count("id:dig-seg-hour")).toBe(0);
     expect(app.count("id:dig-seg-minute")).toBe(0);
@@ -240,7 +241,7 @@ describe("time-field mobile", () => {
   // typing then lands without another press. A press on one segment makes that
   // segment's channel the input target.
   test("M-004 injected touch: padding press focuses the last channel; segment press focuses its channel", async () => {
-    const app = await openCase("focus", { scope: "touch" });
+    const app = await openCase("focus", { testInput: "touch" });
 
     expect(app.count("id:dig-seg-dayPeriod")).toBe(1);
 
@@ -275,7 +276,7 @@ describe("time-field mobile", () => {
   // yet never `field.type`, and `onChange` stays silent. `isDisabled` mounts no
   // channel at all and refuses the press.
   test("M-005 injected touch: readonly channel takes no edit; disabled mounts no channel", async () => {
-    const readonly = await openCase("readonly", { scope: "touch" });
+    const readonly = await openCase("readonly", { testInput: "touch" });
 
     expect(readonly.count("id:dig-seg-hour")).toBe(1);
     expect(readonly.count("id:dig-seg-minute")).toBe(1);
@@ -294,7 +295,7 @@ describe("time-field mobile", () => {
     expect(lastSegment(readonly, "minute").text).toBe("30");
     expect(changeCount(readonly)).toBe(0);
 
-    const disabled = await openCase("disabled", { scope: "touch" });
+    const disabled = await openCase("disabled", { testInput: "touch" });
 
     expect(disabled.count("id:dig-seg-hour")).toBe(0);
     expect(disabled.count("id:dig-seg-minute")).toBe(0);
@@ -319,7 +320,7 @@ describe("time-field mobile", () => {
   // is unobservable (sheet §6), so the assertion stops at the context boundary
   // plus the documented per-segment resolution the fixture records.
   test("M-006 keyboardType reaches the segments: auto resolves per segment, explicit is uniform", async () => {
-    const auto = await openCase("keyboard-type", { scope: "touch" });
+    const auto = await openCase("keyboard-type", { testInput: "touch" });
     await auto.waitUntil(() => keyboardRecords(auto).length >= 3);
 
     expect(lastKeyboardRecord(auto, "hour")).toMatchObject({
@@ -336,7 +337,7 @@ describe("time-field mobile", () => {
     });
     expect(auto.count("id:dig-seg-hour")).toBe(1);
 
-    const explicit = await openCase("keyboard-type", { kt: "decimal-pad", scope: "touch" });
+    const explicit = await openCase("keyboard-type", { kt: "decimal-pad", testInput: "touch" });
     await explicit.waitUntil(() => keyboardRecords(explicit).length >= 3);
 
     for (const type of ["hour", "minute", "dayPeriod"]) {
@@ -353,7 +354,7 @@ describe("time-field mobile", () => {
   // registrations with the invalid-hidden FieldError, fullWidth, and the
   // granularity="second" / hourCycle={24} segment set.
   test("M-008 default environment baseline: keymap, focusLast, ring, registrations, segment sets", async () => {
-    const app = await openCase("focus");
+    const app = await openCase("focus", { testInput: "pointer" });
 
     expect(app.count("id:dig-seg-hour")).toBe(0);
 
@@ -384,24 +385,24 @@ describe("time-field mobile", () => {
     expect(lastSegmentProps(app, "dayPeriod").isFocusVisible).toBe(true);
 
     // Label / FieldError registration and the invalid-hidden FieldError.
-    const required = await openCase("required-invalid");
+    const required = await openCase("required-invalid", { testInput: "pointer" });
     expect(required.texts()).toContain("Time*");
     expect(required.shows("text:Please enter a valid time")).toBe(true);
 
-    const description = await openCase("description");
+    const description = await openCase("description", { testInput: "pointer" });
     expect(description.shows("text:Enter a time")).toBe(true);
 
-    const validation = await openCase("validation");
+    const validation = await openCase("validation", { testInput: "pointer" });
     expect(validation.shows("text:Time must be between 9:00 AM and 5:00 PM")).toBe(false);
 
     // fullWidth mounts the same part tree inside its sized parent.
-    const fullWidth = await openCase("full-width");
+    const fullWidth = await openCase("full-width", { testInput: "pointer" });
     expect(fullWidth.shows("id:tf-frame")).toBe(true);
     expect(fullWidth.shows("id:tf-root")).toBe(true);
     expect(fullWidth.count("id:tf-group >> role:spinbutton")).toBe(3);
 
     // granularity="second" + hourCycle={24}: hour/minute/second, no dayPeriod.
-    const granularity = await openCase("granularity");
+    const granularity = await openCase("granularity", { testInput: "pointer" });
     await granularity.waitUntil(() => callsOf(granularity, "segments").length > 0);
     const types = new Set(segmentRecords(granularity).map((record) => record.type));
     expect(types.has("hour")).toBe(true);
@@ -418,17 +419,17 @@ describe("time-field mobile", () => {
   // and the FieldError / Description registration reads identically under the
   // default pointer environment and the injected touch one.
   test("M-009 disabled/readonly/invalid/required/validation contract is identical on both environments", async () => {
-    for (const scope of [{}, { scope: "touch" }] as Params[]) {
-      const disabled = await openCase("disabled", scope);
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
+      const disabled = await openCase("disabled", params);
       expect(disabled.enabled("id:tf-hour")).toBe(false);
       expect(disabled.shows("id:tf-hour >> text:9")).toBe(true);
       expect(changeCount(disabled)).toBe(0);
-      if (scope.scope === "touch") {
+      if (params.testInput === "touch") {
         expect(disabled.count("id:dig-seg-hour")).toBe(0);
       }
 
-      const readonly = await openCase("readonly", scope);
-      if (scope.scope === "touch") {
+      const readonly = await openCase("readonly", params);
+      if (params.testInput === "touch") {
         expect(readonly.enabled("id:dig-seg-hour")).toBe(false);
         await readonly.press("id:dig-seg-hour");
         await waitFocused(readonly, "hour");
@@ -442,14 +443,14 @@ describe("time-field mobile", () => {
       expect(lastSegment(readonly, "hour").text).toBe("9");
       expect(changeCount(readonly)).toBe(0);
 
-      const required = await openCase("required-invalid", scope);
+      const required = await openCase("required-invalid", params);
       expect(required.texts()).toContain("Time*");
       expect(required.shows("text:Please enter a valid time")).toBe(true);
 
-      const description = await openCase("description", scope);
+      const description = await openCase("description", params);
       expect(description.shows("text:Enter a time")).toBe(true);
 
-      const validation = await openCase("validation", scope);
+      const validation = await openCase("validation", params);
       expect(validation.shows("text:Time must be between 9:00 AM and 5:00 PM")).toBe(false);
     }
   }, 120_000);
@@ -459,7 +460,7 @@ describe("time-field mobile", () => {
   // `segment-props`, `segments`, `group-bounds`, `segment-bounds`,
   // `keyboard-type`) records.
   test("M-010 fixture Scoped mounts both environments with readable probes", async () => {
-    for (const params of [{}, { scope: "touch" }] as Params[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const app = await openCase("default", params);
       await app.waitUntil(
         () =>
@@ -474,7 +475,7 @@ describe("time-field mobile", () => {
       expect(changeCount(app)).toBe(0);
     }
 
-    const keyboard = await openCase("keyboard-type", { scope: "touch" });
+    const keyboard = await openCase("keyboard-type", { testInput: "touch" });
     await keyboard.waitUntil(() => callsOf(keyboard, "keyboard-type").length >= 3);
     expect(lastKeyboardRecord(keyboard, "hour").keyboardType).toBe("auto");
   }, 120_000);

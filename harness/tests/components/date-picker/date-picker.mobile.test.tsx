@@ -21,9 +21,12 @@ import { changeCount, changeRecords, lastLayout } from "../../testers/date-picke
  * `skipanim` parameterize the Popover, the Input's `keyboardType` and the
  * Root's gates.
  *
- * The `platform: "windows"` pin is load-bearing: without it `pnpm test`
- * lands the app on the phone-sized engine where `input` defaults to touch
- * and every pointer-default assertion inverts under the suite (_common.md).
+ * The `input:"pointer"` + `width:"regular"` injection is load-bearing the
+ * way the old `platform: "windows"` pin was: `open()` platform/width/height
+ * options are rejected on ios/android, so the desktop-parity environment
+ * comes from `host.params` → `EnvironmentScope`; without it the host
+ * defaults `input` to touch and every pointer-default assertion inverts
+ * under the suite (_common.md).
  *
  * The carrier probe is the derived testID — `id:dp-popover-panel` on the
  * anchored overlay, `id:dp-popover-sheet` on the Sheet carrier (adapt sheet
@@ -53,15 +56,19 @@ type Params = Record<string, string>;
 function openDp(
   caseName: string,
   params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height" | "clock"> = {},
+  options: Pick<OpenOptions, "clock"> = {},
 ): Promise<App> {
   return open("../../../date-picker.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     locale: "en-US",
     ...options,
-    host: { params: { case: caseName, ...params } },
+    host: {
+      params: {
+        case: caseName,
+        input: "pointer",
+        width: "regular",
+        ...params,
+      },
+    },
   });
 }
 

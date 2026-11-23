@@ -1,13 +1,14 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 import * as select from "../../testers/select";
 
 /*
  * Mobile assertions for the Select adapt unit (C+B+F(消费); sheet 输入场景
- * 参与 G), one test per row of adapt-sheets/select.md §4 that the shared
- * targets (headless + web) can observe: M-001 … M-005, M-008, M-010, M-011,
- * M-013 … M-019. The `platform:"ios"` host-derived half, the sheet dismissal
+ * 参与 G), one test per row of adapt-sheets/select.md §4 that the
+ * ios/android targets can observe: M-001 … M-005, M-008, M-010, M-011,
+ * M-013, M-014, M-016 … M-019 (M-015's hover row in
+ * `select.mobile.web.test.tsx`). The `platform:"ios"` host-derived half, the sheet dismissal
  * chains and the `app.drag` press-cancel (M-006, M-007, M-009, M-012) live in
  * `select.mobile.headless.test.tsx` — web has none of those capabilities.
  *
@@ -17,10 +18,14 @@ import * as select from "../../testers/select";
  * input scenario, `narrow` shrinks the trigger under 44pt, `keepopen` selects
  * `selectionMode="multiple"`, `hover`/`layout`/`ctx2` switch the probes.
  *
- * The `platform:"windows"` + 1024×768 pin is load-bearing: without it
- * `pnpm test` lands the app on the phone-sized engine where `input` defaults
- * to touch and every pointer-default assertion inverts under the suite (the
- * _common.md convention, switch M-001/3/4's precedent).
+ * The `input:"pointer"` + `width:"regular"` default this file injects is
+ * load-bearing the way the old `platform:"windows"` + 1024×768 pin was:
+ * without it the host defaults `input` to touch on native targets and every
+ * pointer-default assertion inverts under the suite (the _common.md
+ * convention, switch M-001/3/4's precedent). `open()` platform/width/height
+ * options are rejected on ios/android, so the desktop-parity environment
+ * comes from `EnvironmentScope` params instead; M-015's hover row lives in
+ * `select.mobile.web.test.tsx` (`app.hover` is desktop/web-only).
  *
  * Every assertion reads what `nsh/test` can observe — `shows`, `count`,
  * `texts`, `enabled`, `onLayout` bounds and the `app.storage()` probe calls:
@@ -34,15 +39,17 @@ import * as select from "../../testers/select";
 function openSelect(
   caseName: string,
   params: Record<string, string> = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
 ): Promise<App> {
   return open("../../../select.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
-    ...options,
-    host: { params: { case: caseName, ...params } },
+    host: {
+      params: {
+        case: caseName,
+        input: "pointer",
+        width: "regular",
+        ...params,
+      },
+    },
   });
 }
 
@@ -319,13 +326,17 @@ describe("select mobile", () => {
     expect(app.count("id:sel-pop-panel")).toBe(0);
 
     // Centered, not bottom-anchored: the box's vertical centre sits near
-    // the viewport's (768/2), far from both edges.
-    await app.waitUntil(() => layouts(app, "pop").length > 0);
+    // the `stage` root's centre (the window-sized column the fixture mounts
+    // under `layout=1`), far from its bottom edge.
+    await app.waitUntil(
+      () => layouts(app, "pop").length > 0 && layouts(app, "stage").length > 0,
+    );
     const box = lastLayout(app, "pop");
+    const stage = lastLayout(app, "stage");
     expect(box.height).toBeGreaterThan(0);
     const centerY = box.y + box.height / 2;
-    expect(Math.abs(centerY - 384)).toBeLessThan(80);
-    expect(box.y + box.height).toBeLessThan(768 - 12);
+    expect(Math.abs(centerY - (stage.y + stage.height / 2))).toBeLessThan(80);
+    expect(box.y + box.height).toBeLessThan(stage.y + stage.height - 12);
 
     // Row selection closes a single select, as the panel carrier does.
     await app.press("role:option[Two]");
@@ -465,33 +476,8 @@ describe("select mobile", () => {
   // state never engages: the `hov` marker never renders, no `hover` record
   // appears, while the raw `enter`/`leave` mouse callbacks still forward.
   // Under pointer the same steps set and clear the flag as before.
-  test("M-015 touch suppresses the JS hover state; pointer keeps it", async () => {
-    const touch = await openSelect("states", {
-      input: "touch",
-      width: "compact",
-      hover: "1",
-    });
-    await touch.hover("id:select-trigger");
-    expect(touch.shows("text:hov")).toBe(false);
-    await touch.hover("id:ctx-sample");
-    await touch.press("id:select-trigger");
-    expect(touch.shows("text:hov")).toBe(false);
-    const touchHover = callsOf(touch, "hover").map((c) => c[0]);
-    expect(touchHover).toContain("enter");
-    expect(touchHover).toContain("leave");
-    expect(touchHover).not.toContain("start");
-    expect(touchHover).not.toContain("end");
-
-    const pointer = await openSelect("states", { hover: "1" });
-    await pointer.hover("id:select-trigger");
-    expect(pointer.shows("text:hov")).toBe(true);
-    const pointerHover = callsOf(pointer, "hover").map((c) => c[0]);
-    expect(pointerHover).toContain("enter");
-    expect(pointerHover).toContain("start");
-    await pointer.hover("id:ctx-sample");
-    expect(pointer.shows("text:hov")).toBe(false);
-    expect(callsOf(pointer, "hover").map((c) => c[0])).toContain("leave");
-  });
+  // `app.hover` is desktop/web-only — the row lives in
+  // select.mobile.web.test.tsx.
 
   // adapt-sheets/select.md M-016 (A-001): `density="compact"` tightens the
   // root `gap` and the trigger `px`/`py` — the root and trigger boxes are

@@ -6,17 +6,18 @@ import { callsOf } from "../../helpers/calls";
  * Mobile assertions for the adapt unit toolbar, one test per row of
  * adapt-sheets/toolbar.md §4 (M-001…M-008). The fixture is
  * `harness/toolbar.fixtures.tsx`; `host.params.scope` picks the
- * `EnvironmentScope` ("touch", "touch-compact"), and its absence is the
- * default pointer environment — the desktop-parity baseline the action
- * pins: the toolbar container never takes a press surface of its own
- * ("容器不加按压"), and every mobile behaviour is inherited from the child
- * controls' own `input` axis (button / toggle-button units, sheet §5).
+ * `EnvironmentScope` ("touch", "touch-compact", "pointer"), and "pointer"
+ * is the desktop-parity baseline the action pins: the toolbar container
+ * never takes a press surface of its own ("容器不加按压"), and every
+ * mobile behaviour is inherited from the child controls' own `input`
+ * axis (button / toggle-button units, sheet §5).
  *
  * `app.press`, `shows`, `enabled`, `texts` and the Storage probes are the
  * whole observation channel; no class names or computed styles are read.
- * Every case opens with a desktop `platform` pin and the 1024×768 window the
- * w1 files use: without it the app would land on the phone-sized engine and
- * the pointer-default assertions would invert under the suite.
+ * Native hosts fill the device screen, so the desktop `platform` pin and
+ * the 1024×768 window are gone: the pointer-default halves inject
+ * `scope="pointer"` explicitly — a native phone's host-derived input is
+ * touch, which would invert every pointer-default assertion.
  */
 
 type LayoutCall = { name: string; x: number; y: number; width: number; height: number };
@@ -101,13 +102,10 @@ const WIDE_NAMES = [
 
 function openToolbar(
   caseName: string,
-  scope?: "touch" | "touch-compact",
+  scope: "touch" | "touch-compact" | "pointer" = "pointer",
 ): Promise<App> {
   return open("../../../toolbar.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    host: { params: { case: caseName, ...(scope ? { scope } : {}) } },
+    host: { params: { case: caseName, scope } },
   });
 }
 

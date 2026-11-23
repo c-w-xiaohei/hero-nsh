@@ -1,5 +1,5 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 import {
   fieldChanges,
@@ -22,14 +22,15 @@ import {
  *
  * The fixture is `harness/date-input-group.fixtures.tsx`, opened by
  * `host.params`: `case` (default / affix-interactive / affix-static /
- * edit-gate / keyboard-type / trigger-focus / range-slots …), `scope`
- * ("" = the host's pointer environment — the desktop-parity half — or
- * "touch" through `EnvironmentScope`), `kt` / `gate` / `granularity` for the
- * prop and gate cases.
- *
- * The `platform: "windows"` pin is load-bearing: without it `pnpm test`
- * lands the app on the phone-sized engine where `input` defaults to touch
- * and every pointer-default assertion inverts under the suite (_common.md).
+ * edit-gate / keyboard-type / trigger-focus / range-slots …), `testInput`
+ * ("pointer"/"touch" through an outer `EnvironmentScope` — the pointer half
+ * is the host-independent desktop-parity baseline; the host-derived
+ * default differs per target, so it is never assumed), `kt` / `gate` /
+ * `granularity` for the prop and gate cases. Native hosts fill the device
+ * screen and reject the `platform`/`width`/`height` open options, so this
+ * file carries none and runs on ios/android too; the rows that need
+ * `app.hover` (M-003 and M-010's hover half) moved to
+ * `date-input-group.mobile.headless.test.tsx`.
  *
  * Every assertion reads what `nsh/test` can observe — `shows`, `count`,
  * `enabled`, `texts`, `onLayout` bounds probes and the `@scenario/probe`
@@ -43,17 +44,9 @@ import {
 
 type Params = Record<string, string>;
 
-function openDig(
-  caseName: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openDig(caseName: string, params: Params = {}): Promise<App> {
   return open("../../../date-input-group.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     locale: "en-US",
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -67,14 +60,6 @@ type Bounds = { origin: { x: number; y: number }; size: { width: number; height:
 
 type RootBounds = Bounds;
 type SegmentBoundsEntry = { type: string; bounds: Bounds };
-type HoverEventEntry = { source: string; type: string; kind: string; isHovering?: boolean };
-type InputPropsEntry = {
-  isHovered: boolean;
-  isFocusWithin: boolean;
-  isFocusVisible: boolean;
-  isDisabled: boolean;
-  isInvalid: boolean;
-};
 type SlotsEntry = { name: string; base: string; prefix: string; suffix: string; segment: string };
 
 function lastOf<T>(app: App, name: string): T {
@@ -103,14 +88,6 @@ function segmentBounds(app: App, type: string): Bounds {
 
 function affixBounds(app: App, name: "prefix-bounds" | "suffix-bounds"): Bounds {
   return lastOf<Bounds>(app, name);
-}
-
-function hoverEvents(app: App): HoverEventEntry[] {
-  return callsOf(app, "hover-events").map((c) => c[0] as HoverEventEntry);
-}
-
-function inputRecord(app: App): InputPropsEntry {
-  return lastOf<InputPropsEntry>(app, "input-props");
 }
 
 function affixPresses(app: App): string[] {
@@ -148,14 +125,14 @@ describe("date-input-group mobile", () => {
   // the fixture's `onLayout` probes (Segment takes no `onLayout`, so a
   // shrink-wrapping View reports its bounds — sheet §6 records the probe).
   test("M-001 touch raises row/segments/affix to 44pt, pointer keeps the desktop metrics", async () => {
-    const touch = await openDig("default", { scope: "touch" });
+    const touch = await openDig("default", { testInput: "touch" });
     await touch.waitUntil(() => callsOf(touch, "root-bounds").length > 0);
     expect(rootBounds(touch).size.height).toBeGreaterThanOrEqual(44);
     for (const type of ["month", "day", "year"]) {
       expect(segmentBounds(touch, type).size.height).toBeGreaterThanOrEqual(44);
     }
 
-    const affixTouch = await openDig("affix-interactive", { scope: "touch" });
+    const affixTouch = await openDig("affix-interactive", { testInput: "touch" });
     await affixTouch.waitUntil(() => callsOf(affixTouch, "prefix-bounds").length > 0);
     for (const bounds of [
       affixBounds(affixTouch, "prefix-bounds"),
@@ -166,7 +143,7 @@ describe("date-input-group mobile", () => {
     }
 
     // The table itself, for the slot strings the bounds come from.
-    const slotsApp = await openDig("slots-probe");
+    const slotsApp = await openDig("slots-probe", { testInput: "pointer" });
     await slotsApp.waitUntil(() => callsOf(slotsApp, "slots").length >= 4);
     const byName = new Map(slotsEntries(slotsApp).map((e) => [e.name, e]));
     expect(byName.get("touch-interactive")?.prefix).toContain("min-h-11");
@@ -176,14 +153,14 @@ describe("date-input-group mobile", () => {
     expect(byName.get("touch-static")?.prefix).not.toContain("min-h-11");
     expect(byName.get("pointer-interactive")?.prefix).not.toContain("min-h-11");
 
-    const pointer = await openDig("default");
+    const pointer = await openDig("default", { testInput: "pointer" });
     await pointer.waitUntil(() => callsOf(pointer, "root-bounds").length > 0);
     expect(rootBounds(pointer).size.height).toBeLessThan(44);
     for (const type of ["month", "day", "year"]) {
       expect(segmentBounds(pointer, type).size.height).toBeLessThan(44);
     }
 
-    const affixPointer = await openDig("affix-interactive");
+    const affixPointer = await openDig("affix-interactive", { testInput: "pointer" });
     await affixPointer.waitUntil(() => callsOf(affixPointer, "prefix-bounds").length > 0);
     for (const bounds of [
       affixBounds(affixPointer, "prefix-bounds"),
@@ -198,7 +175,7 @@ describe("date-input-group mobile", () => {
   // (`pointer-events-none` really blocking) is only observable through a real
   // hit test — `date-input-group.mobile.web.test.tsx`.
   test("M-002 injected touch: interactive affix pressables fire their probes", async () => {
-    const app = await openDig("affix-interactive", { scope: "touch" });
+    const app = await openDig("affix-interactive", { testInput: "touch" });
 
     await app.press("id:affix-prefix-button");
     await app.press("id:affix-suffix-button");
@@ -206,52 +183,16 @@ describe("date-input-group mobile", () => {
     expect(affixPresses(app)).toEqual(["prefix", "suffix"]);
   }, 120_000);
 
-  // adapt-sheets/date-input-group.md M-003 (A-002, A-003, A-004): under touch
-  // the hover writes stay off on the Root, the Input and the Segment —
-  // `isHovered` render props stay false and no `onHover*` callback records,
-  // even after a press (the web sticky hover cannot pin the group). The
-  // default environment keeps the hover round-trip.
-  test("M-003 injected touch suppresses hover everywhere, default environment keeps it", async () => {
-    const touch = await openDig("default", { scope: "touch" });
-
-    await touch.hover("label:date");
-    await touch.hover("label:date >> text:mm");
-    await touch.press("id:dig-seg-month");
-    await touch.wait(50);
-
-    expect(rootRecord(touch).isHovered).toBe(false);
-    expect(inputRecord(touch).isHovered).toBe(false);
-    expect(lastSegmentProps(touch, "month").isHovered).toBe(false);
-    expect(hoverEvents(touch)).toHaveLength(0);
-
-    const pointer = await openDig("default");
-    await pointer.hover("label:date >> text:mm");
-    await pointer.wait(50);
-
-    expect(rootRecord(pointer).isHovered).toBe(true);
-    expect(inputRecord(pointer).isHovered).toBe(true);
-    expect(lastSegmentProps(pointer, "month").isHovered).toBe(true);
-    const kinds = hoverEvents(pointer).map((e) => `${e.source}:${e.kind}`);
-    expect(kinds).toContain("root:start");
-    expect(kinds).toContain("segment:start");
-
-    // Moving to the next segment ends the first one's hover.
-    await pointer.hover("label:date >> text:dd");
-    await pointer.wait(50);
-    const ends = hoverEvents(pointer).filter(
-      (e) => e.source === "segment" && e.type === "month" && e.kind === "end",
-    );
-    expect(ends.length).toBeGreaterThan(0);
-    expect(lastSegmentProps(pointer, "month").isHovered).toBe(false);
-    expect(lastSegmentProps(pointer, "day").isHovered).toBe(true);
-  }, 120_000);
+  // adapt-sheets/date-input-group.md M-003 (A-002, A-003, A-004) lives in
+  // `date-input-group.mobile.headless.test.tsx` — `app.hover` needs a
+  // mouse, so the row moved there whole rather than split.
 
   // adapt-sheets/date-input-group.md M-004 (A-005, A-006, 负断言): under the
   // default pointer environment the soft-keyboard channel does not exist —
   // no `dig-seg-*` input mounts — the segment view itself takes the focus and
   // the keymap digits still drive `field.type`.
-  test("M-004 default environment: no channel mounts, view focus and keymap unchanged", async () => {
-    const app = await openDig("default");
+  test("M-004 pointer baseline: no channel mounts, view focus and keymap unchanged", async () => {
+    const app = await openDig("default", { testInput: "pointer" });
 
     expect(app.count("id:dig-seg-month")).toBe(0);
     expect(app.count("id:dig-seg-day")).toBe(0);
@@ -272,7 +213,7 @@ describe("date-input-group mobile", () => {
   // `field.type` with the keymap's buffer/advance rules, and Backspace feeds
   // `field.backspace` (a placeholder first moves the focus back).
   test("M-005 injected touch: channel press focuses, typing edits, Backspace deletes", async () => {
-    const app = await openDig("default", { scope: "touch" });
+    const app = await openDig("default", { testInput: "touch" });
 
     expect(app.count("id:dig-seg-month")).toBe(1);
     expect(app.count("id:dig-seg-day")).toBe(1);
@@ -301,7 +242,7 @@ describe("date-input-group mobile", () => {
   // commit boundary, so an invalid display (February 30th) commits clamped,
   // exactly once.
   test("M-006 injected touch: Enter blurs and submits through the commit boundary once", async () => {
-    const app = await openDig("trigger-focus", { scope: "touch" });
+    const app = await openDig("trigger-focus", { testInput: "touch" });
 
     await app.type("id:dig-seg-month", "02");
     await app.type("id:dig-seg-day", "30");
@@ -324,7 +265,7 @@ describe("date-input-group mobile", () => {
   // and the host keyboard itself is unobservable (§6 registered gap), so the
   // assertion stops at the context boundary plus a clean mount.
   test("M-007 keyboardType reaches the segments: auto default, explicit uniform", async () => {
-    const auto = await openDig("keyboard-type", { scope: "touch" });
+    const auto = await openDig("keyboard-type", { testInput: "touch" });
     await auto.waitUntil(() => keyboardTypes(auto).length >= 3);
     expect(keyboardTypes(auto).every((v) => v === "auto")).toBe(true);
     // The channels still mount under the prop's presence.
@@ -332,7 +273,7 @@ describe("date-input-group mobile", () => {
 
     const explicit = await openDig("keyboard-type", {
       kt: "numbers-and-punctuation",
-      scope: "touch",
+      testInput: "touch",
     });
     await explicit.waitUntil(() => keyboardTypes(explicit).length >= 3);
     expect(keyboardTypes(explicit).every((v) => v === "numbers-and-punctuation")).toBe(true);
@@ -344,7 +285,7 @@ describe("date-input-group mobile", () => {
   // segment keeps a focusable but `readonly` channel: it focuses, and keys
   // change nothing.
   test("M-008 injected touch: padding press focuses the channel; readonly channel takes no edit", async () => {
-    const app = await openDig("default", { scope: "touch" });
+    const app = await openDig("default", { testInput: "touch" });
 
     // The group's centre is a segment, so `role:group` hit-tests onto it;
     // the "/" literal is group area that hears no press, so its press runs
@@ -355,7 +296,7 @@ describe("date-input-group mobile", () => {
     await app.type("id:dig-seg-month", "1");
     await app.waitUntil(() => lastSegment(app, "month").text === "1");
 
-    const ro = await openDig("edit-gate", { gate: "readonly", scope: "touch" });
+    const ro = await openDig("edit-gate", { gate: "readonly", testInput: "touch" });
     expect(ro.count("id:dig-seg-month")).toBe(1);
 
     await ro.press("id:dig-seg-month");
@@ -382,25 +323,26 @@ describe("date-input-group mobile", () => {
       "phone-pad",
       "url",
     ]) {
-      const app = await openDig("keyboard-type", { kt });
+      const app = await openDig("keyboard-type", { testInput: "pointer", kt });
       await app.waitUntil(() => keyboardTypes(app).length >= 3);
       expect(keyboardTypes(app).every((v) => v === kt)).toBe(true);
     }
 
-    const absent = await openDig("keyboard-type");
+    const absent = await openDig("keyboard-type", { testInput: "pointer" });
     await absent.waitUntil(() => keyboardTypes(absent).length >= 3);
     expect(keyboardTypes(absent).every((v) => v === "auto")).toBe(true);
   }, 120_000);
 
   // adapt-sheets/date-input-group.md M-010 (基线): the default environment
   // keeps the desktop contract — segment keymap editing, padding press →
-  // focusLast, hover callbacks, focus-visible ring inputs, the range-slots
-  // binding and the affix press path. The commit boundary's Tab half is
-  // web-only (`date-input-group.mobile.web.test.tsx`) and its press-focus
-  // half headless-only (the headless file); `date-input-group.web.test.tsx`
+  // focusLast, focus-visible ring inputs, the range-slots binding and the
+  // affix press path. The commit boundary's Tab half is web-only
+  // (`date-input-group.mobile.web.test.tsx`) and its press-focus half
+  // headless-only (the headless file, which also carries the hover-callback
+  // half — `app.hover` needs a mouse); `date-input-group.web.test.tsx`
   // already pins the same semantics read-only.
-  test("M-010 default environment baseline: keymap, focusLast, hover, range slots, affix", async () => {
-    const app = await openDig("default");
+  test("M-010 pointer baseline: keymap, focusLast, range slots, affix", async () => {
+    const app = await openDig("default", { testInput: "pointer" });
 
     // Keymap editing: digits fill and advance, arrows move, Backspace deletes.
     await app.press("label:date >> text:mm");
@@ -433,21 +375,18 @@ describe("date-input-group mobile", () => {
     await app.press("label:date >> text:/");
     await waitFocused(app, "day");
 
-    // Hover callbacks and isHovered (the pointer half of M-003's row). The
-    // month reads "10" now, so the segment is picked by spinbutton order.
-    await app.hover("label:date >> role:spinbutton >> nth=0");
-    await app.wait(50);
-    expect(lastSegmentProps(app, "month").isHovered).toBe(true);
-    expect(hoverEvents(app).some((e) => e.source === "segment" && e.kind === "start")).toBe(true);
+    // The hover-callbacks half of this baseline (the pointer half of
+    // M-003's row) lives in `date-input-group.mobile.headless.test.tsx` —
+    // `app.hover` needs a mouse.
 
     // Range slots: the separator registers and a slot Input's padding focuses.
-    const range = await openDig("range-slots");
+    const range = await openDig("range-slots", { testInput: "pointer" });
     expect(range.shows("text:separator-registered")).toBe(true);
     await range.press("id:start-input");
     await waitFocused(range, "month", "start-segment-props");
 
     // The affix press path is env-independent once interactive: pointer too.
-    const affix = await openDig("affix-interactive");
+    const affix = await openDig("affix-interactive", { testInput: "pointer" });
     await affix.press("id:affix-prefix-button");
     await affix.press("id:affix-suffix-button");
     expect(affixPresses(affix)).toEqual(["prefix", "suffix"]);
@@ -458,7 +397,7 @@ describe("date-input-group mobile", () => {
   // takes no channel and no focus, a read-only one focuses but never edits,
   // and no `onChange` fires anywhere.
   test("M-011 disabled and readonly gate editing in both environments", async () => {
-    for (const scope of [{}, { scope: "touch" }] as Params[]) {
+    for (const scope of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const disabled = await openDig("edit-gate", { gate: "disabled", ...scope });
       expect(disabled.count("id:dig-seg-month")).toBe(0);
       expect(lastSegmentProps(disabled, "month").isDisabled).toBe(true);
@@ -471,7 +410,7 @@ describe("date-input-group mobile", () => {
       expect(fieldChanges(disabled)).toHaveLength(0);
 
       const readonly = await openDig("edit-gate", { gate: "readonly", ...scope });
-      if (scope.scope === "touch") {
+      if (scope.testInput === "touch") {
         // The channel mounts but stays readonly: focusable, never editable.
         expect(readonly.count("id:dig-seg-month")).toBe(1);
         await readonly.press("id:dig-seg-month");
@@ -492,7 +431,7 @@ describe("date-input-group mobile", () => {
   // `Scoped` mounts both environments and every probe the assertions read
   // (render props, bounds, hover events, field changes) records.
   test("M-012 fixture Scoped mounts both environments with readable probes", async () => {
-    for (const params of [{}, { scope: "touch" }] as Params[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const app = await openDig("default", params);
       await app.waitUntil(() => callsOf(app, "root-bounds").length > 0);
       expect(callsOf(app, "root-props").length).toBeGreaterThan(0);

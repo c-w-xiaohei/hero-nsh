@@ -207,4 +207,24 @@ describe("skeleton mobile (headless)", () => {
     expect(probe.isLoading).toBeNull();
     expect(probe.variant).toBeNull();
   }, 120_000);
+
+  // adapt-sheets/skeleton.md M-007 (A-010, A-011): the desktop-pin half the
+  // shared file dropped to run natively — the fixture's `env` probe reports
+  // host-derived values (it sits outside the `EnvironmentScope`), so
+  // `platform.desktop === true`, the desktop idiom and `input === "pointer"`
+  // only hold under this file's `platform:"windows"` pin.
+  test("M-007 desktop pin: host reports a desktop platform and pointer input in the default environment", async () => {
+    const app = await openSkeleton("single");
+    const env = callsOf(app, "env").at(-1)?.[0] as {
+      os: string;
+      desktop: boolean;
+      idiom: string;
+      input: string;
+    };
+
+    expect(env.desktop).toBe(true);
+    expect(env.idiom).toBe("desktop");
+    expect(env.input).toBe("pointer");
+    expect(["windows", "web"]).toContain(env.os);
+  }, 120_000);
 });

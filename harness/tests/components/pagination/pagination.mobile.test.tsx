@@ -1,5 +1,5 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
@@ -10,10 +10,18 @@ import { callsOf } from "../../helpers/calls";
  * `case` ("press" default — Previous + Link 1 isActive + Link 2 + Ellipsis +
  * Next with every pressable probe-wired; "sm" one sm Link; "disabled" an
  * isDisabled Previous + an isPending Link; "overflow" Summary + 9 links +
- * two Ellipsis; "sizes" one link per size) and `scope` ("" host default or
- * "touch" through `EnvironmentScope input="touch"`). `open` pins
- * `platform: "windows"` — the pointer host both targets share — at
- * 1024×768; M-008 re-opens at width 360.
+ * two Ellipsis; "sizes" one link per size) and `scope` ("pointer"/"touch"
+ * through `EnvironmentScope input`). The host-derived default differs per
+ * target — touch on ios/android, pointer on desktop and web — so the
+ * desktop-parity baseline injects `scope:"pointer"` explicitly. No
+ * `platform`/`width`/`height` open options and no `setViewport`: the
+ * native targets fill the device screen and reject/resist both.
+ *
+ * Desktop-only halves moved to `pagination.mobile.headless.test.tsx`, a
+ * local file that keeps the `platform:"windows"` pin: M-004's and M-011's
+ * hover assertions (`app.hover` does not exist natively), M-008's 360 px
+ * viewport (a real phone's screen cannot be resized) and M-009's exact
+ * `md:` breakpoint size pins (breakpoint literals only resolve at ≥640 px).
  *
  * Observation channels, all in `app.storage()` through `@scenario/probe`:
  * `events` ([name, phase] for down/up/changeT/changeF/press/click),
@@ -34,16 +42,8 @@ import { callsOf } from "../../helpers/calls";
 
 type Params = Record<string, string>;
 
-function openPagination(
-  caseName: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openPagination(caseName: string, params: Params = {}): Promise<App> {
   return open("../../../pagination.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -116,8 +116,8 @@ describe("pagination mobile", () => {
   // `isPressed` never rises, `hitSlop()` stays undefined, `scale` is pinned
   // at 1 — while `onPressDown`/`onPressUp`/`onPressChange`/`onPress`/`onClick`
   // still fire in order.
-  test("M-001 default pointer environment: the touch feedback path does not exist while the press contract holds", async () => {
-    const app = await openPagination("press");
+  test("M-001 pointer baseline: the touch feedback path does not exist while the press contract holds", async () => {
+    const app = await openPagination("press", { scope: "pointer" });
 
     for (const part of ["link-2", "prev", "next"]) {
       await app.press(`id:${part}`);
@@ -279,7 +279,7 @@ describe("pagination mobile", () => {
 
     // Pointer: the gate never opens — no seam edge means no hold samples,
     // and the post-press sample reads the pinned channel.
-    const pointer = await openPagination("press");
+    const pointer = await openPagination("press", { scope: "pointer" });
     await pointer.press("id:link-2");
     await pointer.waitUntil(() => callsOf(pointer, "seam-sample").length > 0);
     expect(callsOf(pointer, "seam-edge").filter((c) => (c[0] as SeamEdge).seam === true)).toHaveLength(0);
@@ -291,32 +291,20 @@ describe("pagination mobile", () => {
   }, 120_000);
 
   // adapt-sheets/pagination.md M-004 (A-001): under touch the `input` axis
-  // drops `hover:bg-default-hover` from the link slot, so a hover — whose
-  // callbacks still fire, the contract is unchanged — paints no background
-  // and a completed press leaves none behind (the sticky-hover regression
-  // the axis exists to prevent). Under pointer the same hover paints the
-  // desktop hover background.
-  test("M-004 touch suppresses the hover background; pointer keeps it", async () => {
+  // drops `hover:bg-default-hover` from the link slot, so a completed press
+  // leaves no background behind (the sticky-hover regression the axis
+  // exists to prevent). The hover halves — touch's hover paints nothing,
+  // pointer's paints the desktop hover background — live in
+  // `pagination.mobile.headless.test.tsx`, which can call `app.hover`.
+  test("M-004 injected touch: a completed press leaves no hover background behind", async () => {
     const touch = await openPagination("press", { scope: "touch" });
     const base = touch.viewStyle("id:link-2")?.backgroundColor;
-
-    await touch.hover("id:link-2");
-    await touch.wait(100);
-    expect(touch.viewStyle("id:link-2")?.backgroundColor).toBe(base);
 
     await touch.press("id:link-2");
     await touch.waitUntil(() =>
       callsOf(touch, "events").some((c) => c[0] === "link-2" && c[1] === "press"),
     );
     expect(touch.viewStyle("id:link-2")?.backgroundColor).toBe(base);
-
-    const pointer = await openPagination("press");
-    const pointerBase = pointer.viewStyle("id:link-2")?.backgroundColor;
-    await pointer.hover("id:link-2");
-    await pointer.wait(100);
-    const pointerHover = pointer.viewStyle("id:link-2")?.backgroundColor;
-    expect(pointerHover).toBeDefined();
-    expect(pointerHover).not.toBe(pointerBase);
   }, 120_000);
 
   // adapt-sheets/pagination.md M-005 (A-002): under touch, `isDisabled`
@@ -364,8 +352,8 @@ describe("pagination mobile", () => {
   // → `onPressUp` → `onPressChange(false)` → `onPress` → `onClick` — so the
   // feedback hooks introduce no second press owner and swap no callback.
   test("M-006 both environments keep the RAC release order per part", async () => {
-    for (const scope of ["", "touch"] as const) {
-      const app = await openPagination("press", scope ? { scope } : {});
+    for (const scope of ["pointer", "touch"] as const) {
+      const app = await openPagination("press", { scope });
 
       await app.press("id:link-2");
       await app.press("id:prev");
@@ -385,7 +373,7 @@ describe("pagination mobile", () => {
   // environment's exactly.
   test("M-007 injected touch moves no laid-out box", async () => {
     const touch = await openPagination("press", { scope: "touch" });
-    const pointer = await openPagination("press");
+    const pointer = await openPagination("press", { scope: "pointer" });
 
     await waitForBoxes(touch, PRESS_PARTS);
     await waitForBoxes(pointer, PRESS_PARTS);
@@ -397,40 +385,21 @@ describe("pagination mobile", () => {
     }
   }, 120_000);
 
-  // adapt-sheets/pagination.md M-008 (A-005): at a 360 px viewport both
-  // environments render Summary, the page row, Previous/Next and both
-  // Ellipsis; the overflow case (Summary + 9 links + 2 Ellipses) keeps the
-  // vertical stacking of `flex-col sm:flex-row` — content below summary —
-  // with non-overlapping link bounds and a pressable link. The component
-  // produces no horizontal clipping of its own: caller-side truncation via
-  // `Pagination.Ellipsis` is the same case.
-  test("M-008 360px viewport: every part renders; the overflow case stacks vertically with non-overlapping pressable links", async () => {
-    for (const scope of ["", "touch"] as const) {
-      const app = await openPagination(
-        "overflow",
-        scope ? { scope } : {},
-        { width: 360, height: 768 },
-      );
+  // adapt-sheets/pagination.md M-008 (A-005): the overflow case (Summary +
+  // 9 links + 2 Ellipses) renders every part in both environments — the
+  // `layout` probes report each item whether or not it sits in view — the
+  // flex row never overlaps its items and a link stays pressable. The
+  // viewport-pinned half (360 px: `shows()` visibility and the `flex-col
+  // sm:flex-row` vertical stacking under 640 px) lives in
+  // `pagination.mobile.headless.test.tsx` — a real phone's screen cannot
+  // be resized, and `setViewport` is a headless step.
+  test("M-008 overflow case: every part renders, items never overlap, a link stays pressable", async () => {
+    for (const scope of ["pointer", "touch"] as const) {
+      const app = await openPagination("overflow", { scope });
 
-      await app.waitUntil(() => app.shows("text:Page 4 of 9"));
-      // `shows()` is viewport-bound: at 360 px the single content row
-      // overflows, so the trailing links, the end Ellipsis and Next sit
-      // off-screen. Their render is proven by the `layout` boxes below —
-      // every part reports `onLayout` whether or not it is in view.
-      expect(app.shows("text:Page 4 of 9")).toBe(true);
-      expect(app.shows("text:Previous")).toBe(true);
-      expect(app.shows("text:1")).toBe(true);
-      // Both Ellipsis render — the end one's `…` is off-viewport, so the
-      // `layout` boxes below carry its proof.
+      await app.waitUntil(() => app.texts().includes("Page 4 of 9"));
+      expect(app.texts()).toContain("Previous");
       expect(app.texts()).toContain("…");
-
-      // Vertical stacking: `sm:flex-row` is inactive under 640 px, so the
-      // content row sits below the summary.
-      await waitForBoxes(app, ["summary", "content"]);
-      const stacked = lastBoxes(app);
-      expect(stacked["content"]!.y).toBeGreaterThanOrEqual(
-        stacked["summary"]!.y + stacked["summary"]!.height,
-      );
 
       // Every Item reports a content-relative box and no two overlap — the
       // row may run past the viewport (callers truncate), but flex never
@@ -474,10 +443,13 @@ describe("pagination mobile", () => {
   // adapt-sheets/pagination.md M-009 (基线): desktop zero drift — the
   // `isActive` link keeps its `bg-default` ground against the plain
   // link's `bg-transparent`, a press migrates no `current` state (the
-  // owner is the caller's prop), and the three sizes lay out at the
-  // current bounds (`md:` shrink live at 1024 px).
-  test("M-009 baseline: active-page styling is caller-owned and the three sizes keep their bounds", async () => {
-    const app = await openPagination("press");
+  // owner is the caller's prop), and the three sizes keep their strict
+  // sm < md < lg order. The exact bounds (28/32/36 at `md:` shrink) are
+  // breakpoint literals that only resolve at ≥640 px — a phone viewport
+  // stays under the breakpoint — so they pin in
+  // `pagination.mobile.headless.test.tsx`.
+  test("M-009 baseline: active-page styling is caller-owned and the three sizes keep their order", async () => {
+    const app = await openPagination("press", { scope: "pointer" });
 
     const activeBg = app.viewStyle("id:link-1")?.backgroundColor;
     const plainBg = app.viewStyle("id:link-2")?.backgroundColor;
@@ -490,15 +462,14 @@ describe("pagination mobile", () => {
     );
     expect(app.viewStyle("id:link-1")?.backgroundColor).toBe(activeBg);
 
-    const sizes = await openPagination("sizes");
+    const sizes = await openPagination("sizes", { scope: "pointer" });
     await waitForBoxes(sizes, ["size-sm", "size-md", "size-lg"]);
     const boxes = lastBoxes(sizes);
-    expect(Math.round(boxes["size-sm"]!.width)).toBe(28);
-    expect(Math.round(boxes["size-sm"]!.height)).toBe(28);
-    expect(Math.round(boxes["size-md"]!.width)).toBe(32);
-    expect(Math.round(boxes["size-md"]!.height)).toBe(32);
-    expect(Math.round(boxes["size-lg"]!.width)).toBe(36);
-    expect(Math.round(boxes["size-lg"]!.height)).toBe(36);
+    expect(boxes["size-sm"]!.width).toBeGreaterThan(0);
+    expect(boxes["size-sm"]!.width).toBeLessThan(boxes["size-md"]!.width);
+    expect(boxes["size-md"]!.width).toBeLessThan(boxes["size-lg"]!.width);
+    expect(boxes["size-sm"]!.height).toBeLessThan(boxes["size-md"]!.height);
+    expect(boxes["size-md"]!.height).toBeLessThan(boxes["size-lg"]!.height);
   }, 120_000);
 
   // adapt-sheets/pagination.md M-010 (A-001, A-003): the fixture mounts
@@ -507,8 +478,8 @@ describe("pagination mobile", () => {
   // samples, the event sequence, layout bounds — is readable through
   // `app.storage()`.
   test("M-010 the fixture opens in both environments and every probe channel records", async () => {
-    for (const scope of ["", "touch"] as const) {
-      const app = await openPagination("press", scope ? { scope } : {});
+    for (const scope of ["pointer", "touch"] as const) {
+      const app = await openPagination("press", { scope });
       for (const id of ["prev", "link-1", "link-2", "next", "ellipsis"]) {
         expect(app.shows(`id:${id}`)).toBe(true);
       }
@@ -534,12 +505,13 @@ describe("pagination mobile", () => {
   }, 120_000);
 
   // adapt-sheets/pagination.md M-011 (A-004): the Ellipsis is decorative —
-  // it renders its `…` glyph in both environments, a press at its position
-  // fires no callback and raises no seam edge, and under the default
-  // environment a hover changes nothing either.
+  // it renders its `…` glyph in both environments and a press at its
+  // position fires no callback and raises no seam edge. The "a hover
+  // changes nothing either" half lives in
+  // `pagination.mobile.headless.test.tsx`.
   test("M-011 Ellipsis renders its glyph and carries no interaction semantics in either environment", async () => {
-    for (const scope of ["", "touch"] as const) {
-      const app = await openPagination("press", scope ? { scope } : {});
+    for (const scope of ["pointer", "touch"] as const) {
+      const app = await openPagination("press", { scope });
       expect(app.texts()).toContain("…");
 
       // Whatever the harness resolves the press to, the ellipsis itself
@@ -552,10 +524,8 @@ describe("pagination mobile", () => {
       ).toHaveLength(0);
     }
 
-    const app = await openPagination("press");
-    const before = app.spanStyle("id:ellipsis >> text:…")?.color;
-    await app.hover("id:ellipsis");
-    await app.wait(100);
-    expect(app.spanStyle("id:ellipsis >> text:…")?.color).toBe(before);
+    // The "a hover changes nothing either" half moved to
+    // `pagination.mobile.headless.test.tsx` — `app.hover` does not exist
+    // on the native targets.
   }, 120_000);
 });

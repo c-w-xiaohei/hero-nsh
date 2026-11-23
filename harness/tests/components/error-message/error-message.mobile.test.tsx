@@ -11,11 +11,12 @@ import { callsOf } from "../../helpers/calls";
  * with no provider; every case sits inside `EnvironmentScope` driven by
  * `host.params.input` / `host.params.density`.
  *
- * Absent params leave the host-derived environment — pointer + default
- * density on headless and web — which is the desktop-parity baseline every
- * assertion compares against. `platform:"windows"` at 1024×768 is the pinned
- * desktop host both targets share (the mobile pin rule from _common.md; a
- * plain .mobile.test.tsx must never land on the phone-derived engine).
+ * The environment axes are always explicit: `input:"pointer"` is the
+ * desktop-parity baseline every assertion compares against and
+ * `input:"touch"` the injected mobile half, because the host-derived
+ * default differs per target (touch on ios/android, pointer on desktop
+ * and web). No `platform`/`width` open options: native targets fill the
+ * device screen and reject them.
  *
  * ErrorMessage is a non-interactive text part: the sheet keeps every 落点 at
  * "保留" — no `input`/`density` axis, no gesture owner, no presentation —
@@ -48,9 +49,6 @@ type EnvParams = {
 
 function openMobile(caseName: string, env: EnvParams = {}): Promise<App> {
   return open("../../../error-message.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: {
       params: {
         case: caseName,
@@ -107,7 +105,7 @@ describe("error-message mobile", () => {
   // the same text, the same resolved text-xs/text-danger, and one field
   // registration, matching the .heroui.test.tsx desktop baseline exactly.
   test("M-001 default environment: text, style and registration match the desktop baseline", async () => {
-    const app = await openMobile("in-container");
+    const app = await openMobile("in-container", { input: "pointer" });
 
     expect(app.shows(MESSAGE_SELECTOR)).toBe(true);
     expect(app.texts()).toContain(MESSAGE);
@@ -126,7 +124,7 @@ describe("error-message mobile", () => {
   // on the mobile side): bare's text box is content height only (15), the
   // container's carries the 4pt padding on both sides (23).
   test("M-002 default environment: caller gate removes the message; partClass pads its box", async () => {
-    const app = await openMobile("gated");
+    const app = await openMobile("gated", { input: "pointer" });
 
     expect(app.shows(MESSAGE_SELECTOR)).toBe(true);
     expect(callsOf(app, "error-message.registered")).toEqual([[MESSAGE]]);
@@ -134,7 +132,7 @@ describe("error-message mobile", () => {
     await settleLayout(app);
     const gatedBoxes = messageBoxes(app);
 
-    const bare = await openMobile("bare");
+    const bare = await openMobile("bare", { input: "pointer" });
     await settleLayout(bare);
 
     const gatedBox = JSON.parse(gatedBoxes[0]!) as Omit<Box, "name">;
@@ -153,7 +151,7 @@ describe("error-message mobile", () => {
   // identical to the pointer default across all three cases.
   test("M-003 injected touch: every observable matches the pointer default", async () => {
     for (const caseName of ["in-container", "gated", "bare"]) {
-      const pointer = await openMobile(caseName);
+      const pointer = await openMobile(caseName, { input: "pointer" });
       const touch = await openMobile(caseName, { input: "touch" });
 
       await settleLayout(pointer);
@@ -171,7 +169,7 @@ describe("error-message mobile", () => {
   // spacing — so a `density="compact"` scope produces no class difference;
   // bounds and span style stay identical to the default environment.
   test("M-004 injected density compact: bounds and span style unchanged", async () => {
-    const plain = await openMobile("in-container");
+    const plain = await openMobile("in-container", { input: "pointer" });
     const compact = await openMobile("in-container", {
       input: "touch",
       density: "compact",
@@ -229,7 +227,7 @@ describe("error-message mobile", () => {
   // without a Provider — the registration channel idles without crashing —
   // and injected input/density change nothing on it.
   test("M-007 bare case: renders with no provider, no registration, stable under injection", async () => {
-    const plain = await openMobile("bare");
+    const plain = await openMobile("bare", { input: "pointer" });
 
     expect(plain.shows(MESSAGE_SELECTOR)).toBe(true);
     expect(plain.texts()).toContain(MESSAGE);
@@ -239,7 +237,7 @@ describe("error-message mobile", () => {
 
     for (const env of [
       { input: "touch" },
-      { density: "compact" },
+      { input: "pointer", density: "compact" },
     ] as EnvParams[]) {
       const injected = await openMobile("bare", env);
       await settleLayout(injected);
@@ -249,20 +247,20 @@ describe("error-message mobile", () => {
     }
   });
 
-  // adapt-sheets/error-message.md M-008 (A-007): the desktop pin itself —
-  // platform:"windows" at 1024×768 with no env params — must keep the
-  // pointer-default derivation from being inverted by the phone-sized
-  // engine. This is the pin's own assertion: every M-001/M-002 observation
-  // holds, and pinning proves it under whichever target the file runs on.
-  test("M-008 desktop pin: default-environment assertions hold under the pinned host", async () => {
-    const app = await openMobile("in-container");
+  // adapt-sheets/error-message.md M-008 (A-007): the pointer baseline
+  // itself — `input:"pointer"` scope is what the old desktop pin derived,
+  // and it must keep every M-001/M-002 observation identical on whichever
+  // host the file runs on: the scope, not the launch platform, owns the
+  // baseline now.
+  test("M-008 pointer baseline: default-environment assertions hold under the pointer scope", async () => {
+    const app = await openMobile("in-container", { input: "pointer" });
 
     expect(app.shows(MESSAGE_SELECTOR)).toBe(true);
     expect(callsOf(app, "error-message.registered")).toEqual([[MESSAGE]]);
     expect(app.spanStyle(MESSAGE_SELECTOR).fontSize).toBe(12);
     expect(app.spanStyle(MESSAGE_SELECTOR).color).toBe(DANGER);
 
-    const gated = await openMobile("gated");
+    const gated = await openMobile("gated", { input: "pointer" });
 
     expect(gated.shows(MESSAGE_SELECTOR)).toBe(true);
 

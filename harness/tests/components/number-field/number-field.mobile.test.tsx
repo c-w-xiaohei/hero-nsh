@@ -1,5 +1,5 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { calls, callsOf } from "../../helpers/calls";
 
 /*
@@ -20,13 +20,14 @@ import { calls, callsOf } from "../../helpers/calls";
  * hoverable part), `hold` (`onChange` count + `hold` samples at
  * 450/550/700/1100 ms after the first step) and `submit` (`onSubmit`/`onBlur`/
  * `onChange` probes + `submitBehavior`/`enterKeyHint`/`returnKeyType`/
- * `autoCapitalize` params) — and `scope` ("" = the host's pointer default,
- * the desktop-parity half; "touch" = `EnvironmentScope input="touch"`).
+ * `autoCapitalize` params).
  *
- * `open` pins `platform: "windows"` — the pointer host both targets share —
- * at 1024×768, the w1 convention: without a pin a suite run lands on the
- * phone-sized engine where `platform.desktop` is false and every
- * pointer-default assertion inverts.
+ * `testInput` ("pointer"/"touch" through an outer `EnvironmentScope`)
+ * replaces the `scope` param: the pointer half is the host-independent
+ * desktop-parity baseline — the host-derived default differs per target
+ * (touch on native phones, pointer on desktop/web) and the open's
+ * `platform`/`width`/`height` options are gone because native hosts fill
+ * the device screen and reject them, so this file runs on ios/android too.
  *
  * Observation channels, all in `app.storage()` through `@scenario/probe`:
  * `events` ([name, phase] — button phases down/start/changeT/up/end/
@@ -44,16 +45,8 @@ import { calls, callsOf } from "../../helpers/calls";
 
 type Params = Record<string, string | number | boolean>;
 
-function openField(
-  caseName: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openField(caseName: string, params: Params = {}): Promise<App> {
   return open("../../../number-field.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -185,7 +178,7 @@ describe("number-field mobile", () => {
   // no hold samples schedule — while the press contract (step → onChange,
   // the down→up→press chain, the caller's onPress) fires once per press.
   test("M-001 default environment: the touch feedback path does not exist while the press contract holds", async () => {
-    const app = await openField("press", { probe: "1" });
+    const app = await openField("press", { testInput: "pointer", probe: "1" });
 
     await app.press("id:nf-inc");
     await app.waitUntil(() => buttonPhases(app, "inc").includes("press"));
@@ -232,7 +225,7 @@ describe("number-field mobile", () => {
   // and back to 1 after release; the 44 pt touch column already meets the
   // hit target, so `hitSlop()` reports no expansion while `enabled` holds.
   test("M-002 injected touch: seam round-trips, held scale presses below 1, 44pt column needs no slop", async () => {
-    const app = await openField("press", { scope: "touch", probe: "1" });
+    const app = await openField("press", { testInput: "touch", probe: "1" });
 
     await app.press("id:nf-inc");
     await app.waitUntil(() => buttonPhases(app, "inc").includes("press"));
@@ -285,7 +278,7 @@ describe("number-field mobile", () => {
   // `groupCols: "44px"` widen the step columns; the default environment
   // keeps the desktop 36 pt row and 40 pt columns — zero drift.
   test("M-003 touch row and step columns measure 44pt; default environment keeps 36/40", async () => {
-    const touch = await openField("layout", { scope: "touch" });
+    const touch = await openField("layout", { testInput: "touch" });
     await waitForLayouts(touch, ["group", "dec", "inc"]);
 
     const touchGroup = layoutFor(touch, "group");
@@ -297,7 +290,7 @@ describe("number-field mobile", () => {
       expect(box.width).toBeLessThanOrEqual(44.6);
     }
 
-    const pointer = await openField("layout");
+    const pointer = await openField("layout", { testInput: "pointer" });
     await waitForLayouts(pointer, ["group", "dec", "inc"]);
 
     const pointerGroup = layoutFor(pointer, "group");
@@ -310,46 +303,9 @@ describe("number-field mobile", () => {
     }
   }, 120_000);
 
-  // adapt-sheets/number-field.md M-004 (A-005): under touch the hover writes
-  // stay off on Group, Input and both step buttons — `app.hover` and a press
-  // leave `isHovered` false, no `onHover*` callback records, and the group's
-  // background never takes the hover fill (the web sticky-hover regression
-  // the axis exists to prevent). The default environment's hover round-trips.
-  test("M-004 injected touch suppresses hover on every part; default environment keeps it", async () => {
-    const touch = await openField("hover", { scope: "touch" });
-    const baseBg = touch.viewStyle("id:nf-group")?.backgroundColor;
-
-    for (const selector of ["id:nf-group", "id:nf-input", "id:nf-dec", "id:nf-inc"]) {
-      await touch.hover(selector);
-    }
-    await touch.press("id:nf-inc");
-    await touch.wait(150);
-
-    // No hover callback ever fired and no render prop ever read hovered.
-    expect(callsOf(touch, "hover")).toHaveLength(0);
-    for (const part of ["group", "input", "dec", "inc"]) {
-      const states = hoverStates(touch, part);
-      expect(states.length).toBeGreaterThan(0);
-      expect(states.every((s) => s.isHovered === false)).toBe(true);
-    }
-    // The group's background never took the hover fill — before, during and
-    // after the press it reads the same color.
-    expect(touch.viewStyle("id:nf-group")?.backgroundColor).toBe(baseBg);
-
-    const pointer = await openField("hover");
-    const pointerBase = pointer.viewStyle("id:nf-group")?.backgroundColor;
-
-    await pointer.hover("id:nf-group");
-    await pointer.waitUntil(() => callsOf(pointer, "hover").length > 0);
-
-    const hoverCalls = callsOf(pointer, "hover").map((c) => c as [string, string, unknown?]);
-    expect(hoverCalls).toContainEqual(["group", "start"]);
-    expect(hoverCalls).toContainEqual(["group", "change", true]);
-    expect(hoverStates(pointer, "group").some((s) => s.isHovered === true)).toBe(true);
-    const pointerHoverBg = pointer.viewStyle("id:nf-group")?.backgroundColor;
-    expect(pointerHoverBg).toBeDefined();
-    expect(pointerHoverBg).not.toBe(pointerBase);
-  }, 120_000);
+  // adapt-sheets/number-field.md M-004 (A-005) lives in
+  // `number-field.mobile.headless.test.tsx` — `app.hover` needs a mouse, so
+  // the row moved there whole rather than split.
 
   // adapt-sheets/number-field.md M-005 (A-006): the hold-repeat's first
   // delay follows the axis — touch widens the window to 600 ms, pointer
@@ -359,7 +315,7 @@ describe("number-field mobile", () => {
   // last mark (the fixture note records why the default 500 ms is not
   // enough). Every step fires `onChange` exactly once, in order.
   test("M-005 hold-repeat first delay is 600ms on touch, 400ms on pointer, one 60ms cadence", async () => {
-    const touch = await openField("hold", { scope: "touch" });
+    const touch = await openField("hold", { testInput: "touch" });
     await touch.longPress("id:nf-inc");
     await touch.waitUntil(() => holdSamples(touch).length >= 4);
 
@@ -371,7 +327,7 @@ describe("number-field mobile", () => {
     expect(touchSamples.get(700)).toBeGreaterThanOrEqual(2);
     expect(touchSamples.get(1100)).toBeGreaterThan(touchSamples.get(700)!);
 
-    const pointer = await openField("hold");
+    const pointer = await openField("hold", { testInput: "pointer" });
     await pointer.longPress("id:nf-inc");
     await pointer.waitUntil(() => holdSamples(pointer).length >= 4);
 
@@ -396,7 +352,7 @@ describe("number-field mobile", () => {
   // the next `app.type` still lands in the same input) while
   // `"blurAndSubmit"` reports the blur. The new prop mouths mount.
   test("M-006 submit commits before onSubmit, keeps focus by default, blurAndSubmit blurs", async () => {
-    const app = await openField("submit");
+    const app = await openField("submit", { testInput: "pointer" });
 
     await app.press("id:nf-input");
     await app.clear("id:nf-input");
@@ -414,7 +370,7 @@ describe("number-field mobile", () => {
     await app.type("id:nf-input", "7");
     expect(app.value("id:nf-input")).toBe("57");
 
-    const blurApp = await openField("submit", { submitBehavior: "blurAndSubmit" });
+    const blurApp = await openField("submit", { testInput: "pointer", submitBehavior: "blurAndSubmit" });
     await blurApp.press("id:nf-input");
     await blurApp.clear("id:nf-input");
     await blurApp.type("id:nf-input", "5");
@@ -433,7 +389,7 @@ describe("number-field mobile", () => {
       { autoCapitalize: "none" },
     ];
     for (const params of variants) {
-      const variant = await openField("submit", params);
+      const variant = await openField("submit", { testInput: "pointer", ...params });
       expect(variant.shows("id:nf-input")).toBe(true);
       await variant.press("id:nf-input");
       await variant.type("id:nf-input", "5");
@@ -446,7 +402,7 @@ describe("number-field mobile", () => {
   // in the same input and the keymap stays live — and the step event order
   // is identical under pointer and touch.
   test("M-007 step press keeps the focusInput path and the event order on both inputs", async () => {
-    for (const params of [{} as Params, { scope: "touch" }]) {
+    for (const params of [{ testInput: "pointer" } as Params, { testInput: "touch" }]) {
       const app = await openField("press", { probe: "1", ...params });
 
       await app.press("id:nf-inc");
@@ -470,7 +426,7 @@ describe("number-field mobile", () => {
   // contract's focus path) produces no group hover/press record and no
   // step; the group itself reports nothing.
   test("M-008 group container has no press channel on either input", async () => {
-    for (const params of [{} as Params, { scope: "touch" }]) {
+    for (const params of [{ testInput: "pointer" } as Params, { testInput: "touch" }]) {
       const app = await openField("hover", params);
 
       // The Label's press is the field's focus contract, not a group press:
@@ -493,7 +449,7 @@ describe("number-field mobile", () => {
   // commit the bounds. (The `accessibilityActions` increment/decrement
   // half has no `nsh/test` channel — recorded as a host gap.)
   test("M-009 typing filter and the six keymap bindings agree on both inputs", async () => {
-    for (const params of [{} as Params, { scope: "touch" }]) {
+    for (const params of [{ testInput: "pointer" } as Params, { testInput: "touch" }]) {
       const app = await openField("log", {
         defaultValue: 10,
         minValue: 0,
@@ -536,34 +492,35 @@ describe("number-field mobile", () => {
   // invalid/required/description texts render. The existing `.heroui.` /
   // `.kobalte.` files stay read-only and keep their own assertions.
   test("M-010 default environment baseline: composition, controlled, disabled, readonly, field texts", async () => {
-    const parts = await openField("parts");
+    const parts = await openField("parts", { testInput: "pointer" });
     expect(parts.shows("label:Width")).toBe(true);
     for (const id of ["nf-group", "nf-input", "nf-dec", "nf-inc"]) {
       expect(parts.shows(`id:${id}`)).toBe(true);
     }
 
     const composition = await openField("composition", {
+      testInput: "pointer",
       hasDecrement: true,
       hasIncrement: false,
     });
     expect(composition.shows("id:nf-dec")).toBe(true);
     expect(composition.shows("id:nf-inc")).toBe(false);
 
-    const controlled = await openField("controlled", { initial: 10 });
+    const controlled = await openField("controlled", { testInput: "pointer", initial: 10 });
     await controlled.press("id:set-zero");
     expect(controlled.value("id:nf-input")).toBe("0");
     await controlled.press("id:set-max");
     // The committed value formats through the locale: 2048 → "2,048".
     expect(controlled.value("id:nf-input")).toBe("2,048");
 
-    const disabled = await openField("disabled");
+    const disabled = await openField("disabled", { testInput: "pointer" });
     expect(disabled.enabled("id:nf-input")).toBe(false);
     await expect(disabled.press("id:nf-inc")).rejects.toMatchObject({
       code: "ERR_NSH_TEST_DISABLED",
     });
     expect(callsOf(disabled, "onChange")).toHaveLength(0);
 
-    const readonly = await openField("readonly");
+    const readonly = await openField("readonly", { testInput: "pointer" });
     expect(readonly.enabled("id:nf-input")).toBe(false);
     // Read-only closes `canStep`, so the step buttons report disabled and a
     // press is refused — the desktop contract, unchanged.
@@ -573,13 +530,13 @@ describe("number-field mobile", () => {
     expect(callsOf(readonly, "onChange")).toHaveLength(0);
     expect(readonly.value("id:nf-input")).toBe("10");
 
-    const invalid = await openField("invalid");
+    const invalid = await openField("invalid", { testInput: "pointer" });
     expect(invalid.shows("text:Max is 10")).toBe(true);
 
-    const required = await openField("required");
+    const required = await openField("required", { testInput: "pointer" });
     expect(required.shows("label:Width")).toBe(true);
 
-    const description = await openField("description");
+    const description = await openField("description", { testInput: "pointer" });
     expect(description.shows("text:Description")).toBe(true);
   }, 120_000);
 
@@ -589,7 +546,7 @@ describe("number-field mobile", () => {
   // `layout`, `hover`, `hover-state`, `hold`, `onSubmit`/`blur`/`onChange`)
   // reaches `app.storage()` on both environments.
   test("M-011 fixture probe surface: every channel is readable through app.storage()", async () => {
-    for (const params of [{ probe: "1" } as Params, { scope: "touch", probe: "1" }]) {
+    for (const params of [{ testInput: "pointer", probe: "1" } as Params, { testInput: "touch", probe: "1" }]) {
       const app = await openField("press", params);
 
       // Mount-time channels: the seam gate per button and the field axis.
@@ -616,14 +573,16 @@ describe("number-field mobile", () => {
     // The remaining carriers record their own channels under both scopes:
     // `layout` bounds, `hover-state` render-prop records, `hold` samples and
     // the `submit` chain's `onSubmit`/`blur` probes.
-    for (const params of [{} as Params, { scope: "touch" }]) {
+    for (const params of [{ testInput: "pointer" } as Params, { testInput: "touch" }]) {
       const layoutApp = await openField("layout", params);
       await waitForLayouts(layoutApp, ["group", "dec", "inc"]);
       expect(callsOf(layoutApp, "layout").length).toBeGreaterThanOrEqual(3);
 
+      // `app.hover` needs a mouse, so the `hover` case's own record is
+      // asserted headless-side (`number-field.mobile.headless.test.tsx`);
+      // here the mount alone proves the channel records.
       const hoverApp = await openField("hover", params);
-      await hoverApp.hover("id:nf-group");
-      await hoverApp.wait(100);
+      await hoverApp.wait(50);
       expect(hoverStates(hoverApp, "group").length).toBeGreaterThan(0);
 
       const holdApp = await openField("hold", params);
@@ -645,7 +604,7 @@ describe("number-field mobile", () => {
   // no part reads the environment itself. The default environment reports
   // the pointer档 on both probes.
   test("M-013 the input axis reaches groupCols and the seam gate through one context read", async () => {
-    const touch = await openField("press", { scope: "touch", probe: "1" });
+    const touch = await openField("press", { testInput: "touch", probe: "1" });
     await touch.waitUntil(() => callsOf(touch, "field-env").length >= 1);
 
     const touchField = lastOf<FieldEnv>(touch, "field-env");
@@ -655,7 +614,7 @@ describe("number-field mobile", () => {
     expect(touchField.hasIncrement).toBe(true);
     expect(lastSeamEnv(touch)["inc"]?.enabled).toBe(true);
 
-    const pointer = await openField("press", { probe: "1" });
+    const pointer = await openField("press", { testInput: "pointer", probe: "1" });
     await pointer.waitUntil(() => callsOf(pointer, "field-env").length >= 1);
 
     const pointerField = lastOf<FieldEnv>(pointer, "field-env");

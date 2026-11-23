@@ -12,10 +12,12 @@ import { callsOf } from "../../helpers/calls";
  * attaches the caller `onPress` probe to the root. "mobile-variants" mounts
  * the four `variant` values under the same scope.
  *
- * Absent params leave the host-derived environment — pointer + default
- * density on headless and web — which is the desktop-parity baseline every
- * assertion compares against. `platform:"windows"` is the pointer host both
- * targets share (the link/breadcrumbs mobile convention). The observation
+ * The environment axes are always explicit: `input:"pointer"` is the
+ * desktop-parity baseline every assertion compares against and
+ * `input:"touch"` the injected mobile half, because the host-derived
+ * default differs per target (touch on ios/android, pointer on desktop
+ * and web). No `platform`/`width` open options — native targets fill the
+ * device screen and reject them. The observation
  * channel is what `nsh/test` sees: `onLayout` bounds records for the
  * density/input axis checks, `spanStyle` for the typography the density axis
  * must not move, `app.storage()` probe calls for the `onPress` pass-through,
@@ -41,9 +43,6 @@ type EnvParams = {
 
 function openCard(caseName: string, env: EnvParams = {}): Promise<App> {
   return open("../../../card.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: {
       params: {
         case: caseName,
@@ -168,7 +167,7 @@ describe("card mobile", () => {
   // text styles are the ones the existing heroui test pins (density must
   // not move typography).
   test("M-001 default environment: padding 16, block gap 12, content gap 4, typography unchanged", async () => {
-    const app = await openCard("mobile");
+    const app = await openCard("mobile", { input: "pointer" });
     await settleLayout(app);
 
     expect(padding(app)).toEqual({ top: 16, left: 16, right: 16, bottom: 16 });
@@ -190,8 +189,11 @@ describe("card mobile", () => {
   // 2pt — while the painted half (title/description color and size) stays
   // exactly what the default environment resolved.
   test("M-002 compact density: padding 12, block gap 8, content gap 2, paint unchanged", async () => {
-    const compact = await openCard("mobile", { density: "compact" });
-    const plain = await openCard("mobile");
+    const compact = await openCard("mobile", {
+      input: "pointer",
+      density: "compact",
+    });
+    const plain = await openCard("mobile", { input: "pointer" });
     await settleLayout(compact);
     await settleLayout(plain);
 
@@ -214,8 +216,11 @@ describe("card mobile", () => {
   // resolved text style member for member (spanStyle exposes no line height;
   // fontSize/fontWeight/color are the observable typography).
   test("M-003 compact density: title and description text style equals default", async () => {
-    const compact = await openCard("mobile", { density: "compact" });
-    const plain = await openCard("mobile");
+    const compact = await openCard("mobile", {
+      input: "pointer",
+      density: "compact",
+    });
+    const plain = await openCard("mobile", { input: "pointer" });
 
     for (const label of ["Mobile title", "Mobile description"]) {
       expect(spanStyleOf(compact, label)).toEqual(spanStyleOf(plain, label));
@@ -228,7 +233,7 @@ describe("card mobile", () => {
   // and the four variants keep their backgrounds (the bg slot did not move;
   // `transparent` still resolves no backgroundColor).
   test("M-004 baseline: onPress fires once per press, no-press card renders, variants keep backgrounds", async () => {
-    const app = await openCard("mobile", { press: true });
+    const app = await openCard("mobile", { input: "pointer", press: true });
 
     await app.press("id:card-mobile");
     expect(callsOf(app, "onPress")).toHaveLength(1);
@@ -236,12 +241,12 @@ describe("card mobile", () => {
     await app.press("id:card-mobile");
     expect(callsOf(app, "onPress")).toHaveLength(2);
 
-    const quiet = await openCard("mobile");
+    const quiet = await openCard("mobile", { input: "pointer" });
     expect(quiet.shows("id:card-mobile")).toBe(true);
     expect(quiet.texts()).toContain("Mobile title");
     expect(quiet.texts()).toContain("Mobile description");
 
-    const variants = await openCard("mobile-variants");
+    const variants = await openCard("mobile-variants", { input: "pointer" });
     for (const name of ["default", "secondary", "tertiary", "transparent"]) {
       expect(variants.shows(`id:card-v-${name}`)).toBe(true);
     }
@@ -263,7 +268,10 @@ describe("card mobile", () => {
   // callback halves are what this row can observe.
   test("M-005 injected touch: identical layout boxes and unchanged onPress pass-through", async () => {
     const touch = await openCard("mobile", { input: "touch", press: true });
-    const pointer = await openCard("mobile", { press: true });
+    const pointer = await openCard("mobile", {
+      input: "pointer",
+      press: true,
+    });
 
     await settleLayout(touch);
     await settleLayout(pointer);

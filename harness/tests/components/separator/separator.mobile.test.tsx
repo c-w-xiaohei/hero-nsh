@@ -15,10 +15,12 @@ import { callsOf } from "../../helpers/calls";
  * for the two-environment comparisons, which mount every tree at once so
  * they cost two opens, not ten) and
  * `host.params.input`/`host.params.density` feed `EnvironmentScope`.
- * Absent params leave the host-derived environment — pointer + default
- * density under the `platform:"windows"`, 1024×768 pin both targets share
- * — which is the desktop-parity baseline every comparison measures
- * against. The observation channel is what `nsh/test` sees: `shows`/
+ * The axes are always explicit — `input:"pointer"` is the desktop-parity
+ * baseline every comparison measures against and `input:"touch"` the
+ * injected mobile half — because the host-derived default differs per
+ * target (touch on ios/android, pointer on desktop and web). No
+ * `platform`/`width` open options: native targets fill the device screen
+ * and reject them. The observation channel is what `nsh/test` sees: `shows`/
  * `count` for the mount contract and `onLayout` bounds probes for the
  * geometry; class names are not observable, so the assertions pin the
  * resolved boxes.
@@ -39,9 +41,6 @@ type EnvParams = {
 
 function openMobile(caseName: string, env: EnvParams = {}): Promise<App> {
   return open("../../../separator.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
     host: {
       params: {
@@ -135,7 +134,7 @@ describe("separator mobile", () => {
   // full 300-point container width (`h-px w-full`), and all three variant
   // colors are on screen — the pre-port rendering contract, unchanged.
   test("M-001 default environment: horizontal hairline is 1pt × full width, all variants show", async () => {
-    const app = await openMobile("default");
+    const app = await openMobile("default", { input: "pointer" });
     await settleLayout(app, ["separator"]);
 
     expect(app.shows("id:separator")).toBe(true);
@@ -144,7 +143,7 @@ describe("separator mobile", () => {
     expect(divider.height).toBe(1);
     expect(divider.width).toBe(300);
 
-    const variants = await openMobile("variants");
+    const variants = await openMobile("variants", { input: "pointer" });
     await settleLayout(variants, CASE_BOXES.variants);
     for (const id of ["separator-default", "separator-secondary", "separator-tertiary"]) {
       expect(variants.shows(`id:${id}`)).toBe(true);
@@ -160,7 +159,7 @@ describe("separator mobile", () => {
   // all three dividers mounted and testID-addressable — `isDecorative` /
   // `aria-hidden` touch only accessibility flags, never the view.
   test("M-002 default environment: vertical geometry and decorative dividers stay mounted", async () => {
-    const app = await openMobile("vertical");
+    const app = await openMobile("vertical", { input: "pointer" });
     await settleLayout(app, ["separator"]);
 
     const divider = lastBox(app, "separator");
@@ -168,7 +167,7 @@ describe("separator mobile", () => {
     expect(divider.height).toBe(20);
     expect(divider.height).toBeGreaterThanOrEqual(8);
 
-    const decorative = await openMobile("decorative");
+    const decorative = await openMobile("decorative", { input: "pointer" });
     await settleLayout(decorative, CASE_BOXES.decorative);
     for (const id of ["divider-horizontal", "divider-vertical", "divider-aria"]) {
       expect(decorative.shows(`id:${id}`)).toBe(true);
@@ -187,7 +186,7 @@ describe("separator mobile", () => {
   // (prop → `w-1/2` of the 300pt row): the
   // `prop ?? context ?? "horizontal"` fallback chain is untouched.
   test("M-003 default environment: context feeds orientation and partClass, prop wins", async () => {
-    const app = await openMobile("context");
+    const app = await openMobile("context", { input: "pointer" });
     await settleLayout(app, CASE_BOXES.context);
 
     const inherit = lastBox(app, "sep-inherit");
@@ -214,7 +213,7 @@ describe("separator mobile", () => {
     const touchSnap = snapshot(touch, ALL_IDS);
     touch.dispose();
 
-    const pointer = await openMobile("all");
+    const pointer = await openMobile("all", { input: "pointer" });
     await settleLayout(pointer, ALL_BOXES);
     const pointerSnap = snapshot(pointer, ALL_IDS);
     pointer.dispose();
@@ -242,7 +241,7 @@ describe("separator mobile", () => {
     const compactSnap = snapshot(compact, ALL_IDS);
     compact.dispose();
 
-    const baseline = await openMobile("all");
+    const baseline = await openMobile("all", { input: "pointer" });
     await settleLayout(baseline, ALL_BOXES);
     const baselineSnap = snapshot(baseline, ALL_IDS);
     baseline.dispose();
@@ -252,29 +251,24 @@ describe("separator mobile", () => {
   }, 120_000);
 
   // adapt-sheets/separator.md M-006 (A-005): injected touch — the divider
-  // has no press path: `app.press` on it must fail (no pressable view is
-  // found) or record no callback; written tolerantly so it does not depend
-  // on the driver's specific error code.
+  // has no press path: `app.press` resolves no pressable view on it and
+  // rejects `ERR_NSH_TEST_NOT_FOUND`, so nothing can ever record.
   test("M-006 injected touch: the divider has no press path", async () => {
     const app = await openMobile("default", { input: "touch" });
     await settleLayout(app, ["separator"]);
 
-    const failure = await app
-      .press("id:separator")
-      .then(() => null)
-      .catch((error: unknown) => error);
-
-    expect(failure).not.toBeNull();
+    await expect(app.press("id:separator")).rejects.toMatchObject({
+      code: "ERR_NSH_TEST_NOT_FOUND",
+    });
   });
 
-  // adapt-sheets/separator.md M-007 (A-006, A-007): the desktop pin is in
-  // force — under `platform:"windows"`, 1024×768 with no env params the
-  // fixture's `createInput()` probe resolves "pointer", so the M-001…M-003
-  // baseline runs as pointer on both headless and web; an `input` param
-  // reaches `EnvironmentScope` as "touch", so the injected half of this
-  // file rides the same file without a `.headless.`/`.web.` split.
-  test("M-007 pin: default environment resolves pointer, injection resolves touch", async () => {
-    const pointer = await openMobile("default");
+  // adapt-sheets/separator.md M-007 (A-006, A-007): the scope wiring is in
+  // force — the fixture's `createInput()` probe inside `Scoped` resolves
+  // the injected value, so an `input:"pointer"` param reports "pointer"
+  // (the M-001…M-003 baseline) and `input:"touch"` reports "touch" (the
+  // injected half) on whichever host the file runs on.
+  test("M-007 scope: pointer injection resolves pointer, touch injection resolves touch", async () => {
+    const pointer = await openMobile("default", { input: "pointer" });
     await pointer.waitUntil(() => callsOf(pointer, "env").length >= 1);
     expect(callsOf(pointer, "env").at(-1)?.[0]).toMatchObject({ input: "pointer" });
 

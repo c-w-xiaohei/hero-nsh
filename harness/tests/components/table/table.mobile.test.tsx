@@ -1,13 +1,16 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the table adapt unit, one test per row of
- * adapt-sheets/table.md §4 the shared (headless + web) targets can
- * observe: M-001…M-005, M-007, M-009…M-012 and M-014. The drag
+ * adapt-sheets/table.md §4 the shared (native + headless + web) targets can
+ * observe: M-001…M-005, M-007, M-010…M-012 and M-014. The drag
  * arbitration, held-press sampling and `platform:"ios"` halves live in
- * `table.mobile.headless.test.tsx` (M-006 headless half, M-008, M-013).
+ * `table.mobile.headless.test.tsx` (M-006 headless half, M-008, M-013); the
+ * hover row (M-009) and M-011's `platform:"web"` typeahead half live in
+ * `table.mobile.web.test.tsx` (`app.hover` is desktop/web only and a
+ * desktop `platform` pin is illegal on native).
  *
  * The fixture is `harness/table.fixtures.tsx`, opened by `host.params`:
  * `case` (`rows`, `sortable`, `resizable`, `ctx-probe`, `events`,
@@ -37,13 +40,8 @@ type Params = Record<string, string>;
 function openTable(
   caseName: string,
   params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
 ): Promise<App> {
   return open("../../../table.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -121,7 +119,7 @@ describe("table mobile", () => {
   // `hitSlop`/`origin` stay null and `pressed`/`scale` hold rest — while a
   // cell press selects its row exactly as on desktop.
   test("M-001 default environment: the row seam is inert while selection works", async () => {
-    const app = await openTable("ctx-probe");
+    const app = await openTable("ctx-probe", { input: "pointer" });
 
     await app.press("text:Ada");
     await app.waitUntil(() => callsOf(app, "selection").length >= 1);
@@ -159,7 +157,7 @@ describe("table mobile", () => {
   // sortable column's seam is inert too — press sorting and the direction
   // report behave exactly as on desktop.
   test("M-002 default environment: the column seam is inert while sorting works", async () => {
-    const app = await openTable("ctx-probe");
+    const app = await openTable("ctx-probe", { input: "pointer" });
 
     await app.press("text:Member");
     await app.waitUntil(() => callsOf(app, "sort").length >= 1);
@@ -184,7 +182,7 @@ describe("table mobile", () => {
   // `isPressed`/`seamPressed` rest, and `bounds + slop` never reports a
   // touch hit area. The touch path does not exist.
   test("M-003 default environment: the resizer press-feedback seam is inert", async () => {
-    const app = await openTable("ctx-probe");
+    const app = await openTable("ctx-probe", { input: "pointer" });
 
     // The mount-time env report: everything gated off.
     const env = lastOf<ResizerSample>(app, "resizer-env");
@@ -210,7 +208,7 @@ describe("table mobile", () => {
   // object is empty and no responder listener registers at all. The
   // desktop drag chain still commits `onResize*` unchanged.
   test("M-004 default environment: pan mounts no handlers and the desktop drag works", async () => {
-    const app = await openTable("ctx-probe");
+    const app = await openTable("ctx-probe", { input: "pointer" });
 
     // `panHandlers()` key count is 0 — the spread `{...pan.panHandlers()}`
     // produces nothing, so the view mounts no `onResponder*` props.
@@ -247,7 +245,7 @@ describe("table mobile", () => {
     expect(lastLayout(touch, "column-role").height).toBeGreaterThanOrEqual(44);
     expect(lastLayout(touch, "column-name").height).toBeGreaterThanOrEqual(44);
 
-    const pointer = await openTable("layout");
+    const pointer = await openTable("layout", { input: "pointer" });
     await pointer.waitUntil(() => layouts(pointer, "cell-one").length > 0);
     // The non-sortable column keeps `py-2.5` over `text-xs`: under 44 pt
     // without the axis — the observable proof the touch cell is an axis
@@ -355,80 +353,18 @@ describe("table mobile", () => {
     expect(callsOf(app, "sort")).toHaveLength(0);
   }, 120_000);
 
-  // adapt-sheets/table.md M-009 (A-006): under touch the hover channel
-  // stays dead — `app.hover` writes no `isHovered` render value on row,
-  // cell, sortable column, header or resizer, reports no
-  // `onHoverStart`/`onHoverChange`, and the resizer's own hovered
-  // marker never rises — while the raw `onMouseEnter`/`onMouseLeave`
-  // callbacks still forward (the switch A-003 ruling). The default
-  // environment keeps the full hover roundtrip.
-  test("M-009 touch suppresses hover state and callbacks; pointer keeps them", async () => {
-    const touch = await openTable("ctx-probe", { input: "touch" });
-
-    await touch.hover("label:Resize member");
-    await touch.wait(300);
-    expect(touch.shows("text:resizer-hovered")).toBe(false);
-    expect(touch.shows("text:resizer-idle")).toBe(true);
-
-    const rows = await openTable("rows", { input: "touch" });
-    await rows.hover("id:row-one");
-    await rows.wait(300);
-    // No hover callback ran on the row part under touch.
-    expect(callsOf(rows, "hover").filter((c) => (c[0] as { part: string }).part === "row-one")).toHaveLength(0);
-    // The raw host callbacks still forward (the switch A-003 ruling).
-    expect(callsOf(rows, "mouseenter").length).toBeGreaterThan(0);
-    // The render-prop opacity probe stays at rest: `isHovered` never rose.
-    expect(rows.viewStyle("id:row-one")?.opacity ?? 1).toBe(1);
-    expect(rows.viewStyle("id:cell-one")?.opacity ?? 1).toBe(1);
-
-    await rows.press("id:row-one");
-    await rows.wait(300);
-    expect(callsOf(rows, "hover").filter((c) => (c[0] as { part: string }).part === "row-one")).toHaveLength(0);
-    expect(rows.viewStyle("id:row-one")?.opacity ?? 1).toBe(1);
-
-    // The sortable column's hover channel under touch: its style fn
-    // opacity stays at rest and no sort fires off a hover.
-    const sortable = await openTable("sortable", { input: "touch" });
-    await sortable.hover("id:column-name");
-    await sortable.wait(300);
-    expect(sortable.viewStyle("id:column-name")?.opacity ?? 1).toBe(1);
-    expect(callsOf(sortable, "sort")).toHaveLength(0);
-
-    // Pointer keeps the roundtrip: enter reports start+change, the
-    // render-prop opacity flips to 0.5, leaving reports change(false)+end.
-    const pointer = await openTable("rows");
-    await pointer.hover("id:row-one");
-    await pointer.wait(300);
-    const hoverCalls = callsOf(pointer, "hover").map((c) => c[0]) as {
-      part: string;
-      kind: string;
-      value?: boolean;
-    }[];
-    expect(hoverCalls).toContainEqual({ part: "row-one", kind: "start" });
-    expect(hoverCalls).toContainEqual({ part: "row-one", kind: "change", value: true });
-    // The opacity probe reads the render-prop channel: hovered → 0.5.
-    await pointer.waitUntil(() => (pointer.viewStyle("id:row-one")?.opacity ?? 1) === 0.5);
-    // On web a pointer over the row also raises `isHovered` on its cells
-    // (the cell's hover state follows the pointer position there), so the
-    // cell-at-rest half is headless-only.
-    if (!isWeb(pointer)) {
-      expect(pointer.viewStyle("id:cell-one")?.opacity ?? 1).toBe(1);
-    }
-
-    const pointerResizer = await openTable("ctx-probe");
-    await pointerResizer.hover("label:Resize member");
-    await pointerResizer.wait(300);
-    expect(pointerResizer.shows("text:resizer-hovered")).toBe(true);
-  }, 120_000);
+  // adapt-sheets/table.md M-009 (A-006): the hover-suppression row needs
+  // `app.hover`, which a phone has no mouse for — the whole row lives in
+  // `table.mobile.web.test.tsx`.
 
   // adapt-sheets/table.md M-010 (A-001): `density="compact"` tightens the
   // slot spacing literals one step — the column, cell and footer boxes
   // all shrink relative to `density="default"`; an uninjected environment
   // resolves `default` identically to the explicit preset.
   test("M-010 density compact tightens column, cell and footer spacing", async () => {
-    const compact = await openTable("layout", { density: "compact" });
-    const explicit = await openTable("layout", { density: "default" });
-    const bare = await openTable("layout");
+    const compact = await openTable("layout", { input: "pointer", density: "compact" });
+    const explicit = await openTable("layout", { input: "pointer", density: "default" });
+    const bare = await openTable("layout", { input: "pointer" });
 
     for (const name of ["column-role", "cell-one", "footer"]) {
       expect(lastLayout(compact, name).height).toBeLessThan(
@@ -458,7 +394,7 @@ describe("table mobile", () => {
   // assertion is dropped or weakened; the existing `table.*` files stay
   // green as the F-regression evidence.
   test("M-011 injected touch keeps multiple/single selection and select-all semantics", async () => {
-    for (const params of [{}, { input: "touch" }] as Params[]) {
+    for (const params of [{ input: "pointer" }, { input: "touch" }] as Params[]) {
       const app = await openTable("rows", params);
 
       // A cell press selects exactly its row.
@@ -493,7 +429,7 @@ describe("table mobile", () => {
 
     // selectionMode="single": one press selects exactly one row, a second
     // press replaces the selection rather than accumulating.
-    for (const params of [{ mode: "single" }, { mode: "single", input: "touch" }] as Params[]) {
+    for (const params of [{ mode: "single", input: "pointer" }, { mode: "single", input: "touch" }] as Params[]) {
       const app = await openTable("rows", params);
       await app.press("id:row-one");
       await app.waitUntil(() => callsOf(app, "selection").length >= 1);
@@ -512,7 +448,7 @@ describe("table mobile", () => {
     // selectionMode="none": presses never produce a selection call, but
     // the row's own action still fires (the disabledBehavior="selection"
     // row's `onAction` is asserted separately below).
-    for (const params of [{ mode: "none" }, { mode: "none", input: "touch" }] as Params[]) {
+    for (const params of [{ mode: "none", input: "pointer" }, { mode: "none", input: "touch" }] as Params[]) {
       const app = await openTable("rows", params);
       await app.press("id:row-one");
       // `onAction` rides the row's press dispatch — which web does not
@@ -529,7 +465,7 @@ describe("table mobile", () => {
     // stays non-inert (not `disabled`, press events still run). The
     // observable contract is identical in both environments: a press
     // produces no selection change and no action call.
-    for (const params of [{}, { input: "touch" }] as Params[]) {
+    for (const params of [{ input: "pointer" }, { input: "touch" }] as Params[]) {
       const app = await openTable("rows", params);
       const selBefore = callsOf(app, "selection").length;
       const actBefore = callsOf(app, "action").length;
@@ -561,9 +497,9 @@ describe("table mobile", () => {
     // press on them cannot select. Expanded children select normally.
     // The observable is the `selection` probe — identical under touch.
     for (const params of [
-      { tree: "collapsed" },
+      { tree: "collapsed", input: "pointer" },
       { tree: "collapsed", input: "touch" },
-      { tree: "expanded" },
+      { tree: "expanded", input: "pointer" },
       { tree: "expanded", input: "touch" },
     ] as Params[]) {
       const app = await openTable("rows", params);
@@ -612,38 +548,10 @@ describe("table mobile", () => {
     await touch.waitUntil(() => callsOf(touch, "sort").length >= 2);
     expect((callsOf(touch, "sort")[1][0] as { direction: string }).direction).toBe("descending");
 
-    // Keyboard half (web host only — headless Windows gives a view no
-    // keyboard focus, the registered gap): `platform:"web"` opens run the
-    // same fixture with `input:"touch"` and the keymap's typeahead/arrow
-    // paths must behave identically to pointer. The `events` case's cell
-    // `onFocus` probes report which cell took focus.
-    if (isWeb(touch)) {
-      for (const input of [undefined, "touch"] as (string | undefined)[]) {
-        const kb = await openTable("events", input ? { input } : {}, { platform: "web" });
-        await kb.clock?.runFor(20);
-        // Press the first cell itself (role selector, as the keyboard
-        // tests do) to focus it — `onFocus` reports `part:"cell"`.
-        await kb.press("role:cell[Ada]");
-        await kb.clock?.runFor(20);
-        expect(
-          callsOf(kb, "events").some(
-            (c) => (c[0] as EventEntry).part === "cell" && (c[0] as EventEntry).kind === "focus",
-          ),
-        ).toBe(true);
-        // Typeahead "G" from the focused cell lands on Grace's row —
-        // the `cell-two` focus probe records the move.
-        await kb.keyboard.press("g");
-        await kb.clock?.runFor(20);
-        expect(
-          callsOf(kb, "events").some(
-            (c) => (c[0] as EventEntry).part === "cell-two" && (c[0] as EventEntry).kind === "focus",
-          ),
-        ).toBe(true);
-        // Arrow down from the focused cell moves to the next row's cell.
-        await kb.keyboard.press("arrowdown");
-        await kb.clock?.runFor(20);
-      }
-    }
+    // The keymap's typeahead/arrow half of this row lives in
+    // `table.mobile.web.test.tsx`: `platform:"web"` is the one host that
+    // moves view focus, and a `platform` pin is illegal on native (the
+    // registered focus gap).
   }, 120_000);
 
   // adapt-sheets/table.md M-012 (基线): the pointer baseline — cell
@@ -653,7 +561,7 @@ describe("table mobile", () => {
   // resizer keymap (web host, where keyboard focus reaches the hit
   // area) starts on Enter and steps ±10 pt.
   test("M-012 pointer baseline: claim chain, href, drag and keyboard resize", async () => {
-    const app = await openTable("events");
+    const app = await openTable("events", { input: "pointer" });
 
     // A press on the row view selects exactly that row and runs the
     // down → up → press chain on the row part.
@@ -698,7 +606,7 @@ describe("table mobile", () => {
       expect(app.openedUrls()).toEqual(["https://example.test/row-two"]);
     }
 
-    const sortable = await openTable("events");
+    const sortable = await openTable("events", { input: "pointer" });
     await sortable.press("text:Member");
     await sortable.waitUntil(() => callsOf(sortable, "sort").length >= 1);
     if (!isWeb(sortable)) {
@@ -749,7 +657,7 @@ describe("table mobile", () => {
   };
 
   test("M-014 the fixture mounts in every environment and every probe records (pointer scope)", async () => {
-    await probeFixtureChannels({});
+    await probeFixtureChannels({ input: "pointer" });
   }, 120_000);
 
   test("M-014 the fixture mounts in every environment and every probe records (touch scope)", async () => {
@@ -757,6 +665,6 @@ describe("table mobile", () => {
   }, 120_000);
 
   test("M-014 the fixture mounts in every environment and every probe records (compact density scope)", async () => {
-    await probeFixtureChannels({ density: "compact" });
+    await probeFixtureChannels({ input: "pointer", density: "compact" });
   }, 120_000);
 });

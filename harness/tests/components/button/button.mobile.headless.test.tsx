@@ -3,20 +3,23 @@ import type { App, OpenOptions } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
- * Headless-only mobile assertions for the button adapt unit — the two rows
- * of adapt-sheets/button.md §4 that need steps only the headless engine
+ * Headless-only mobile assertions for the button adapt unit — the rows of
+ * adapt-sheets/button.md §4 that need steps only the headless engine
  * provides:
  *
+ *   M-009's hover half  `app.hover` on the `HoverTriggerContext` chain —
+ *          a phone has no mouse, so the shared file keeps only the
+ *          form/overlay halves.
  *   M-011  `open({platform:"ios"})` host derivation — no `EnvironmentScope`,
  *          the platform reports `input()==="touch"` and the seam engages.
  *   M-012  `dragAndHold`/`drop` held-press + `app.drag` cancellation — the
  *          only steps that keep a press down while the test reads the
  *          screen, and the only way to observe the cancel=release path.
  *
- * The shared file `button.mobile.test.tsx` covers M-001…M-010; the
- * held-press channel assertions below are the pressed-end halves of
- * M-004/M-005/M-006 that need `dragAndHold` — the only step that keeps a
- * press down while the test reads the screen.
+ * The shared file `button.mobile.test.tsx` covers the portable halves of
+ * M-001…M-010; the held-press channel assertions below are the pressed-end
+ * halves of M-004/M-005/M-006 that need `dragAndHold` — the only step that
+ * keeps a press down while the test reads the screen.
  */
 
 function openButton(
@@ -52,10 +55,31 @@ function heldSamples(app: App): CtxState[] {
     .filter((s) => s.isPressed === true);
 }
 
+function kinds(app: App): string[] {
+  return callsOf(app, "events").map((c) => (c[0] as { kind: string }).kind);
+}
+
 describe("button mobile (headless)", () => {
+  // adapt-sheets/button.md M-009's `HoverTriggerContext` half — moved from
+  // the shared file because `app.hover` needs a mouse: mouse enter →
+  // hoverStart, press down → pressStart, press → press (the root's
+  // channel), user onPress → userPress.
+  test("M-009 hover trigger: the hover/press/focus chain is unchanged", async () => {
+    const hover = await openButton("hover");
+    await hover.hover("id:trigger");
+    await hover.waitUntil(() => callsOf(hover, "events").length > 0);
+    expect(kinds(hover)).toContain("hoverStart");
+
+    await hover.press("id:trigger");
+    await hover.waitUntil(() => callsOf(hover, "events").length > 1);
+    expect(kinds(hover)).toContain("pressStart");
+    expect(kinds(hover)).toContain("press");
+    expect(kinds(hover)).toContain("userPress");
+  }, 120_000);
+
   test("mounted button switches from highlight to ripple", async () => {
     const app = await openButton("basic", {
-      scope: "touch",
+      testInput: "touch",
       preset: "scale-highlight",
       switchPreset: "1",
     });
@@ -100,7 +124,7 @@ describe("button mobile (headless)", () => {
   // release takes: `onPressUp` fires, `isPressed` returns to false and every
   // channel settles back to rest.
   test("M-012 drag cancels the press: channels reset through the shared release path", async () => {
-    const app = await openButton("basic", { scope: "touch" });
+    const app = await openButton("basic", { testInput: "touch" });
 
     await app.dragAndHold("id:btn", { x: 0, y: 0 });
     await app.waitUntil(

@@ -69,7 +69,8 @@ import { createDateFieldState } from "../src/components/date-input-group/create-
  * host.params.scope picks the environment wrapper (A-011): "touch" wraps the
  * case in `EnvironmentScope(input="touch")` — the injected half of the mobile
  * assertions; anything else mounts the case on the host-derived default
- * (the pointer half on a desktop-pinned open).
+ * (the pointer half on a desktop-pinned open). The test-only params
+ * `testInput` ("pointer"/"touch") inject an outer EnvironmentScope input.
  *
  * The mobile layer's extra probes (adapt sheet §4): the default case records
  * the Root's `onLayout` bounds (`root-bounds`), the Root's and each Segment's
@@ -674,10 +675,23 @@ function EditGateCase() {
 /* A-011: the environment wrapper the mobile assertions drive — the same
  * `Scoped` shape switch's fixture uses (harness/switch.fixtures.tsx:73). */
 function Scoped(props: { children?: JSX.Element }) {
-  return String(host.params.scope ?? "") === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  // Test-harness environment param (only the mobile tests set it —
+  // absent keeps the host-derived default): `testInput` injects an outer
+  // EnvironmentScope input so the pointer baseline is host-independent
+  // (inner `scope` overrides still win).
+  const testInput = String(host.params.testInput ?? "");
+
+  const body =
+    String(host.params.scope ?? "") === "touch" ? (
+      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+    ) : (
+      <>{props.children}</>
+    );
+
+  return testInput === "pointer" || testInput === "touch" ? (
+    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
   ) : (
-    <>{props.children}</>
+    body
   );
 }
 

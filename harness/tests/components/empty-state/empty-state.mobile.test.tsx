@@ -10,12 +10,14 @@ import { calls, callsOf } from "../../helpers/calls";
  * probe plus a caller-composed `Button` child) and "layout" (a fixed-size
  * child whose bounds against the root read the four padding sides) all mount
  * under `EnvironmentScope`, fed by `host.params.input` /
- * `host.params.density`. Absent params keep the host-derived environment —
- * pointer + default density on headless and web — the desktop-parity
- * baseline every injected-environment assertion compares against.
+ * `host.params.density`. The axes are always explicit —
+ * `input:"pointer"` is the desktop-parity baseline every
+ * injected-environment assertion compares against and `input:"touch"`
+ * the injected mobile half — because the host-derived default differs
+ * per target (touch on ios/android, pointer on desktop and web).
  *
- * `platform:"windows"` is the pointer host both targets share (the
- * breadcrumbs.mobile.test.tsx convention). The observation channel is what
+ * No `platform`/`width` open options: native targets fill the device
+ * screen and reject them. The observation channel is what
  * `nsh/test` sees: `shows` / `texts` / `spanStyle` / `viewStyle` / `enabled`,
  * `app.storage()` probe calls (`onPress`, `layout` boxes), `app.press` for
  * the pass-through half. `accessibilityState` and `focusable` have no
@@ -45,9 +47,6 @@ type EnvParams = {
 
 function openMobile(caseName: string, env: EnvParams = {}): Promise<App> {
   return open("../../../empty-state.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: {
       params: {
         case: caseName,
@@ -131,14 +130,14 @@ describe("empty-state mobile", () => {
   // layout case's root padding is the default density cell's p-2 = 8pt on
   // all four sides.
   test("M-001 default environment: inherited text keeps text-sm over text-lg, root padding is 8pt", async () => {
-    const inherited = await openMobile("inherited");
+    const inherited = await openMobile("inherited", { input: "pointer" });
 
     expect(inherited.shows("text:No results found")).toBe(true);
     expect(inherited.spanStyle("text:plain").fontSize).toBe(18);
     expect(inherited.spanStyle("text:No results found").fontSize).toBe(14);
     expect(inherited.spanStyle("text:No results found").color).toBe(MUTED_LIGHT);
 
-    const layout = await openMobile("layout");
+    const layout = await openMobile("layout", { input: "pointer" });
     await settleLayout(layout, ["root", "content"]);
 
     expect(paddings(layout)).toEqual({ top: 8, right: 8, bottom: 8, left: 8 });
@@ -152,14 +151,14 @@ describe("empty-state mobile", () => {
   // render, so the on-screen text set holds the case's own copy and nothing
   // an overlay would add.
   test("M-002 default environment: aria name wins, root press records once, cases render inline", async () => {
-    const aria = await openMobile("aria-label");
+    const aria = await openMobile("aria-label", { input: "pointer" });
 
     expect(aria.shows("label:No search results")).toBe(true);
     expect(aria.shows("label:Fallback name")).toBe(false);
     expect(aria.shows("text:Nothing here")).toBe(true);
     expect(aria.texts()).toEqual(["Nothing here"]);
 
-    const press = await openMobile("press");
+    const press = await openMobile("press", { input: "pointer" });
     const before = press.viewStyle("id:press-root");
 
     await press.press("id:press-root");
@@ -173,7 +172,7 @@ describe("empty-state mobile", () => {
     // stays the text, so the inline copy set is exactly these two strings.
     expect(press.texts().slice().sort()).toEqual(["Action", "No results found"]);
 
-    const layout = await openMobile("layout");
+    const layout = await openMobile("layout", { input: "pointer" });
 
     expect(layout.texts()).toEqual([]);
   });
@@ -182,7 +181,10 @@ describe("empty-state mobile", () => {
   // the root padding one step (8pt → 6pt, still > 0) and nothing else — the
   // inherited case's copy, size and color are the default cell's.
   test("M-003 compact density tightens root padding one step; typography untouched", async () => {
-    const compact = await openMobile("layout", { density: "compact" });
+    const compact = await openMobile("layout", {
+      input: "pointer",
+      density: "compact",
+    });
     await settleLayout(compact, ["root", "content"]);
 
     const pad = paddings(compact);
@@ -191,7 +193,10 @@ describe("empty-state mobile", () => {
       expect(side).toBeGreaterThan(0);
     }
 
-    const inherited = await openMobile("inherited", { density: "compact" });
+    const inherited = await openMobile("inherited", {
+      input: "pointer",
+      density: "compact",
+    });
 
     expect(inherited.shows("text:No results found")).toBe(true);
     expect(inherited.spanStyle("text:No results found").fontSize).toBe(14);
@@ -202,8 +207,11 @@ describe("empty-state mobile", () => {
   // scope resolves to the same boxes and paddings as no scope at all — the
   // default cell is the pre-axis p-2 verbatim.
   test("M-004 explicit default density lays out identical to no scope", async () => {
-    const plain = await openMobile("layout");
-    const explicit = await openMobile("layout", { density: "default" });
+    const plain = await openMobile("layout", { input: "pointer" });
+    const explicit = await openMobile("layout", {
+      input: "pointer",
+      density: "default",
+    });
 
     await settleLayout(plain, ["root", "content"]);
     await settleLayout(explicit, ["root", "content"]);
@@ -221,7 +229,7 @@ describe("empty-state mobile", () => {
   // environments (`local.focusable ?? false`, env-free).
   test("M-005 injected touch without density changes no observable", async () => {
     const touchInherited = await openMobile("inherited", { input: "touch" });
-    const plainInherited = await openMobile("inherited");
+    const plainInherited = await openMobile("inherited", { input: "pointer" });
 
     expect(touchInherited.texts()).toEqual(plainInherited.texts());
     expect(touchInherited.shows("text:No results found")).toBe(true);
@@ -230,14 +238,14 @@ describe("empty-state mobile", () => {
     );
 
     const touchLayout = await openMobile("layout", { input: "touch" });
-    const plainLayout = await openMobile("layout");
+    const plainLayout = await openMobile("layout", { input: "pointer" });
 
     await settleLayout(touchLayout, ["root", "content"]);
     await settleLayout(plainLayout, ["root", "content"]);
     expect(boxSet(touchLayout)).toEqual(boxSet(plainLayout));
 
     const touchPress = await openMobile("press", { input: "touch" });
-    const plainPress = await openMobile("press");
+    const plainPress = await openMobile("press", { input: "pointer" });
 
     await touchPress.press("id:press-root");
     await plainPress.press("id:press-root");
@@ -277,7 +285,7 @@ describe("empty-state mobile", () => {
   // button unit.
   test("M-007 injected touch: embedded Button leaves root bounds and copy unchanged", async () => {
     const touch = await openMobile("press", { input: "touch" });
-    const pointer = await openMobile("press");
+    const pointer = await openMobile("press", { input: "pointer" });
 
     await settleLayout(touch, ["root"]);
     await settleLayout(pointer, ["root"]);
@@ -290,10 +298,10 @@ describe("empty-state mobile", () => {
 
   // adapt-sheets/empty-state.md M-008 (A-006, A-007): every fixture case
   // dispatches on `host.params.case` — each opens to its own marker — and a
-  // case opened without scope params behaves as the unwrapped baseline (the
+  // case opened under the pointer scope behaves as the baseline (the
   // layout case's padding is the default cell's 8pt, not compact's 6pt), so
   // `EnvironmentScope` wrapping is proven live rather than assumed.
-  test("M-008 fixture cases dispatch on host.params.case; absent params are the baseline", async () => {
+  test("M-008 fixture cases dispatch on host.params.case; the pointer scope is the baseline", async () => {
     const markers: Array<[string, string]> = [
       ["inherited", "text:No results found"],
       ["aria-label", "label:No search results"],
@@ -302,11 +310,11 @@ describe("empty-state mobile", () => {
     ];
 
     for (const [name, marker] of markers) {
-      const app = await openMobile(name);
+      const app = await openMobile(name, { input: "pointer" });
       expect(app.shows(marker)).toBe(true);
     }
 
-    const plain = await openMobile("layout");
+    const plain = await openMobile("layout", { input: "pointer" });
     await settleLayout(plain, ["root", "content"]);
     expect(paddings(plain)).toEqual({ top: 8, right: 8, bottom: 8, left: 8 });
   });

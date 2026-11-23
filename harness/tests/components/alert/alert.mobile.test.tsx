@@ -10,11 +10,13 @@ import { calls, callsOf } from "../../helpers/calls";
  * alert in a 200pt box for the narrow-width `flex-auto` check) under
  * `EnvironmentScope` driven by `host.params.input` / `host.params.density`.
  *
- * Absent params leave the host-derived environment — pointer + default
- * density on headless and web — which is the desktop-parity baseline every
- * assertion compares against. `platform:"windows"` is the pointer host both
- * targets share (the .mobile.test.tsx convention). The observation channel
- * is what `nsh/test` sees: `shows`, `spanStyle`, `count`, and the `onLayout`
+ * The environment axes are always explicit: `input:"pointer"` plays the
+ * desktop-parity baseline every assertion compares against and
+ * `input:"touch"` the injected mobile half, because the host-derived
+ * default differs per target (touch on ios/android, pointer on desktop
+ * and web). No `platform`/`width` open options — native targets fill the
+ * device screen and reject them. The observation channel is what
+ * `nsh/test` sees: `shows`, `spanStyle`, `count`, and the `onLayout`
  * bounds records; class names are not observable, so the density axis is
  * read through the laid-out geometry it produces.
  */
@@ -34,9 +36,6 @@ type EnvParams = {
 
 function openMobile(env: EnvParams = {}): Promise<App> {
   return open("../../../alert.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
     host: {
       params: {
@@ -124,7 +123,7 @@ describe("alert mobile", () => {
   // title keeps its text. alert.heroui.test.tsx keeps pinning the desktop
   // contract; this row asserts the same geometry on the scoped fixture.
   test("M-001 default environment: all parts visible with the ported layout", async () => {
-    const app = await openMobile();
+    const app = await openMobile({ input: "pointer" });
 
     await settleLayout(app);
 
@@ -173,7 +172,7 @@ describe("alert mobile", () => {
   // spanStyle is unchanged as well.
   test("M-002 injected touch: identical boxes and status styling", async () => {
     const touch = await openMobile({ input: "touch" });
-    const pointer = await openMobile();
+    const pointer = await openMobile({ input: "pointer" });
 
     await settleLayout(touch);
     await settleLayout(pointer);
@@ -191,9 +190,12 @@ describe("alert mobile", () => {
   // texts stay visible, and an explicit `density="default"` scope resolves
   // to the same boxes as no scope.
   test("M-003 density compact shrinks gap, padding and indicator box; explicit default matches", async () => {
-    const compact = await openMobile({ density: "compact" });
-    const plain = await openMobile();
-    const explicit = await openMobile({ density: "default" });
+    const compact = await openMobile({ input: "pointer", density: "compact" });
+    const plain = await openMobile({ input: "pointer" });
+    const explicit = await openMobile({
+      input: "pointer",
+      density: "default",
+    });
 
     await settleLayout(compact);
     await settleLayout(plain);

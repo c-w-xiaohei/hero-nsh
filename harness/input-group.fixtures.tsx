@@ -44,7 +44,8 @@ import { probe } from "@scenario/probe";
  * `host.params.scope` picks the environment wrapper — "" is the host's default
  * (pointer, the desktop-parity half), "touch" is
  * `EnvironmentScope input="touch"`, the same convention the switch and
- * toggle-button fixtures use (adapt sheet A-011).
+ * toggle-button fixtures use (adapt sheet A-011). The test-only params
+ * `testInput` ("pointer"/"touch") inject an outer EnvironmentScope input.
  *
  * The input records focus into Storage: `nsh/test` cannot query focus, and the
  * upstream `toHaveFocus()` is the one fact T-016 / T-017 read.
@@ -55,10 +56,23 @@ import { probe } from "@scenario/probe";
  * -----------------------------------------------------------------------------------------------*/
 
 function Scoped(props: { children?: JSX.Element }) {
-  return String(host.params.scope ?? "") === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  // Test-harness environment param (only the mobile tests set it —
+  // absent keeps the host-derived default): `testInput` injects an outer
+  // EnvironmentScope input so the pointer baseline is host-independent
+  // (inner `scope` overrides still win).
+  const testInput = String(host.params.testInput ?? "");
+
+  const body =
+    String(host.params.scope ?? "") === "touch" ? (
+      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+    ) : (
+      <>{props.children}</>
+    );
+
+  return testInput === "pointer" || testInput === "touch" ? (
+    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
   ) : (
-    <>{props.children}</>
+    body
   );
 }
 

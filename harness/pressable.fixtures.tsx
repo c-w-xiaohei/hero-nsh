@@ -1,4 +1,4 @@
-import { effect, host, mount, Text, View } from "nsh";
+import { effect, host, mount, platform, Text, View, windowSize } from "nsh";
 import type { Component, JSX, PressEvent } from "nsh";
 import {
   createInput,
@@ -39,8 +39,9 @@ import { probe } from "@scenario/probe";
  *              handlers, `layout` off `onLayout`.
  *
  * `host.params.scope` picks the `EnvironmentScope` wrapper ("" = host
- * default, "touch" = `input="touch"`), same convention as
- * `environment.fixtures.tsx`.
+ * default, "touch" = `input="touch"`, "pointer" = `input="pointer"` — the
+ * explicit pointer half, since a real phone's default is touch), same
+ * convention as `environment.fixtures.tsx`.
  *
  * `host.params.fanim` selects the factory's scale `animation`
  * (`PressableFeedbackScaleAnimation`): "" | "ignore-scale" | "disabled" |
@@ -60,16 +61,24 @@ import { probe } from "@scenario/probe";
  * Shared bits
  * -----------------------------------------------------------------------------------------------*/
 
-type Scope = "" | "touch";
+type Scope = "" | "touch" | "pointer";
 
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "") as Scope;
 
-  return scope === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
-  ) : (
-    <>{props.children}</>
-  );
+  if (scope === "touch") {
+    return (
+      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+    );
+  }
+
+  if (scope === "pointer") {
+    return (
+      <EnvironmentScope input="pointer">{props.children}</EnvironmentScope>
+    );
+  }
+
+  return <>{props.children}</>;
 }
 
 function Frame(props: { children?: JSX.Element }) {
@@ -429,6 +438,18 @@ const cases: Record<string, Component> = {
 function Fixture() {
   const name = String(host.params.case ?? "factory");
   const Case = cases[name] ?? FactoryInner;
+
+  // The host's own report — platform facts and the real window size — so
+  // tests derive the expected default environment (the feedback gate
+  // follows `input`, which follows `platform.desktop`) instead of pinning
+  // a desktop baseline a native phone cannot provide.
+  probe("env")({
+    os: platform.os,
+    desktop: platform.desktop,
+    idiom: platform.idiom,
+    w: windowSize().width,
+    h: windowSize().height,
+  });
 
   return (
     <Frame>

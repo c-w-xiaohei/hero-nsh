@@ -52,9 +52,12 @@ import { probe } from "@scenario/probe";
  *              the offset, and a plain `pad` view proves the scroller moves
  *              when the gesture is not the slider's.
  *
- * host.params.scope picks the EnvironmentScope wrapper: "touch" injects
- * input="touch", anything else leaves the default environment — the
- * desktop-parity half of the same case (the switch fixures' convention).
+ * host.params.scope picks the EnvironmentScope wrapper: "touch"/"pointer"
+ * inject that input axis, anything else leaves the default environment —
+ * the desktop-parity half of the same case (the switch fixtures'
+ * convention). `scope` wraps every case (the slider fixture's `App`
+ * convention), so the parity cases — `controlled`/`disabled`/`alpha` —
+ * honor it too.
  *
  * The positive pan observation the headless assertions read is the
  * `ctx-env` channel's `panActive`/`panKeys` pair (review M-013 complement to
@@ -108,10 +111,17 @@ function orientationParam(): "horizontal" | "vertical" {
  * Environment + probes (adapt sheet §4)
  * -----------------------------------------------------------------------------------------------*/
 
-/** `scope=touch` injects the touch environment; anything else is the default. */
+/**
+ * `scope` picks the `EnvironmentScope` wrapper: "touch"/"pointer" inject that
+ * input axis, anything else leaves the default environment (the host-derived
+ * half — on native phones that is touch, so the pointer-baseline assertions
+ * inject "pointer" explicitly instead of a desktop platform pin).
+ */
 function Scoped(props: { children?: JSX.Element }) {
-  return String(host.params.scope ?? "") === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  const scope = String(host.params.scope ?? "");
+
+  return scope === "touch" || scope === "pointer" ? (
+    <EnvironmentScope input={scope}>{props.children}</EnvironmentScope>
   ) : (
     props.children
   );
@@ -498,8 +508,8 @@ function ScrollCase() {
 function Fixture() {
   const name = String(host.params.case ?? "parts");
 
-  if (name === "mobile") return <Scoped><MobileCase /></Scoped>;
-  if (name === "scroll") return <Scoped><ScrollCase /></Scoped>;
+  if (name === "mobile") return <MobileCase />;
+  if (name === "scroll") return <ScrollCase />;
   if (name === "keyboard") return <KeyboardCase />;
   if (name === "controlled") return <ControlledCase />;
   if (name === "disabled") return <DisabledCase />;
@@ -509,4 +519,19 @@ function Fixture() {
   return <PartsCase />;
 }
 
-mount(Fixture);
+/*
+ * `Scoped` wraps the whole case tree (the slider fixture's convention): an
+ * absent `scope` leaves the tree untouched — a bare passthrough, so the
+ * existing desktop tests' default behavior is unchanged — and the case
+ * elements are built inside `Fixture`'s body so the injected context
+ * actually reaches them.
+ */
+function App() {
+  return (
+    <Scoped>
+      <Fixture />
+    </Scoped>
+  );
+}
+
+mount(App);

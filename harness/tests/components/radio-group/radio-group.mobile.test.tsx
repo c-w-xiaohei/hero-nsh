@@ -1,40 +1,38 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the radio-group adapt unit, one test per row of
- * adapt-sheets/radio-group.md §4 (M-001…M-007). The action is B(继承): the
- * press surface belongs to each `Radio`/`Radio.Content` row (the radio
- * unit's delivered seam), and the group container itself gains no feedback
- * — these rows pin that boundary from the group's side.
+ * adapt-sheets/radio-group.md §4 (M-001…M-006) on every target, native
+ * ios/android included. The action is B(继承): the press surface belongs
+ * to each `Radio`/`Radio.Content` row (the radio unit's delivered seam),
+ * and the group container itself gains no feedback — these rows pin that
+ * boundary from the group's side.
  *
- * The fixture is `harness/radio-group.fixtures.tsx`, opened by `host.params`:
- * `scope` ("" or "touch" through `EnvironmentScope`), `default`,
- * `orientation`, `disabled`, `readonly`, `gap`. Probes in `app.storage()`:
- * `onChange` (the group's single commit channel), `press` (per-row Content
- * onPress — proves a press landed when no `onChange` may follow), `layout`
- * (`part` = "group" | "radio" | "content"), `onFocus`/`onBlur` (per item).
- * The "<name>:selected" markers stand in for aria-checked.
+ * The fixture is `harness/radio-group.fixtures.tsx`, opened by
+ * `host.params`: `testInput` ("pointer"/"touch" through an outer
+ * `EnvironmentScope` — the pointer half is the host-independent
+ * desktop-parity baseline; the host-derived default differs per target),
+ * `default`, `orientation`, `disabled`, `readonly`, `gap`. Probes in
+ * `app.storage()`: `onChange` (the group's single commit channel), `press`
+ * (per-row Content onPress — proves a press landed when no `onChange` may
+ * follow), `layout` (`part` = "group" | "radio" | "content"),
+ * `onFocus`/`onBlur` (per item). The "<name>:selected" markers stand in
+ * for aria-checked.
  *
  * M-007's keyboard half cannot run on a headless Windows window (the
- * registered focus gap), so it opens `platform: "web"` explicitly inside
- * the test — the same split button.mobile.test.tsx uses — and reuses
- * radio.fixtures.tsx's `group-focus` case, which already records the
- * group's onFocus/onBlur/onFocusChange and the per-item focus probes.
+ * registered focus gap), so it lives in
+ * `radio-group.mobile.web.test.tsx` — `platform:"web"` drives Tab focus —
+ * and reuses radio.fixtures.tsx's `group-focus` case, which already
+ * records the group's onFocus/onBlur/onFocusChange and the per-item focus
+ * probes.
  */
 
 type Params = Record<string, string | number | boolean>;
 
-function openGroup(
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openGroup(params: Params = {}): Promise<App> {
   return open("../../../radio-group.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
     host: { params },
   });
 }
@@ -76,8 +74,8 @@ describe("radio-group mobile", () => {
   // exactly once with that value, and pressing the now-selected item again
   // appends nothing (radio semantics: no deselect, the group's `select`
   // writes once and `createControllableSignal` dedupes the repeat).
-  test("M-001 default environment: row press commits once and a re-press never re-commits", async () => {
-    const app = await openGroup();
+  test("M-001 pointer baseline: row press commits once and a re-press never re-commits", async () => {
+    const app = await openGroup({ testInput: "pointer" });
 
     await app.press("role:radio[Cats]");
     await app.waitUntil(() => callsOf(app, "onChange").length === 1);
@@ -98,7 +96,7 @@ describe("radio-group mobile", () => {
   // observable form of "组不加反馈" is that the press finds no pressable
   // view at all; the probes and markers then confirm nothing moved.
   test("M-002 pressing the group's bare gap finds no pressable and commits nothing", async () => {
-    const app = await openGroup({ gap: "1" });
+    const app = await openGroup({ gap: "1", testInput: "pointer" });
 
     expect(app.shows("id:group-gap")).toBe(true);
 
@@ -114,7 +112,7 @@ describe("radio-group mobile", () => {
   // under an injected touch environment — "group 不加反馈" holds on mobile
   // exactly as under pointer.
   test("M-003 under touch the group's bare gap still has no pressable", async () => {
-    const app = await openGroup({ gap: "1", scope: "touch" });
+    const app = await openGroup({ gap: "1", testInput: "touch" });
 
     expect(app.shows("id:group-gap")).toBe(true);
 
@@ -132,7 +130,7 @@ describe("radio-group mobile", () => {
   // floor through the group's `mt-4` itemClass, and the group's
   // `isDisabled`/`isReadOnly` still block the write.
   test("M-004 under touch: row press commits once, the 44pt floor holds, disabled and read-only refuse writes", async () => {
-    const app = await openGroup({ scope: "touch" });
+    const app = await openGroup({ testInput: "touch" });
 
     await app.press("role:radio[Cats]");
     await app.waitUntil(() => callsOf(app, "onChange").length === 1);
@@ -141,14 +139,14 @@ describe("radio-group mobile", () => {
     await app.waitUntil(() => layouts(app, "content", "Cats").length > 0);
     expect(lastLayout(app, "content", "Cats").height).toBeGreaterThanOrEqual(44);
 
-    const disabled = await openGroup({ disabled: true, scope: "touch" });
+    const disabled = await openGroup({ disabled: true, testInput: "touch" });
     expect(disabled.enabled("role:radio[Cats]")).toBe(false);
     await expect(disabled.press("role:radio[Cats]")).rejects.toMatchObject({
       code: "ERR_NSH_TEST_DISABLED",
     });
     expect(callsOf(disabled, "onChange")).toHaveLength(0);
 
-    const readonly = await openGroup({ readonly: true, scope: "touch" });
+    const readonly = await openGroup({ readonly: true, testInput: "touch" });
     await readonly.press("role:radio[Cats]");
     await readonly.waitUntil(() => pressCount(readonly, "cats") >= 1);
     await readonly.wait(20);
@@ -162,18 +160,18 @@ describe("radio-group mobile", () => {
   // identical under pointer and touch, and `orientation="horizontal"`
   // still puts the first two items on the same row in both environments.
   test("M-005 group root width is identical across environments and horizontal items share a row", async () => {
-    const pointer = await openGroup();
+    const pointer = await openGroup({ testInput: "pointer" });
     await pointer.waitUntil(() => layouts(pointer, "group").length > 0);
     const pointerWidth = lastLayout(pointer, "group").width;
 
-    const touch = await openGroup({ scope: "touch" });
+    const touch = await openGroup({ testInput: "touch" });
     await touch.waitUntil(() => layouts(touch, "group").length > 0);
     const touchWidth = lastLayout(touch, "group").width;
 
     expect(pointerWidth).toBeGreaterThan(0);
     expect(touchWidth).toBe(pointerWidth);
 
-    for (const params of [{}, { scope: "touch" }] as Params[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const app = await openGroup({ ...params, orientation: "horizontal" });
       await app.waitUntil(
         () =>
@@ -192,7 +190,7 @@ describe("radio-group mobile", () => {
   // host gap on headless Windows, so the assertion stays on the contract:
   // no `onChange`, selection marker unmoved.
   test("M-006 group Label press commits nothing and leaves the selection", async () => {
-    for (const params of [{}, { scope: "touch" }] as Params[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const app = await openGroup(params);
 
       await app.press("id:group-label");
@@ -204,37 +202,7 @@ describe("radio-group mobile", () => {
     }
   }, 120_000);
 
-  // adapt-sheets/radio-group.md M-007 (基线): desktop zero-drift sample —
-  // the focus-within contract is unchanged: the first item entering the
-  // group fires the group's `onFocus`/`onFocusChange(true)` once, arrow
-  // moves inside the group never produce `onBlur`/`onFocusChange(false)`,
-  // and the real leave commits the delayed blur pair. Keyboard focus only
-  // exists on the web target, so this row opens `platform: "web"` and
-  // reuses radio.fixtures.tsx's `group-focus` case (the same upstream
-  // unit the heroui.web suite already pins).
-  test("M-007 baseline: focus-within enters once, survives arrow moves, and leaves once", async () => {
-    const app = await open("../../../radio.fixtures.tsx", {
-      platform: "web",
-      width: 1024,
-      height: 768,
-      host: { params: { case: "group-focus" } },
-    });
-
-    await app.keyboard.press("tab");
-    expect(callsOf(app, "groupFocus")).toEqual([["group"]]);
-    expect(callsOf(app, "groupBlur")).toHaveLength(0);
-    expect(callsOf(app, "groupFocusChange")).toEqual([[true]]);
-
-    await app.keyboard.press("arrowdown");
-    await app.keyboard.press("arrowup");
-    expect(callsOf(app, "onFocus")).toEqual([["a"], ["b"], ["a"]]);
-    expect(callsOf(app, "groupFocus")).toEqual([["group"]]);
-    expect(callsOf(app, "groupBlur")).toHaveLength(0);
-    expect(callsOf(app, "groupFocusChange")).toEqual([[true]]);
-
-    await app.keyboard.press("tab");
-    expect(callsOf(app, "groupBlur")).toEqual([["group"]]);
-    expect(callsOf(app, "groupFocusChange")).toEqual([[true], [false]]);
-    expect(callsOf(app, "groupFocus")).toEqual([["group"]]);
-  }, 120_000);
+  // adapt-sheets/radio-group.md M-007 (基线) lives in
+  // `radio-group.mobile.web.test.tsx` — keyboard focus only exists on the
+  // web target.
 });

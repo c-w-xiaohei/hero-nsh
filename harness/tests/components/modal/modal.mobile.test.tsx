@@ -6,18 +6,21 @@ import { calls, callsOf } from "../../helpers/calls";
 /*
  * Mobile assertions for the modal adapt unit, one test per row of
  * adapt-sheets/modal.md §4 (M-001…M-010, M-012, M-013; M-011 lives in
- * modal.mobile.headless.test.tsx, the web-only half of M-005 in
- * modal.mobile.web.test.tsx, the headless halves of M-009/M-013 in
- * modal.mobile.headless.test.tsx). The fixture is
+ * modal.mobile.headless.test.tsx, the web-only halves of M-005 and the
+ * M-009 `size` axis in modal.mobile.web.test.tsx, the headless halves of
+ * M-009/M-013 in modal.mobile.headless.test.tsx). The fixture is
  * `harness/modal.fixtures.tsx` — `basic` is the upstream part tree,
  * `scrollable` adds 40 tall Body rows; `host.params` carries `scope`
  * (EnvironmentScope input/width), `presentation`, `dismissable`, `swipeable`,
  * `scroll`, `size`, `placement` and `open` ("0" starts closed so `mo-trigger`
  * opens).
  *
- * Every open pins `platform: "windows"` at 1024×768 — the desktop `pointer`
- * environment is the default half of each row, and `scope` injects the touch
- * half. The observation channel is what `nsh/test` sees: the `layout` probe's
+ * `open()` platform/width/height options are rejected on ios/android, so
+ * `scope:"pointer"` is the default half of each row (the role the old
+ * `platform:"windows"` pin played) and `scope` keeps injecting the touch
+ * half; geometry reads the `container`/`absDialog` records rather than
+ * viewport constants because native screens vary. The observation channel
+ * is what `nsh/test` sees: the `layout` probe's
  * per-part bounds, the `swipe` probe (`panKeys` — 0 when the swipe gesture is
  * gated off, the physical-absence evidence — plus `offset`, `atTop` and the
  * resolved `presentation`), the `drag` probe (offset deltas the pan wrote),
@@ -35,10 +38,6 @@ import { calls, callsOf } from "../../helpers/calls";
  * default 30 s cap is where the page-load flake lives, so they carry an
  * explicit 90 s budget.
  */
-
-const VIEWPORT_W = 1024;
-const VIEWPORT_H = 768;
-const CENTER_Y = VIEWPORT_H / 2;
 
 type LayoutRecord = {
   name: string;
@@ -59,11 +58,8 @@ function openModal(
   params: Record<string, string | number | boolean> = {},
 ): Promise<App> {
   return open("../../../modal.fixtures.tsx", {
-    platform: "windows",
-    width: VIEWPORT_W,
-    height: VIEWPORT_H,
     clock: {},
-    host: { params: { case: "basic", ...params } },
+    host: { params: { case: "basic", scope: "pointer", ...params } },
   });
 }
 
@@ -72,11 +68,8 @@ function openModalCase(
   params: Record<string, string | number | boolean> = {},
 ): Promise<App> {
   return open("../../../modal.fixtures.tsx", {
-    platform: "windows",
-    width: VIEWPORT_W,
-    height: VIEWPORT_H,
     clock: {},
-    host: { params: { case: caseName, ...params } },
+    host: { params: { case: caseName, scope: "pointer", ...params } },
   });
 }
 
@@ -172,9 +165,12 @@ describe("modal mobile", () => {
       await settleOpen(app);
 
       const dialog = absDialog(app);
-      expect(Math.abs(dialog.y + dialog.height - VIEWPORT_H)).toBeLessThanOrEqual(4);
-      expect(dialog.width).toBeGreaterThan(VIEWPORT_W * 0.9);
-      expect(dialog.centerY).toBeGreaterThan(CENTER_Y + 100);
+      const stage = lastLayout(app, "container");
+      expect(
+        Math.abs(dialog.y + dialog.height - (stage.y + stage.height)),
+      ).toBeLessThanOrEqual(4);
+      expect(dialog.width).toBeGreaterThan(stage.width * 0.9);
+      expect(dialog.centerY).toBeGreaterThan(stage.y + stage.height / 2 + 100);
       expect(lastSwipe(app).presentation).toBe("sheet");
     },
     90_000,
@@ -196,9 +192,12 @@ describe("modal mobile", () => {
       await settleOpen(app);
 
       const dialog = absDialog(app);
-      expect(Math.abs(dialog.centerY - CENTER_Y)).toBeLessThanOrEqual(40);
-      // The `max-w-md` cap: 448 measured, far below the sheet's ~1024.
-      expect(dialog.width).toBeLessThan(600);
+      const stage = lastLayout(app, "container");
+      expect(
+        Math.abs(dialog.centerY - (stage.y + stage.height / 2)),
+      ).toBeLessThanOrEqual(40);
+      // The `max-w-md` cap: far below the sheet's full-bleed width.
+      expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
       expect(dialog.width).toBeGreaterThan(200);
       expect(lastSwipe(app).presentation).toBe("panel");
     },
@@ -435,8 +434,11 @@ describe("modal mobile", () => {
       await settleOpen(app);
 
       const dialog = absDialog(app);
-      expect(Math.abs(dialog.centerY - CENTER_Y)).toBeLessThanOrEqual(40);
-      expect(dialog.width).toBeLessThan(600);
+      const stage = lastLayout(app, "container");
+      expect(
+        Math.abs(dialog.centerY - (stage.y + stage.height / 2)),
+      ).toBeLessThanOrEqual(40);
+      expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
 
       // `isKeyboardDismissDisabled=false` (the default): Escape closes through
       // the native Dialog's `closeOnEscape`.
@@ -496,19 +498,9 @@ describe("modal mobile", () => {
       expect(callsOf(outside, "scroll")).toEqual([]);
       expect(outside.shows("text:Row 39")).toBe(true);
 
-      // `size`: the max-w caps are observable as distinct widths (measured:
-      // xs 320, sm 384, md 448, lg 512, cover 944, full 1024 — the sm/md/lg
-      // run pins the ordering; cover/full are the w-full extremes).
-      const widths: Record<string, number> = {};
-      for (const size of ["sm", "md", "lg"] as const) {
-        const sized = await openModal({ size });
-        await settleOpen(sized);
-        widths[size] = absDialog(sized).width;
-      }
-      expect(widths.sm).toBeLessThan(widths.md);
-      expect(widths.md).toBeLessThan(widths.lg);
-      expect(widths.md).toBeGreaterThan(400);
-      expect(widths.md).toBeLessThan(500);
+      // `size`: the max-w caps need a window wider than 512 pt to tell the
+      // sizes apart — on a phone-width screen every cap clamps to the same
+      // box. That half lives in modal.mobile.web.test.tsx.
 
       // `placement`: top/center/bottom mount and render identical card
       // bounds — the desktop baseline measured above (the margins have no
@@ -544,8 +536,11 @@ describe("modal mobile", () => {
       await settleOpen(app);
 
       const dialog = absDialog(app);
-      expect(Math.abs(dialog.centerY - CENTER_Y)).toBeLessThanOrEqual(40);
-      expect(dialog.width).toBeLessThan(600);
+      const stage = lastLayout(app, "container");
+      expect(
+        Math.abs(dialog.centerY - (stage.y + stage.height / 2)),
+      ).toBeLessThanOrEqual(40);
+      expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
       expect(lastSwipe(app).presentation).toBe("panel");
 
       await app.drag("id:mo-card", { y: 200 });

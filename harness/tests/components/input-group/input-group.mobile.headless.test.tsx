@@ -3,18 +3,21 @@ import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
- * Headless mobile assertions for the input-group adapt unit — the half of
- * adapt-sheets/input-group.md §4 that only exists on the headless engine:
- * `open({ platform: "ios" })` host derivation (`platform.desktop` false →
- * `Environment.input` defaults to `"touch"` without an `EnvironmentScope`).
- * `--target web` rejects a phone `platform`, so this file is headless-only.
+ * Headless mobile assertions for the input-group adapt unit — the halves
+ * of adapt-sheets/input-group.md §4 that only exist on the headless
+ * engine: `open({ platform: "ios" })` host derivation (`platform.desktop`
+ * false → `Environment.input` defaults to `"touch"` without an
+ * `EnvironmentScope`; `--target web` rejects a phone `platform`) and the
+ * `app.hover` rows a phone has no mouse for — M-002 and M-006's
+ * pointer-hover half, moved from `input-group.mobile.test.tsx`.
  *
- * The fixture is `harness/input-group.fixtures.tsx`, `case: "layout"`, whose
- * Root `onLayout` probe reports the same bounds M-001 reads under the
- * injected scope.
+ * The fixture is `harness/input-group.fixtures.tsx`, `case: "layout"` /
+ * `"hover"`, whose Root `onLayout` probe reports the same bounds M-001
+ * reads under the injected scope.
  */
 
 type LayoutEntry = { name: string; width: number; height: number };
+type FocusRecord = { part: string; focused: boolean };
 
 function layoutFor(app: App, name: string): LayoutEntry {
   const entries = callsOf(app, "layout")
@@ -23,7 +26,75 @@ function layoutFor(app: App, name: string): LayoutEntry {
   return entries[entries.length - 1];
 }
 
+function focusedRecords(app: App): FocusRecord[] {
+  return callsOf(app, "focus")
+    .map((c) => c[0] as FocusRecord)
+    .filter((r) => r.part === "input" && r.focused === true);
+}
+
+function openCase(name: string, params: Record<string, string> = {}): Promise<App> {
+  return open("../../../input-group.fixtures.tsx", {
+    platform: "windows",
+    width: 1024,
+    height: 768,
+    locale: "en-US",
+    host: { params: { case: name, ...params } },
+  });
+}
+
 describe("input-group mobile (headless)", () => {
+  // adapt-sheets/input-group.md M-002 (A-003, A-004): under touch neither a
+  // hover nor a press (whose sticky web hover is the registered hazard)
+  // raises `isHovered` — the render-prop marker stays "idle" and the three
+  // hover callbacks record nothing, which is also what keeps
+  // `bg-field-hover` / `bg-default-hover` off (they ride the same `hovered`
+  // signal; class names are not observable). The press itself still lands:
+  // the input's focus probe records. Under pointer the hover round-trips
+  // exactly as on desktop.
+  test("M-002 injected touch suppresses group and control hover; pointer keeps it", async () => {
+    const touch = await openCase("hover", { testInput: "touch" });
+    expect(touch.shows("text:idle")).toBe(true);
+
+    await touch.hover("id:ig-prefix");
+    await touch.press("id:ig-prefix");
+    await touch.waitUntil(() => focusedRecords(touch).length > 0);
+
+    expect(touch.shows("text:hovered")).toBe(false);
+    expect(touch.shows("text:idle")).toBe(true);
+    expect(callsOf(touch, "onHoverStart")).toHaveLength(0);
+    expect(callsOf(touch, "onHoverEnd")).toHaveLength(0);
+    expect(callsOf(touch, "onHoverChange")).toHaveLength(0);
+
+    const pointer = await openCase("hover", { testInput: "pointer" });
+    // No pre-hover "idle" assertion here: the mouse can still sit over the
+    // group's position from the touch app's press, and a mount-time
+    // mouseenter then legitimately reports "hovered" — the probes below
+    // hold either way (they record at mount or at `app.hover`).
+
+    await pointer.hover("id:ig-prefix");
+    expect(pointer.shows("text:hovered")).toBe(true);
+    expect(callsOf(pointer, "onHoverStart").length).toBeGreaterThanOrEqual(1);
+    expect(callsOf(pointer, "onHoverChange")).toEqual([[true]]);
+
+    // `label:Amount` names the input (inside the group); the visible Label
+    // text is the element outside the group that ends the hover.
+    await pointer.hover("text:Amount");
+    expect(pointer.shows("text:idle")).toBe(true);
+    expect(callsOf(pointer, "onHoverEnd").length).toBeGreaterThanOrEqual(1);
+    expect(callsOf(pointer, "onHoverChange")).toEqual([[true], [false]]);
+  }, 120_000);
+
+  // adapt-sheets/input-group.md M-006's pointer-hover half (A-011): the
+  // `hover` case's own channel under pointer — `app.hover` raises the
+  // marker and `onHoverStart` records (the shared file proves the same
+  // case on both scopes with the press-focus probe instead).
+  test("M-006 pointer: the hover case's hover channel records", async () => {
+    const hover = await openCase("hover", { testInput: "pointer" });
+    await hover.hover("id:ig-prefix");
+    expect(hover.shows("text:hovered")).toBe(true);
+    expect(callsOf(hover, "onHoverStart").length).toBeGreaterThan(0);
+  }, 120_000);
+
   // adapt-sheets/input-group.md M-008 (A-001, A-002): an ios host derives
   // `input()==="touch"` on its own — no `EnvironmentScope` — so the `input`
   // axis' `min-h-11` lifts the group row to the 44 pt hit minimum. This is

@@ -8,10 +8,13 @@ import { calls, callsOf } from "../../helpers/calls";
  * `harness/spinner.fixtures.tsx`: `host.params.case` picks the mount
  * (`layout`/`gradient` are the pre-existing cases, `sizes`/`label` are the
  * A-006 additions) and `host.params.input` / `host.params.density` feed the
- * `EnvironmentScope` wrapper; absent params leave the host-derived
- * environment — pointer + default density under the `platform:"windows"`
- * pin both targets share — which is the desktop-parity baseline every
- * injected run compares against. The fixture's `EnvProbe` reports the
+ * `EnvironmentScope` wrapper. The axes are always explicit —
+ * `input:"pointer"` is the desktop-parity baseline every injected run
+ * compares against and `input:"touch"` the injected mobile half —
+ * because the host-derived default differs per target (touch on
+ * ios/android, pointer on desktop and web). No `platform`/`width` open
+ * options: native targets fill the device screen and reject them. The
+ * fixture's `EnvProbe` reports the
  * resolved pair as `env=input:… density:…`; the injected-environment rows
  * assert it so a param that never reached the scope cannot pass vacuously,
  * and `contentTexts` filters it out of cross-environment text comparisons.
@@ -23,10 +26,8 @@ import { calls, callsOf } from "../../helpers/calls";
  * environments, a touch press finds no press path, and the reduced-motion
  * host still mounts the same geometry.
  *
- * `platform:"windows"` is the pointer host both targets share (the
- * badge/kbd .mobile.test.tsx convention); the file runs headless and
- * `--target web` unchanged — M-007's dual-runner contract — because no
- * case injects a phone platform or needs a held touch.
+ * M-007's dual-runner contract holds because no case injects a phone
+ * platform or needs a held touch.
  */
 
 type Box = {
@@ -45,9 +46,6 @@ function openSpinner(
   options: { reducedMotion?: boolean } = {},
 ): Promise<App> {
   return open("../../../spinner.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     ...(options.reducedMotion ? { reducedMotion: true } : {}),
     host: { params },
   });
@@ -130,7 +128,7 @@ describe("spinner mobile", () => {
   // default accessible name "Loading", and the decorative icon mounts under
   // it. Same baseline the heroui file pins in T-001/T-002/T-004.
   test("M-001 default environment: size squares, named progressbar, icon mounted", async () => {
-    const app = await openCase("sizes");
+    const app = await openCase("sizes", { input: "pointer" });
 
     await settleLayout(app, [...SIZE_NAMES]);
     for (const name of SIZE_NAMES) {
@@ -150,18 +148,22 @@ describe("spinner mobile", () => {
   // (T-004); `gradient` records the same 8 stops X-001 pins — two arcs,
   // each fading its own hue through the 00-alpha twin at the fixed offsets.
   test("M-002 baseline: label name override, layout geometry, gradient stops", async () => {
-    const fallback = await openCase("label");
+    const fallback = await openCase("label", { input: "pointer" });
     expect(fallback.shows("role:progressbar[Loading]")).toBe(true);
 
-    const named = await openSpinner({ case: "label", name: "Saving changes" });
+    const named = await openSpinner({
+      case: "label",
+      name: "Saving changes",
+      input: "pointer",
+    });
     expect(named.shows("role:progressbar[Saving changes]")).toBe(true);
 
-    const layout = await openCase("layout");
+    const layout = await openCase("layout", { input: "pointer" });
     await settleLayout(layout, ["lg", "md"]);
     expect(lastBox(layout, "lg")).toMatchObject({ width: 32, height: 32 });
     expect(lastBox(layout, "md")).toMatchObject({ width: 24, height: 24 });
 
-    const gradient = await openCase("gradient");
+    const gradient = await openCase("gradient", { input: "pointer" });
     const stops = gradientStops(gradient);
 
     expect(stops).toHaveLength(8);
@@ -191,7 +193,7 @@ describe("spinner mobile", () => {
   // baseline — the component table carries no `input` axis and the canvas
   // draw has no environment branch, so the render is constant on both ends.
   test("M-003 injected touch changes no bound, name, icon or gradient stop", async () => {
-    const sizesPointer = await openCase("sizes");
+    const sizesPointer = await openCase("sizes", { input: "pointer" });
     const sizesTouch = await openCase("sizes", { input: "touch" });
 
     // The scope really engaged — without this line the comparisons below
@@ -204,13 +206,13 @@ describe("spinner mobile", () => {
     expect(boxSet(sizesTouch)).toEqual(boxSet(sizesPointer));
     expect(sizesTouch.shows("role:progressbar[Loading] >> id:spinner-icon")).toBe(true);
 
-    const layoutPointer = await openCase("layout");
+    const layoutPointer = await openCase("layout", { input: "pointer" });
     const layoutTouch = await openCase("layout", { input: "touch" });
     await settleLayout(layoutPointer, ["lg", "md"]);
     await settleLayout(layoutTouch, ["lg", "md"]);
     expect(boxSet(layoutTouch)).toEqual(boxSet(layoutPointer));
 
-    const labelPointer = await openCase("label");
+    const labelPointer = await openCase("label", { input: "pointer" });
     const labelTouch = await openCase("label", { input: "touch" });
     await settleLayout(labelPointer, ["label"]);
     await settleLayout(labelTouch, ["label"]);
@@ -224,7 +226,7 @@ describe("spinner mobile", () => {
     });
     expect(namedTouch.shows("role:progressbar[Saving changes]")).toBe(true);
 
-    const gradientPointer = await openCase("gradient");
+    const gradientPointer = await openCase("gradient", { input: "pointer" });
     const gradientTouch = await openCase("gradient", { input: "touch" });
     expect(gradientStops(gradientTouch)).toEqual(gradientStops(gradientPointer));
   }, 120_000);
@@ -237,8 +239,8 @@ describe("spinner mobile", () => {
   test("M-004 injected compact density changes no bound", async () => {
     for (const caseName of ["sizes", "layout"] as const) {
       const names = caseName === "sizes" ? [...SIZE_NAMES] : ["lg", "md"];
-      const plain = await openCase(caseName);
-      const compact = await openCase(caseName, { density: "compact" });
+      const plain = await openCase(caseName, { input: "pointer" });
+      const compact = await openCase(caseName, { input: "pointer", density: "compact" });
       const both = await openCase(caseName, { input: "touch", density: "compact" });
 
       // Same non-vacuity guard as M-003: both presets must be mounted.
@@ -266,12 +268,9 @@ describe("spinner mobile", () => {
     const before = boxSet(app);
     const beforeTexts = app.texts();
 
-    try {
-      await app.press("id:spinner-md");
-    } catch {
-      // Nothing around the spinner hears presses; a rejection is itself the
-      // negative assertion — no press path exists to answer.
-    }
+    await expect(app.press("id:spinner-md")).rejects.toMatchObject({
+      code: "ERR_NSH_TEST_NOT_FOUND",
+    });
 
     const names = calls(app).map((call) => call.name);
     expect(new Set(names)).toEqual(new Set(["layout"]));
@@ -290,16 +289,10 @@ describe("spinner mobile", () => {
     // opens are the same mounts under the weakened-motion host option.
     const plain = await openCase("sizes", { input: "touch" });
     const reduced = await open("../../../spinner.fixtures.tsx", {
-      platform: "windows",
-      width: 1024,
-      height: 768,
       reducedMotion: true,
       host: { params: { case: "sizes", input: "touch" } },
     });
     const reducedLabel = await open("../../../spinner.fixtures.tsx", {
-      platform: "windows",
-      width: 1024,
-      height: 768,
       reducedMotion: true,
       host: { params: { case: "label", input: "touch" } },
     });
@@ -322,10 +315,9 @@ describe("spinner mobile", () => {
   // adapt-sheets/spinner.md M-007 (A-006, A-007): the fixture channel works —
   // `case` dispatches all four mounts, `input`/`density` injection reaches
   // the scope (the env line proves it), the onLayout and gradient-stop
-  // probes record into `app.storage()` and read back, and the unpinned
-  // `layout`/`gradient` cases keep their pre-mobile behavior verbatim. The
-  // `platform:"windows"` pin is what lets the same file pass headless and
-  // `--target web`.
+  // probes record into `app.storage()` and read back, and the `layout`/
+  // `gradient` cases keep their pre-mobile behavior verbatim under the
+  // explicit pointer scope that replaced the desktop pin.
   test("M-007 fixture channel: cases dispatch, injections engage, probes record", async () => {
     const mounts: Array<{
       params: Record<string, string>;
@@ -339,9 +331,9 @@ describe("spinner mobile", () => {
     ];
 
     for (const mount of mounts) {
-      const app = await openSpinner(mount.params);
+      const app = await openSpinner({ ...mount.params, input: "pointer" });
       expect(app.shows(mount.selector)).toBe(true);
-      // Absent params keep the host baseline — pointer + default density.
+      // The injected pointer scope is the baseline — pointer + default density.
       expect(app.texts()).toContain("env=input:pointer density:default");
       await settleLayout(app, mount.probes);
       for (const name of mount.probes) {
@@ -349,13 +341,13 @@ describe("spinner mobile", () => {
       }
     }
 
-    const gradient = await openCase("gradient");
+    const gradient = await openCase("gradient", { input: "pointer" });
     expect(gradientStops(gradient)).toHaveLength(8);
 
     // The pre-existing cases are verbatim under the wrapper: layout still
     // reports lg=32/md=24 and gradient still records its 8 stops (M-002
     // pins the full assertion; this is the channel-level recheck).
-    const layout = await openCase("layout");
+    const layout = await openCase("layout", { input: "pointer" });
     await settleLayout(layout, ["lg", "md"]);
     expect(lastBox(layout, "lg")).toMatchObject({ width: 32, height: 32 });
     expect(lastBox(layout, "md")).toMatchObject({ width: 24, height: 24 });

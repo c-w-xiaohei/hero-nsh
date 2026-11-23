@@ -1,42 +1,41 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the button adapt unit, one test per row of
- * adapt-sheets/button.md §4 (M-001…M-010).
+ * adapt-sheets/button.md §4 (M-001…M-010) on every target this file can
+ * reach — native ios/android included.
  *
  * The fixture is `harness/button.fixtures.tsx`, opened by `host.params`:
- * `case` (basic/form/overlay/hover/matrix), `scope` ("" or "touch" through
- * `EnvironmentScope`), `size`, `icon`, `variant`, `preset`, `anim`,
- * `animatedstyle`, `pending`, `disabled`, `channel`. Every assertion reads
- * what `nsh/test` can observe — `shows()`, `texts()`, `enabled()`,
- * `viewStyle().backgroundColor`, `onLayout` bounds and the `@scenario/probe`
- * calls in `app.storage()` (`events`, `press-change`, `layout`,
- * `ctx-pressed`, `ctx-state`, `ctx-env`, `ctx-origin`, `ctx-channels`,
- * `form.submit`, `overlay`).
+ * `case` (basic/form/overlay/hover/matrix), `testInput` ("pointer"/"touch"
+ * through an outer `EnvironmentScope`), `size`, `icon`, `variant`, `preset`,
+ * `anim`, `animatedstyle`, `pending`, `disabled`, `channel`. Every
+ * assertion reads what `nsh/test` can observe — `shows()`, `texts()`,
+ * `enabled()`, `viewStyle().backgroundColor`, `onLayout` bounds and the
+ * `@scenario/probe` calls in `app.storage()` (`events`, `press-change`,
+ * `layout`, `ctx-pressed`, `ctx-state`, `ctx-env`, `ctx-origin`,
+ * `ctx-channels`, `form.submit`, `overlay`).
  *
  * `viewStyle` cannot resolve `AnimatedValue`-bound `opacity`/`scale`
  * (measured: it reports the static value), so the seam's channels are
  * asserted through the context `getValue()` probes — the same degradation
  * the pressable-feedback and e-parts sheets register.
  *
- * The default environment (pointer on headless/web) is the desktop-parity
- * baseline; `EnvironmentScope input="touch"` injects the touch side.
+ * The environment is always explicit: `testInput:"pointer"` is the
+ * desktop-parity baseline and `testInput:"touch"` the injected touch side,
+ * because the host-derived default differs per target (touch on native
+ * phones, pointer on desktop/web). Native hosts fill the device screen and
+ * reject the `platform`/`width`/`height` open options, so this file carries
+ * none; the M-007 web-only Tab half lives in `button.mobile.web.test.tsx`
+ * and M-009's hover-trigger half in `button.mobile.headless.test.tsx`
+ * (`app.hover` needs a mouse).
  */
 
 type Params = Record<string, string>;
 
-function openButton(
-  caseName: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openButton(caseName: string, params: Params = {}): Promise<App> {
   return open("../../../button.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -87,8 +86,8 @@ describe("button mobile", () => {
   // is pinned at 1, no press origin is recorded and the part channels hold
   // their rest values — while `onPress`/`onPressDown`/`onPressUp`/
   // `onPressChange` still fire in order (desktop zero change).
-  test("M-001 default environment: the feedback seam is inert while the press contract holds", async () => {
-    const app = await openButton("basic");
+  test("M-001 pointer baseline: the feedback seam is inert while the press contract holds", async () => {
+    const app = await openButton("basic", { testInput: "pointer" });
 
     await app.press("id:btn");
     await app.waitUntil(() => callsOf(app, "press-change").length === 2);
@@ -133,7 +132,7 @@ describe("button mobile", () => {
   // `isPressed` completes the true→false roundtrip and the user-visible
   // event order (down → up → press) matches the desktop one.
   test("M-002 injected touch: the seam press roundtrips and the event order is unchanged", async () => {
-    const app = await openButton("basic", { scope: "touch" });
+    const app = await openButton("basic", { testInput: "touch" });
 
     await app.press("id:btn");
     await app.waitUntil(() => callsOf(app, "press-change").length === 2);
@@ -157,7 +156,7 @@ describe("button mobile", () => {
   // reports undefined.
   test("M-003 injected touch: hitSlop pads a 40pt icon-only sm by 2pt and stays empty at 48pt", async () => {
     const small = await openButton("basic", {
-      scope: "touch",
+      testInput: "touch",
       size: "sm",
       icon: "1",
     });
@@ -170,7 +169,7 @@ describe("button mobile", () => {
       left: 2,
     });
 
-    const medium = await openButton("basic", { scope: "touch", size: "md" });
+    const medium = await openButton("basic", { testInput: "touch", size: "md" });
     await medium.waitUntil(() => callsOf(medium, "ctx-env").length > 0);
     const mediumEnv = lastOf<CtxEnv>(medium, "ctx-env");
     expect(mediumEnv.hitSlop).toBeNull();
@@ -184,7 +183,7 @@ describe("button mobile", () => {
   test("M-004 injected touch: preset matrix drives highlight, ripple, scale-only and none channels", async () => {
     // scale-highlight: highlightOpacity reaches its 0.1 end mid-hold.
     const highlight = await openButton("basic", {
-      scope: "touch",
+      testInput: "touch",
       preset: "scale-highlight",
     });
     await highlight.longPress("id:btn");
@@ -196,7 +195,7 @@ describe("button mobile", () => {
     expect(heldHighlight.origin).not.toBeNull();
 
     // auto resolves to scale-highlight on touch: same channel, same end.
-    const auto = await openButton("basic", { scope: "touch", preset: "auto" });
+    const auto = await openButton("basic", { testInput: "touch", preset: "auto" });
     await auto.longPress("id:btn");
     await auto.waitUntil(() => heldSamples(auto).length >= 1);
     const heldAuto = heldSamples(auto).at(-1)!;
@@ -207,7 +206,7 @@ describe("button mobile", () => {
     // press point. The →2 completion segment is asserted in the headless
     // file where `dragAndHold`/`drop` can hold the press open.
     const ripple = await openButton("basic", {
-      scope: "touch",
+      testInput: "touch",
       preset: "scale-ripple",
     });
     await ripple.longPress("id:btn");
@@ -220,7 +219,7 @@ describe("button mobile", () => {
 
     // scale: no overlay channels move — highlight and ripple stay at rest.
     const scaleOnly = await openButton("basic", {
-      scope: "touch",
+      testInput: "touch",
       preset: "scale",
     });
     await scaleOnly.longPress("id:btn");
@@ -233,7 +232,7 @@ describe("button mobile", () => {
 
     // none: the seam's gate is closed — no press edge, no origin, every
     // channel at rest, while onPress still fires.
-    const none = await openButton("basic", { scope: "touch", preset: "none" });
+    const none = await openButton("basic", { testInput: "touch", preset: "none" });
     await none.press("id:btn");
     await none.waitUntil(() => callsOf(none, "press-change").length === 2);
     expect(kinds(none)).toEqual(["down", "up", "press"]);
@@ -256,7 +255,7 @@ describe("button mobile", () => {
   // base color through a press — never the hover color.
   test("M-005 injected touch: a press keeps the variant base color, never the hover color", async () => {
     const app = await openButton("basic", {
-      scope: "touch",
+      testInput: "touch",
       variant: "primary",
     });
 
@@ -279,7 +278,7 @@ describe("button mobile", () => {
   // canonical press still round-trips.
   test("M-006 props surface: every feedbackVariant and animation tier mounts; disable-all rests the part channels", async () => {
     // The matrix case mounts all 5 presets × 7 animation tiers in one app.
-    const matrix = await openButton("matrix", { scope: "touch" });
+    const matrix = await openButton("matrix", { testInput: "touch" });
     for (const preset of [
       "auto",
       "scale-highlight",
@@ -296,7 +295,7 @@ describe("button mobile", () => {
     // canonical `pressed` channel still completes its run, and the part
     // channels (`highlightOpacity`/`rippleProgress`) hold their rest values.
     const disabled = await openButton("basic", {
-      scope: "touch",
+      testInput: "touch",
       anim: "disable-all",
     });
     expect(lastOf<CtxEnv>(disabled, "ctx-env").allDisabled).toBe(true);
@@ -320,7 +319,7 @@ describe("button mobile", () => {
   // the adapt unit must not move: a plain press still produces the same
   // down → up → press sequence and the same `onPressChange` roundtrip.
   test("M-007 baseline: render-prop press state, callback order and focus behavior are unchanged", async () => {
-    const app = await openButton("basic");
+    const app = await openButton("basic", { testInput: "pointer" });
 
     // The render-prop `isPressed` edge is the Button's own signal — it
     // round-trips through `onPressChange` exactly as before the seam.
@@ -329,30 +328,19 @@ describe("button mobile", () => {
     expect(callsOf(app, "press-change")).toEqual([[true], [false]]);
     expect(kinds(app)).toEqual(["down", "up", "press"]);
 
-    // Focus-visible is a keyboard-modality concern, untouched by the seam:
-    // on the web target Tab reaches the button and the ring's render-prop
-    // reads `isFocusVisible`. The fixture's ButtonCtxProbe text reports the
-    // seam's `isPressed`, not the render prop — the render-prop contract is
-    // covered by the existing `button.heroui.test.tsx` T-013 row, which this
-    // file does not re-port. The observable half here is that Tab still
-    // moves focus onto the button: `enabled` reports true and `shows` still
-    // finds it.
-    const web = await openButton("basic", {}, { platform: "web" });
-    await web.keyboard.press("tab");
-    await web.waitUntil(() => web.enabled("id:btn"));
-    expect(web.enabled("id:btn")).toBe(true);
-    expect(web.shows("id:btn")).toBe(true);
+    // The web-only Tab half (focus-visible is a keyboard-modality concern,
+    // untouched by the seam) lives in `button.mobile.web.test.tsx`.
   }, 120_000);
 
   // adapt-sheets/button.md M-008 (基线): `isPending`/`isDisabled` block
   // `onPress` in both environments, and under touch + pending the seam's
   // `isPressed` produces no edge either — the two channels are parallel.
   test("M-008 isPending and isDisabled block onPress; touch+pending leaves the seam inert too", async () => {
-    for (const scope of ["", "touch"] as const) {
-      const pending = await openButton(
-        "basic",
-        scope ? { scope, pending: "1" } : { pending: "1" },
-      );
+    for (const testInput of ["pointer", "touch"] as const) {
+      const pending = await openButton("basic", {
+        testInput,
+        pending: "1",
+      });
       await expect(pending.press("id:btn")).rejects.toMatchObject({
         code: "ERR_NSH_TEST_DISABLED",
       });
@@ -360,10 +348,10 @@ describe("button mobile", () => {
       expect(callsOf(pending, "press-change")).toHaveLength(0);
       expect(callsOf(pending, "ctx-pressed").filter((c) => c[0] === true)).toHaveLength(0);
 
-      const disabled = await openButton(
-        "basic",
-        scope ? { scope, disabled: "1" } : { disabled: "1" },
-      );
+      const disabled = await openButton("basic", {
+        testInput,
+        disabled: "1",
+      });
       expect(disabled.enabled("id:btn")).toBe(false);
       await expect(disabled.press("id:btn")).rejects.toMatchObject({
         code: "ERR_NSH_TEST_DISABLED",
@@ -376,11 +364,12 @@ describe("button mobile", () => {
 
   // adapt-sheets/button.md M-009 (基线): `type="submit"` inside a `Form`
   // calls `form.submit`; inside an `OverlayTriggerContext` a press calls
-  // `triggerPress`/`toggle` and a long press calls `triggerLongPress`;
-  // inside a `HoverTriggerContext` the hover/press/focus chain is intact.
-  test("M-009 form submit, overlay trigger and hover trigger channels are unchanged", async () => {
+  // `triggerPress`/`toggle` and a long press calls `triggerLongPress`. The
+  // `HoverTriggerContext` hover/press/focus half lives in
+  // `button.mobile.headless.test.tsx` — `app.hover` needs a mouse.
+  test("M-009 form submit and overlay trigger channels are unchanged", async () => {
     // Form: `type="submit"` reaches `FormContext.submit()` → `onSubmit`.
-    const form = await openButton("form");
+    const form = await openButton("form", { testInput: "pointer" });
     await form.press("id:submit");
     await form.waitUntil(() => callsOf(form, "form.submit").length === 1);
     expect(callsOf(form, "form.submit")).toHaveLength(1);
@@ -388,7 +377,10 @@ describe("button mobile", () => {
 
     // Overlay trigger with the custom channel: press → triggerPress,
     // longPress → triggerLongPress, and the user's onPress still fires.
-    const overlay = await openButton("overlay", { channel: "custom" });
+    const overlay = await openButton("overlay", {
+      testInput: "pointer",
+      channel: "custom",
+    });
     await overlay.press("id:trigger");
     await overlay.waitUntil(() => callsOf(overlay, "overlay").length === 1);
     expect(callsOf(overlay, "overlay")).toEqual([
@@ -403,34 +395,24 @@ describe("button mobile", () => {
     ]);
 
     // Overlay trigger with no custom channel: press → toggle().
-    const toggle = await openButton("overlay", { channel: "toggle" });
+    const toggle = await openButton("overlay", {
+      testInput: "pointer",
+      channel: "toggle",
+    });
     await toggle.press("id:trigger");
     await toggle.waitUntil(() => callsOf(toggle, "events").length > 0);
     // `toggle` flips the disclosure state — observable through `isOpen` on
     // the context, which the fixture does not probe; the contract half is
     // that the press still reaches the user's onPress.
     expect(kinds(toggle)).toContain("press");
-
-    // Hover trigger: mouse enter → hoverStart, press down → pressStart,
-    // press → press (the root's channel), user onPress → userPress.
-    const hover = await openButton("hover");
-    await hover.hover("id:trigger");
-    await hover.waitUntil(() => callsOf(hover, "events").length > 0);
-    expect(kinds(hover)).toContain("hoverStart");
-
-    await hover.press("id:trigger");
-    await hover.waitUntil(() => callsOf(hover, "events").length > 1);
-    expect(kinds(hover)).toContain("pressStart");
-    expect(kinds(hover)).toContain("press");
-    expect(kinds(hover)).toContain("userPress");
   }, 120_000);
 
   // adapt-sheets/button.md M-010 (A-009): the fixture's own dual-environment
-  // structure — `basic` under the host default and under
+  // structure — `basic` under injected pointer and under
   // `EnvironmentScope input="touch"` — mounts and answers every probe.
   test("M-010 the fixture opens in both environments and every probe records", async () => {
-    for (const scope of ["", "touch"] as const) {
-      const app = await openButton("basic", scope ? { scope } : {});
+    for (const testInput of ["pointer", "touch"] as const) {
+      const app = await openButton("basic", { testInput });
       expect(app.shows("id:btn")).toBe(true);
       expect(app.shows("id:ctx-sample")).toBe(true);
 

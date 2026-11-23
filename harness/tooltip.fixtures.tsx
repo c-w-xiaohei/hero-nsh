@@ -222,11 +222,13 @@ function Fixture() {
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "");
 
-  return scope === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
-  ) : (
-    <>{props.children}</>
-  );
+  if (scope === "touch") {
+    return <EnvironmentScope input="touch">{props.children}</EnvironmentScope>;
+  }
+  if (scope === "pointer") {
+    return <EnvironmentScope input="pointer">{props.children}</EnvironmentScope>;
+  }
+  return <>{props.children}</>;
 }
 
 function Root() {

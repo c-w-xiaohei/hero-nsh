@@ -1,13 +1,15 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { calls, callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the color-picker adapt unit, one test per row of
  * adapt-sheets/color-picker.md §4: M-001, M-002, M-003, M-005, M-007, M-008,
- * M-009 and M-010 here (headless + web); M-004 and M-006 live in
- * `color-picker.mobile.headless.test.tsx` because they open
- * `platform: "ios"`, which `--target web` rejects.
+ * M-009 and M-010 here (native phones + headless + web); M-004 and M-006
+ * live in `color-picker.mobile.headless.test.tsx` because they open
+ * `platform: "ios"`, which `--target web` rejects, and M-009's Trigger
+ * hover chain lives in `color-picker.mobile.web.test.tsx` (`app.hover` is
+ * desktop/web only — a phone has no mouse).
  *
  * The fixture is `harness/color-picker.fixtures.tsx`: `case` =
  * "with-swatches" (default) / "default" / "controlled"; `host.params.input` /
@@ -27,13 +29,20 @@ import { calls, callsOf } from "../../helpers/calls";
  * `onOpenChange` is the live channel instead — same probe name, never both
  * at once.
  *
- * The `platform: "windows"` pin is the `.mobile.test.tsx` convention: without
- * it a suite run lands the app on the phone-sized headless engine where
- * `platform.desktop` is false and `input` defaults to touch, inverting every
- * pointer-default assertion.
+ * Native hosts fill the device screen, so the viewport `width`/`height`
+ * and `platform` options are gone. The desktop-parity baseline is the
+ * explicit `POINTER` scope instead (`input="pointer" width="regular"`
+ * through the fixture's `EnvironmentScope`): without it a phone-derived
+ * `input` of touch would invert every pointer-default assertion.
  */
 
 const TRIGGER = "role:button[Pick a color]";
+
+type Params = Record<string, string>;
+
+// The desktop-parity environment the pointer-default rows assert: an
+// explicit scope injection (host-independent), not a launch option.
+const POINTER: Params = { input: "pointer", width: "regular" };
 
 // Every probe name the fixture wires; M-007's "no picker-layer new
 // observable surface" asserts the recorded set stays inside it.
@@ -47,19 +56,9 @@ const FIXTURE_PROBES = new Set([
   "blur",
 ]);
 
-type Params = Record<string, string>;
-
-function openPicker(
-  caseName: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openPicker(caseName: string, params: Params = {}): Promise<App> {
   return open("../../../color-picker.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -70,7 +69,7 @@ describe("color-picker mobile", () => {
   // absent — the trigger content shows and the root-owned open channel
   // records the open edge once. Desktop zero drift.
   test("M-001 default environment opens the panel carrier", async () => {
-    const app = await openPicker("with-swatches");
+    const app = await openPicker("with-swatches", POINTER);
 
     expect(app.count("id:cp-panel")).toBe(0);
     expect(app.count("id:cp-sheet")).toBe(0);
@@ -116,6 +115,7 @@ describe("color-picker mobile", () => {
   // pick sheet.
   test("M-003 explicit presentation pin beats the auto rule on both environments", async () => {
     const pinnedSheet = await openPicker("with-swatches", {
+      ...POINTER,
       presentation: "sheet",
     });
     await pinnedSheet.press(TRIGGER);
@@ -216,7 +216,7 @@ describe("color-picker mobile", () => {
   // probe stays silent after a close on both targets). All three ride
   // the same unobservable surface and get no separate assertion here.
   test("M-009 default environment baseline sample across the contract surface", async () => {
-    const app = await openPicker("with-swatches");
+    const app = await openPicker("with-swatches", POINTER);
 
     // Trigger open, preset write, Escape close — the T-006 / T-007 semantics.
     await app.press(TRIGGER);
@@ -234,13 +234,9 @@ describe("color-picker mobile", () => {
     await app.clock!.runFor(120);
     expect(app.count("id:cp-panel")).toBe(0);
 
-    // Hover fires under pointer through the forwarded `onMouseEnter` /
-    // `onMouseLeave` chain (the focus half of the callback chain is the
-    // unobservable gap the header note records).
-    await app.hover(TRIGGER);
-    expect(callsOf(app, "hoverStart").length).toBeGreaterThanOrEqual(1);
-    await app.hover("id:away");
-    expect(callsOf(app, "hoverEnd").length).toBeGreaterThanOrEqual(1);
+    // The hover half of the callback chain moved to
+    // `color-picker.mobile.web.test.tsx` (`app.hover` is desktop/web only);
+    // the focus half stays the unobservable gap the header note records.
 
     // Outside press: while open the underlay covers the trigger, so the
     // press lands on the outside-press close (the popover M-011 pattern).
@@ -262,7 +258,10 @@ describe("color-picker mobile", () => {
 
     // Trigger disabled: no press, no open, the disabled look's `enabled`
     // read false.
-    const disabled = await openPicker("with-swatches", { trigdisabled: "1" });
+    const disabled = await openPicker("with-swatches", {
+      ...POINTER,
+      trigdisabled: "1",
+    });
     expect(disabled.enabled(TRIGGER)).toBe(false);
     await expect(disabled.press(TRIGGER)).rejects.toMatchObject({
       code: "ERR_NSH_TEST_DISABLED",
@@ -273,7 +272,7 @@ describe("color-picker mobile", () => {
 
     // isKeyboardDismissDisabled gates Escape on the panel chain; the
     // outside-press close still works.
-    const kb = await openPicker("with-swatches", { kbdismiss: "1" });
+    const kb = await openPicker("with-swatches", { ...POINTER, kbdismiss: "1" });
     await kb.press(TRIGGER);
     await kb.keyboard.press("escape");
     expect(kb.count("id:cp-panel")).toBe(1);
@@ -286,7 +285,10 @@ describe("color-picker mobile", () => {
     // `onOpenChange` — the owns-state channel (the root trigger stays
     // untouched, so `OpenProbe` stays silent and the recorded round is the
     // Popover's own `[false]`).
-    const selfOpen = await openPicker("with-swatches", { defaultopen: "1" });
+    const selfOpen = await openPicker("with-swatches", {
+      ...POINTER,
+      defaultopen: "1",
+    });
     expect(selfOpen.count("id:cp-panel")).toBe(1);
     expect(selfOpen.shows("text:Hue")).toBe(true);
     await selfOpen.keyboard.press("escape");
@@ -299,6 +301,7 @@ describe("color-picker mobile", () => {
     // closes through the Popover's `onOpenChange`, which the fixture
     // writes back into the signal.
     const controlled = await openPicker("with-swatches", {
+      ...POINTER,
       controlledopen: "1",
     });
     await controlled.host.send("cp.open");
@@ -313,6 +316,7 @@ describe("color-picker mobile", () => {
     // and opens with a non-default anchor request (the resolved geometry
     // is the §6 host gap — only the mount is asserted).
     const placed = await openPicker("with-swatches", {
+      ...POINTER,
       placement: "top",
       offset: "20",
     });
@@ -324,7 +328,7 @@ describe("color-picker mobile", () => {
     // Controlled `value`: the echo text shows the seed, a preset press
     // writes `onChange` once and the controlled round-trip updates the
     // displayed hex.
-    const valued = await openPicker("controlled");
+    const valued = await openPicker("controlled", POINTER);
     expect(valued.shows("text:selected:#325578")).toBe(true);
     await valued.press(TRIGGER);
     await valued.press("role:option >> nth=1");
@@ -334,7 +338,10 @@ describe("color-picker mobile", () => {
     // `shouldSkipAnimation`: the exit hold is skipped — the carrier is
     // gone after a short clock run that would still be inside the 100ms
     // hold on the default path (asserted above on `app`).
-    const skip = await openPicker("with-swatches", { skipanim: "1" });
+    const skip = await openPicker("with-swatches", {
+      ...POINTER,
+      skipanim: "1",
+    });
     await skip.press(TRIGGER);
     expect(skip.count("id:cp-panel")).toBe(1);
     await skip.keyboard.press("escape");
@@ -351,7 +358,7 @@ describe("color-picker mobile", () => {
   // probes answer `count`, the `OpenProbe` open-state channel reports
   // edges, and the Trigger callback probes record.
   test("M-010 fixture Scoped params, case params and carrier probes all mount and discriminate", async () => {
-    const baseline = await openPicker("with-swatches");
+    const baseline = await openPicker("with-swatches", POINTER);
     expect(baseline.shows(TRIGGER)).toBe(true);
     expect(baseline.shows("text:open-state:closed")).toBe(true);
 
@@ -364,6 +371,7 @@ describe("color-picker mobile", () => {
     expect(injected.count("id:cp-panel")).toBe(0);
 
     const pinned = await openPicker("with-swatches", {
+      ...POINTER,
       presentation: "sheet",
     });
     await pinned.press(TRIGGER);
@@ -379,10 +387,16 @@ describe("color-picker mobile", () => {
     expect(nonModal.count("id:cp-panel")).toBe(1);
     expect(nonModal.count("id:cp-sheet")).toBe(0);
 
-    const selfOpen = await openPicker("with-swatches", { defaultopen: "1" });
+    const selfOpen = await openPicker("with-swatches", {
+      ...POINTER,
+      defaultopen: "1",
+    });
     expect(selfOpen.count("id:cp-panel")).toBe(1);
 
-    const disabled = await openPicker("with-swatches", { trigdisabled: "1" });
+    const disabled = await openPicker("with-swatches", {
+      ...POINTER,
+      trigdisabled: "1",
+    });
     expect(disabled.enabled(TRIGGER)).toBe(false);
     expect(callsOf(disabled, "openChange")).toHaveLength(0);
   });

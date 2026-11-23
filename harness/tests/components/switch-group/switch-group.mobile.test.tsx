@@ -5,13 +5,16 @@ import { callsOf } from "../../helpers/calls";
 /*
  * Mobile assertions for the switch-group adapt unit, one test per row of
  * adapt-sheets/switch-group.md §4 (M-001…M-007). The fixture is
- * `harness/switch-group.fixtures.tsx`; `host.params.scope` picks the
- * environment ("" = host default pointer baseline, "touch" =
- * `EnvironmentScope input="touch"`), so every row runs identically on the
- * headless and web targets this single file covers.
+ * `harness/switch-group.fixtures.tsx`; `host.params.testInput` picks the
+ * environment explicitly — "pointer" is the host-independent
+ * desktop-parity baseline, "touch" wraps the case in
+ * `EnvironmentScope input="touch"` — so every row runs identically on the
+ * headless, web and native ios/android targets this single file covers.
  *
- * `platform:"windows"` at 1024×768 is the pinned desktop host both targets
- * share (the mobile pin rule from _common.md). Assertions read only what
+ * Native hosts fill the device screen and reject the `platform` /
+ * `width` / `height` open options (`ERR_NSH_TEST_UNSUPPORTED`), so this
+ * file carries none: the old desktop pin's pointer-baseline job is now
+ * `testInput:"pointer"` on every open. Assertions read only what
  * `nsh/test` observes: `shows`/`texts`/`enabled`, `onLayout` probe payloads,
  * `viewStyle` backgroundColor, and `app.storage()` probe calls — never class
  * names (D18).
@@ -35,9 +38,6 @@ type LayoutCall = {
 
 function openCase(params: Record<string, string> = {}): Promise<App> {
   return open("../../../switch-group.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: { params: { case: "layout", ...params } },
   });
 }
@@ -63,7 +63,7 @@ describe("switch-group mobile", () => {
   // onChange, the selection takes effect, and the sibling Switch's state is
   // untouched: the group shares and intercepts nothing.
   test("M-001 pointer baseline: one onChange, selection applies, sibling unchanged", async () => {
-    const app = await openCase({ case: "independent" });
+    const app = await openCase({ case: "independent", testInput: "pointer" });
 
     await app.press("role:switch[Wifi]");
 
@@ -78,7 +78,7 @@ describe("switch-group mobile", () => {
   // observable the error-message unit uses for a non-interactive part) and no
   // child callback or selection change follows.
   test("M-002 pointer: pressing the bare group surface reaches no child", async () => {
-    const app = await openCase({ case: "independent" });
+    const app = await openCase({ case: "independent", testInput: "pointer" });
 
     await expect(app.press("id:gap")).rejects.toMatchObject({
       code: "ERR_NSH_TEST_NOT_FOUND",
@@ -93,7 +93,7 @@ describe("switch-group mobile", () => {
   // under injected touch — "the group adds no press surface of its own" holds
   // on mobile exactly as on pointer.
   test("M-003 touch: pressing the bare group surface still reaches no child", async () => {
-    const app = await openCase({ case: "independent", scope: "touch" });
+    const app = await openCase({ case: "independent", testInput: "touch" });
 
     await expect(app.press("id:gap")).rejects.toMatchObject({
       code: "ERR_NSH_TEST_NOT_FOUND",
@@ -110,7 +110,7 @@ describe("switch-group mobile", () => {
   // group's items layout; and a disabled Switch in the same group stays
   // blocked — the host refuses the press and no onChange is recorded.
   test("M-004 touch: one onChange, 44pt face, disabled stays blocked", async () => {
-    const app = await openCase({ scope: "touch", disabled: "1" });
+    const app = await openCase({ testInput: "touch", disabled: "1" });
 
     await app.press("role:switch[Wifi]");
 
@@ -131,8 +131,8 @@ describe("switch-group mobile", () => {
   // on the first's row and sits one item width plus the `gap-4` 16pt away —
   // layout semantics the environment does not move.
   test("M-005 group bounds are environment-invariant; horizontal gap stays 16pt", async () => {
-    const pointer = await openCase({ still: "1" });
-    const touch = await openCase({ still: "1", scope: "touch" });
+    const pointer = await openCase({ still: "1", testInput: "pointer" });
+    const touch = await openCase({ still: "1", testInput: "touch" });
 
     for (const name of ["group", "wifi", "bluetooth"] as const) {
       const a = lastLayout(pointer, name);
@@ -146,7 +146,7 @@ describe("switch-group mobile", () => {
     const row = await openCase({
       case: "layout",
       orientation: "horizontal",
-      scope: "touch",
+      testInput: "touch",
       still: "1",
     });
     const wifi = lastLayout(row, "wifi");
@@ -164,7 +164,7 @@ describe("switch-group mobile", () => {
   // least 44 pt under touch (control-field's `min-h-11` survives inside the
   // group's items layout).
   test("M-006 touch: ControlField row commits once, indicator follows, row is 44pt", async () => {
-    const app = await openCase({ case: "control-field", scope: "touch" });
+    const app = await openCase({ case: "control-field", testInput: "touch" });
 
     expect(app.shows("id:cf-row")).toBe(true);
     expect(app.shows("id:cf-switch-track")).toBe(true);
@@ -189,17 +189,17 @@ describe("switch-group mobile", () => {
   // string child renders as text instead of vanishing. The existing
   // switch-group.heroui.test.tsx regression file stays untouched.
   test("M-007 desktop drift: root visible, 16pt gap, w-40 class, bare string renders", async () => {
-    const layout = await openCase();
+    const layout = await openCase({ testInput: "pointer" });
 
     expect(layout.shows("id:group")).toBe(true);
     const wifi = lastLayout(layout, "wifi");
     const bluetooth = lastLayout(layout, "bluetooth");
     expectClose(bluetooth.y - (wifi.y + wifi.height), 16);
 
-    const withClass = await openCase({ case: "class-name" });
+    const withClass = await openCase({ case: "class-name", testInput: "pointer" });
     expectClose(lastLayout(withClass, "group").width, 160);
 
-    const text = await openCase({ case: "text" });
+    const text = await openCase({ case: "text", testInput: "pointer" });
     expect(text.shows("text:Just a label")).toBe(true);
   });
 });

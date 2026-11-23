@@ -1,25 +1,29 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the ListBox adapt unit (B(项) + F), one test per
- * row of adapt-sheets/list-box.md §4 that the shared targets (headless +
- * web) can observe: M-001 … M-009 and M-011. The host-derivation half
- * (`open({platform:"ios"})`) and the `app.drag` press-cancel (M-010) live
- * in `list-box.mobile.headless.test.tsx` — web has neither capability.
+ * row of adapt-sheets/list-box.md §4 that the ios/android targets can
+ * observe: M-001 … M-004, M-006 … M-009 and M-011. M-005 (hover
+ * suppression + the pointer roundtrip) lives in
+ * `list-box.mobile.web.test.tsx` — `app.hover` is desktop/web-only. The
+ * host-derivation half (`open({platform:"ios"})`) and the `app.drag`
+ * press-cancel (M-010) live in `list-box.mobile.headless.test.tsx`.
  *
  * The fixture is `harness/list-box.fixtures.tsx`, opened by `host.params`:
  * `case` (`b-item` carries every seam probe, `b-action` the
  * `selectionMode="none"` baseline, the existing cases the parity rows),
- * `scope` ("" = the host default pointer environment — desktop parity — or
- * "touch" through `EnvironmentScope`), `density` ("compact"), `narrow`,
+ * `scope` ("pointer" = the desktop-parity injected environment — the
+ * default this file passes — or "touch"), `density` ("compact"), `narrow`,
  * `disabled`, `hover`, `overlay`.
  *
- * The `platform: "windows"` pin is load-bearing: without it `pnpm test`
- * lands the app on the phone-sized engine where `input` defaults to touch
- * and every pointer-default assertion inverts under the suite (the
- * _common.md convention, switch M-001/3/4's precedent).
+ * The `scope:"pointer"` default is load-bearing the way the old
+ * `platform:"windows"` pin was: without it the host defaults `input` to
+ * touch on native targets and every pointer-default assertion inverts
+ * under the suite. `open()` platform/width/height options are rejected on
+ * ios/android, so the pointer environment is injected per open through
+ * `EnvironmentScope` instead.
  *
  * Every assertion reads what `nsh/test` can observe — `shows`, `enabled`,
  * `count`, `texts`, `onLayout` bounds and the `@scenario/probe` calls in
@@ -32,14 +36,9 @@ import { callsOf } from "../../helpers/calls";
 function openListBox(
   caseName: string,
   params: Record<string, string> = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
 ): Promise<App> {
   return open("../../../list-box.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
-    host: { params: { case: caseName, ...params } },
+    host: { params: { case: caseName, scope: "pointer", ...params } },
   });
 }
 
@@ -224,11 +223,8 @@ describe("list-box mobile", () => {
   // seam's inline `isDisabled` gate reports closed — no `selectionChange`,
   // no `onAction`, every channel at rest, in both environments.
   test("M-004 injected touch + isDisabled: gate closed, press refused; pointer half the same", async () => {
-    for (const scope of ["", "touch"] as const) {
-      const app = await openListBox(
-        "b-item",
-        scope ? { scope, disabled: "1" } : { disabled: "1" },
-      );
+    for (const scope of ["pointer", "touch"] as const) {
+      const app = await openListBox("b-item", { scope, disabled: "1" });
 
       expect(app.enabled(ROW_ALPHA)).toBe(false);
       await expect(app.press(ROW_ALPHA)).rejects.toMatchObject({
@@ -248,77 +244,14 @@ describe("list-box mobile", () => {
     }
   }, 120_000);
 
-  // adapt-sheets/list-box.md M-005 (A-005): under injected touch the hover
-  // writes stay off — `app.hover` records neither `onHoverStart`/
-  // `onHoverEnd`/`onHoverChange` nor the render-prop `hov` marker (web's
-  // sticky hover cannot pin it), and a following press still selects. The
-  // host's `onMouseEnter`/`onMouseLeave` callbacks pass through in both
-  // environments; the pointer half keeps the full hover roundtrip.
-  test("M-005 injected touch suppresses hover state; pointer keeps the roundtrip", async () => {
-    const touch = await openListBox("b-item", {
-      scope: "touch",
-      hover: "1",
-    });
-    await touch.hover(ROW_ALPHA);
-    await touch.wait(300);
-    expect(callsOf(touch, "hover").some((c) => c[0] === "start")).toBe(false);
-    expect(
-      callsOf(touch, "hover").some(
-        (c) => (c[0] as { kind?: string }).kind === "change",
-      ),
-    ).toBe(false);
-    expect(touch.texts().some((t) => t.includes("hov"))).toBe(false);
-    // The host callbacks themselves are not gated.
-    expect(callsOf(touch, "hover").some((c) => c[0] === "enter")).toBe(true);
-
-    // A press after the synthetic hover still selects — no sticky state.
-    await touch.press(ROW_ALPHA);
-    await touch.waitUntil(() => callsOf(touch, "selectionChange").length === 1);
-    expect(touch.texts().some((t) => t.includes("hov"))).toBe(false);
-
-    const pointer = await openListBox("b-item", { hover: "1" });
-    await pointer.hover(ROW_ALPHA);
-    await pointer.waitUntil(() =>
-      callsOf(pointer, "hover").some((c) => c[0] === "start"),
-    );
-    expect(callsOf(pointer, "hover")).toContainEqual(["enter"]);
-    expect(
-      callsOf(pointer, "hover").some(
-        (c) =>
-          (c[0] as { kind?: string; value?: boolean }).kind === "change" &&
-          (c[0] as { value?: boolean }).value === true,
-      ),
-    ).toBe(true);
-    await pointer.waitUntil(() =>
-      pointer.texts().some((t) => t.includes("hov")),
-    );
-
-    // Leaving restores the rest state.
-    await pointer.hover("id:ctx-sample");
-    await pointer.waitUntil(() =>
-      callsOf(pointer, "hover").some((c) => c[0] === "end"),
-    );
-    expect(callsOf(pointer, "hover")).toContainEqual(["leave"]);
-    expect(
-      callsOf(pointer, "hover").some(
-        (c) =>
-          (c[0] as { kind?: string; value?: boolean }).kind === "change" &&
-          (c[0] as { value?: boolean }).value === false,
-      ),
-    ).toBe(true);
-    await pointer.waitUntil(
-      () => !pointer.texts().some((t) => t.includes("hov")),
-    );
-  }, 120_000);
-
   // adapt-sheets/list-box.md M-006 (A-004): the row's children resolve
   // inside `PressableFeedbackContext.Provider` — `ctx-env.enabled` follows
   // the scope, `hitSlop`/`bounds` accessors read real values, and a
   // caller-composed `<PressableFeedback.Highlight/>` mounts while the
   // default case mounts none.
   test("M-006 PressableFeedbackContext provider chain: gate follows scope, accessors read, overlay composes", async () => {
-    for (const scope of ["", "touch"] as const) {
-      const app = await openListBox("b-item", scope ? { scope } : {});
+    for (const scope of ["pointer", "touch"] as const) {
+      const app = await openListBox("b-item", { scope });
       await app.waitUntil(() => callsOf(app, "ctx-env").length > 0);
       expect(lastOf<CtxEnv>(app, "ctx-env").enabled).toBe(scope === "touch");
 

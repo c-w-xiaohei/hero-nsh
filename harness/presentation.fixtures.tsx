@@ -1,10 +1,11 @@
-import { host, mount, signal, Text, View } from "nsh";
+import { host, mount, platform, signal, Text, View, windowSize } from "nsh";
 import type { JSX } from "nsh";
 import {
   createPresentation,
   EnvironmentScope,
   type Presentation,
 } from "@heroui/react";
+import { probe } from "@scenario/probe";
 
 /*
  * NSH-only fixture for the create-presentation mechanism unit
@@ -35,7 +36,10 @@ import {
  *   (absent)       no scope — the host-derived default environment
  *   "touch"        input="touch"; width still follows the host window, so the
  *                  tests exercise the real windowSize → width derivation
- *   "touch-compact" input="touch" width="compact" pinned
+ *   "touch-compact" input="touch" width="compact" pinned — the touch-phone
+ *                  half, host-independent (a real phone cannot resize)
+ *   "pointer-compact" input="pointer" width="compact" pinned — the
+ *                  pointer-at-small-window negative half, host-independent
  *   "regular"      input="touch" width="regular" pinned (touch tablet)
  *
  * Observable surface: `open=…`, `presentation=…`, `pin=…` Texts plus the
@@ -88,6 +92,12 @@ function Scoped(props: { children?: JSX.Element }) {
     case "touch-compact":
       return (
         <EnvironmentScope input="touch" width="compact">
+          {props.children}
+        </EnvironmentScope>
+      );
+    case "pointer-compact":
+      return (
+        <EnvironmentScope input="pointer" width="compact">
           {props.children}
         </EnvironmentScope>
       );
@@ -169,6 +179,18 @@ function ProbeInner() {
  * -----------------------------------------------------------------------------------------------*/
 
 function Fixture() {
+  // The host's own report — platform facts and the real window size — so
+  // tests derive the expected default environment (input follows
+  // `platform.desktop`, width the window's short side) instead of pinning
+  // a desktop baseline a native phone cannot provide.
+  probe("env")({
+    os: platform.os,
+    desktop: platform.desktop,
+    idiom: platform.idiom,
+    w: windowSize().width,
+    h: windowSize().height,
+  });
+
   return (
     <View class="flex-1 items-start gap-4 bg-background p-6">
       <Scoped>

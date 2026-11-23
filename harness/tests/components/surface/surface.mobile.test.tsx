@@ -11,14 +11,15 @@ import { calls, callsOf } from "../../helpers/calls";
  * `SurfaceContext` read) all mount under `EnvironmentScope`, fed by
  * `host.params.input` / `host.params.density`.
  *
- * Absent params leave the host-derived environment — pointer + default
- * density on headless and web — which is the desktop-parity baseline every
- * injected-environment assertion compares against. `platform:"windows"` is
- * the pointer host both targets share (the breadcrumbs.mobile.test.tsx
- * convention). The observation channel is what `nsh/test` sees: `shows` /
+ * The axes are always explicit — `input:"pointer"` is the desktop-parity
+ * baseline every injected-environment assertion compares against and
+ * `input:"touch"` the injected mobile half — because the host-derived
+ * default differs per target (touch on ios/android, pointer on desktop
+ * and web). No `platform`/`width` open options: native targets fill the
+ * device screen and reject them. The observation channel is what
+ * `nsh/test` sees: `shows` /
  * `texts` / `count` / `spanStyle` / `viewStyle`, `onLayout` bounds records
- * and `app.storage()` probe calls. There is no ios/android injection and no
- * drag case, so one file serves headless and `--target web` both.
+ * and `app.storage()` probe calls.
  */
 
 // Resolved on the harness theme (theme/hero-nsh.theme.json), the same value
@@ -41,9 +42,6 @@ type EnvParams = {
 
 function openMobile(caseName: string, env: EnvParams = {}): Promise<App> {
   return open("../../../surface.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: {
       params: {
         case: caseName,
@@ -128,12 +126,12 @@ describe("surface mobile", () => {
   // transparent variant's text keeps the base `text-foreground` (the T-002
   // channel). `surfaceVariants` and the render path drift zero.
   test("M-001 default environment: children render and all four variants show", async () => {
-    const basic = await openMobile("basic");
+    const basic = await openMobile("basic", { input: "pointer" });
 
     expect(basic.shows("text:Panel content")).toBe(true);
     expect(basic.count("id:basic-root")).toBe(1);
 
-    const variants = await openMobile("variants");
+    const variants = await openMobile("variants", { input: "pointer" });
 
     for (const [id, label] of VARIANTS) {
       expect(variants.shows(`text:${label}`)).toBe(true);
@@ -149,7 +147,7 @@ describe("surface mobile", () => {
   // without `onPress` renders unchanged — `rest` pass-through and the
   // `focusable ?? false` shape drift zero.
   test("M-002 default environment: caller onPress records once; plain surface renders", async () => {
-    const app = await openMobile("press");
+    const app = await openMobile("press", { input: "pointer" });
     const before = app.viewStyle("id:press-root");
 
     await app.press("id:press-root");
@@ -162,7 +160,7 @@ describe("surface mobile", () => {
     expect(after?.opacity).toBe(before?.opacity);
     expect(after?.effectiveOpacity).toBe(before?.effectiveOpacity);
 
-    const plain = await openMobile("basic");
+    const plain = await openMobile("basic", { input: "pointer" });
 
     expect(plain.shows("text:Panel content")).toBe(true);
     expect(callsOf(plain, "onPress")).toHaveLength(0);
@@ -174,7 +172,7 @@ describe("surface mobile", () => {
   // delivery works and `Surface` / `Surface.Root` stay the same component
   // shape (A-007: contract unchanged).
   test("M-003 default environment: SurfaceContext delivers outer and inner variants", async () => {
-    const app = await openMobile("context");
+    const app = await openMobile("context", { input: "pointer" });
 
     expect(app.shows("text:secondary")).toBe(true);
     expect(app.shows("text:tertiary")).toBe(true);
@@ -191,7 +189,7 @@ describe("surface mobile", () => {
   // not auto-become a button (the A-002 rule's touch-side control).
   test("M-004 injected touch changes no observable across all cases", async () => {
     const touch = await observeCase({ input: "touch" });
-    const pointer = await observeCase({});
+    const pointer = await observeCase({ input: "pointer" });
 
     expect(touch.texts).toEqual(pointer.texts);
     expect(touch.colors).toEqual(pointer.colors);
@@ -206,7 +204,7 @@ describe("surface mobile", () => {
   // the default environment's, and the press record is unchanged.
   test("M-005 compact density changes no observable across all cases", async () => {
     const compact = await observeCase({ input: "touch", density: "compact" });
-    const pointer = await observeCase({});
+    const pointer = await observeCase({ input: "pointer" });
 
     expect(compact.texts).toEqual(pointer.texts);
     expect(compact.colors).toEqual(pointer.colors);
@@ -215,11 +213,10 @@ describe("surface mobile", () => {
   });
 
   // adapt-sheets/surface.md M-006 (A-005, A-006): every fixture case
-  // dispatches on `host.params.case` — each opens to its own marker — and
-  // the `platform:"windows"` pin holds the desktop environment on both
-  // targets, so M-001…M-003's default-environment assertions stand under
-  // headless and `--target web` alike.
-  test("M-006 fixture cases dispatch on host.params.case under the desktop pin", async () => {
+  // dispatches on `host.params.case` — each opens to its own marker under
+  // the explicit pointer scope that replaced the desktop pin, so
+  // M-001…M-003's baseline assertions stand on every target alike.
+  test("M-006 fixture cases dispatch on host.params.case under the pointer scope", async () => {
     const markers: Array<[string, string]> = [
       ["basic", "text:Panel content"],
       ["variants", "id:variant-default"],
@@ -228,7 +225,7 @@ describe("surface mobile", () => {
     ];
 
     for (const [name, marker] of markers) {
-      const app = await openMobile(name);
+      const app = await openMobile(name, { input: "pointer" });
       expect(app.shows(marker)).toBe(true);
     }
   });

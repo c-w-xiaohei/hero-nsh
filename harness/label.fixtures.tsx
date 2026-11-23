@@ -56,7 +56,7 @@ import type { FieldState } from "../src/components/label/context";
  *                  the no-field case's caller probes (M-007).
  */
 
-type Scope = "" | "touch" | "density";
+type Scope = string;
 
 type LayoutEvent = {
   bounds: {
@@ -67,18 +67,23 @@ type LayoutEvent = {
 
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "") as Scope;
+  const tokens = scope.split(",");
+  const touch = tokens.includes("touch");
+  const pointer = tokens.includes("pointer");
+  const density = tokens.includes("density");
 
-  if (scope === "touch") {
-    return <EnvironmentScope input="touch">{props.children}</EnvironmentScope>;
+  if (!touch && !pointer && !density) {
+    return <>{props.children}</>;
   }
 
-  if (scope === "density") {
-    return (
-      <EnvironmentScope density="compact">{props.children}</EnvironmentScope>
-    );
-  }
-
-  return <>{props.children}</>;
+  return (
+    <EnvironmentScope
+      input={touch ? "touch" : pointer ? "pointer" : undefined}
+      density={density ? "compact" : undefined}
+    >
+      {props.children}
+    </EnvironmentScope>
+  );
 }
 
 function Frame(props: { children?: JSX.Element }) {

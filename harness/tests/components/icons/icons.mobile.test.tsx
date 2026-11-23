@@ -12,11 +12,11 @@ import { calls, callsOf } from "../../helpers/calls";
  * Action A keeps every seam point 保留: the icons have no tv() table, no
  * gestures and no presentation host, so every injected-environment assertion
  * is an equality check — same testIDs, same bounds, same override order as
- * the desktop-parity baseline. Absent params leave the host-derived
- * environment (pointer + default density on a desktop platform), which is
- * that baseline. `platform:"windows"` at 1024×768 is the pointer host both
- * targets share (the breadcrumbs.mobile.test.tsx convention), so every case
- * runs headless and on `--target web`.
+ * the desktop-parity baseline. The axes are always explicit:
+ * `input:"pointer"` is that baseline and `input:"touch"` the injected
+ * mobile half, because the host-derived default differs per target (touch
+ * on ios/android, pointer on desktop and web). No `platform`/`width` open
+ * options: native targets fill the device screen and reject them.
  */
 
 type LayoutCall = {
@@ -34,9 +34,6 @@ type EnvParams = {
 
 function openMobile(env: EnvParams = {}): Promise<App> {
   return open("../../../icons.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     locale: "en-US",
     clock: {},
     host: {
@@ -106,7 +103,7 @@ describe("icons mobile", () => {
   // default box is the ported SVG width/height contract, not a density
   // literal (A-001).
   test("M-001 default environment: every icon shows under its testID at its default size", async () => {
-    const app = await openMobile();
+    const app = await openMobile({ input: "pointer" });
     await settleLayout(app);
 
     const boxes = boxSet(app);
@@ -128,7 +125,7 @@ describe("icons mobile", () => {
   // over it (size-3 → 12×12). Both probes share the mobile row so the check
   // runs under the same environment as M-001.
   test("M-002 default environment: width/height and className override the default box", async () => {
-    const app = await openMobile();
+    const app = await openMobile({ input: "pointer" });
     await settleLayout(app);
 
     const boxes = boxSet(app);
@@ -148,7 +145,7 @@ describe("icons mobile", () => {
   // bounds set equals the pointer environment's, box for box.
   test("M-003 injected touch: identical testIDs and bounds to the pointer environment", async () => {
     const touch = await openMobile({ input: "touch" });
-    const pointer = await openMobile();
+    const pointer = await openMobile({ input: "pointer" });
     await settleLayout(touch);
     await settleLayout(pointer);
 
@@ -166,12 +163,12 @@ describe("icons mobile", () => {
   // cells, so the preset resolves but produces no class difference and the
   // bounds equal the default environment's.
   test("M-004 injected compact density: identical bounds to the default environment", async () => {
-    const compact = await openMobile({ input: "touch", density: "compact" });
-    const plain = await openMobile();
+    const compact = await openMobile({ input: "pointer", density: "compact" });
+    const plain = await openMobile({ input: "pointer" });
     await settleLayout(compact);
     await settleLayout(plain);
 
-    expect(compact.texts()).toContain("env:input=touch density=compact");
+    expect(compact.texts()).toContain("env:input=pointer density=compact");
     expect(boxSet(compact)).toEqual(boxSet(plain));
   });
 
@@ -197,7 +194,7 @@ describe("icons mobile", () => {
   // in-scope `createInput()`/`createDensity()` witnesses report them.
   test("M-006 scope injection reaches createInput and createDensity", async () => {
     const touch = await openMobile({ input: "touch", density: "compact" });
-    const pointer = await openMobile();
+    const pointer = await openMobile({ input: "pointer" });
 
     expect(touch.texts()).toContain("env:input=touch density=compact");
     expect(pointer.texts()).toContain("env:input=pointer density=default");

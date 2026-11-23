@@ -7,9 +7,12 @@ import { calls, callsOf } from "../../helpers/calls";
  * adapt-sheets/meter.md §4 (M-001…M-007). The fixture is
  * `harness/meter.fixtures.tsx`: `host.params.case` picks the mount and
  * `host.params.input` / `host.params.density` feed the `EnvironmentScope`
- * wrapper; absent params leave the host-derived environment — pointer +
- * default density on headless and web — which is the desktop-parity baseline
- * every injected run compares against. The fixture's `EnvProbe` reports the
+ * wrapper. The axes are always explicit — `input:"pointer"` is the
+ * desktop-parity baseline every injected run compares against and
+ * `input:"touch"` the injected mobile half — because the host-derived
+ * default differs per target (touch on ios/android, pointer on desktop
+ * and web). No `platform`/`width` open options: native targets fill the
+ * device screen and reject them. The fixture's `EnvProbe` reports the
  * resolved pair as `env=input:… density:…`; M-003/M-004/M-006 assert it so an
  * injection that never engaged cannot pass vacuously, and `contentTexts`
  * filters it out of cross-environment text comparisons.
@@ -21,10 +24,8 @@ import { calls, callsOf } from "../../helpers/calls";
  * touch press never reaches a callback, because none is wired and none may
  * be added ("计量展示不增加手势", A-004).
  *
- * `platform:"windows"` is the pointer host both targets share (the
- * sheet.mobile.test.tsx convention); the file runs headless and `--target
- * web` unchanged — M-007's dual-runner contract — because no case injects a
- * phone platform or needs a held touch.
+ * M-007's dual-runner contract holds because no case needs a phone
+ * platform injection or a held touch.
  */
 
 type Box = {
@@ -42,9 +43,6 @@ type EnvParams = {
 
 function openMobile(caseName: string, env: EnvParams = {}): Promise<App> {
   return open("../../../meter.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
     host: {
       params: {
@@ -115,7 +113,7 @@ describe("meter mobile", () => {
   // Track, and the fill's box is 60% of the 300-point track (180 pt), so the
   // clamp → percentage chain has no regression.
   test("M-001 default environment: named progressbar, 60% output, 180-point fill", async () => {
-    const app = await openMobile("default");
+    const app = await openMobile("default", { input: "pointer" });
 
     expect(app.shows("role:progressbar[Storage]")).toBe(true);
     expect(app.shows("id:output >> text:60%")).toBe(true);
@@ -133,7 +131,7 @@ describe("meter mobile", () => {
   // while percentage still sizes the fill, currency formatOptions, the
   // `aria-disabled` contract, and the render-prop accessors driving content.
   test("M-002 baseline: sizes, colors, value-label, custom-format, disabled, render-prop", async () => {
-    const sizes = await openMobile("sizes");
+    const sizes = await openMobile("sizes", { input: "pointer" });
     await settleLayout(sizes, ["track-sm", "track-md", "track-lg", "fill-sm", "fill-md", "fill-lg"]);
 
     expect(lastBox(sizes, "track-sm").height).toBe(4);
@@ -146,7 +144,7 @@ describe("meter mobile", () => {
     expect(sizes.shows("id:output-sm >> text:40%")).toBe(true);
     expect(sizes.shows("id:output-lg >> text:80%")).toBe(true);
 
-    const colors = await openMobile("colors");
+    const colors = await openMobile("colors", { input: "pointer" });
     await settleLayout(colors, ["fill-success", "fill-danger"]);
 
     expect(lastBox(colors, "fill-success").width).toBe(150);
@@ -156,23 +154,23 @@ describe("meter mobile", () => {
     expect(dangerFill?.backgroundColor).toBeTruthy();
     expect(dangerFill?.backgroundColor).not.toBe(successFill?.backgroundColor);
 
-    const valueLabel = await openMobile("value-label");
+    const valueLabel = await openMobile("value-label", { input: "pointer" });
     await settleLayout(valueLabel, ["fill"]);
     expect(valueLabel.shows("id:value-label >> text:3 of 10 completed")).toBe(true);
     expect(lastBox(valueLabel, "fill").width).toBe(90);
 
-    const customFormat = await openMobile("custom-format");
+    const customFormat = await openMobile("custom-format", { input: "pointer" });
     await settleLayout(customFormat, ["fill"]);
     expect(customFormat.texts().some((text) => text.includes("$750"))).toBe(true);
     expect(lastBox(customFormat, "fill").width).toBe(225);
 
-    const disabled = await openMobile("disabled");
+    const disabled = await openMobile("disabled", { input: "pointer" });
     await settleLayout(disabled, ["fill"]);
     expect(disabled.enabled("role:progressbar[Storage]")).toBe(false);
     expect(disabled.shows("id:output >> text:50%")).toBe(true);
     expect(lastBox(disabled, "fill").width).toBe(150);
 
-    const renderProp = await openMobile("render-prop");
+    const renderProp = await openMobile("render-prop", { input: "pointer" });
     await settleLayout(renderProp, ["fill"]);
     expect(renderProp.shows("id:output >> text:done 40% (40%)")).toBe(true);
     expect(lastBox(renderProp, "fill").width).toBe(120);
@@ -183,7 +181,7 @@ describe("meter mobile", () => {
   // identical to the pointer baseline — the component table carries no
   // `input` axis, so nothing may move.
   test("M-003 injected touch changes no box and no text", async () => {
-    const pointer = await openMobile("default");
+    const pointer = await openMobile("default", { input: "pointer" });
     const touch = await openMobile("default", { input: "touch" });
 
     // The scope really engaged — without this line the comparison below
@@ -203,8 +201,8 @@ describe("meter mobile", () => {
   // component table carries no `density` axis, so `gap-1`, the track height
   // and the radii do not follow the preset.
   test("M-004 injected compact density changes no box", async () => {
-    const plain = await openMobile("default");
-    const compact = await openMobile("default", { density: "compact" });
+    const plain = await openMobile("default", { input: "pointer" });
+    const compact = await openMobile("default", { input: "pointer", density: "compact" });
 
     // Same non-vacuity guard as M-003: the compact preset must be mounted.
     expect(compact.texts()).toContain("env=input:pointer density:compact");
@@ -225,16 +223,13 @@ describe("meter mobile", () => {
     const before = boxSet(app);
     const beforeTexts = app.texts();
 
-    try {
-      await app.press("id:meter");
-    } catch {
-      // Nothing around the meter hears presses; a rejection is itself the
-      // negative assertion — no press path exists to answer.
-    }
-    try {
-      await app.press("id:track");
-    } catch {
-      // Same: a track without a press handler has no press path.
+    // Nothing around the meter hears presses — `app.press` resolves no
+    // view that answers and rejects `ERR_NSH_TEST_NOT_FOUND` (the same
+    // strict form separator/spinner's negative rows use).
+    for (const selector of ["id:meter", "id:track"]) {
+      await expect(app.press(selector)).rejects.toMatchObject({
+        code: "ERR_NSH_TEST_NOT_FOUND",
+      });
     }
 
     const names = calls(app).map((call) => call.name);
@@ -258,15 +253,15 @@ describe("meter mobile", () => {
     ];
 
     for (const mount of mounts) {
-      const app = await openMobile(mount.name);
+      const app = await openMobile(mount.name, { input: "pointer" });
       expect(app.shows(mount.selector)).toBe(true);
       await settleLayout(app, mount.probes);
       for (const probe of mount.probes) {
         expect(lastBox(app, probe).width).toBeGreaterThan(0);
       }
 
-      // The loop's unpinned "default" mount is also the baseline half of the
-      // ScopedMobile check: absent params keep the host-derived environment.
+      // The loop's pointer-scoped "default" mount is also the baseline half
+      // of the ScopedMobile check.
       if (mount.name === "default") {
         expect(app.texts()).toContain("env=input:pointer density:default");
       }
@@ -287,7 +282,7 @@ describe("meter mobile", () => {
   // touch and the unpinned host baseline — so headless and `--target web`
   // replay them identically.
   test("M-007 dual environment in one file: baseline and injected-touch mounts both pass", async () => {
-    const baseline = await openMobile("default");
+    const baseline = await openMobile("default", { input: "pointer" });
     await settleLayout(baseline, ["fill"]);
     expect(baseline.shows("role:progressbar[Storage]")).toBe(true);
     expect(lastBox(baseline, "fill").width).toBe(180);

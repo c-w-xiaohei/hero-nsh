@@ -1,12 +1,13 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
-import { calls, callsOf } from "../../helpers/calls";
+import type { App } from "nsh/test";
+import { callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the autocomplete adapt unit, one test per row of
- * adapt-sheets/autocomplete.md §4: M-001 … M-015, M-018 and M-019 here
- * (headless + web); M-016 and M-017 live in
- * `autocomplete.mobile.headless.test.tsx` because they open
+ * adapt-sheets/autocomplete.md §4: M-001, M-003, M-005 … M-015 and M-019
+ * here (ios + android); the `app.hover` rows M-002, M-004 and M-018 live in
+ * `autocomplete.mobile.web.test.tsx` (hover is desktop/web-only); M-016 and
+ * M-017 live in `autocomplete.mobile.headless.test.tsx` because they open
  * `platform: "ios"`, which `--target web` rejects.
  *
  * The fixture is `harness/autocomplete.fixtures.tsx`, `case: "m"` (plus the
@@ -17,10 +18,11 @@ import { calls, callsOf } from "../../helpers/calls";
  * carrier probe is the testID — `id:ac-pop` verbatim on the anchored panel,
  * `id:ac-pop-sheet` derived on the Sheet carrier.
  *
- * Every `open` pins `platform:"windows", width:1024, height:768`: without
- * the pin a bare headless open lands on the phone-sized engine where
- * `input` defaults to touch and every pointer-default assertion inverts
- * (the switch M-001/3/4 lesson).
+ * Every `open` injects `input:"pointer", width:"regular"` through
+ * `host.params` — the role the old `platform:"windows", width:1024` pin
+ * played (open() platform/width options are rejected on ios/android):
+ * without it the phone-derived environment defaults `input` to touch and
+ * every pointer-default assertion inverts (the switch M-001/3/4 lesson).
  *
  * `hitSlop` itself has no `nsh/test` readout (sheet §6 host gap): M-005 /
  * M-006 / M-007 assert the seam's `ctx-*` channel values instead — the
@@ -35,15 +37,17 @@ type Params = Record<string, string>;
 function openMobile(
   caseName: string,
   params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
 ): Promise<App> {
   return open("../../../autocomplete.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
-    ...options,
-    host: { params: { case: caseName, ...params } },
+    host: {
+      params: {
+        case: caseName,
+        input: "pointer",
+        width: "regular",
+        ...params,
+      },
+    },
   });
 }
 
@@ -113,30 +117,9 @@ describe("autocomplete mobile", () => {
 
   // adapt-sheets/autocomplete.md M-002 (A-001): R-043's `hover:` class lives
   // in the `input: "pointer"` cell now — under touch neither a hover nor a
-  // completed press leaves the `default-hover` fill on the clear button
-  // (web's sticky hover is the registered hazard), while under pointer the
-  // same hover paints it. `viewStyle` reads the resolved background; the
-  // class itself is unobservable.
-  test("M-002 clear button hover fill is pointer-only", async () => {
-    const touch = await openMobile("m", { input: "touch" });
-    const base = touch.viewStyle(CLEAR)?.backgroundColor;
-
-    await touch.hover(CLEAR);
-    await touch.wait(100);
-    expect(touch.viewStyle(CLEAR)?.backgroundColor).toBe(base);
-
-    await touch.press(CLEAR);
-    await touch.waitUntil(() => callsOf(touch, "clear").length === 1);
-    expect(touch.viewStyle(CLEAR)?.backgroundColor).toBe(base);
-
-    const pointer = await openMobile("m");
-    const pointerBase = pointer.viewStyle(CLEAR)?.backgroundColor;
-    await pointer.hover(CLEAR);
-    await pointer.wait(100);
-    const pointerHover = pointer.viewStyle(CLEAR)?.backgroundColor;
-    expect(pointerHover).toBeDefined();
-    expect(pointerHover).not.toBe(pointerBase);
-  }, 120_000);
+  // completed press leaves the `default-hover` fill on the clear button,
+  // while under pointer the same hover paints it. `app.hover` is
+  // desktop/web-only — the row lives in autocomplete.mobile.web.test.tsx.
 
   // adapt-sheets/autocomplete.md M-003 (A-001): injected `density="compact"`
   // tightens the spacing cells. Heights cannot show it — the SearchField
@@ -168,42 +151,10 @@ describe("autocomplete mobile", () => {
   }, 120_000);
 
   // adapt-sheets/autocomplete.md M-004 (A-002): under touch neither a hover
-  // nor a press raises `isHovered` — the render-prop marker stays "idle" and
-  // `onHoverChange` / `onHoverStart` / `onHoverEnd` record nothing (the
-  // sticky-hover double safety: the JS signal never sets, so the R-006 /
-  // R-011 fills it feeds never paint). The host `onMouseEnter` /
-  // `onMouseLeave` callbacks still forward on both environments; under
-  // pointer the hover round-trips exactly as on desktop.
-  test("M-004 touch suppresses trigger hover; pointer keeps it", async () => {
-    const touch = await openMobile("m", { input: "touch" });
-
-    await touch.hover(TRIGGER);
-    await touch.wait(100);
-    expect(touch.shows("text:trigger-hover")).toBe(false);
-    expect(callsOf(touch, "events")).toContainEqual(["mouseEnter"]);
-
-    await touch.press(TRIGGER);
-    await touch.waitFor("role:option");
-    expect(touch.shows("text:trigger-hover")).toBe(false);
-    expect(callsOf(touch, "hover")).toHaveLength(0);
-    expect(callsOf(touch, "openChange")).toEqual([[true]]);
-
-    const pointer = await openMobile("m");
-    await pointer.hover(TRIGGER);
-    await pointer.waitUntil(() => callsOf(pointer, "hover").length > 0);
-    expect(pointer.shows("text:trigger-hover")).toBe(true);
-
-    await pointer.hover("id:ctx-sample");
-    await pointer.waitUntil(() =>
-      callsOf(pointer, "hover").some((c) => (c[0] as { kind: string }).kind === "end"),
-    );
-    expect(pointer.shows("text:trigger-hover")).toBe(false);
-    expect(callsOf(pointer, "events")).toContainEqual(["mouseEnter"]);
-    expect(callsOf(pointer, "events")).toContainEqual(["mouseLeave"]);
-    expect(
-      callsOf(pointer, "hover").some((c) => (c[0] as { kind: string }).kind === "change"),
-    ).toBe(true);
-  }, 120_000);
+  // nor a press raises `isHovered`; the host `onMouseEnter`/`onMouseLeave`
+  // callbacks still forward, and under pointer the hover round-trips as on
+  // desktop. `app.hover` is desktop/web-only — the row lives in
+  // autocomplete.mobile.web.test.tsx.
 
   // adapt-sheets/autocomplete.md M-005 (A-003, A-004, 负断言): under the
   // default pointer environment the touch-gated seam is inert — `enabled`
@@ -499,55 +450,9 @@ describe("autocomplete mobile", () => {
   }, 120_000);
 
   // adapt-sheets/autocomplete.md M-018 (A-013, A-014): the fixture machinery
-  // itself — `Scoped` + the `m-*` cases mount under every environment
-  // combination, and every probe channel (`openChange` / `change` /
-  // `inputChange` / `clear` / `events` / `hover` / `layout` / `ctx-*`)
-  // records through `app.storage()` on both halves, so a silent fixture
-  // regression cannot pass the other rows vacuously.
-  test("M-018 fixture Scoped params, m-* cases and probes all record", async () => {
-    for (const params of [
-      {},
-      { input: "touch", width: "compact" },
-      { density: "compact" },
-    ] as Params[]) {
-      const app = await openMobile("m", params);
-
-      // layout probes arrive at mount; open drives the rest of the chain.
-      await app.waitUntil(() => callsOf(app, "layout").length > 0);
-      expect(app.shows(TRIGGER)).toBe(true);
-
-      await app.hover(TRIGGER);
-      await app.press(CLEAR);
-      await app.waitUntil(() => callsOf(app, "clear").length === 1);
-      expect(callsOf(app, "change")).toEqual([[null]]);
-
-      // The on-demand channel read runs while the overlay is closed: an
-      // open modal carrier owns outside presses (web hit-testing lands the
-      // press on the backdrop/sheet, headless resolves it to the view), so
-      // pressing `ctx-sample` with the popover up would sample nothing.
-      await app.press("id:ctx-sample");
-      await app.waitUntil(() => callsOf(app, "ctx-channels").length > 0);
-
-      await app.press(TRIGGER);
-      await app.waitFor("role:option");
-      expect(callsOf(app, "openChange")).toEqual([[true]]);
-      expect(app.shows("role:option")).toBe(true);
-      expect(app.count("id:ac-pop") + app.count("id:ac-pop-sheet")).toBe(1);
-
-      await app.type(SEARCH, "ca");
-      await app.waitUntil(() => callsOf(app, "inputChange").length > 0);
-
-      // The pointer half records the hover channel; the touch half's is
-      // silent by design (M-004), so only the record shape is pinned there.
-      if (params.input !== "touch") {
-        expect(callsOf(app, "hover").length).toBeGreaterThan(0);
-        expect(callsOf(app, "events")).toContainEqual(["mouseEnter"]);
-      }
-      expect(callsOf(app, "ctx-env").length).toBeGreaterThan(0);
-      expect(callsOf(app, "ctx-pressed").length).toBeGreaterThan(0);
-      expect(states(app).length).toBeGreaterThan(0);
-    }
-  }, 120_000);
+  // itself — every probe channel records — rides `app.hover` to exercise the
+  // hover channel, which is desktop/web-only; the row lives in
+  // autocomplete.mobile.web.test.tsx.
 
   // adapt-sheets/autocomplete.md M-019 (基线): the default environment keeps
   // the desktop contract item for item — a trigger press opens the lazy

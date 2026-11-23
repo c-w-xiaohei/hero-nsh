@@ -38,7 +38,7 @@ describe("close-button mobile (web)", () => {
     );
     expect(pointer.viewStyle("id:cb-probe")?.backgroundColor).toBeDefined();
 
-    const app = await openCloseButton("events", { scope: "touch" });
+    const app = await openCloseButton("events", { testInput: "touch" });
     const before = app.viewStyle("id:cb-probe")?.backgroundColor;
 
     await app.hover("id:cb-probe");

@@ -16,14 +16,15 @@ import { callsOf } from "../../helpers/calls";
 
 type PanCall = { phase: string; dx: number; dy: number; active: boolean };
 
+// No `platform`/`width`/`height` open options: native iOS/Android hosts run
+// this file with their real screen and platform and reject those options.
+// Environment comparisons go through the fixture's EnvironmentScope
+// injection (params.scope "touch"/"pointer"), never the host platform.
 function openPan(
   caseName: string,
   params: { scope?: "touch" | "pointer" } = {},
 ): Promise<App> {
   return open("../../../sheet.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: {
       params: {
         case: caseName,

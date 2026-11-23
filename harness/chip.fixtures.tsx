@@ -35,13 +35,13 @@ import { probe } from "@scenario/probe";
  * the `@heroui/react` alias and the theme.
  */
 
-type Scope = "" | "touch";
+type Scope = "" | "touch" | "pointer";
 
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "") as Scope;
 
-  return scope === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  return scope === "touch" || scope === "pointer" ? (
+    <EnvironmentScope input={scope}>{props.children}</EnvironmentScope>
   ) : (
     <>{props.children}</>
   );

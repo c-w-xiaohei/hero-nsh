@@ -74,7 +74,9 @@ import { createInput } from "../src/primitives/environment";
  *
  * `host.params.scope` picks the `EnvironmentScope` wrapper ("" = host
  * default, "touch" = `input="touch"`), the same convention as
- * `control-field.fixtures.tsx`. `box`="tiny" gives the row a 24 pt width so
+ * `control-field.fixtures.tsx`. The test-only params `testInput`
+ * ("pointer"/"touch") inject an outer EnvironmentScope input; `box`="tiny"
+ * gives the row a 24 pt width so
  * the seam's `hitSlop` has an axis left to expand — under touch the row's
  * height already sits at the 44 pt minimum `min-h-11` gives it. `tall`="1"
  * stacks extra text lines inside the same Content so the row's natural
@@ -623,11 +625,23 @@ type Scope = "" | "touch";
 
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "") as Scope;
+  // Test-harness environment param (only the mobile tests set it —
+  // absent keeps the host-derived default): `testInput` injects an outer
+  // EnvironmentScope input so the pointer baseline is host-independent
+  // (inner `scope` overrides still win).
+  const testInput = String(host.params.testInput ?? "");
 
-  return scope === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  const body =
+    scope === "touch" ? (
+      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+    ) : (
+      <>{props.children}</>
+    );
+
+  return testInput === "pointer" || testInput === "touch" ? (
+    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
   ) : (
-    <>{props.children}</>
+    body
   );
 }
 

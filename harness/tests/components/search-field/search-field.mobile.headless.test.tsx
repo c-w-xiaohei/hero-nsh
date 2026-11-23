@@ -3,19 +3,43 @@ import type { App, OpenOptions } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
 /*
- * Headless mobile assertions for the search-field adapt unit — the row of
- * adapt-sheets/search-field.md §4 that needs a capability only the
- * headless engine has: M-010 (`open({platform:"ios"})` host derivation —
- * `--target web` rejects a `platform` option outright).
+ * Headless mobile assertions for the search-field adapt unit — the rows of
+ * adapt-sheets/search-field.md §4 that need capabilities only the headless
+ * engine has:
+ *
+ *   M-002  `app.hover` — the touch hover-suppression row. The native
+ *          ios/android CI lanes have no mouse channel, so the row moved
+ *          here whole rather than split; `testInput` picks the fixture's
+ *          environment exactly as the shared file does.
+ *   M-010  `open({platform:"ios"})` host derivation — `--target web`
+ *          rejects a `platform` option outright.
  *
  * The fixture is `harness/search-field.fixtures.tsx`; `host.params`:
  * `case` (`layout` for the bounds probes, `basic` for the press→type
- * chain) — no `scope`: the phone-sized host deriving `input == "touch"`
- * on its own is the subject (the switch / tabs / date-input-group
- * headless convention).
+ * chain, `hover` for the hover probes) plus `testInput` ("pointer"/"touch"
+ * — the same explicit environment pick the shared file uses). M-010's ios
+ * opens pass no environment param: the phone-sized host deriving
+ * `input == "touch"` on its own is the subject (the switch / tabs /
+ * date-input-group headless convention).
  */
 
 type Bounds = { origin: { x: number; y: number }; size: { width: number; height: number } };
+
+type GroupProps = {
+  isHovered: boolean;
+  isFocusWithin: boolean;
+  isFocusVisible: boolean;
+  isDisabled: boolean;
+  isInvalid: boolean;
+};
+
+type InputProps = {
+  isHovered: boolean;
+  isFocused: boolean;
+  isFocusVisible: boolean;
+  isDisabled: boolean;
+  isInvalid: boolean;
+};
 
 function openCase(
   name: string,
@@ -34,6 +58,8 @@ function openCase(
 function openIos(name: string): Promise<App> {
   return openCase(name, {}, { platform: "ios", width: 390, height: 844 });
 }
+
+const INPUT = "label:Search";
 
 function lastOf<T>(app: App, name: string): T {
   const all = callsOf(app, name);
@@ -67,5 +93,56 @@ describe("search-field mobile (headless)", () => {
     expect(app.value("label:Search")).toBe("ios");
     expect(callsOf(app, "onChange").at(-1)?.[0]).toBe("ios");
     expect(callsOf(app, "onBlur")).toHaveLength(0);
+  }, 120_000);
+
+  // adapt-sheets/search-field.md M-002 (A-002, A-003): under touch neither a
+  // hover nor a press (whose sticky web hover is the registered hazard)
+  // raises `isHovered` — the Group and Input render props stay false and
+  // the four `onHover*` callbacks record nothing, which is also what keeps
+  // the hover fill classes off (they ride the same `hovered` signal; class
+  // names are not observable). The press itself still lands: the input
+  // focuses. Under pointer the hover round-trips exactly as on desktop.
+  test("M-002 injected touch suppresses group and input hover; pointer keeps it", async () => {
+    const touch = await openCase("hover", { testInput: "touch" });
+
+    await touch.hover("id:sf-group");
+    await touch.hover("id:sf-input");
+    // The press itself still lands: the input's `isFocused` render prop
+    // rises (the hover case wires no `onFocus` probe — the render props
+    // are its focus channel).
+    await touch.press(INPUT);
+    await touch.waitUntil(() => lastOf<InputProps>(touch, "input-props").isFocused === true);
+    await touch.wait(50);
+
+    expect(callsOf(touch, "hover")).toHaveLength(0);
+    for (const c of callsOf(touch, "group-props")) {
+      expect((c[0] as GroupProps).isHovered).toBe(false);
+    }
+    for (const c of callsOf(touch, "input-props")) {
+      expect((c[0] as InputProps).isHovered).toBe(false);
+    }
+    touch.dispose();
+
+    const pointer = await openCase("hover", { testInput: "pointer" });
+
+    await pointer.hover("id:sf-input");
+    await pointer.waitUntil(() => callsOf(pointer, "hover").length > 0);
+
+    const hoverCalls = callsOf(pointer, "hover").map((c) => c[0] as unknown[]);
+    expect(hoverCalls).toContainEqual(["input", "start"]);
+    expect(hoverCalls).toContainEqual(["input", "change", true]);
+    expect(lastOf<InputProps>(pointer, "input-props").isHovered).toBe(true);
+    expect(lastOf<GroupProps>(pointer, "group-props").isHovered).toBe(true);
+
+    // Moving onto the Label (outside the group) ends both hovers.
+    await pointer.hover("text:Search");
+    await pointer.waitUntil(() => {
+      const ends = callsOf(pointer, "hover").filter(
+        (c) => (c[0] as unknown[])[1] === "end",
+      );
+      return ends.length > 0 && lastOf<GroupProps>(pointer, "group-props").isHovered === false;
+    });
+    expect(lastOf<InputProps>(pointer, "input-props").isHovered).toBe(false);
+    pointer.dispose();
   }, 120_000);
 });

@@ -57,9 +57,11 @@ import { probe } from "@scenario/probe";
  *                     horizontal Scroll), for the arbitration assertions
  *
  * Mobile-layer params (adapt sheet §4):
- *   scope    "" = the host's default environment (pointer — the desktop-parity
- *            side); "touch" wraps the case in EnvironmentScope(input="touch"),
- *            the injected environment the assertions drive.
+ *   scope    "" = the host's default environment (on a native phone that is
+ *            touch, so the desktop-parity side injects "pointer"
+ *            explicitly); "touch"/"pointer" wrap the case in
+ *            EnvironmentScope(input=scope), the injected environment the
+ *            assertions drive.
  *   probe    "1" mounts the seam surface: a `CtxProbe` inside the Track's and
  *            the Thumb's own `SliderSeamContext` (reachable only inside the
  *            provider, so the fixture imports the context file directly the
@@ -572,8 +574,14 @@ function MarkChildrenCase() {
  * -----------------------------------------------------------------------------------------------*/
 
 function Scoped(props: { children?: JSX.Element }) {
-  return String(host.params.scope ?? "") === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  const scope = String(host.params.scope ?? "");
+
+  // "touch"/"pointer" inject that input axis; anything else leaves the
+  // host-derived environment (on native phones touch — the pointer
+  // baseline's assertions inject "pointer" explicitly instead of a desktop
+  // platform pin).
+  return scope === "touch" || scope === "pointer" ? (
+    <EnvironmentScope input={scope}>{props.children}</EnvironmentScope>
   ) : (
     <>{props.children}</>
   );

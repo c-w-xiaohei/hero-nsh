@@ -8,9 +8,10 @@ import { callsOf } from "../../helpers/calls";
  * `harness/link.fixtures.tsx` — `case` picks the link shape (`basic` is an
  * absolute-URL single-line link under 44 pt tall, `relative`/`anchor` the
  * non-navigating hrefs, `disabled` the refused link, `nav` all three hrefs
- * in one mount) and `scope` picks the environment (`"touch"` mounts
- * `EnvironmentScope input="touch"`; absent is the host default, pointer —
- * the desktop-parity baseline).
+ * in one mount) and `scope` picks the environment (`"touch"`/`"pointer"`
+ * mount `EnvironmentScope input`; absent is the host default, which
+ * differs per target — touch on ios/android, pointer on desktop and web —
+ * so the desktop-parity baseline injects `"pointer"` explicitly).
  *
  * The observation channel is what `nsh/test` sees plus the fixture's
  * `probe()` records in `app.storage()`: `hitSlop` is the press-feedback
@@ -20,20 +21,22 @@ import { callsOf } from "../../helpers/calls";
  * press/click order. `app.openedUrls()` is the `openUrl` probe; `spanStyle`
  * reads the resolved underline for the sticky-hover assertion.
  *
- * Both environments are covered in the same file: the default (pointer)
- * and the injected touch one. `app.press`/`app.hover`/`spanStyle` behave
- * the same on headless and web, so this is a dual-target `.mobile.test.tsx`.
+ * No `platform`/`width`/`height` open options — the native targets fill
+ * the device screen and reject them. The hover halves of M-003 and M-004
+ * moved to `link.mobile.headless.test.tsx`, a local file that keeps the
+ * `platform:"windows"` pin: `app.hover` is a mouse gesture the native
+ * targets cannot perform.
  */
 
 type Edges = { top: number; right: number; bottom: number; left: number };
 
 // `open` resolves its entry against the test file; this file sits three
 // levels below harness/, same as every other component test.
-function openLink(caseName: string, scope?: "touch"): Promise<App> {
+function openLink(
+  caseName: string,
+  scope?: "touch" | "pointer",
+): Promise<App> {
   return open("../../../link.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: { params: { case: caseName, ...(scope ? { scope } : {}) } },
   });
 }
@@ -103,24 +106,19 @@ describe("link", () => {
     expect(hitSlopReports(disabled).every((slop) => slop === null)).toBe(true);
   }, 120_000);
 
-  // adapt-sheets/link.md M-003 (基线, A-001, A-002): the default pointer
-  // environment is the desktop-parity baseline — hover underline, press
-  // callbacks and the disabled refusal match the existing desktop
-  // assertions (T-004/T-006/T-007), the seam reports `hitSlop` undefined on
-  // every change, and no touch feedback path appears.
-  test("M-003 default pointer environment: desktop parity — hover, press, disabled, no hitSlop", async () => {
-    const app = await openLink("basic");
+  // adapt-sheets/link.md M-003 (基线, A-001, A-002): the injected pointer
+  // environment is the desktop-parity baseline — press callbacks and the
+  // disabled refusal match the existing desktop assertions
+  // (T-006/T-007), the seam reports `hitSlop` undefined on every change,
+  // and no touch feedback path appears. The hover-underline half (T-004)
+  // lives in `link.mobile.headless.test.tsx` — `app.hover` does not exist
+  // on the native targets.
+  test("M-003 pointer baseline: desktop parity — press, disabled, no hitSlop", async () => {
+    const app = await openLink("basic", "pointer");
 
     // The seam is gated off: every report is `null` (undefined).
     expect(hitSlopReports(app).length).toBeGreaterThan(0);
     expect(hitSlopReports(app).every((slop) => slop === null)).toBe(true);
-
-    // T-004 parity: hover still raises the underline.
-    await app.hover("id:link-under-test");
-    expect(callsOf(app, "onHover")).toContainEqual(["start"]);
-    expect(
-      app.spanStyle("id:link-under-test >> text:Link label").underline,
-    ).toBe(true);
 
     // T-006 parity plus navigation: one press, both callbacks, one openUrl.
     await app.press("id:link-under-test");
@@ -129,7 +127,7 @@ describe("link", () => {
     expect(app.openedUrls()).toEqual(["https://example.com"]);
 
     // T-007 parity: the disabled link takes no input and fires nothing.
-    const disabled = await openLink("disabled");
+    const disabled = await openLink("disabled", "pointer");
     expect(disabled.enabled("id:link-under-test")).toBe(false);
     await expect(disabled.press("id:link-under-test")).rejects.toMatchObject({
       code: "ERR_NSH_TEST_DISABLED",
@@ -140,31 +138,19 @@ describe("link", () => {
   }, 120_000);
 
   // adapt-sheets/link.md M-004 (A-001): under touch the `input` axis drops
-  // the hover classes, so a hover — whose callbacks still fire, the contract
-  // is unchanged — paints no underline, and nothing lingers after a press
-  // (the sticky-hover regression the axis exists to prevent). Under pointer
-  // the same case keeps the desktop hover style.
-  test("M-004 touch suppresses the hover underline; pointer keeps it", async () => {
+  // the hover classes, so a completed press leaves no decoration behind —
+  // `active:` is gone once the press resolves and no `hover:` class exists
+  // to stick (the sticky-hover regression the axis exists to prevent). The
+  // hover halves — touch's hover paints no underline while its `onHover`
+  // callbacks still fire, and pointer keeps the desktop hover style — live
+  // in `link.mobile.headless.test.tsx`, which can call `app.hover`.
+  test("M-004 injected touch: a completed press leaves no underline behind", async () => {
     const touch = await openLink("basic", "touch");
 
-    await touch.hover("id:link-under-test");
-    expect(callsOf(touch, "onHover")).toContainEqual(["start"]);
-    expect(
-      touch.spanStyle("id:link-under-test >> text:Link label").underline,
-    ).toBe(false);
-
-    // A completed press leaves no hover decoration behind either: `active:`
-    // is gone once the press resolves and no `hover:` class exists to stick.
     await touch.press("id:link-under-test");
     expect(
       touch.spanStyle("id:link-under-test >> text:Link label").underline,
     ).toBe(false);
-
-    const pointer = await openLink("basic");
-    await pointer.hover("id:link-under-test");
-    expect(
-      pointer.spanStyle("id:link-under-test >> text:Link label").underline,
-    ).toBe(true);
   }, 120_000);
 
   // adapt-sheets/link.md M-005 (基线, A-004): navigation semantics are
@@ -172,7 +158,7 @@ describe("link", () => {
   // once with the unchanged argument, a relative path and a `#anchor` only
   // run `onPress`/`onClick` (in that order), in both environments.
   test("M-005 baseline navigation: absolute URL opens once, relative and anchor stay callback-only, in both environments", async () => {
-    for (const scope of [undefined, "touch"] as const) {
+    for (const scope of ["pointer", "touch"] as const) {
       const app = await openLink("nav", scope);
 
       await app.press("id:link-nav-abs");
@@ -193,7 +179,7 @@ describe("link", () => {
   // `Link` and `EnvironmentScope` through the `@heroui/react` entry, and both
   // parameter paths — `scope="touch"` and the default — open and render.
   test("M-006 fixture entry: Link and EnvironmentScope mount through @heroui/react in both scopes", async () => {
-    for (const scope of [undefined, "touch"] as const) {
+    for (const scope of ["pointer", "touch"] as const) {
       const app = await openLink("basic", scope);
 
       expect(app.shows("id:link-under-test")).toBe(true);

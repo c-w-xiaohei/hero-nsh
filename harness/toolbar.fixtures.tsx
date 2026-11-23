@@ -40,8 +40,10 @@ import { probe } from "@scenario/probe";
  *                (M-007 axis inheritance, role:group)
  *
  * host.params.scope picks the `EnvironmentScope` wrapper ("" = host default,
- * "touch" = `input="touch"`, "touch-compact" = `input="touch" width="compact"`),
- * same convention as disclosure-group.fixtures.tsx.
+ * "touch" = `input="touch"`, "pointer" = `input="pointer"` — the explicit
+ * pointer baseline the shared mobile tests inject, since a native phone's
+ * host-derived input is touch — "touch-compact" = `input="touch"
+ * width="compact"`), same convention as disclosure-group.fixtures.tsx.
  */
 
 type LayoutEvent = {
@@ -266,8 +268,8 @@ const cases: Record<string, Component> = {
 function Scoped(props: { children?: JSX.Element }) {
   const scope = String(host.params.scope ?? "");
 
-  if (scope === "touch") {
-    return <EnvironmentScope input="touch">{props.children}</EnvironmentScope>;
+  if (scope === "touch" || scope === "pointer") {
+    return <EnvironmentScope input={scope}>{props.children}</EnvironmentScope>;
   }
 
   if (scope === "touch-compact") {

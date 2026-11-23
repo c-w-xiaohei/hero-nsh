@@ -10,13 +10,14 @@ import { calls, callsOf } from "../../helpers/calls";
  * a handwritten `DescriptionContext.Provider` whose `partClass` mirrors the
  * textfield's `invalid → "hidden"`.
  *
- * `host.params.scope` picks the `EnvironmentScope` wrapper — "" is the
- * host-derived desktop environment (pointer + default density), the baseline
- * every comparison reads. `platform:"windows"` at 1024×768 pins the pointer
- * host both targets share (the sheet convention), so the whole file runs on
- * headless and web unchanged. The observation channel is what `nsh/test`
- * sees: `shows`/`texts`, `spanStyle` for the resolved typography, `onLayout`
- * bounds records, and `app.storage()` probe calls.
+ * `host.params.scope` picks the `EnvironmentScope` wrapper via comma tokens
+ * ("pointer"/"touch"/"density"). The host-derived environment differs per
+ * target — touch on ios/android, pointer on desktop and web — so the
+ * desktop-parity baseline every comparison reads injects `"pointer"`
+ * explicitly. No `platform`/`width`/`height` open options: the native
+ * targets fill the device screen and reject them. The observation channel
+ * is what `nsh/test` sees: `shows`/`texts`, `spanStyle` for the resolved
+ * typography, `onLayout` bounds records, and `app.storage()` probe calls.
  */
 
 type Box = {
@@ -36,9 +37,6 @@ const ACCENT = "#0485f7ff";
 
 function openFixture(params: Record<string, string>): Promise<App> {
   return open("../../../description.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
     host: { params },
   });
@@ -109,8 +107,8 @@ describe("description mobile", () => {
   // adapt-sheets/description.md M-001 (baseline): the default environment is
   // the desktop-parity surface — the description paints its upstream
   // `text-xs text-muted` exactly: 12pt in the theme's muted color.
-  test("M-001 default environment: description renders text-xs text-muted", async () => {
-    const app = await openFixture({ case: "basic" });
+  test("M-001 pointer baseline: description renders text-xs text-muted", async () => {
+    const app = await openFixture({ case: "basic", scope: "pointer" });
 
     expect(app.shows("id:desc-basic")).toBe(true);
     expect(app.texts()).toContain("Save changes");
@@ -125,8 +123,8 @@ describe("description mobile", () => {
   // `text-wrap` wraps the long sentence into a taller box than the one-line
   // default. The removed `wrap-break-word` (R-003) is not asserted — a long
   // unbroken token overflows, a port-sheet-recorded difference.
-  test("M-002 default environment: caller className wins, text-wrap wraps", async () => {
-    const app = await openFixture({ case: "basic" });
+  test("M-002 pointer baseline: caller className wins, text-wrap wraps", async () => {
+    const app = await openFixture({ case: "basic", scope: "pointer" });
     await settleLayout(app, BASIC_BOXES);
 
     const custom = app.spanStyle("id:desc-custom >> text:Custom tone");
@@ -145,7 +143,7 @@ describe("description mobile", () => {
   // is no focus query to read it by.)
   test("M-003 injected touch: typography and bounds equal the pointer baseline", async () => {
     const touch = await openFixture({ case: "basic", scope: "touch" });
-    const pointer = await openFixture({ case: "basic" });
+    const pointer = await openFixture({ case: "basic", scope: "pointer" });
     await settleLayout(touch, BASIC_BOXES);
     await settleLayout(pointer, BASIC_BOXES);
 
@@ -164,9 +162,12 @@ describe("description mobile", () => {
   // produces no class or bounds difference; combining it with touch (the
   // sheet's alternate form) matches too.
   test("M-004 density compact: typography and bounds equal the default preset", async () => {
-    const compact = await openFixture({ case: "basic", scope: "density" });
+    const compact = await openFixture({
+      case: "basic",
+      scope: "pointer,density",
+    });
     const both = await openFixture({ case: "basic", scope: "touch,density" });
-    const plain = await openFixture({ case: "basic" });
+    const plain = await openFixture({ case: "basic", scope: "pointer" });
     await settleLayout(compact, BASIC_BOXES);
     await settleLayout(both, BASIC_BOXES);
     await settleLayout(plain, BASIC_BOXES);
@@ -187,8 +188,8 @@ describe("description mobile", () => {
   // exactly once at mount, and `partClass` toggling to `"hidden"` hides the
   // description and back. Run once in each environment.
   test("M-005 ctx case: registration reports once, invalid toggles hidden", async () => {
-    for (const scope of ["", "touch"]) {
-      const app = await openFixture({ case: "ctx", ...(scope ? { scope } : {}) });
+    for (const scope of ["pointer", "touch"]) {
+      const app = await openFixture({ case: "ctx", scope });
 
       await app.waitUntil(() => callsOf(app, "register").length === 1);
       expect(callsOf(app, "register")).toEqual([["Registered description"]]);
@@ -228,10 +229,10 @@ describe("description mobile", () => {
     const touch = await openFixture({ case: "basic", scope: "touch" });
     expect(touch.texts()).toContain("input=touch");
 
-    const plain = await openFixture({ case: "basic" });
+    const plain = await openFixture({ case: "basic", scope: "pointer" });
     expect(plain.texts()).toContain("input=pointer");
 
-    const ctx = await openFixture({ case: "ctx" });
+    const ctx = await openFixture({ case: "ctx", scope: "pointer" });
     expect(ctx.shows("id:desc-ctx")).toBe(true);
   });
 });

@@ -10,11 +10,12 @@ import { callsOf } from "../../helpers/calls";
  * owns) and records `probe("data")` / `probe("getters")` / `probe("import")`.
  */
 
+// No `platform`/`width`/`height` open options: native iOS/Android hosts run
+// this file with their real screen and platform and reject those options,
+// and these rows assert data-side normalization only — identical under
+// every environment.
 function openData() {
   return open("../../../list-box.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: { params: { case: "f-collection", which: "data" } },
   });
 }

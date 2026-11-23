@@ -85,7 +85,7 @@ describe("date-input-group mobile (web)", () => {
   // (The interactive half runs in `date-input-group.mobile.test.tsx` on
   // both targets.)
   test("M-002 injected touch: non-interactive affix stays inert, segment press works", async () => {
-    const app = await openDig("affix-static", { scope: "touch" });
+    const app = await openDig("affix-static", { testInput: "touch" });
 
     await app.press("id:affix-prefix-button");
     await app.press("id:affix-suffix-button");

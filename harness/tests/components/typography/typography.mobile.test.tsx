@@ -15,17 +15,19 @@ import { calls, callsOf } from "../../helpers/calls";
  * The fixture is `harness/typography.fixtures.tsx` — `host.params.case`
  * picks the shape (`lines`, `variants`, `truncate`, `scaling`, `prose`; an
  * absent case keeps the original `lines` probe that `typography.heroui.web
- * .test.tsx` reads) and `input`/`density` feed `EnvironmentScope` (absent =
- * the host default, pointer — the desktop-parity baseline). Probes in
- * `app.storage()`: `layout` (each tagged part's full bounds box), `lines`
+ * .test.tsx` reads) and `input`/`density` feed `EnvironmentScope`. The axes
+ * are always explicit — `input:"pointer"` is the desktop-parity baseline
+ * and `input:"touch"` the injected mobile half — because the host-derived
+ * default differs per target (touch on ios/android, pointer on desktop and
+ * web). Probes in `app.storage()`: `layout` (each tagged part's full bounds
+ * box), `lines`
  * (each `onTextLayout` line report — the only channel that sees a line's
  * height or horizontal placement) and `env` (the host platform plus the
  * scope-resolved `input`, which M-007/M-010 read).
  *
- * `open` keeps the w1 pin (`platform:"windows"`, 1024×768): without it the
- * headless engine lands on the phone host where `input` defaults to touch
- * and every pointer-default assertion inverts. No `ios`/`android` open and
- * no drag case, so this is a dual-target `.mobile.test.tsx`.
+ * No `platform`/`width` open options — native targets fill the device
+ * screen and reject them. No platform injection and no drag case, so this
+ * file runs on every target.
  *
  * One 宿主缺口 shapes the split: the headless text engine collapses every
  * paragraph to a single full-width `onTextLayout` line, so a wrapped
@@ -36,13 +38,10 @@ import { calls, callsOf } from "../../helpers/calls";
  * stays smaller than the uncapped one on both).
  */
 
-type Env = { input?: "touch"; density?: "compact" };
+type Env = { input?: "touch" | "pointer"; density?: "compact" };
 
 function openTypo(caseName?: string, env: Env = {}): Promise<App> {
   return open("../../../typography.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: {
       params: { ...(caseName === undefined ? {} : { case: caseName }), ...env },
     },
@@ -154,7 +153,7 @@ describe("typography mobile", () => {
   // origin is the headless blind spot (`onTextLayout` collapses it to a
   // full-width line); `typography.mobile.web.test.tsx` M-001 reads it.
   test("M-001 default environment: variant parts render with the semantic type scale", async () => {
-    const app = await openTypo("variants");
+    const app = await openTypo("variants", { input: "pointer" });
     await settleLayout(app, VARIANT_LAYOUTS);
     await settleLines(app, VARIANT_LINES);
 
@@ -185,7 +184,7 @@ describe("typography mobile", () => {
   // its zero-width root span, so its glyph asserts by text, as `texts()`
   // reports it.
   test("M-002 default environment: Prose container mounts with heading and paragraphs", async () => {
-    const app = await openTypo("prose");
+    const app = await openTypo("prose", { input: "pointer" });
     await settleLayout(app, PROSE_LAYOUTS);
 
     expect(app.shows("id:prose")).toBe(true);
@@ -207,7 +206,7 @@ describe("typography mobile", () => {
   // twin's real line count (>1) is the headless blind spot; the web file's
   // M-003 asserts it (both targets report the truncated side as one line).
   test("M-003 default environment: truncate is one line, the wrap twin grows taller", async () => {
-    const app = await openTypo("truncate");
+    const app = await openTypo("truncate", { input: "pointer" });
     await settleLayout(app, TRUNCATE_LAYOUTS);
     await settleLines(app, TRUNCATE_LINES);
 
@@ -229,7 +228,7 @@ describe("typography mobile", () => {
   // counts (≤2 vs more) are the headless blind spot; the web file's M-004
   // asserts them.
   test("M-004 default environment: scaling host props pass through, numberOfLines clamps the box", async () => {
-    const app = await openTypo("scaling");
+    const app = await openTypo("scaling", { input: "pointer" });
     await settleLayout(app, SCALING_LAYOUTS);
     await settleLines(app, SCALING_LINES);
 
@@ -262,7 +261,7 @@ describe("typography mobile", () => {
     };
 
     for (const caseName of Object.keys(waits)) {
-      const pointer = await openTypo(caseName);
+      const pointer = await openTypo(caseName, { input: "pointer" });
       const touch = await openTypo(caseName, { input: "touch" });
       await settleLayout(pointer, waits[caseName]!.layouts);
       await settleLayout(touch, waits[caseName]!.layouts);
@@ -281,15 +280,15 @@ describe("typography mobile", () => {
   }, 120_000);
 
   // adapt-sheets/typography.md M-006 (A-003): injected `density="compact"`
-  // (with `input="touch"`, the mobile combination) — the component table
+  // (on the pointer baseline axis, same input on both sides) — the table
   // has no density cell, so the compact preset produces no class or bounds
   // difference; heading and body semantic sizes stay exactly the default
   // environment's.
   test("M-006 injected compact density: bounds and spans identical to default", async () => {
     for (const caseName of ["variants", "prose"] as const) {
-      const baseline = await openTypo(caseName);
+      const baseline = await openTypo(caseName, { input: "pointer" });
       const compact = await openTypo(caseName, {
-        input: "touch",
+        input: "pointer",
         density: "compact",
       });
       const names = caseName === "variants" ? VARIANT_LAYOUTS : PROSE_LAYOUTS;
@@ -301,7 +300,7 @@ describe("typography mobile", () => {
     }
 
     const compact = await openTypo("variants", {
-      input: "touch",
+      input: "pointer",
       density: "compact",
     });
     expect(compact.spanStyle("text:Section title").fontSize).toBe(30);
@@ -315,7 +314,7 @@ describe("typography mobile", () => {
   // environment, and the `env` probe reports `input` as `"touch"`, proving
   // the `EnvironmentScope` injection took.
   test("M-007 injected touch on scaling: passthrough identical, env probe reports touch", async () => {
-    const pointer = await openTypo("scaling");
+    const pointer = await openTypo("scaling", { input: "pointer" });
     const touch = await openTypo("scaling", { input: "touch" });
     await settleLayout(pointer, SCALING_LAYOUTS);
     await settleLayout(touch, SCALING_LAYOUTS);
@@ -339,7 +338,10 @@ describe("typography mobile", () => {
   // both environments: the missing press path is a contract, not a
   // desktop quirk.
   test("M-008 both environments: pressing text parts rejects — no press path exists", async () => {
-    for (const env of [{}, { input: "touch" } as Env] as const) {
+    for (const env of [
+      { input: "pointer" },
+      { input: "touch" },
+    ] as Env[]) {
       const app = await openTypo("variants", env);
       await settleLayout(app, VARIANT_LAYOUTS);
 
@@ -367,7 +369,10 @@ describe("typography mobile", () => {
   // `weight="bold"` Paragraph paints 700 (X-005's channel) in both
   // environments.
   test("M-009 both environments: derived types resolve, code inherits the bold weight", async () => {
-    for (const env of [{}, { input: "touch" } as Env] as const) {
+    for (const env of [
+      { input: "pointer" },
+      { input: "touch" },
+    ] as Env[]) {
       const variants = await openTypo("variants", env);
       expect(variants.spanStyle("text:Section title").fontSize).toBe(30);
       expect(variants.spanStyle("text:Small copy").fontSize).toBe(14);
@@ -383,13 +388,14 @@ describe("typography mobile", () => {
   // adapt-sheets/typography.md M-010 (A-011, A-012): the fixture itself —
   // an absent `case` keeps the original `lines` probe (the three X-003 /
   // X-004 paragraph reports, byte-identical for `typography.heroui.web
-  // .test.tsx`), the new cases dispatch by `host.params.case`, the desktop
-  // pin reports `input: "pointer"` on both targets and the injected touch
-  // shows through the env probe (`platform.os` is "windows" on the pinned
-  // headless engine; the web target always reports "web" — the desktop
-  // idiom the `platform` option forces is what the pin buys there).
+  // .test.tsx`), the new cases dispatch by `host.params.case`, the injected
+  // pointer baseline reports `input: "pointer"` through the env probe and
+  // the injected touch shows as `"touch"`. The `desktop`/`os`/`idiom` host
+  // pins the original row carried moved to `typography.mobile.headless
+  // .test.tsx` — they only hold under the `platform:"windows"` pin, which
+  // the native targets reject.
   test("M-010 fixture: default case is the lines probe, dispatch and env injection work", async () => {
-    const plain = await openTypo();
+    const plain = await openTypo(undefined, { input: "pointer" });
     await settleLines(plain, ["plain-sm", "code-sm", "base-span"]);
 
     const lines = linesOf(plain);
@@ -397,11 +403,7 @@ describe("typography mobile", () => {
     expect(lines["code-sm"]!.length).toBeGreaterThan(0);
     expect(lines["base-span"]!.length).toBeGreaterThan(0);
 
-    const env = envOf(plain);
-    expect(env.desktop).toBe(true);
-    expect(env.idiom).toBe("desktop");
-    expect(env.input).toBe("pointer");
-    expect(["windows", "web"]).toContain(env.os);
+    expect(envOf(plain).input).toBe("pointer");
 
     const touch = await openTypo("variants", { input: "touch" });
     expect(envOf(touch).input).toBe("touch");

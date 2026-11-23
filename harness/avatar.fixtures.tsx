@@ -214,7 +214,9 @@ function ScopedMobile(props: { children?: JSX.Element }) {
 
   return (
     <EnvironmentScope
-      input={scope === "touch" ? "touch" : undefined}
+      input={
+        scope === "touch" || scope === "pointer" ? scope : undefined
+      }
       density={density === "compact" ? "compact" : undefined}
     >
       {props.children}

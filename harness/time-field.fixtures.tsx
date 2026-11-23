@@ -64,7 +64,8 @@ import { probe } from "@scenario/probe";
  * `host.params.scope` picks the environment wrapper (A-007): "touch" wraps the
  * case in `EnvironmentScope(input="touch")` — the injected half of the mobile
  * assertions; anything else mounts the case on the host-derived default (the
- * pointer half on a desktop-pinned open).
+ * pointer half on a desktop-pinned open). The test-only params `testInput`
+ * ("pointer"/"touch") inject an outer EnvironmentScope input.
  *
  * `host.params.kt` feeds the `keyboard-type` case only (see above).
  *
@@ -496,10 +497,23 @@ function KeyboardTypeCase() {
  * `Scoped` shape date-input-group's fixture uses
  * (harness/date-input-group.fixtures.tsx:676). */
 function Scoped(props: { children?: JSX.Element }) {
-  return String(host.params.scope ?? "") === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  // Test-harness environment param (only the mobile tests set it —
+  // absent keeps the host-derived default): `testInput` injects an outer
+  // EnvironmentScope input so the pointer baseline is host-independent
+  // (inner `scope` overrides still win).
+  const testInput = String(host.params.testInput ?? "");
+
+  const body =
+    String(host.params.scope ?? "") === "touch" ? (
+      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+    ) : (
+      <>{props.children}</>
+    );
+
+  return testInput === "pointer" || testInput === "touch" ? (
+    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
   ) : (
-    <>{props.children}</>
+    body
   );
 }
 

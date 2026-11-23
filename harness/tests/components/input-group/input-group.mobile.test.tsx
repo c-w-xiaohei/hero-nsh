@@ -5,12 +5,15 @@ import { lastFocus } from "../../testers/input-group";
 
 /*
  * Mobile assertions for the input-group adapt unit
- * (adapt-sheets/input-group.md §4, M-001…M-007). One file for headless+web:
- * every assertion reads what `nsh/test` observes — `shows`, `value`,
- * `enabled`, `onLayout` probe payloads and `app.storage()` probe calls — and
- * `host.params.scope` picks the environment, so the dual-environment rows run
- * identically on both targets. The file pins `platform: "windows"` so the
- * default half is `platform.desktop` (pointer) on headless and web alike.
+ * (adapt-sheets/input-group.md §4, M-001…M-007) on every target, native
+ * ios/android included: every assertion reads what `nsh/test` observes —
+ * `shows`, `value`, `enabled`, `onLayout` probe payloads and
+ * `app.storage()` probe calls — and `host.params.testInput` picks the
+ * environment explicitly ("pointer" is the host-independent desktop-parity
+ * baseline, "touch" the injected side), so the dual-environment rows run
+ * identically everywhere. M-002 and M-006's pointer-hover half use
+ * `app.hover`, which needs a mouse — they live in
+ * `input-group.mobile.headless.test.tsx`.
  *
  * The probes live in `harness/input-group.fixtures.tsx`:
  *   `layout` case   Root / Prefix / Suffix `onLayout` bounds — the touch
@@ -31,13 +34,6 @@ type Params = Record<string, string>;
 
 function openCase(name: string, params: Params = {}): Promise<App> {
   return open("../../../input-group.fixtures.tsx", {
-    // The default half of the sheet's dual environment is `platform.desktop`
-    // === true — the same host the desktop contract runs on (a bare `nsh
-    // test` headless host reports `desktop: false`). `EnvironmentScope`
-    // supplies the injected touch half.
-    platform: "windows",
-    width: 1024,
-    height: 768,
     locale: "en-US",
     host: { params: { case: name, ...params } },
   });
@@ -71,59 +67,22 @@ describe("input-group mobile", () => {
   // the same row keeps its `min-h-9` 36 pt height under pointer — desktop
   // zero drift.
   test("M-001 group row measures at least 44pt under touch and stays 36pt under pointer", async () => {
-    const touch = await openCase("layout", { scope: "touch" });
+    const touch = await openCase("layout", { testInput: "touch" });
     await touch.waitUntil(() =>
       callsOf(touch, "layout").some((c) => (c[0] as LayoutEntry).name === "root"),
     );
     expect(layoutFor(touch, "root").height).toBeGreaterThanOrEqual(44);
 
-    const pointer = await openCase("layout");
+    const pointer = await openCase("layout", { testInput: "pointer" });
     await pointer.waitUntil(() =>
       callsOf(pointer, "layout").some((c) => (c[0] as LayoutEntry).name === "root"),
     );
     expect(layoutFor(pointer, "root").height).toBe(36);
   }, 120_000);
 
-  // adapt-sheets/input-group.md M-002 (A-003, A-004): under touch neither a
-  // hover nor a press (whose sticky web hover is the registered hazard)
-  // raises `isHovered` — the render-prop marker stays "idle" and the three
-  // hover callbacks record nothing, which is also what keeps
-  // `bg-field-hover` / `bg-default-hover` off (they ride the same `hovered`
-  // signal; class names are not observable). The press itself still lands:
-  // the input's focus probe records. Under pointer the hover round-trips
-  // exactly as on desktop.
-  test("M-002 injected touch suppresses group and control hover; pointer keeps it", async () => {
-    const touch = await openCase("hover", { scope: "touch" });
-    expect(touch.shows("text:idle")).toBe(true);
-
-    await touch.hover("id:ig-prefix");
-    await touch.press("id:ig-prefix");
-    await touch.waitUntil(() => focusedRecords(touch).length > 0);
-
-    expect(touch.shows("text:hovered")).toBe(false);
-    expect(touch.shows("text:idle")).toBe(true);
-    expect(callsOf(touch, "onHoverStart")).toHaveLength(0);
-    expect(callsOf(touch, "onHoverEnd")).toHaveLength(0);
-    expect(callsOf(touch, "onHoverChange")).toHaveLength(0);
-
-    const pointer = await openCase("hover");
-    // No pre-hover "idle" assertion here: the mouse can still sit over the
-    // group's position from the touch app's press, and a mount-time
-    // mouseenter then legitimately reports "hovered" — the probes below
-    // hold either way (they record at mount or at `app.hover`).
-
-    await pointer.hover("id:ig-prefix");
-    expect(pointer.shows("text:hovered")).toBe(true);
-    expect(callsOf(pointer, "onHoverStart").length).toBeGreaterThanOrEqual(1);
-    expect(callsOf(pointer, "onHoverChange")).toEqual([[true]]);
-
-    // `label:Amount` names the input (inside the group); the visible Label
-    // text is the element outside the group that ends the hover.
-    await pointer.hover("text:Amount");
-    expect(pointer.shows("text:idle")).toBe(true);
-    expect(callsOf(pointer, "onHoverEnd").length).toBeGreaterThanOrEqual(1);
-    expect(callsOf(pointer, "onHoverChange")).toEqual([[true], [false]]);
-  }, 120_000);
+  // adapt-sheets/input-group.md M-002 (A-003, A-004) lives in
+  // `input-group.mobile.headless.test.tsx` — `app.hover` needs a mouse, so
+  // the row moved there whole rather than split.
 
   // adapt-sheets/input-group.md M-003 (A-008): the press-to-focus channel is
   // the shared contract on both ends — pressing the Prefix, the Suffix or
@@ -133,7 +92,7 @@ describe("input-group mobile", () => {
   // records a blur in between. Under `isDisabled` the same press focuses
   // nothing.
   test("M-003 affix and group presses focus the real input in both environments", async () => {
-    for (const params of [{}, { scope: "touch" }] as Params[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const app = await openCase("default", params);
 
       await app.press("id:ig-prefix");
@@ -147,7 +106,7 @@ describe("input-group mobile", () => {
       expect(blurredRecords(app)).toHaveLength(0);
     }
 
-    const disabled = await openCase("disabled");
+    const disabled = await openCase("disabled", { testInput: "pointer" });
     expect(disabled.enabled("label:Amount")).toBe(false);
     await expect(disabled.press("id:ig-prefix")).rejects.toMatchObject({
       code: "ERR_NSH_TEST_DISABLED",
@@ -161,7 +120,7 @@ describe("input-group mobile", () => {
   // recorded and a second `app.type` still lands in the same input (the
   // focus-query gap's registered degradation, sheet §6).
   test("M-004 Return submits once with the current text and keeps focus", async () => {
-    const app = await openCase("submit");
+    const app = await openCase("submit", { testInput: "pointer" });
 
     await app.type("label:Amount", "hello");
     await app.submit("label:Amount");
@@ -185,7 +144,7 @@ describe("input-group mobile", () => {
   // lands. Resolution values and soft-keyboard labels are the sheet §6 host
   // gap: asserted here is mount + channel, not the keyboard itself.
   test("M-005 keyboard and autofill attribute matrix mounts and stays editable", async () => {
-    const app = await openCase("kbd");
+    const app = await openCase("kbd", { testInput: "pointer" });
 
     const ids = [
       "kbd-keyboard",
@@ -212,25 +171,20 @@ describe("input-group mobile", () => {
   // carrier — every fixture probe surface (`focus`, `layout`, the hover
   // trio, `onSubmit`, the `kbd-*` mounts) records through `app.storage()`
   // under BOTH scopes, so a silent fixture regression cannot pass the other
-  // rows vacuously. Under touch the hover probes stay silent by design
-  // (M-002), so that half proves the channel with the focus probe instead.
+  // rows vacuously. The hover case proves its channel with the press-focus
+  // probe (hover probes stay silent under touch by design — M-002); the
+  // pointer half's `app.hover` round-trip lives in
+  // `input-group.mobile.headless.test.tsx`.
   test("M-006 fixture probes record through open + host.params on both scopes", async () => {
-    for (const params of [{}, { scope: "touch" }] as Params[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const layout = await openCase("layout", params);
       await layout.waitUntil(() => callsOf(layout, "layout").length > 0);
       expect(callsOf(layout, "layout").length).toBeGreaterThan(0);
 
       const hover = await openCase("hover", params);
-      if (params.scope === "touch") {
-        await hover.press("id:ig-prefix");
-        await hover.waitUntil(() => focusedRecords(hover).length > 0);
-      } else {
-        await hover.hover("id:ig-prefix");
-        expect(hover.shows("text:hovered")).toBe(true);
-      }
-      expect(
-        callsOf(hover, params.scope === "touch" ? "focus" : "onHoverStart").length,
-      ).toBeGreaterThan(0);
+      await hover.press("id:ig-prefix");
+      await hover.waitUntil(() => focusedRecords(hover).length > 0);
+      expect(callsOf(hover, "focus").length).toBeGreaterThan(0);
 
       const submit = await openCase("submit", params);
       await submit.type("label:Amount", "x");
@@ -252,7 +206,7 @@ describe("input-group mobile", () => {
   // (`rounded-s/e-none`) regress through that read-only suite, which stays
   // green untouched.
   test("M-007 baseline: default environment keeps the desktop contract", async () => {
-    const app = await openCase("default");
+    const app = await openCase("default", { testInput: "pointer" });
     expect(app.shows("id:ig-root >> text:$")).toBe(true);
     expect(app.shows("label:Amount")).toBe(true);
     expect(app.shows("id:ig-root >> text:USD")).toBe(true);
@@ -260,7 +214,7 @@ describe("input-group mobile", () => {
     await app.waitUntil(() => focusedRecords(app).length > 0);
     expect(lastFocus(app, "input")).toBe(true);
 
-    const disabled = await openCase("disabled");
+    const disabled = await openCase("disabled", { testInput: "pointer" });
     expect(disabled.enabled("label:Amount")).toBe(false);
     await expect(disabled.press("id:ig-prefix")).rejects.toMatchObject({
       code: "ERR_NSH_TEST_DISABLED",
@@ -269,26 +223,26 @@ describe("input-group mobile", () => {
     await disabled.type("label:Amount", "x").catch(() => undefined);
     expect(disabled.value("label:Amount")).toBe("10");
 
-    const textarea = await openCase("textarea");
+    const textarea = await openCase("textarea", { testInput: "pointer" });
     expect(textarea.shows("label:Notes")).toBe(true);
     await textarea.type("label:Notes", "Hello");
     expect(textarea.value("label:Notes")).toBe("Hello");
 
-    const secondary = await openCase("secondary");
+    const secondary = await openCase("secondary", { testInput: "pointer" });
     expect(secondary.shows("id:ig-root >> text:$")).toBe(true);
     expect(secondary.shows("id:ig-root >> text:USD")).toBe(true);
 
-    const fullWidth = await openCase("full-width");
+    const fullWidth = await openCase("full-width", { testInput: "pointer" });
     expect(fullWidth.shows("id:ig-frame")).toBe(true);
     expect(fullWidth.shows("id:ig-root >> text:$")).toBe(true);
 
-    const controlled = await openCase("controlled");
+    const controlled = await openCase("controlled", { testInput: "pointer" });
     await controlled.type("label:Amount", "5");
     await controlled.waitUntil(() => callsOf(controlled, "onChange").length > 0);
     const last = callsOf(controlled, "onChange").at(-1)![0] as { value: string };
     expect(last.value).toContain("5");
 
-    const renderProps = await openCase("render-props");
+    const renderProps = await openCase("render-props", { testInput: "pointer" });
     expect(renderProps.shows("text:USD")).toBe(true);
     await renderProps.type("label:Amount", "x");
     expect(renderProps.shows("text:focused")).toBe(true);

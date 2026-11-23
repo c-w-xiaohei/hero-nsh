@@ -10,10 +10,12 @@ import { calls, callsOf } from "../../helpers/calls";
  * `colors`, `value-label`, `custom-format`, `disabled` and `render-prop` —
  * and `host.params.input` / `host.params.density` feed `EnvironmentScope`.
  *
- * `platform:"windows"` at 1024×768 pins the desktop host both runners share
- * (the sheet convention: without the pin the headless suite lands on the
- * phone-sized engine where `input` defaults to touch and the pointer-default
- * assertions invert), so the whole file runs on headless and web unchanged.
+ * The environment axes are always explicit: `input:"pointer"` is the
+ * desktop-parity baseline every comparison reads and `input:"touch"` the
+ * injected mobile half, because the host-derived default differs per
+ * target (touch on ios/android, pointer on desktop and web). No
+ * `platform`/`width` open options: native targets fill the device screen
+ * and reject them.
  * The observation channel is what `nsh/test` sees: `shows`/`texts`, `onLayout`
  * bounds records and `app.storage()` probe calls.
  *
@@ -33,9 +35,6 @@ type Box = {
 
 function openFixture(params: Record<string, string | number | boolean> = {}): Promise<App> {
   return open("../../../progress-bar.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
     host: { params },
   });
@@ -126,7 +125,7 @@ describe("progress-bar mobile", () => {
   // Output's "60%", the Fill sits inside the Track, and the 200pt root's
   // track/fill measure 200 / 120.
   test("M-001 default environment: geometry paints text and measured widths", async () => {
-    const app = await openFixture({ case: "geometry", value: 60 });
+    const app = await openFixture({ case: "geometry", value: 60, input: "pointer" });
     await settleLayout(app, GEOMETRY_BOXES);
 
     expect(app.texts()).toContain("60%");
@@ -142,7 +141,7 @@ describe("progress-bar mobile", () => {
   // Output text, `aria-disabled` still mounts a full bar, and the render-prop
   // accessors drive their content.
   test("M-002 default environment: sizes case", async () => {
-    const app = await openFixture({ case: "sizes" });
+    const app = await openFixture({ case: "sizes", input: "pointer" });
     await settleLayout(app, CASE_BOXES.sizes);
 
     expect(app.texts()).toEqual(["sm", "50%", "md", "50%", "lg", "50%"]);
@@ -153,7 +152,7 @@ describe("progress-bar mobile", () => {
   });
 
   test("M-002 default environment: colors case", async () => {
-    const app = await openFixture({ case: "colors" });
+    const app = await openFixture({ case: "colors", input: "pointer" });
     await settleLayout(app, CASE_BOXES.colors);
 
     expect(app.shows("id:track-success >> id:fill-success")).toBe(true);
@@ -164,7 +163,7 @@ describe("progress-bar mobile", () => {
   });
 
   test("M-002 default environment: value-label case", async () => {
-    const app = await openFixture({ case: "value-label" });
+    const app = await openFixture({ case: "value-label", input: "pointer" });
     await settleLayout(app, CASE_BOXES["value-label"]);
 
     expect(app.texts()).toContain("3 of 10 completed");
@@ -172,7 +171,7 @@ describe("progress-bar mobile", () => {
   });
 
   test("M-002 default environment: custom-format case", async () => {
-    const app = await openFixture({ case: "custom-format" });
+    const app = await openFixture({ case: "custom-format", input: "pointer" });
     await settleLayout(app, CASE_BOXES["custom-format"]);
 
     // minValue -50 / maxValue 50 / value 0 with a decimal format: a non-percent
@@ -182,7 +181,7 @@ describe("progress-bar mobile", () => {
   });
 
   test("M-002 default environment: disabled case", async () => {
-    const app = await openFixture({ case: "disabled" });
+    const app = await openFixture({ case: "disabled", input: "pointer" });
     await settleLayout(app, CASE_BOXES.disabled);
 
     expect(app.texts()).toContain("60%");
@@ -191,7 +190,7 @@ describe("progress-bar mobile", () => {
   });
 
   test("M-002 default environment: render-prop case", async () => {
-    const app = await openFixture({ case: "render-prop" });
+    const app = await openFixture({ case: "render-prop", input: "pointer" });
     await settleLayout(app, CASE_BOXES["render-prop"]);
 
     expect(app.texts()).toContain("percentage:40");
@@ -201,7 +200,7 @@ describe("progress-bar mobile", () => {
   });
 
   test("M-002 default environment: indeterminate fill is 40% of the track", async () => {
-    const app = await openFixture({ case: "geometry", indeterminate: true });
+    const app = await openFixture({ case: "geometry", indeterminate: true, input: "pointer" });
     await settleLayout(app, GEOMETRY_BOXES);
 
     expect(app.texts().filter((text) => text.trim() !== "")).toEqual([
@@ -217,7 +216,7 @@ describe("progress-bar mobile", () => {
   for (const name of ["geometry", "sizes", "render-prop"]) {
     test(`M-003 injected touch: ${name} equals the pointer baseline`, async () => {
       const touch = await openFixture({ case: name, value: 60, input: "touch" });
-      const pointer = await openFixture({ case: name, value: 60 });
+      const pointer = await openFixture({ case: name, value: 60, input: "pointer" });
       await settleLayout(touch, CASE_BOXES[name]);
       await settleLayout(pointer, CASE_BOXES[name]);
 
@@ -231,8 +230,8 @@ describe("progress-bar mobile", () => {
   // the track heights and the radii are invariant under the preset.
   for (const name of ["geometry", "sizes"]) {
     test(`M-004 density compact: ${name} equals the default preset`, async () => {
-      const compact = await openFixture({ case: name, value: 60, density: "compact" });
-      const plain = await openFixture({ case: name, value: 60 });
+      const compact = await openFixture({ case: name, value: 60, input: "pointer", density: "compact" });
+      const plain = await openFixture({ case: name, value: 60, input: "pointer" });
       await settleLayout(compact, CASE_BOXES[name]);
       await settleLayout(plain, CASE_BOXES[name]);
 
@@ -280,7 +279,7 @@ describe("progress-bar mobile", () => {
       "disabled",
       "render-prop",
     ]) {
-      const app = await openFixture({ case: name });
+      const app = await openFixture({ case: name, input: "pointer" });
       // The first layout record arriving proves both the dispatch and the
       // storage channel (open resolves once the app rendered, so the record
       // is either there already or lands on the next frame).
@@ -291,20 +290,20 @@ describe("progress-bar mobile", () => {
   });
 
   test("M-006 fixture: unscoped geometry stays byte-identical to the port", async () => {
-    const app = await openFixture({ case: "geometry", value: 60 });
+    const app = await openFixture({ case: "geometry", value: 60, input: "pointer" });
     await settleLayout(app, GEOMETRY_BOXES);
     expect(app.shows("role:progressbar[Progress Bar]")).toBe(true);
     expect(app.texts()).toContain("60%");
     expect(lastBox(app, "track").width).toBe(200);
   });
 
-  // adapt-sheets/progress-bar.md M-007 (A-007): this file itself — every case
-  // opens through the same `platform:"windows"` 1024×768 pin, so the desktop
-  // baseline and the injected-environment runs share one file under both the
-  // headless and the `--target web` runner; no `.headless.`/`.web.` split is
-  // needed because nothing injects a mobile platform or drags a held touch.
-  test("M-007 dual environment: the pinned open works under both runners", async () => {
-    const app = await openFixture({ case: "geometry", value: 60 });
+  // adapt-sheets/progress-bar.md M-007 (A-007): this file itself — the
+  // baseline opens through the explicit pointer scope that replaces the old
+  // desktop pin, and the injected-environment runs share one file under
+  // every target; no `.headless.`/`.web.` split is needed because nothing
+  // injects a mobile platform or drags a held touch.
+  test("M-007 dual environment: the scoped open works under every target", async () => {
+    const app = await openFixture({ case: "geometry", value: 60, input: "pointer" });
     await settleLayout(app, GEOMETRY_BOXES);
     expect(app.shows("id:root")).toBe(true);
   });

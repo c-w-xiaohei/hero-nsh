@@ -1,36 +1,37 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
+import { callsOf } from "../../helpers/calls";
 
 /*
  * Mobile assertions for the create-presentation mechanism unit, one test per
- * row of adapt-sheets/create-presentation.md §4 (M-001…M-010, M-012 below;
- * M-011 lives in `presentation.mobile.headless.test.tsx`).
+ * row of adapt-sheets/create-presentation.md §4 (M-001…M-004, M-009, M-010,
+ * M-012 below; the setViewport latch rows M-005…M-008 and the platform-spoof
+ * row M-011 live in `presentation.mobile.headless.test.tsx`).
  * The fixture is `harness/presentation.fixtures.tsx`, opened by
  * `host.params.case`/`scope`/`allowed`; every assertion reads what `nsh/test`
- * can observe — `texts()` and `app.setViewport`.
+ * can observe — `texts()` and the `@scenario/probe` `env` report.
  *
- * Both environments are covered in the same file: the default (pointer,
- * which is also the desktop-parity baseline and carries the sheet-path
- * negative assertion M-002) and injected ones through `EnvironmentScope`
- * (params.scope = "touch", width left to the host window so the real
- * windowSize → width derivation is what produces compact/regular).
+ * No `platform`/`width`/`height` open options: native iOS/Android hosts run
+ * this file with their real screen and platform and reject those options.
+ * Both environments are covered through `EnvironmentScope`
+ * (params.scope — "touch-compact"/"pointer-compact"/"regular" pin what a
+ * window size used to, since a real phone's screen cannot be resized),
+ * while the default-environment rows derive their expectations from the
+ * fixture's `env` probe (the host's `platform` facts and the real
+ * `windowSize`), so a real phone still exercises the genuine
+ * windowSize → width derivation.
  */
 
-type Scope = "" | "touch" | "touch-compact" | "regular";
+type Scope = "" | "touch" | "touch-compact" | "pointer-compact" | "regular";
 type Allowed = "ps" | "pf";
 
 // `open` resolves its entry against the test file; this file sits three
 // levels below harness/, same as every other primitives test.
-function openPresentation(
+async function openPresentation(
   caseName: string,
   params: { scope?: Scope; allowed?: Allowed } = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
 ): Promise<App> {
-  return open("../../../presentation.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
+  const app = await open("../../../presentation.fixtures.tsx", {
     host: {
       params: {
         case: caseName,
@@ -39,6 +40,35 @@ function openPresentation(
       },
     },
   });
+  // The fixture's mount-time `env` probe writes Storage asynchronously;
+  // `open` resolving does not guarantee the write is visible yet, and
+  // `envOf`/`derivedPresentation` read it unconditionally in several tests.
+  await app.waitUntil(() => callsOf(app, "env").length > 0);
+  return app;
+}
+
+type EnvReport = {
+  os: string;
+  desktop: boolean;
+  idiom: string;
+  w: number;
+  h: number;
+};
+
+/** The host platform/window report the fixture probes once per mount. */
+function envOf(app: App): EnvReport {
+  return callsOf(app, "env").at(-1)?.[0] as EnvReport;
+}
+
+/**
+ * What the auto rule must prefer on this host: `"sheet"` exactly when the
+ * default environment derives input="touch" (platform.desktop false — a
+ * real phone) AND the real window's short side is under 640 points;
+ * `"panel"` otherwise.
+ */
+function derivedPresentation(app: App): "panel" | "sheet" {
+  const env = envOf(app);
+  return !env.desktop && Math.min(env.w, env.h) < 640 ? "sheet" : "panel";
 }
 
 /*
@@ -53,34 +83,32 @@ async function openOverlay(app: App): Promise<void> {
   await app.waitFor("text:open=true");
 }
 
-async function closeOverlay(app: App): Promise<void> {
-  await app.press("id:toggle");
-  await app.waitFor("text:open=false");
-}
-
 describe("createPresentation", () => {
-  // adapt-sheets/create-presentation.md M-001 (A-001): the default pointer
-  // environment at a regular window presents panel — desktop zero drift.
-  test("M-001 default environment at 1024×768 presents panel", async () => {
-    const app = await openPresentation(
-      "probe",
-      {},
-      { width: 1024, height: 768 },
-    );
+  // adapt-sheets/create-presentation.md M-001 (A-001): the default
+  // environment presents what the auto rule prefers on this host — touch +
+  // compact short side yields sheet (a real phone), anything else panel —
+  // asserted against the host's own platform/window report rather than a
+  // forced desktop viewport.
+  test("M-001 default environment presents what the host's input and real width class prefer", async () => {
+    const app = await openPresentation("probe");
+
+    const env = envOf(app);
+    expect(env.w).toBeGreaterThan(0);
+    expect(env.h).toBeGreaterThan(0);
 
     await openOverlay(app);
-    expect(app.texts()).toContain("presentation=panel");
+    expect(app.texts()).toContain(
+      `presentation=${derivedPresentation(app)}`,
+    );
   });
 
   // adapt-sheets/create-presentation.md M-002 (A-001, 负断言): a compact
-  // window under the pointer environment still presents panel — the sheet
-  // path does not exist without input="touch".
-  test("M-002 default environment at 390×844 still presents panel — no sheet path under pointer", async () => {
-    const app = await openPresentation(
-      "probe",
-      {},
-      { width: 390, height: 844 },
-    );
+  // width under the pointer environment still presents panel — the sheet
+  // path does not exist without input="touch". Pinned through
+  // EnvironmentScope so it holds on every host (a real phone's default is
+  // touch; its screen is already compact).
+  test("M-002 injected pointer at compact width still presents panel — no sheet path without touch", async () => {
+    const app = await openPresentation("probe", { scope: "pointer-compact" });
 
     await openOverlay(app);
     expect(app.texts()).toContain("presentation=panel");
@@ -88,97 +116,22 @@ describe("createPresentation", () => {
   });
 
   // adapt-sheets/create-presentation.md M-003 (A-001): injected touch +
-  // compact window (short side 390 < 640) presents sheet — both halves of
-  // the auto rule hold.
-  test("M-003 injected touch at 390×844 presents sheet", async () => {
-    const app = await openPresentation(
-      "probe",
-      { scope: "touch" },
-      { width: 390, height: 844 },
-    );
+  // compact width presents sheet — both halves of the auto rule hold.
+  // Pinned through EnvironmentScope; the same pair is what a real phone's
+  // default environment derives (M-001 covers the derived half).
+  test("M-003 injected touch at compact width presents sheet", async () => {
+    const app = await openPresentation("probe", { scope: "touch-compact" });
 
     await openOverlay(app);
     expect(app.texts()).toContain("presentation=sheet");
   });
 
   // adapt-sheets/create-presentation.md M-004 (A-001): injected touch at a
-  // regular window lacks the compact half, so the auto rule falls to panel.
-  test("M-004 injected touch at 1024×768 presents panel — compact missing", async () => {
-    const app = await openPresentation(
-      "probe",
-      { scope: "touch" },
-      { width: 1024, height: 768 },
-    );
+  // regular width lacks the compact half, so the auto rule falls to panel
+  // (the "touch tablet" scope).
+  test("M-004 injected touch at regular width presents panel — compact missing", async () => {
+    const app = await openPresentation("probe", { scope: "regular" });
 
-    await openOverlay(app);
-    expect(app.texts()).toContain("presentation=panel");
-    expect(app.texts()).not.toContain("presentation=sheet");
-  });
-
-  // adapt-sheets/create-presentation.md M-005 (A-001): the value is computed
-  // once on the open edge and held — rotating the window to regular while
-  // the overlay is open must not swap sheet for panel (encapsulation §7).
-  test("M-005 touch+compact latched: rotating to regular while open keeps sheet", async () => {
-    const app = await openPresentation(
-      "probe",
-      { scope: "touch" },
-      { width: 390, height: 844 },
-    );
-
-    await openOverlay(app);
-    expect(app.texts()).toContain("presentation=sheet");
-
-    await app.setViewport(1024, 768);
-    expect(app.texts()).toContain("presentation=sheet");
-    expect(app.texts()).not.toContain("presentation=panel");
-  });
-
-  // adapt-sheets/create-presentation.md M-006 (A-001): the reverse latch —
-  // shrinking to compact while a panel is open must not upgrade it to sheet.
-  test("M-006 touch+regular latched: shrinking to compact while open keeps panel", async () => {
-    const app = await openPresentation(
-      "probe",
-      { scope: "touch" },
-      { width: 1024, height: 768 },
-    );
-
-    await openOverlay(app);
-    expect(app.texts()).toContain("presentation=panel");
-
-    await app.setViewport(390, 844);
-    expect(app.texts()).toContain("presentation=panel");
-    expect(app.texts()).not.toContain("presentation=sheet");
-  });
-
-  // adapt-sheets/create-presentation.md M-007 (A-001): the width class is a
-  // short-side rule, not a width rule — a landscape phone (844×390, short
-  // side still <640) is compact and presents sheet.
-  test("M-007 touch landscape 844×390 (short side under 640) presents sheet", async () => {
-    const app = await openPresentation(
-      "probe",
-      { scope: "touch" },
-      { width: 844, height: 390 },
-    );
-
-    await openOverlay(app);
-    expect(app.texts()).toContain("presentation=sheet");
-  });
-
-  // adapt-sheets/create-presentation.md M-008 (A-001): the latch releases on
-  // close — reopening after the rotation re-evaluates against the new
-  // environment and yields panel (the M-005 end state continued).
-  test("M-008 closing releases the latch: reopen after rotation re-evaluates to panel", async () => {
-    const app = await openPresentation(
-      "probe",
-      { scope: "touch" },
-      { width: 390, height: 844 },
-    );
-
-    await openOverlay(app);
-    expect(app.texts()).toContain("presentation=sheet");
-
-    await app.setViewport(1024, 768);
-    await closeOverlay(app);
     await openOverlay(app);
     expect(app.texts()).toContain("presentation=panel");
     expect(app.texts()).not.toContain("presentation=sheet");
@@ -190,11 +143,7 @@ describe("createPresentation", () => {
   test("M-009 pin beats the auto rule, and the latch covers pin changes while open", async () => {
     // case=pin: pin="panel" fixed — under touch+compact the auto rule would
     // say sheet, the pin says panel.
-    const pinned = await openPresentation(
-      "pin",
-      { scope: "touch" },
-      { width: 390, height: 844 },
-    );
+    const pinned = await openPresentation("pin", { scope: "touch-compact" });
 
     await openOverlay(pinned);
     expect(pinned.texts()).toContain("presentation=panel");
@@ -202,11 +151,9 @@ describe("createPresentation", () => {
 
     // case=pin-toggle: pin starts "panel"; the press flips it to "sheet"
     // while the overlay is open — the latched "panel" must not move.
-    const toggled = await openPresentation(
-      "pin-toggle",
-      { scope: "touch" },
-      { width: 390, height: 844 },
-    );
+    const toggled = await openPresentation("pin-toggle", {
+      scope: "touch-compact",
+    });
 
     await openOverlay(toggled);
     expect(toggled.texts()).toContain("presentation=panel");
@@ -222,42 +169,38 @@ describe("createPresentation", () => {
   // result falls back to panel without leaving the set; with sheet allowed
   // the same environment still yields sheet.
   test("M-010 allowed narrows the auto result: no sheet falls back to panel, sheet allowed stays sheet", async () => {
-    const pf = await openPresentation(
-      "allowed2",
-      { scope: "touch", allowed: "pf" },
-      { width: 390, height: 844 },
-    );
+    const pf = await openPresentation("allowed2", {
+      scope: "touch-compact",
+      allowed: "pf",
+    });
 
     await openOverlay(pf);
     expect(pf.texts()).toContain("presentation=panel");
     expect(pf.texts()).not.toContain("presentation=sheet");
 
-    const ps = await openPresentation(
-      "allowed2",
-      { scope: "touch", allowed: "ps" },
-      { width: 390, height: 844 },
-    );
+    const ps = await openPresentation("allowed2", {
+      scope: "touch-compact",
+      allowed: "ps",
+    });
 
     await openOverlay(ps);
     expect(ps.texts()).toContain("presentation=sheet");
   });
 
   // adapt-sheets/create-presentation.md M-012 (A-006): the directory and
-  // suffix convention is proven by pickup — this file is the headless+web
-  // half, `presentation.mobile.headless.test.tsx` carries the
-  // `open({platform})` half that web cannot run. The runnable part asserts
-  // the fixture mounts on this file's targets and renders its closed
-  // baseline; its green status on both targets is itself the convention
-  // proof (a file web could not run would live in the .headless. file).
-  test("M-012 pickup convention: this file mounts the fixture and runs on headless+web", async () => {
-    const app = await openPresentation(
-      "probe",
-      {},
-      { width: 1024, height: 768 },
-    );
+  // suffix convention is proven by pickup — this file is the shared
+  // headless+web+native half, `presentation.mobile.headless.test.tsx`
+  // carries the `open({platform, width, height})` and `setViewport` halves
+  // a native host cannot run. The runnable part asserts the fixture mounts
+  // and renders its closed baseline — the auto-rule preference this host
+  // derives (a real phone: sheet; desktop/web: panel).
+  test("M-012 pickup convention: this file mounts the fixture and runs on every host", async () => {
+    const app = await openPresentation("probe");
 
     expect(app.shows("text:toggle")).toBe(true);
     expect(app.texts()).toContain("open=false");
-    expect(app.texts()).toContain("presentation=panel");
+    expect(app.texts()).toContain(
+      `presentation=${derivedPresentation(app)}`,
+    );
   });
 });

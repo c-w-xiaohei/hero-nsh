@@ -28,17 +28,33 @@ import { FieldErrorContext } from "../src/components/field-error/context";
  *            and an `away` pressable for the blank-area assertion
  *   errors   Form validationErrors + the field consumer rendering FieldError (T-003)
  *
- * Mobile-layer param (adapt sheet A-008):
+ * Mobile-layer params (adapt sheet A-008):
  *   scope    "" = the host's default environment (pointer — the desktop-parity
  *            side); "touch" wraps the case in EnvironmentScope(input="touch"),
  *            the injected environment the assertions drive.
+ *   testInput "pointer"/"touch" — an outer EnvironmentScope input so the
+ *            pointer baseline is host-independent. Absent params keep the
+ *            host default.
  */
 
 function Scoped(props: { children?: JSX.Element }) {
-  return String(host.params.scope ?? "") === "touch" ? (
-    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  // Test-harness environment param (only the mobile tests set it —
+  // absent keeps the host-derived default): `testInput` injects an outer
+  // EnvironmentScope input so the pointer baseline is host-independent
+  // (inner `scope` overrides still win).
+  const testInput = String(host.params.testInput ?? "");
+
+  const body =
+    String(host.params.scope ?? "") === "touch" ? (
+      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+    ) : (
+      <>{props.children}</>
+    );
+
+  return testInput === "pointer" || testInput === "touch" ? (
+    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
   ) : (
-    <>{props.children}</>
+    body
   );
 }
 

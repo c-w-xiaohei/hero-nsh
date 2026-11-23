@@ -10,12 +10,13 @@ import { callsOf } from "../../helpers/calls";
  * driven by `host.params.input` / `host.params.density`; "mobile-disabled"
  * is the same tree with `disabled` on.
  *
- * Absent params leave the host-derived environment — pointer + default
- * density on headless and web — which is the desktop-parity baseline every
- * assertion compares against. `platform:"windows"` pins the pointer host
- * both targets share (the .mobile.test.tsx convention): without it a
- * headless run lands on the phone-sized engine where `input` defaults to
- * touch. The observation channel is what `nsh/test` sees: `onLayout` bounds
+ * The environment axes are always explicit: `input:"pointer"` is the
+ * desktop-parity baseline every assertion compares against and
+ * `input:"touch"` the injected mobile half, because the host-derived
+ * default differs per target (touch on ios/android, pointer on desktop
+ * and web). No `platform`/`width` open options — native targets fill the
+ * device screen and reject them. The observation channel is what
+ * `nsh/test` sees: `onLayout` bounds
  * records for the density axis, `enabled`/`spanStyle` for the contract
  * checks, and the probe channel for press callbacks.
  */
@@ -35,9 +36,6 @@ type EnvParams = {
 
 function openMobile(caseName: string, env: EnvParams = {}): Promise<App> {
   return open("../../../fieldset.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
     host: {
       params: {
@@ -123,7 +121,7 @@ describe("fieldset mobile", () => {
   // action gap), the legend renders, the bare string child still renders,
   // and `role`/`id` pass through unchanged.
   test("M-001 default environment: every block measures the upstream spacing", async () => {
-    const app = await openMobile("mobile");
+    const app = await openMobile("mobile", { input: "pointer" });
     await settleLayout(app);
 
     const g = gaps(app);
@@ -150,7 +148,7 @@ describe("fieldset mobile", () => {
   // `disabled` on the same tree restores it: the context accessor follows
   // the signal back without a remount (OR merge, zero drift).
   test("M-002 default environment: disabled propagates and clearing it restores the control", async () => {
-    const app = await openMobile("mobile-disabled");
+    const app = await openMobile("mobile-disabled", { input: "pointer" });
     await settleLayout(app);
 
     expect(app.enabled("id:member-two")).toBe(false);
@@ -178,7 +176,7 @@ describe("fieldset mobile", () => {
   // brackets it.) A press on the container records no callback.
   test("M-003 injected touch: identical fieldset bounds, container press records nothing", async () => {
     const touch = await openMobile("mobile", { input: "touch" });
-    const pointer = await openMobile("mobile");
+    const pointer = await openMobile("mobile", { input: "pointer" });
 
     await settleLayout(touch);
     await settleLayout(pointer);
@@ -221,9 +219,15 @@ describe("fieldset mobile", () => {
   // spacing 16→8, actions pad 4→2, action gap 8→6 — and an explicit
   // `density="default"` scope lays out exactly like the uninjected one.
   test("M-004 density compact tightens every gap; explicit default matches", async () => {
-    const compact = await openMobile("mobile", { density: "compact" });
-    const plain = await openMobile("mobile");
-    const explicit = await openMobile("mobile", { density: "default" });
+    const compact = await openMobile("mobile", {
+      input: "pointer",
+      density: "compact",
+    });
+    const plain = await openMobile("mobile", { input: "pointer" });
+    const explicit = await openMobile("mobile", {
+      input: "pointer",
+      density: "default",
+    });
 
     await settleLayout(compact);
     await settleLayout(plain);
@@ -243,12 +247,16 @@ describe("fieldset mobile", () => {
   // legend keeps its 16pt type scale — density owns spacing only — and the
   // disabled contract still reaches the subtree's controls.
   test("M-005 compact: legend font unchanged, disabled still propagates", async () => {
-    const app = await openMobile("mobile", { density: "compact" });
+    const app = await openMobile("mobile", {
+      input: "pointer",
+      density: "compact",
+    });
     await settleLayout(app);
 
     expect(app.spanStyle("id:legend >> text:Settings").fontSize).toBe(16);
 
     const disabled = await openMobile("mobile-disabled", {
+      input: "pointer",
       density: "compact",
     });
     await settleLayout(disabled);
@@ -256,13 +264,12 @@ describe("fieldset mobile", () => {
     expect(disabled.enabled("id:member-two")).toBe(false);
   });
 
-  // adapt-sheets/fieldset.md M-006 (A-011): the file opens pinned to a
-  // desktop platform at 1024×768 and the default `input` is pointer — the
-  // fixture's `EnvironmentScope` wrapper is what makes M-003/M-004 possible,
-  // and the whole measured tree is the shared observation surface those
-  // tests read.
-  test("M-006 pin and scope: the measured tree mounts and reports under the desktop pin", async () => {
-    const app = await openMobile("mobile");
+  // adapt-sheets/fieldset.md M-006 (A-011): the fixture's `EnvironmentScope`
+  // wrapper is what makes M-003/M-004 possible, and the whole measured tree
+  // is the shared observation surface those tests read — under the explicit
+  // pointer scope that replaces the old desktop pin's derivation.
+  test("M-006 scope: the measured tree mounts and reports under the pointer scope", async () => {
+    const app = await openMobile("mobile", { input: "pointer" });
     await settleLayout(app);
 
     const set = boxSet(app);
@@ -271,8 +278,7 @@ describe("fieldset mobile", () => {
       expect(set[name]!.length).toBeGreaterThan(0);
     }
 
-    // The container mounts under the environment the pin derives: on
-    // windows the input axis reads pointer, which is the baseline M-001…
+    // The container mounts under the pointer scope — the baseline M-001…
     // M-005 compare against (touch injection is covered by M-003).
     expect(app.enabled("id:member-two")).toBe(true);
   });

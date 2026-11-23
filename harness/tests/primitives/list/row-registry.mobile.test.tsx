@@ -9,16 +9,16 @@ import { callsOf } from "../../helpers/calls";
  * records every contract point through `probe("registry")` /
  * `probe("import")`.
  *
- * Runs headless and on `--target web` (the `.mobile.` segment marks the
- * mobile layer, not a target): the registry is data-side state, identical on
- * both.
+ * Runs on native iOS/Android in CI and locally on headless and
+ * `--target web` (the `.mobile.` segment marks the mobile layer): the
+ * registry is data-side state, identical on every host.
  */
 
+// No `platform`/`width`/`height` open options: native iOS/Android hosts run
+// this file with their real screen and platform and reject those options,
+// and the registry is data-side state — identical under every environment.
 function openRegistry() {
   return open("../../../list-box.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: { params: { case: "f-collection", which: "registry" } },
   });
 }
@@ -66,13 +66,10 @@ describe("row-registry", () => {
   // adapt-sheets/f-collection.md M-011 (执行项): the static-children path is
   // untouched — the `log` case is the same PlainList the existing heroui /
   // kobalte suites drive (their files are read-only, so the baseline is
-  // re-asserted here under the default pointer environment): pressing an
-  // option selects it and reports the key.
+  // re-asserted here under the host-derived default environment): pressing
+  // an option selects it and reports the key.
   test("M-011 static-children baseline: press selects and reports the key", async () => {
     const app = await open("../../../list-box.fixtures.tsx", {
-      platform: "windows",
-      width: 1024,
-      height: 768,
       host: { params: { case: "log" } },
     });
 
@@ -88,9 +85,6 @@ describe("row-registry", () => {
   // takes; a run that could not reach the assertions would record nothing.
   test("M-016 the seam's probe cases mount and record", async () => {
     const dataApp = await open("../../../list-box.fixtures.tsx", {
-      platform: "windows",
-      width: 1024,
-      height: 768,
       host: { params: { case: "f-collection", which: "data" } },
     });
     expect(callsOf(dataApp, "data").length).toBeGreaterThan(0);

@@ -1,5 +1,5 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { calls, callsOf } from "../../helpers/calls";
 import {
   dayCellLabel,
@@ -15,17 +15,23 @@ import {
 /*
  * Mobile assertions for the range-calendar adapt unit — one test per row of
  * adapt-sheets/range-calendar.md §4 (M-001…M-010, M-012…M-014; M-011 needs
- * `dragAndHold`/`drop` and lives in `range-calendar.mobile.headless.test.tsx`).
- * One file for headless+web: every assertion reads what `nsh/test` observes —
- * `shows`, `count`, `enabled`, `viewStyle`, `onLayout` probe payloads and
- * `app.storage()` seam probes — and `host.params.scope` picks the
- * environment, so the dual-environment rows run identically on both targets.
+ * `dragAndHold`/`drop` and M-004 needs `app.hover` — both live in
+ * `range-calendar.mobile.headless.test.tsx`). Every assertion reads what
+ * `nsh/test` observes — `shows`, `count`, `enabled`, `viewStyle`,
+ * `onLayout` probe payloads and `app.storage()` seam probes — and
+ * `host.params.testInput` picks the environment explicitly ("pointer" is
+ * the host-independent desktop-parity baseline, "touch" the injected
+ * side), so the dual-environment rows run identically on every target,
+ * native ios/android included. Native hosts fill the device screen and
+ * reject the `platform`/`width`/`height` open options, so this file
+ * carries none.
  *
  * The fixture is `harness/range-calendar.fixtures.tsx`, opened by
  * `host.params`: `case` (default/disabled/readonly/unavailable/
  * unavailable-range/noncontiguous/range-start/range-end/nav-disabled/
- * class-override/today/indicator/duration), `scope` ("" = host default
- * pointer, "touch" = EnvironmentScope input="touch"), `weekday`.
+ * class-override/today/indicator/duration), `testInput`
+ * ("pointer"/"touch"), `testWidth` (points bound on the block width — the
+ * native-safe stand-in for a window pin), `weekday`.
  *
  * Probe surfaces: layout (root/grid/nav/header/day/dot bounds),
  * `range-change`/`focus-change`/`picker-change`/`cell-press`/`day-focus`/
@@ -37,20 +43,9 @@ import {
 
 type Params = Record<string, string>;
 
-function openCal(
-  caseName: string,
-  params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openCal(caseName: string, params: Params = {}): Promise<App> {
   return open("../../../range-calendar.fixtures.tsx", {
-    // The default half of the sheet's dual environment is `platform.desktop`
-    // === true — the same host the desktop contract runs on. `EnvironmentScope`
-    // supplies the injected touch half.
-    platform: "windows",
-    width: 1024,
-    height: 768,
     locale: "en-US",
-    ...options,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -100,7 +95,7 @@ type SeamState = RangeStateProbe & {
   cells: ({ date: string } & Channel)[];
 };
 
-const BOTH: Params[] = [{}, { scope: "touch" }];
+const BOTH: Params[] = [{ testInput: "pointer" }, { testInput: "touch" }];
 
 function layoutEntries(app: App): LayoutEntry[] {
   return callsOf(app, "layout").map((c) => c[0] as LayoutEntry);
@@ -136,21 +131,6 @@ function cellOf(state: SeamState, date: string) {
   return state.cells.find((c) => c.date === date);
 }
 
-/** Today's ISO date on the test host's calendar — the `today` case's month. */
-function todayIso(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-/** A same-month neighbour of `iso`, ten days away, clamped inside the month. */
-function siblingIso(iso: string): string {
-  const [year, month, day] = iso.split("-").map((part) => Number(part));
-  const sibling = (day! > 15 ? day! - 10 : day! + 10);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${year}-${pad(month!)}-${pad(sibling)}`;
-}
-
 describe("range-calendar mobile", () => {
   // adapt-sheets/range-calendar.md M-001 (A-001, A-002): the `input` axis'
   // `w-77` gives the touch root its 308pt width — seven 44pt columns — while
@@ -158,7 +138,7 @@ describe("range-calendar mobile", () => {
   // keeps the cell button square; the seam's `bounds` channel measures the
   // track that carries it (the outer `role=cell` adds the row's 4pt pitch).
   test("M-001 touch root measures 308pt with 44pt cells, default keeps 252pt/36pt", async () => {
-    const touch = await openCal("default", { scope: "touch" });
+    const touch = await openCal("default", { testInput: "touch" });
     await waitForLayout(touch, "day-2026-08-15");
 
     const root = lastLayout(touch, "root");
@@ -175,7 +155,7 @@ describe("range-calendar mobile", () => {
     expect(Math.abs(track.bounds.height - track.bounds.width)).toBeLessThanOrEqual(1.5);
     touch.dispose();
 
-    const pointer = await openCal("default");
+    const pointer = await openCal("default", { testInput: "pointer" });
     await waitForLayout(pointer, "day-2026-08-15");
 
     const rootP = lastLayout(pointer, "root");
@@ -201,7 +181,7 @@ describe("range-calendar mobile", () => {
   // the computed value, not a view prop). A held press round-trips
   // `isPressed`. The default environment keeps 24×24 with the seam gated off.
   test("M-002 touch nav buttons measure 44pt with the seam enabled, default keeps 24pt gated off", async () => {
-    const touch = await openCal("default", { scope: "touch" });
+    const touch = await openCal("default", { testInput: "touch" });
     await waitForLayout(touch, "nav-next");
     await touch.waitUntil(() => callsOf(touch, "seam-env").length > 0, { timeout: 15_000 } );
 
@@ -236,7 +216,7 @@ describe("range-calendar mobile", () => {
     expect(settled.nav.next?.enabled).toBe(true);
     touch.dispose();
 
-    const pointer = await openCal("default");
+    const pointer = await openCal("default", { testInput: "pointer" });
     await waitForLayout(pointer, "nav-next");
     await pointer.waitUntil(() => callsOf(pointer, "seam-env").length > 0, { timeout: 15_000 } );
 
@@ -264,8 +244,8 @@ describe("range-calendar mobile", () => {
   // pointer environment the cell seam never engages — no `isPressed` edge,
   // every channel gated off, no hitSlop anywhere — while the two-press
   // select chain is byte-identical to desktop.
-  test("M-003 default environment: cell seam never presses and the two-step chain holds", async () => {
-    const app = await openCal("default");
+  test("M-003 pointer baseline: cell seam never presses and the two-step chain holds", async () => {
+    const app = await openCal("default", { testInput: "pointer" });
     await waitForLayout(app, "day-2026-08-20");
 
     await app.press(dayCellSelector("2026-08-20"));
@@ -304,68 +284,9 @@ describe("range-calendar mobile", () => {
     app.dispose();
   }, 120_000);
 
-  // adapt-sheets/range-calendar.md M-004 (A-001, A-004): under touch the
-  // cell's hover classes are not emitted (`input() !== "touch"` gate), so a
-  // hover — sticky on web — leaves no background path. What `nsh/test` can
-  // observe here: the cell's `onHoverStart`/`onHoverEnd` contract still
-  // fires under touch (the `hovered` signal is contract surface), presses
-  // still commit, and the component's one selector-readable hover surface —
-  // the nav button's `hover:bg-default` — provably resolves under pointer
-  // and stays empty under touch. The cell's own painted view sits one level
-  // below `role=button` with no selector identity, so its sticky-hover pixel
-  // residue is sheet §6's registered host gap (real-device acceptance).
-  test("M-004 injected touch: hover events still arrive and no hover paint lingers; pointer hover paints", async () => {
-    const today = todayIso();
-    const plain = siblingIso(today);
-    const plainSel = dayCellSelector(plain);
-    const todaySel = dayCellSelector(today);
-    const NEXT = "role:button[/^Next$/]";
-
-    const touch = await openCal("today", { scope: "touch" });
-    await waitForLayout(touch, `day-${today}`);
-
-    // The hover contract still records under touch — only the paint is gated.
-    await touch.hover(plainSel);
-    await touch.waitUntil(() =>
-      callsOf(touch, "cell-hover").some((c) => c[0] === `${plain}:start`),
-    { timeout: 15_000 } );
-    await touch.hover(todaySel);
-    await touch.waitUntil(() =>
-      callsOf(touch, "cell-hover").some((c) => c[0] === `${today}:start`),
-    { timeout: 15_000 } );
-
-    // Presses on the plain and the today cell still commit the two-step chain.
-    await touch.press(plainSel);
-    await touch.waitUntil(() => callsOf(touch, "range-change").length === 1, { timeout: 15_000 } );
-    await touch.press(todaySel);
-    await touch.waitUntil(() => callsOf(touch, "range-change").length === 2, { timeout: 15_000 } );
-
-    // The readable hover surface: `hover:bg-default` on the nav button is
-    // gated off under touch — nothing paints on hover, and nothing lingers
-    // after the press that follows it (the sticky-hover half).
-    const navBg = () => touch.viewStyle(NEXT)?.backgroundColor ?? null;
-    await touch.hover(NEXT);
-    await touch.wait(150);
-    expect(navBg()).toBeNull();
-    await touch.press(NEXT);
-    await touch.wait(150);
-    expect(navBg()).toBeNull();
-    touch.dispose();
-
-    // The pointer control proves the hover style is observable at all, so
-    // the touch half cannot pass vacuously.
-    const pointer = await openCal("today");
-    await waitForLayout(pointer, `day-${today}`);
-    await pointer.hover(NEXT);
-    await pointer.waitUntil(() => pointer.viewStyle(NEXT)?.backgroundColor != null, { timeout: 15_000 } );
-    await pointer.hover(plainSel);
-    await pointer.waitUntil(() =>
-      callsOf(pointer, "cell-hover").some((c) => c[0] === `${plain}:start`),
-    { timeout: 15_000 } );
-    await pointer.press(plainSel);
-    await pointer.waitUntil(() => callsOf(pointer, "range-change").length === 1, { timeout: 15_000 } );
-    pointer.dispose();
-  }, 120_000);
+  // adapt-sheets/range-calendar.md M-004 (A-001, A-004) lives in
+  // `range-calendar.mobile.headless.test.tsx` — `app.hover` needs a mouse,
+  // so the row moved there whole rather than split.
 
   // adapt-sheets/range-calendar.md M-005 (A-009): at a 320px viewport both
   // environments render all seven columns and every row cell — the touch
@@ -374,13 +295,16 @@ describe("range-calendar mobile", () => {
   test("M-005 320px viewport renders all columns in both environments; className width wins", async () => {
     // Column widths at full render width: touch keeps the 44pt floor, pointer
     // stays at the ~36pt default.
-    const touchWide = await openCal("default", { scope: "touch" });
+    const touchWide = await openCal("default", { testInput: "touch" });
     await waitForLayout(touchWide, "day-2026-08-15");
     expect(lastLayout(touchWide, "day-2026-08-15").width).toBeGreaterThanOrEqual(43.5);
     touchWide.dispose();
 
     for (const params of BOTH) {
-      const app = await openCal("default", params, { width: 320, height: 568 });
+      // `testWidth` bounds the mounted block at 320pt — the native-safe
+      // stand-in for the viewport pin (the row's point is that seven
+      // columns still fit a phone-wide block).
+      const app = await openCal("default", { ...params, testWidth: "320" });
       await waitForLayout(app, "day-2026-08-15");
 
       expect(app.count("role:columnheader")).toBe(7);
@@ -388,7 +312,7 @@ describe("range-calendar mobile", () => {
       const cell = lastLayout(app, "day-2026-08-15");
       expect(cell.width).toBeGreaterThan(0);
       expect(cell.height).toBeGreaterThan(0);
-      if (params.scope === "touch") {
+      if (params.testInput === "touch") {
         expect(cell.width).toBeGreaterThanOrEqual(43.5);
       }
       app.dispose();
@@ -495,7 +419,7 @@ describe("range-calendar mobile", () => {
       app.dispose();
     }
 
-    const touch = await openCal("readonly", { scope: "touch" });
+    const touch = await openCal("readonly", { testInput: "touch" });
     await waitForLayout(touch, "day-2026-08-20");
     await touch.press("id:rc-sample");
     await touch.waitUntil(() => callsOf(touch, "seam-state").length > 0, { timeout: 15_000 } );
@@ -510,7 +434,7 @@ describe("range-calendar mobile", () => {
   // commits `onPress → selectDate → onChange` with the local callback
   // recorded before the state commit.
   test("M-007 injected touch: held press round-trips the seam, press commits in order", async () => {
-    const app = await openCal("default", { scope: "touch" });
+    const app = await openCal("default", { testInput: "touch" });
     await waitForLayout(app, "day-2026-08-20");
 
     await app.longPress(dayCellSelector("2026-08-20"));
@@ -537,7 +461,7 @@ describe("range-calendar mobile", () => {
     // not headless, so the held date's anchor state differs per target. A new
     // app starts with anchor=null on both, making the first press's payload
     // deterministic: {day, day}.
-    const ordered = await openCal("default", { scope: "touch" });
+    const ordered = await openCal("default", { testInput: "touch" });
     await waitForLayout(ordered, "day-2026-08-22");
 
     const mark = calls(ordered).length;
@@ -583,7 +507,7 @@ describe("range-calendar mobile", () => {
       app.dispose();
     }
 
-    const touch = await openCal("unavailable", { scope: "touch" });
+    const touch = await openCal("unavailable", { testInput: "touch" });
     await waitForLayout(touch, "day-2026-08-12");
     await touch.press("id:rc-sample");
     await touch.waitUntil(() => callsOf(touch, "seam-state").length > 0, { timeout: 15_000 } );
@@ -600,7 +524,7 @@ describe("range-calendar mobile", () => {
   // press starts a new range, and pressing the anchored day again closes a
   // single-day range.
   test("M-009 touch range selection: two-press model, flip, re-anchor, single-day close", async () => {
-    const app = await openCal("default", { scope: "touch" });
+    const app = await openCal("default", { testInput: "touch" });
     await waitForLayout(app, "day-2026-08-10");
 
     // First press: anchor=Aug10, one-day range, cap paint on Aug10 only.
@@ -665,7 +589,7 @@ describe("range-calendar mobile", () => {
   // still draws no track/cap), `=true` keeps it valid, and
   // `isDateUnavailable`'s second argument is the held anchorDate.
   test("M-010 touch unavailable rules: contiguous invalid, noncontiguous clean, anchor as second arg", async () => {
-    const app = await openCal("unavailable", { scope: "touch" });
+    const app = await openCal("unavailable", { testInput: "touch" });
     await waitForLayout(app, "day-2026-08-10");
 
     await app.press(dayCellSelector("2026-08-10"));
@@ -691,7 +615,7 @@ describe("range-calendar mobile", () => {
 
     // allowsNonContiguousRanges=true: the same presses stay valid and the
     // unavailable day is still excluded from the paint.
-    const open2 = await openCal("noncontiguous", { scope: "touch" });
+    const open2 = await openCal("noncontiguous", { testInput: "touch" });
     await waitForLayout(open2, "day-2026-08-10");
     await open2.press(dayCellSelector("2026-08-10"));
     await open2.waitUntil(() => callsOf(open2, "range-change").length === 1, { timeout: 15_000 } );
@@ -713,7 +637,7 @@ describe("range-calendar mobile", () => {
   // autoFocus) keep their semantics through the existing heroui suite this
   // row samples — sheet §4's dual evidence.
   test("M-012 baseline: selection, paging, bounds, visibleDuration, year picker and readonly hold", async () => {
-    const app = await openCal("default");
+    const app = await openCal("default", { testInput: "pointer" });
     await waitForLayout(app, "day-2026-08-10");
 
     await app.press(dayCellSelector("2026-08-10"));
@@ -733,19 +657,19 @@ describe("range-calendar mobile", () => {
     await app.waitFor("role:grid[/August 2026/]", { timeout: 15_000 } );
     app.dispose();
 
-    const start = await openCal("range-start");
+    const start = await openCal("range-start", { testInput: "pointer" });
     await waitForLayout(start, "day-2020-01-15");
     expect(start.enabled(dayCellSelector("2019-12-30"))).toBe(false);
     expect(start.enabled(dayCellSelector("2020-01-10"))).toBe(true);
     start.dispose();
 
-    const end = await openCal("range-end");
+    const end = await openCal("range-end", { testInput: "pointer" });
     await waitForLayout(end, "day-2030-12-15");
     expect(end.enabled(dayCellSelector("2031-01-02"))).toBe(false);
     expect(end.enabled(dayCellSelector("2030-12-10"))).toBe(true);
     end.dispose();
 
-    const picker = await openCal("default");
+    const picker = await openCal("default", { testInput: "pointer" });
     await waitForLayout(picker, "day-2026-08-15");
     await openYearPicker(picker);
     await picker.waitFor("text:2020", { timeout: 15_000 } );
@@ -753,7 +677,7 @@ describe("range-calendar mobile", () => {
     await picker.waitFor("role:grid[/2028/]", { timeout: 15_000 } );
     picker.dispose();
 
-    const weeks = await openCal("duration");
+    const weeks = await openCal("duration", { testInput: "pointer" });
     // weeks:2 shows a two-week window (July 26 – Aug 8 for the August focus),
     // so Aug 15 is off-screen; Aug 5 sits inside it.
     await waitForLayout(weeks, "day-2026-08-05");
@@ -761,7 +685,7 @@ describe("range-calendar mobile", () => {
     expect(weeks.count("role:row")).toBe(3);
     weeks.dispose();
 
-    const readonly = await openCal("readonly");
+    const readonly = await openCal("readonly", { testInput: "pointer" });
     await waitForLayout(readonly, "day-2026-08-20");
     await readonly.press(dayCellSelector("2026-08-20"));
     await readonly.wait(200);
@@ -810,7 +734,7 @@ describe("range-calendar mobile", () => {
       app.dispose();
     }
 
-    const narrow = await openCal("default", { weekday: "narrow" });
+    const narrow = await openCal("default", { testInput: "pointer", weekday: "narrow" });
     await waitForLayout(narrow, "day-2026-08-15");
     expect(headNames(narrow)).toEqual([
       "header-F",
@@ -854,8 +778,8 @@ describe("range-calendar mobile", () => {
   // pointer environment the nav-button seam never engages — hitSlop stays
   // undefined, `isPressed` never sets, bounds hold at 24×24 — while paging
   // still works.
-  test("M-014 default environment: nav seam stays inert while paging works", async () => {
-    const app = await openCal("default");
+  test("M-014 pointer baseline: nav seam stays inert while paging works", async () => {
+    const app = await openCal("default", { testInput: "pointer" });
     await waitForLayout(app, "nav-next");
 
     for (const slot of ["nav-previous", "nav-next"] as const) {

@@ -5,14 +5,17 @@ import { callsOf } from "../../helpers/calls";
 /*
  * Mobile assertions for the adapt unit disclosure-group, one test per row
  * of adapt-sheets/disclosure-group.md §4 (M-001…M-008). The fixture is
- * `harness/disclosure-group.fixtures.tsx`; `host.params.scope="touch"`
- * mounts the `EnvironmentScope input="touch"` the assertions inject, and
- * its absence is the default pointer environment — the desktop-parity
- * baseline the action-B contract pins: the press surface belongs to each
- * `Disclosure.Trigger`, never to the group container.
+ * `harness/disclosure-group.fixtures.tsx`; `host.params.scope` mounts the
+ * `EnvironmentScope input` the assertions inject — `"touch"` is the mobile
+ * half and `"pointer"` the desktop-parity baseline the action-B contract
+ * pins (explicit because the host-derived default differs per target):
+ * the press surface belongs to each `Disclosure.Trigger`, never to the
+ * group container.
  *
  * `app.press`, `shows`, `enabled`, `texts` and the Storage probes are the
  * whole observation channel; no class names or computed styles are read.
+ * No `platform`/`width`/`height` open options — the native targets fill
+ * the device screen and reject them.
  */
 
 const TRIGGER_PREVIEW = "role:button[Preview]";
@@ -22,12 +25,9 @@ const DOWNLOAD_CONTENT = "text:Download content";
 
 function openGroup(
   caseName: string,
-  scope?: "touch",
+  scope?: "touch" | "pointer",
 ): Promise<App> {
   return open("../../../disclosure-group.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: { params: { case: caseName, ...(scope ? { scope } : {}) } },
   });
 }
@@ -48,8 +48,8 @@ describe("disclosure-group mobile", () => {
   // (pointer baseline) — pressing a trigger toggles through the group:
   // `onExpandedChange` reports the new set and the panel body shows; in
   // single mode the second press replaces the first.
-  test("M-001 default environment: trigger presses toggle the group unchanged", async () => {
-    const app = await openGroup("group");
+  test("M-001 pointer baseline: trigger presses toggle the group unchanged", async () => {
+    const app = await openGroup("group", "pointer");
 
     await app.press(TRIGGER_PREVIEW);
     expect(callsOf(app, "onExpandedChange")).toEqual([["preview"]]);
@@ -71,7 +71,7 @@ describe("disclosure-group mobile", () => {
   // pressable view at all; the probes and panels then confirm nothing
   // moved.
   test("M-002 pressing the group's bare surface finds no pressable and toggles nothing", async () => {
-    const app = await openGroup("group-gap");
+    const app = await openGroup("group-gap", "pointer");
 
     expect(app.shows("id:group-gap")).toBe(true);
 
@@ -152,7 +152,7 @@ describe("disclosure-group mobile", () => {
   // `w-full` box measures the same under pointer and touch — the variant
   // table carries no input or density axis for the container.
   test("M-007 the group root's laid-out width is identical under touch", async () => {
-    const pointer = await openGroup("group");
+    const pointer = await openGroup("group", "pointer");
     await pointer.waitUntil(() => callsOf(pointer, "layout").length > 0);
     const pointerWidth = lastLayout(pointer).width;
 
@@ -168,7 +168,7 @@ describe("disclosure-group mobile", () => {
   // two `defaultExpandedKeys` still normalizes to the first — the desktop
   // contract does not drift.
   test("M-008 single mode normalizes two default keys to the first", async () => {
-    const app = await openGroup("group-single-two-defaults");
+    const app = await openGroup("group-single-two-defaults", "pointer");
 
     await app.wait(20);
 

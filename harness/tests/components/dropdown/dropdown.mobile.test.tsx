@@ -1,14 +1,16 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
-import { calls, callsOf } from "../../helpers/calls";
+import type { App } from "nsh/test";
+import { callsOf } from "../../helpers/calls";
 import { dropdownVariants } from "../../../../src/components/dropdown/dropdown.styles";
 
 /*
  * Mobile assertions for the dropdown adapt unit, one test per row of
  * adapt-sheets/dropdown.md §4: M-001…M-005, M-007 (observable halves),
- * M-009, M-011, M-013…M-017 here (headless + web); M-006, M-008, M-010 and
+ * M-009, M-011, M-014…M-017 here (ios + android); M-013 and the M-015
+ * contextMenu half live in `dropdown.mobile.web.test.tsx` because
+ * `app.hover`/`app.rightClick` are desktop/web-only; M-006, M-008, M-010 and
  * M-012 live in `dropdown.mobile.headless.test.tsx` because they need
- * `open({platform:"ios"})` or `app.drag`, which `--target web` rejects.
+ * `open({platform:"ios"})` or `app.drag`.
  *
  * The fixture is `harness/dropdown.fixtures.tsx`: `case:"mobile"` is the
  * parameterized trigger + popover + three-row menu, `case:"mobile-submenu"`
@@ -28,21 +30,26 @@ import { dropdownVariants } from "../../../../src/components/dropdown/dropdown.s
 
 type Params = Record<string, string>;
 
-// The default environment on both targets is pointer at 1024×768 — the
-// desktop-parity half of every row that does not inject (the pin keeps the
-// phone-engine derivation from inverting it, per _common's test facts).
+// The default environment is pointer at regular width — the desktop-parity
+// half of every row that does not inject, injected through `EnvironmentScope`
+// params because `open()` platform/width/height options are rejected on
+// ios/android (the old `platform:"windows"` pin's role, per _common's test
+// facts). Rows needing `app.hover`/`rightClick` live in
+// dropdown.mobile.web.test.tsx.
 function openMobile(
   caseName: string,
   params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
 ): Promise<App> {
   return open("../../../dropdown.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     clock: {},
-    ...options,
-    host: { params: { case: caseName, ...params } },
+    host: {
+      params: {
+        case: caseName,
+        input: "pointer",
+        width: "regular",
+        ...params,
+      },
+    },
   });
 }
 
@@ -357,34 +364,8 @@ describe("dropdown mobile", () => {
   // adapt-sheets/dropdown.md M-013 (A-007): injected touch silences the
   // hover chain — `isHovered` never paints, `hoverStart`/`hoverOn` never
   // fire — while the raw `mouseEnter`/`mouseLeave` callbacks still forward.
-  // Under pointer the same sequence reports the hover round-trip.
-  test("M-013 injected touch silences JS hover state, pointer keeps it", async () => {
-    const touch = await openMobile("mobile", { input: "touch" });
-    await touch.hover("id:dd-trigger");
-    await touch.press("id:dd-trigger");
-
-    expect(touch.shows("text:trigger-hovered")).toBe(false);
-    expect(touch.shows("text:trigger-idle")).toBe(true);
-    const touchEvents = eventsOf(touch).map((entry) => entry.ev);
-    expect(touchEvents).not.toContain("hoverStart");
-    expect(touchEvents).not.toContain("hoverOn");
-    expect(touchEvents).toContain("mouseEnter");
-
-    const pointer = await openMobile("mobile");
-    await pointer.hover("id:dd-trigger");
-    expect(pointer.shows("text:trigger-hovered")).toBe(true);
-    // Leave toward `dd-outside`, the fixture's off-trigger surface: the
-    // hover ends and the idle text comes back.
-    await pointer.hover("id:dd-outside");
-    expect(pointer.shows("text:trigger-hovered")).toBe(false);
-    expect(pointer.shows("text:trigger-idle")).toBe(true);
-    const pointerEvents = eventsOf(pointer).map((entry) => entry.ev);
-    expect(pointerEvents).toContain("hoverStart");
-    expect(pointerEvents).toContain("mouseEnter");
-    expect(pointerEvents).toContain("mouseLeave");
-    expect(pointerEvents).toContain("hoverEnd");
-    expect(pointerEvents).toContain("hoverOff");
-  });
+  // `app.hover` is desktop/web-only — the row (touch suppression + the
+  // pointer round-trip) lives in dropdown.mobile.web.test.tsx.
 
   // adapt-sheets/dropdown.md M-014 (A-001): the `density` axis owns the
   // menu's spacing — `dropdownVariants` resolves `p-1.5 gap-0.5` at the
@@ -419,8 +400,9 @@ describe("dropdown mobile", () => {
   // modal underlay turns a covered trigger press into an outside close,
   // the non-modal chain keeps the trigger live, `ownsState` runs on a
   // standalone popover, `isExiting` retains the layer while
-  // `shouldSkipAnimation` drops it, and the `contextMenu` trigger still
-  // opens from the secondary button. Focus / aria-expanded / typeahead have
+  // `shouldSkipAnimation` drops it. The `contextMenu` secondary-button
+  // open is web-only (`app.rightClick`) and lives in
+  // dropdown.mobile.web.test.tsx. Focus / aria-expanded / typeahead have
   // no `nsh/test` readout and stay with `dropdown.heroui.*` (sheet §6). The
   // covered-anchor press is host-specific below the close contract: web's
   // DOM underlay hit-tests and swallows it before the anchor handlers (the
@@ -485,14 +467,8 @@ describe("dropdown mobile", () => {
     await skip.clock!.runFor(20);
     expect(skip.shows("text:New file")).toBe(false);
 
-    // contextMenu trigger mode: the secondary button opens the layer.
-    const contextMenu = await openMobile("context-menu");
-    await contextMenu.rightClick("id:dd-trigger");
-    expect(callsOf(contextMenu, "contextMenu")).toHaveLength(1);
-    expect(contextMenu.shows("role:menu")).toBe(true);
-    await contextMenu.keyboard.press("escape");
-    await contextMenu.clock!.runFor(150);
-    expect(contextMenu.shows("role:menu")).toBe(false);
+    // The `contextMenu` trigger's secondary-button open lives in
+    // dropdown.mobile.web.test.tsx — `app.rightClick` is desktop/web-only.
   }, 120_000);
 
   // adapt-sheets/dropdown.md M-016 (A-009): the F-consumption regression —

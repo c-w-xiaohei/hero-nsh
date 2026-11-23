@@ -11,12 +11,12 @@ import { calls, callsOf } from "../../helpers/calls";
  * The fixture is `harness/header.fixtures.tsx`: `basic` mounts the bare
  * Header and `attributed` adds testID="section-header", both under
  * `EnvironmentScope` driven by `host.params.input` / `host.params.density`.
- * Absent params leave the host-derived environment — pointer + default
- * density on headless and web — which is the desktop-parity baseline every
- * assertion compares against. `platform:"windows"` pins the pointer host on
- * both targets so the phone-engine default-input derivation cannot invert
- * the suite headless (adapt-sheets/header.md M-006, the switch M-001/3/4
- * lesson).
+ * The axes are always explicit — `input:"pointer"` is the desktop-parity
+ * baseline every assertion compares against and `input:"touch"` the
+ * injected mobile half — because the host-derived default differs per
+ * target (touch on ios/android, pointer on desktop and web). No
+ * `platform`/`width` open options: native targets fill the device screen
+ * and reject them.
  */
 
 // Resolved on the harness theme (theme/hero-nsh.theme.json), light muted.
@@ -37,9 +37,6 @@ type EnvParams = {
 
 function openHeader(caseName: string, env: EnvParams = {}): Promise<App> {
   return open("../../../header.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: {
       params: {
         case: caseName,
@@ -79,7 +76,7 @@ describe("header mobile", () => {
   // testID channel, line for line the header.heroui.test.tsx T-001…T-003
   // baseline.
   test("M-001 default environment: content, resolved style and testID match the migration baseline", async () => {
-    const app = await openHeader("basic");
+    const app = await openHeader("basic", { input: "pointer" });
 
     expect(app.shows("text:Actions")).toBe(true);
     expect(app.texts()).toContain("Actions");
@@ -88,7 +85,7 @@ describe("header mobile", () => {
     expect(style.fontWeight).toBe(500);
     expect(style.color).toBe(MUTED_LIGHT);
 
-    const attributed = await openHeader("attributed");
+    const attributed = await openHeader("attributed", { input: "pointer" });
     expect(attributed.shows("id:section-header")).toBe(true);
   }, 120_000);
 
@@ -96,7 +93,7 @@ describe("header mobile", () => {
   // Header realizes no `input` cell, so the same tree's shows/texts/
   // spanStyle/onLayout bounds are identical to the default environment.
   test("M-002 injected touch: rendering and bounds are identical to the pointer baseline", async () => {
-    const plain = await openHeader("basic");
+    const plain = await openHeader("basic", { input: "pointer" });
     const touch = await openHeader("basic", { input: "touch" });
 
     expect(touch.shows("text:Actions")).toBe(plain.shows("text:Actions"));
@@ -106,7 +103,7 @@ describe("header mobile", () => {
     );
     expect(await boxSet(touch)).toEqual(await boxSet(plain));
 
-    const attrPlain = await openHeader("attributed");
+    const attrPlain = await openHeader("attributed", { input: "pointer" });
     const attrTouch = await openHeader("attributed", { input: "touch" });
 
     expect(attrTouch.shows("id:section-header")).toBe(
@@ -119,13 +116,13 @@ describe("header mobile", () => {
     expect(await boxSet(attrTouch)).toEqual(await boxSet(attrPlain));
   }, 120_000);
 
-  // adapt-sheets/header.md M-003 (A-001): injected `density="compact"` (with
-  // touch) — the component table has no density cell, so the preset produces
+  // adapt-sheets/header.md M-003 (A-001): injected `density="compact"` —
+  // the component table has no density cell, so the preset produces
   // no class difference: bounds and resolved style equal the baseline.
   test("M-003 injected compact density: bounds and style are identical to the baseline", async () => {
-    const plain = await openHeader("basic");
+    const plain = await openHeader("basic", { input: "pointer" });
     const compact = await openHeader("basic", {
-      input: "touch",
+      input: "pointer",
       density: "compact",
     });
 
@@ -140,7 +137,7 @@ describe("header mobile", () => {
   // which is itself the "no press path" evidence; the text stays on screen
   // and the only probe calls are the layout reports.
   test("M-004 injected touch: no press path — press rejects and the text is unchanged", async () => {
-    const pointer = await openHeader("attributed");
+    const pointer = await openHeader("attributed", { input: "pointer" });
     const touch = await openHeader("attributed", { input: "touch" });
 
     for (const app of [pointer, touch]) {
@@ -163,7 +160,7 @@ describe("header mobile", () => {
   // `density="compact"` the attributed case's testID and resolved style are
   // identical to the default environment.
   test("M-005 ScopedMobile injection: attributed case is identical under touch + compact", async () => {
-    const plain = await openHeader("attributed");
+    const plain = await openHeader("attributed", { input: "pointer" });
     const scoped = await openHeader("attributed", {
       input: "touch",
       density: "compact",
@@ -176,13 +173,11 @@ describe("header mobile", () => {
     expect(await boxSet(scoped)).toEqual(await boxSet(plain));
   }, 120_000);
 
-  // adapt-sheets/header.md M-006 (A-006): the desktop pin — every open in
-  // this file passes `platform:"windows", width:1024, height:768`, and with
-  // no env params the full M-001 assertion set holds; the file runs on
-  // headless and `--target web` with the same outcome, so the pointer
-  // default is not inverted by the phone-engine derivation.
-  test("M-006 desktop pin: M-001 assertions hold with no environment injection", async () => {
-    const app = await openHeader("basic");
+  // adapt-sheets/header.md M-006 (A-006): the pointer scope — what the old
+  // desktop pin derived — is explicit now, and the full M-001 assertion set
+  // holds under it on whatever host the file runs on.
+  test("M-006 pointer baseline: M-001 assertions hold under the pointer scope", async () => {
+    const app = await openHeader("basic", { input: "pointer" });
 
     expect(app.shows("text:Actions")).toBe(true);
     expect(app.texts()).toContain("Actions");
@@ -192,7 +187,7 @@ describe("header mobile", () => {
     expect(style.color).toBe(MUTED_LIGHT);
     expect(await boxSet(app)).not.toHaveLength(0);
 
-    const attributed = await openHeader("attributed");
+    const attributed = await openHeader("attributed", { input: "pointer" });
     expect(attributed.shows("id:section-header")).toBe(true);
   }, 120_000);
 });

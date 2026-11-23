@@ -15,21 +15,21 @@ import { callsOf } from "../../helpers/calls";
  *
  * The fixture is `harness/skeleton.fixtures.tsx` — `host.params.case` picks
  * the shape (`single`, `flip`, `group`), `scope` feeds
- * `EnvironmentScope.input` ("touch" = injected; absent = host default,
- * pointer — the desktop-parity baseline) and `density` feeds
+ * `EnvironmentScope.input` ("pointer" = the desktop-parity baseline,
+ * "touch" = the injected mobile half; explicit because the host-derived
+ * default differs per target) and `density` feeds
  * `EnvironmentScope.density`. Probes in `app.storage()`: `layout` (each
  * skeleton root's full bounds box, `onLayout` → probe convention) and
- * `env` (the host's `platform.os`/`desktop`/`idiom` plus the resolved
- * default `input`, which M-007's pin assertion reads).
+ * `env` (the host's platform report — it sits outside the scope, so it
+ * always reads host-derived values; the desktop-pin assertion that read
+ * it moved to `skeleton.mobile.headless.test.tsx`).
  *
- * `open` keeps the w1 pin (`platform:"windows"`, 1024×768): without it the
- * headless engine lands on the phone host where `input` defaults to touch
- * and every pointer-default assertion inverts. No `ios`/`android` open and
- * no drag case, so this is a dual-target `.mobile.test.tsx`
- * (separator/progress-bar convention).
+ * No `platform`/`width`/`height` open options and no `ios`/`android` pin —
+ * the native targets fill the device screen and reject them, so this file
+ * runs on every target.
  */
 
-type Env = { scope?: "touch"; density?: "compact" };
+type Env = { scope?: "touch" | "pointer"; density?: "compact" };
 
 function openSkeleton(
   caseName: string,
@@ -37,9 +37,6 @@ function openSkeleton(
   params: Record<string, string> = {},
 ): Promise<App> {
   return open("../../../skeleton.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: { params: { case: caseName, ...env, ...params } },
   });
 }
@@ -114,25 +111,14 @@ function layoutSet(app: App): Record<string, string[]> {
   return out;
 }
 
-type EnvReport = {
-  os: string;
-  desktop: boolean;
-  idiom: string;
-  input: string;
-};
-
-function envOf(app: App): EnvReport {
-  return callsOf(app, "env").at(-1)?.[0] as EnvReport;
-}
-
 describe("skeleton mobile", () => {
   // adapt-sheets/skeleton.md M-001 (基线): default environment — `single`
   // mounts the loading placeholder (`isLoading` defaults to true), the
   // shimmer overlay appears, the children text never renders, and the
   // `layout` probe reads the caller-supplied 120×20 box — the same
   // resident-placeholder behavior `skeleton.heroui.test.tsx` pins.
-  test("M-001 default environment: single mounts placeholder + shimmer, children hidden, box is 120x20", async () => {
-    const app = await openSkeleton("single");
+  test("M-001 pointer baseline: single mounts placeholder + shimmer, children hidden, box is 120x20", async () => {
+    const app = await openSkeleton("single", { scope: "pointer" });
 
     expect(app.shows("id:skel")).toBe(true);
     expect(app.texts()).not.toContain("Loaded content");
@@ -149,20 +135,20 @@ describe("skeleton mobile", () => {
   // flip=1 children, zero shimmer; the e-parts M-020 equivalent under NSH's
   // mount-time prop evaluation), and the `group` case shows one shimmer
   // per item while `loading=0` renders every item's children.
-  test("M-002 default environment: flip remounts the isLoading gate; group propagates it to every item", async () => {
-    const before = await openSkeleton("flip", {}, { flip: "0" });
+  test("M-002 pointer baseline: flip remounts the isLoading gate; group propagates it to every item", async () => {
+    const before = await openSkeleton("flip", { scope: "pointer" }, { flip: "0" });
     expect(before.texts()).not.toContain("Loaded content");
     await settleCase(before, "flip");
 
-    const after = await openSkeleton("flip", {}, { flip: "1" });
+    const after = await openSkeleton("flip", { scope: "pointer" }, { flip: "1" });
     expect(after.texts()).toContain("Loaded content");
     expect(after.count("id:skeleton-shimmer")).toBe(0);
 
-    const loading = await openSkeleton("group");
+    const loading = await openSkeleton("group", { scope: "pointer" });
     await settleCase(loading, "group");
     expect(loading.texts()).not.toContain("First content");
 
-    const loaded = await openSkeleton("group", {}, { loading: "0" });
+    const loaded = await openSkeleton("group", { scope: "pointer" }, { loading: "0" });
     expect(loaded.count("id:skeleton-shimmer")).toBe(0);
     expect(loaded.texts()).toContain("First content");
     expect(loaded.texts()).toContain("Second content");
@@ -177,26 +163,26 @@ describe("skeleton mobile", () => {
     // Each zero-shimmer case first waits for the `layout` probe: the
     // placeholder has laid out, so a missing shimmer is the gate's answer,
     // not a not-yet-mounted overlay.
-    const pulse = await openSkeleton("single", {}, { variant: "pulse" });
+    const pulse = await openSkeleton("single", { scope: "pointer" }, { variant: "pulse" });
     await pulse.waitUntil(() => callsOf(pulse, "layout").length > 0);
     expect(pulse.count("id:skeleton-shimmer")).toBe(0);
 
-    const none = await openSkeleton("single", {}, { variant: "none" });
+    const none = await openSkeleton("single", { scope: "pointer" }, { variant: "none" });
     await none.waitUntil(() => callsOf(none, "layout").length > 0);
     expect(none.count("id:skeleton-shimmer")).toBe(0);
 
     // Explicit animationType wins over variant.
-    const wins = await openSkeleton("single", {}, {
+    const wins = await openSkeleton("single", { scope: "pointer" }, {
       variant: "none",
       atype: "shimmer",
     });
     await shimmerSettled(wins);
 
-    const off = await openSkeleton("single", {}, { anim: "off" });
+    const off = await openSkeleton("single", { scope: "pointer" }, { anim: "off" });
     await off.waitUntil(() => callsOf(off, "layout").length > 0);
     expect(off.count("id:skeleton-shimmer")).toBe(0);
 
-    const shimmerOff = await openSkeleton("single", {}, {
+    const shimmerOff = await openSkeleton("single", { scope: "pointer" }, {
       anim: "shimmer-off",
     });
     await shimmerOff.waitUntil(() => callsOf(shimmerOff, "layout").length > 0);
@@ -228,7 +214,7 @@ describe("skeleton mobile", () => {
   // side of e-parts M-022, replayed across all three cases).
   test("M-005 injected touch: every case renders identically to the pointer baseline", async () => {
     for (const caseName of ["single", "flip", "group"] as const) {
-      const pointer = await openSkeleton(caseName);
+      const pointer = await openSkeleton(caseName, { scope: "pointer" });
       const touch = await openSkeleton(caseName, { scope: "touch" });
 
       await settleCase(pointer, caseName);
@@ -243,15 +229,15 @@ describe("skeleton mobile", () => {
   }, 120_000);
 
   // adapt-sheets/skeleton.md M-006 (A-001, A-002): injected
-  // `density="compact"` (with `scope="touch"`, the mobile combination) —
-  // the component table has no density cell and no spacing literal, so the
-  // placeholder box, texts and shimmer mount match the default
-  // environment's exactly.
+  // `density="compact"` (on the pointer baseline axis, same input on both
+  // sides) — the component table has no density cell and no spacing
+  // literal, so the placeholder box, texts and shimmer mount match the
+  // default environment's exactly.
   test("M-006 injected compact density: bounds, texts and shimmer identical to default", async () => {
     for (const caseName of ["single", "group"] as const) {
-      const baseline = await openSkeleton(caseName);
+      const baseline = await openSkeleton(caseName, { scope: "pointer" });
       const compact = await openSkeleton(caseName, {
-        scope: "touch",
+        scope: "pointer",
         density: "compact",
       });
 
@@ -264,15 +250,14 @@ describe("skeleton mobile", () => {
   }, 120_000);
 
   // adapt-sheets/skeleton.md M-007 (A-010, A-011): the fixture channels
-  // work — `case` dispatches, `scope`/`density` inject, the probes record —
-  // and the desktop pin holds: `platform.desktop === true`, the desktop
-  // idiom and a resolved `input` of `"pointer"`, so the default environment
-  // really is the pointer baseline on both targets (the unpinned headless
-  // engine would report the phone host). `platform.os` is "windows" on the
-  // pinned headless engine; the web target always reports "web".
-  test("M-007 fixture channels and the desktop pin: cases dispatch, env injects, host reports pointer", async () => {
+  // work — `case` dispatches, `scope`/`density` inject, the probes record.
+  // The desktop-pin half it used to carry (`platform.desktop === true`,
+  // the desktop idiom, `input === "pointer"`) only holds under the
+  // `platform:"windows"` pin the native targets reject, so it lives in
+  // `skeleton.mobile.headless.test.tsx`.
+  test("M-007 fixture channels: cases dispatch, env injects, probes record", async () => {
     for (const caseName of ["single", "flip", "group"] as const) {
-      const app = await openSkeleton(caseName);
+      const app = await openSkeleton(caseName, { scope: "pointer" });
       expect(app.shows("id:skel") || app.shows("id:skel-group")).toBe(true);
     }
 
@@ -282,13 +267,5 @@ describe("skeleton mobile", () => {
     });
     expect(injected.shows("id:skel")).toBe(true);
     await injected.waitUntil(() => callsOf(injected, "layout").length > 0);
-
-    const app = await openSkeleton("single");
-    const env = envOf(app);
-
-    expect(env.desktop).toBe(true);
-    expect(env.idiom).toBe("desktop");
-    expect(env.input).toBe("pointer");
-    expect(["windows", "web"]).toContain(env.os);
   }, 120_000);
 });

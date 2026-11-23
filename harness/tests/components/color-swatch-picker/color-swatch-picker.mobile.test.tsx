@@ -12,27 +12,27 @@ import { callsOf } from "../../helpers/calls";
  *               (the PressableFeedbackContext surface), "events" (the
  *               press/hover chain probes), "hover" (the render-prop isHovered
  *               marker)
- *   input       "" = host-derived (pointer on this pin — the desktop-parity
- *               half), "touch" = `EnvironmentScope input="touch"`
+ *   input       "" = host-derived (touch on a phone — see below), "touch" /
+ *               "pointer" = `EnvironmentScope input` injection
  *   density     "" = host-derived, "compact" / "default" = the density axis
  *   tiny        "1" = inline style overrides `min-h-11 min-w-11` on the
  *               ctx-probe items, so `hitSlop` computes a real expansion
  *
- * The `platform: "windows"` pin is the `.mobile.test.tsx` convention: without
- * it a suite run lands the app on the phone-sized headless engine where
- * `platform.desktop` is false and `input` defaults to touch, inverting every
- * pointer-default assertion. `nsh/test` observes only effects — probe calls
- * through `app.storage()`, `onLayout` bounds, `shows`/`enabled`/`spanStyle` —
- * never class names.
+ * Native hosts fill the device screen, so the `platform: "windows"` /
+ * 1024×768 pin is gone and the desktop-parity baseline is the explicit
+ * `input="pointer"` injection instead — without it a phone-derived input
+ * of touch would invert every pointer-default assertion. The hover row
+ * (M-004) and the keyboard row (M-005's keymap half) live in
+ * `color-swatch-picker.mobile.web.test.tsx` (`app.hover` is desktop/web
+ * only and `platform:"web"` is the focus-capable host). `nsh/test`
+ * observes only effects — probe calls through `app.storage()`, `onLayout`
+ * bounds, `shows`/`enabled`/`spanStyle` — never class names.
  */
 
 type Params = Record<string, string>;
 
 function openPicker(caseName: string, params: Params = {}): Promise<App> {
   return open("../../../color-swatch-picker.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     host: { params: { case: caseName, ...params } },
   });
 }
@@ -123,7 +123,7 @@ describe("color-swatch-picker mobile", () => {
   // at rest, `scale` 1, `hitSlop`/`origin` empty — while the selection
   // contract works: `onChange` records the second preset exactly once.
   test("M-001 default environment: feedback channels stay inert while selection works", async () => {
-    const app = await openPicker("ctx-probe");
+    const app = await openPicker("ctx-probe", { input: "pointer" });
 
     // The press lands on the probed item itself: `ctx-channels` samples
     // item-0's context, so only a press on item-0 makes the post-press rest
@@ -165,7 +165,7 @@ describe("color-swatch-picker mobile", () => {
       }
     }
 
-    const pointer = await openPicker("mobile");
+    const pointer = await openPicker("mobile", { input: "pointer" });
     for (const [size, side] of [
       ["xs", 16],
       ["sm", 24],
@@ -223,50 +223,9 @@ describe("color-swatch-picker mobile", () => {
     expect(engaged.at(-1)!.enabled).toBe(true);
   }, 120_000);
 
-  // adapt-sheets/color-swatch-picker.md M-004 (A-002): injected touch —
-  // `app.hover`/`app.press` leave `isHovered` at Idle and no hover callback
-  // fires (web's sticky hover suppressed), while the raw host
-  // `onMouseEnter`/`onMouseLeave` callbacks still pass on both sides. The
-  // default environment's hover round-trips.
-  test("M-004 injected touch suppresses hover state and callbacks; default environment keeps it", async () => {
-    const touch = await openPicker("hover", { input: "touch" });
-    expect(touch.shows("text:Idle")).toBe(true);
-
-    await touch.hover("id:hv-item-0");
-    expect(touch.shows("text:Hovered")).toBe(false);
-    expect(touch.shows("text:Idle")).toBe(true);
-
-    // The host `onMouseEnter`/`onMouseLeave` callbacks still pass under
-    // touch (the A-002 ruling) — only the component's hover channel is
-    // gated. Hovering away must fire `mouse-leave` while `hover-end`
-    // stays silent.
-    expect(callsOf(touch, "onMouseEnter").length).toBeGreaterThan(0);
-    expect(callsOf(touch, "onHoverStart")).toHaveLength(0);
-
-    await touch.hover("id:away");
-    expect(callsOf(touch, "onMouseLeave").length).toBeGreaterThan(0);
-    expect(callsOf(touch, "onHoverEnd")).toHaveLength(0);
-
-    await touch.press("id:hv-item-0");
-    await touch.waitUntil(() => callsOf(touch, "onChange").length === 1);
-    expect(touch.shows("text:Hovered")).toBe(false);
-    expect(callsOf(touch, "onHoverStart")).toHaveLength(0);
-    expect(callsOf(touch, "onHoverChange")).toHaveLength(0);
-
-    const pointer = await openPicker("hover");
-    await pointer.hover("id:hv-item-0");
-    expect(pointer.shows("text:Hovered")).toBe(true);
-    expect(callsOf(pointer, "onHoverStart")).toHaveLength(1);
-    expect(callsOf(pointer, "onHoverChange")).toEqual([[true]]);
-    // The host mouse callbacks pass on the pointer side too.
-    expect(callsOf(pointer, "onMouseEnter").length).toBeGreaterThan(0);
-
-    await pointer.hover("id:away");
-    await pointer.waitFor("text:Idle");
-    expect(callsOf(pointer, "onHoverEnd")).toHaveLength(1);
-    expect(callsOf(pointer, "onHoverChange")).toEqual([[true], [false]]);
-    expect(callsOf(pointer, "onMouseLeave").length).toBeGreaterThan(0);
-  }, 120_000);
+  // adapt-sheets/color-swatch-picker.md M-004 (A-002): the hover row needs
+  // `app.hover`, which a phone has no mouse for — the whole row lives in
+  // `color-swatch-picker.mobile.web.test.tsx`.
 
   // adapt-sheets/color-swatch-picker.md M-005 (A-004, 基线): dual
   // environment — press-selects `onChange` (lowercase hex), a disabled item
@@ -276,7 +235,7 @@ describe("color-swatch-picker mobile", () => {
   // screenshot coverage), and the event chain keeps the desktop order in
   // both environments.
   test("M-005 dual environment: selection, disabled gate, isSelected channel and press chain unchanged", async () => {
-    for (const params of [{}, { input: "touch" }] as Params[]) {
+    for (const params of [{ input: "pointer" }, { input: "touch" }] as Params[]) {
       const app = await openPicker("events", params);
 
       await app.press("id:ev-item-1");
@@ -335,9 +294,9 @@ describe("color-swatch-picker mobile", () => {
       return [Math.round(b.x - (a.x + a.width))];
     };
 
-    const [plain] = await gaps({});
-    const [compact] = await gaps({ density: "compact" });
-    const [explicit] = await gaps({ density: "default" });
+    const [plain] = await gaps({ input: "pointer" });
+    const [compact] = await gaps({ input: "pointer", density: "compact" });
+    const [explicit] = await gaps({ input: "pointer", density: "default" });
 
     expect(plain).toBe(8);
     expect(explicit).toBe(8);
@@ -349,9 +308,9 @@ describe("color-swatch-picker mobile", () => {
   // `density="compact"` — and every probe surface reports.
   test("M-008 fixture mounts under every injected environment and probes report", async () => {
     for (const params of [
-      {},
+      { input: "pointer" },
       { input: "touch" },
-      { density: "compact" },
+      { input: "pointer", density: "compact" },
     ] as Params[]) {
       // The `events` case exercises the whole mount surface — picker, probes
       // and a selection — under each environment pair.
@@ -378,50 +337,8 @@ describe("color-swatch-picker mobile", () => {
   }, 120_000);
 
   // adapt-sheets/color-swatch-picker.md M-005 (A-004, 基线, keyboard half):
-  // the root's key bindings are input-independent — on the web host (the
-  // one that moves view focus with Tab) arrows, Home/End and typeahead run
-  // the same selection under touch as under pointer.
-  test("M-005 keyboard navigation is identical under touch and pointer (web host)", async () => {
-    for (const params of [{}, { input: "touch" }] as Params[]) {
-      const app = await open("../../../color-swatch-picker.fixtures.tsx", {
-        platform: "web",
-        host: { params: { case: "select", ...params } },
-      });
-
-      await app.keyboard.press("tab");
-      // The picker's selectable list is vertical-only, so Down/Up are the
-      // navigation keys (RAC listbox semantics; Left/Right are inert).
-      await app.keyboard.press("arrowdown");
-      await app.keyboard.press("enter");
-      await app.waitUntil(() => callsOf(app, "onChange").length === 1);
-      expect(onChangeHexes(app)).toEqual(["#22c55e"]);
-
-      await app.keyboard.press("arrowdown");
-      await app.keyboard.press("space");
-      await app.waitUntil(() => callsOf(app, "onChange").length === 2);
-      expect(onChangeHexes(app)).toEqual(["#22c55e", "#3b82f6"]);
-
-      await app.keyboard.press("home");
-      await app.keyboard.press("enter");
-      await app.waitUntil(() => callsOf(app, "onChange").length === 3);
-      expect(onChangeHexes(app)).toEqual(["#22c55e", "#3b82f6", "#ef4444"]);
-
-      // Typeahead moves the focused key without selecting on its own: the
-      // options' accessible names are the colors' English names, and "v"
-      // matches the third option's name but not the middle one's, so from
-      // Home's first option it lands two keys ahead — Enter then selects
-      // #3b82f6. A broken typeahead leaves focus on the first option and
-      // selects #ef4444 instead, so the hex itself is the assertion.
-      await app.keyboard.press("home");
-      await app.keyboard.press("v");
-      await app.keyboard.press("enter");
-      await app.waitUntil(() => callsOf(app, "onChange").length === 4);
-      expect(onChangeHexes(app)).toEqual([
-        "#22c55e",
-        "#3b82f6",
-        "#ef4444",
-        "#3b82f6",
-      ]);
-    }
-  }, 120_000);
+  // the root's key bindings are input-independent — arrows, Home/End and
+  // typeahead run the same selection under touch as under pointer. The
+  // assertions need `platform:"web"`, the one host where Tab moves view
+  // focus — they live in `color-swatch-picker.mobile.web.test.tsx`.
 });

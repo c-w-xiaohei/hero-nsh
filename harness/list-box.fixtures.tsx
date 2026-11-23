@@ -1385,9 +1385,11 @@ function Scoped(props: { children?: JSX.Element }) {
   const scope = param("scope");
   const density = param("density");
 
-  return scope === "touch" || density === "compact" ? (
+  return scope === "touch" || scope === "pointer" || density === "compact" ? (
     <EnvironmentScope
-      input={scope === "touch" ? "touch" : undefined}
+      input={
+        scope === "touch" ? "touch" : scope === "pointer" ? "pointer" : undefined
+      }
       density={density === "compact" ? "compact" : undefined}
     >
       {props.children}

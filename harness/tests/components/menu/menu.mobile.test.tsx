@@ -1,5 +1,5 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 import {
   menu as menuShows,
@@ -9,9 +9,11 @@ import {
 
 /*
  * Mobile assertions for the menu adapt unit, one test per row of
- * adapt-sheets/menu.md §4 that the shared (headless + web) targets can
- * observe: M-001 … M-015 and M-017. The held-press sampling and the
- * `platform:"ios"` halves live in `menu.mobile.headless.test.tsx`.
+ * adapt-sheets/menu.md §4 that the ios/android targets can observe:
+ * M-001 … M-002, M-004 … M-015 and M-017 (M-003's hover rows live in
+ * `menu.mobile.web.test.tsx` — `app.hover` is desktop/web-only). The
+ * held-press sampling and the `platform:"ios"` halves live in
+ * `menu.mobile.headless.test.tsx`.
  *
  * The fixture is `harness/menu.fixtures.tsx`, opened by `host.params`:
  * `case` (`m-seam`/`m-narrow` for the B(项) seam, `f-*` for the collection
@@ -44,14 +46,9 @@ type Params = Record<string, string>;
 function openMenu(
   caseName: string,
   params: Params = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
 ): Promise<App> {
   return open("../../../menu.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
-    ...options,
-    host: { params: { case: caseName, ...params } },
+    host: { params: { case: caseName, input: "pointer", ...params } },
   });
 }
 
@@ -88,8 +85,6 @@ type LayoutEntry = {
 };
 
 type EventEntry = { row: string; kind: string; value?: boolean };
-
-type HoverEntry = { row: string; kind: string; value?: boolean };
 
 type NodeEntry = {
   type: string;
@@ -142,12 +137,6 @@ function menuRows(app: App): number {
     app.count("role:menuitemradio") +
     app.count("role:menuitemcheckbox")
   );
-}
-
-function hovers(app: App, row: string): HoverEntry[] {
-  return callsOf(app, "hover")
-    .map((c) => c[0] as HoverEntry)
-    .filter((e) => e.row === row);
 }
 
 async function pressProbe(
@@ -280,54 +269,11 @@ describe("menu mobile", () => {
   }, 120_000);
 
   // adapt-sheets/menu.md M-003 (A-002): injected touch suppresses the hover
-  // channel — `handleMouseEnter`/`Leave` neither write `isHovered` nor run
+  // channel — handleMouseEnter/Leave neither write `isHovered` nor run
   // `onHover*` nor move `focusedKey`; the raw `onMouseEnter`/`onMouseLeave`
-  // prop callbacks still report (switch/tabs precedent). The default
-  // environment keeps the full hover roundtrip including the focus move.
-  test("M-003 touch suppresses hover state and callbacks; pointer keeps the roundtrip", async () => {
-    const touch = await openMenu("m-seam", { input: "touch" });
-
-    await touch.hover("id:row-a");
-    await touch.wait(300);
-
-    // No useHover record of any kind for row a — only the raw host events.
-    expect(
-      hovers(touch, "a").filter((e) =>
-        ["start", "end", "change"].includes(e.kind),
-      ),
-    ).toHaveLength(0);
-    // The render-prop flag never rose: no ` H` marker in row a's text.
-    expect(touch.texts().some((t) => t === "Alpha H" || t === "Alpha H F")).toBe(
-      false,
-    );
-    // The virtual focus never followed the synthetic enter.
-    await pressProbe(touch, "focused", "focusedKey");
-    expect(lastOf<string | null>(touch, "focusedKey")).toBeNull();
-
-    const pointer = await openMenu("m-seam");
-    await pointer.hover("id:row-a");
-    await pointer.wait(300);
-
-    expect(hovers(pointer, "a")).toContainEqual({ row: "a", kind: "start" });
-    expect(hovers(pointer, "a")).toContainEqual({
-      row: "a",
-      kind: "change",
-      value: true,
-    });
-    expect(pointer.texts()).toContain("Alpha H");
-    await pressProbe(pointer, "focused", "focusedKey");
-    expect(lastOf<string | null>(pointer, "focusedKey")).toBe("a");
-
-    await pointer.hover("id:after");
-    await pointer.wait(300);
-    expect(hovers(pointer, "a")).toContainEqual({ row: "a", kind: "end" });
-    expect(hovers(pointer, "a")).toContainEqual({
-      row: "a",
-      kind: "change",
-      value: false,
-    });
-    expect(pointer.texts()).not.toContain("Alpha H");
-  }, 120_000);
+  // prop callbacks still report. `app.hover` is desktop/web-only, so the row
+  // (touch suppression + the pointer roundtrip) lives in
+  // menu.mobile.web.test.tsx.
 
   // adapt-sheets/menu.md M-004 (A-003): injected touch engages the seam —
   // `isPressed` completes the true → false roundtrip through

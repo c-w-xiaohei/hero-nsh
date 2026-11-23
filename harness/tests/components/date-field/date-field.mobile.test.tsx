@@ -1,5 +1,5 @@
 import { describe, expect, open, test } from "nsh/test";
-import type { App, OpenOptions } from "nsh/test";
+import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 import { changeCount, lastChange, lastSegmentProps } from "../../testers/date-field";
 import { lastSegment } from "../../testers/date-input-group";
@@ -15,13 +15,13 @@ import { lastSegment } from "../../testers/date-input-group";
  * The fixture is `harness/date-field.fixtures.tsx`, opened by `host.params`:
  * `case` (default / empty / readonly / disabled / keyboard-type / focus /
  * full-width / required-invalid / description / validation / controlled /
- * prefix-suffix / granularity), `scope` ("" = the host's pointer environment
- * — the desktop-parity half — or "touch" through `EnvironmentScope`), `kt`
- * for the keyboard-type case, `year` / `month` / `day` for `startDate()`.
- *
- * The `platform: "windows"` pin is load-bearing: without it `pnpm test`
- * lands the app on the phone-sized engine where `input` defaults to touch
- * and every pointer-default assertion inverts under the suite (_common.md).
+ * prefix-suffix / granularity), `testInput` ("pointer"/"touch" through an
+ * outer `EnvironmentScope` — the pointer half is the host-independent
+ * desktop-parity baseline, the host-derived default differs per target),
+ * `kt` for the keyboard-type case, `year` / `month` / `day` for
+ * `startDate()`. Native hosts fill the device screen and reject the
+ * `platform`/`width`/`height` open options, so this file carries none and
+ * runs on ios/android too.
  *
  * Every assertion reads what `nsh/test` can observe — `shows`, `count`,
  * `enabled`, `texts`, `app.type`, `onLayout` bounds probes and the
@@ -35,17 +35,9 @@ import { lastSegment } from "../../testers/date-input-group";
 
 type CaseParams = Record<string, string | number | boolean>;
 
-function openCase(
-  name: string,
-  params: CaseParams = {},
-  options: Pick<OpenOptions, "platform" | "width" | "height"> = {},
-): Promise<App> {
+function openCase(name: string, params: CaseParams = {}): Promise<App> {
   return open("../../../date-field.fixtures.tsx", {
-    platform: "windows",
-    width: 1024,
-    height: 768,
     locale: "en-US",
-    ...options,
     host: { params: { case: name, ...params } },
   });
 }
@@ -126,14 +118,14 @@ describe("date-field mobile", () => {
   // so a shrink-wrapping View reports its bounds — sheet §6 records the
   // probe).
   test("M-001 touch raises group and segments to 44pt, pointer keeps the desktop metrics", async () => {
-    const touch = await openCase("default", { scope: "touch" });
+    const touch = await openCase("default", { testInput: "touch" });
     await touch.waitUntil(() => callsOf(touch, "group-bounds").length > 0);
     expect(groupBounds(touch).size.height).toBeGreaterThanOrEqual(44);
     for (const type of ["month", "day", "year"]) {
       expect(segmentBounds(touch, type).size.height).toBeGreaterThanOrEqual(44);
     }
 
-    const pointer = await openCase("default");
+    const pointer = await openCase("default", { testInput: "pointer" });
     await pointer.waitUntil(() => callsOf(pointer, "group-bounds").length > 0);
     expect(groupBounds(pointer).size.height).toBeLessThan(44);
     for (const type of ["month", "day", "year"]) {
@@ -148,7 +140,7 @@ describe("date-field mobile", () => {
   // (`blurAndSubmit`) runs the out-of-group `commit()` boundary once, which
   // is what drives the field's `onChange` probe.
   test("M-002 injected touch: channel press focuses, typing edits, Enter commits once", async () => {
-    const app = await openCase("default", { scope: "touch" });
+    const app = await openCase("default", { testInput: "touch" });
 
     expect(app.count("id:dig-seg-month")).toBe(1);
     expect(app.count("id:dig-seg-day")).toBe(1);
@@ -185,7 +177,7 @@ describe("date-field mobile", () => {
     // 30th) never committed while editing — the date stays incomplete until
     // the last keystroke and then fails validation — so the boundary emits
     // exactly one value: the clamped February 28th.
-    const editing = await openCase("empty", { scope: "touch" });
+    const editing = await openCase("empty", { testInput: "touch" });
     await editing.type("id:dig-seg-month", "02");
     await editing.type("id:dig-seg-day", "30");
     await editing.type("id:dig-seg-year", "2026");
@@ -204,8 +196,8 @@ describe("date-field mobile", () => {
   // pointer environment the soft-keyboard channel does not exist — no
   // `dig-seg-*` input mounts — the segment view itself takes the press focus
   // and the keymap digits still drive `field.type`.
-  test("M-003 default environment: no channel mounts, view focus and keymap unchanged", async () => {
-    const app = await openCase("default");
+  test("M-003 pointer baseline: no channel mounts, view focus and keymap unchanged", async () => {
+    const app = await openCase("default", { testInput: "pointer" });
 
     expect(app.count("id:dig-seg-month")).toBe(0);
     expect(app.count("id:dig-seg-day")).toBe(0);
@@ -221,7 +213,7 @@ describe("date-field mobile", () => {
     expect(lastSegment(app, "month").isPlaceholder).toBe(false);
 
     // The `focus` case's own probe flips the same way it always did.
-    const focus = await openCase("focus");
+    const focus = await openCase("focus", { testInput: "pointer" });
     await focus.press("id:df-day");
     await waitFocused(focus, "day");
     expect(lastSegmentProps(focus, "day").isFocused).toBe(true);
@@ -233,7 +225,7 @@ describe("date-field mobile", () => {
   // without another press. A press on a segment names its own channel as
   // the typing target.
   test("M-004 injected touch: padding press focuses a channel, segment press targets it", async () => {
-    const app = await openCase("default", { scope: "touch" });
+    const app = await openCase("default", { testInput: "touch" });
 
     // Every segment is filled, so `focusLast` lands on the last one: the
     // year channel takes the focus and `app.type` routes straight into it.
@@ -257,7 +249,7 @@ describe("date-field mobile", () => {
   // nothing. A disabled field mounts no channel at all: the segments are
   // not focusable and no editing event fires on either side.
   test("M-005 readonly channel takes no edit, disabled mounts no channel", async () => {
-    const ro = await openCase("readonly", { scope: "touch" });
+    const ro = await openCase("readonly", { testInput: "touch" });
     expect(ro.count("id:dig-seg-month")).toBe(1);
     expect(segmentFlag(ro, "month", "isReadOnly")).toBe(true);
 
@@ -273,7 +265,7 @@ describe("date-field mobile", () => {
     expect(lastSegment(ro, "month").isPlaceholder).toBe(false);
     expect(changeCount(ro)).toBe(0);
 
-    const disabled = await openCase("disabled", { scope: "touch" });
+    const disabled = await openCase("disabled", { testInput: "touch" });
     expect(disabled.count("id:dig-seg-month")).toBe(0);
     expect(disabled.count("id:dig-seg-day")).toBe(0);
     expect(disabled.count("id:dig-seg-year")).toBe(0);
@@ -294,14 +286,14 @@ describe("date-field mobile", () => {
   // the host keyboard itself stay at the channel boundary (§6 registered
   // gap), so the assertion stops at the context readback.
   test("M-006 keyboardType passes through DateField.Input to the segments", async () => {
-    const auto = await openCase("keyboard-type", { scope: "touch" });
+    const auto = await openCase("keyboard-type", { testInput: "touch" });
     await auto.waitUntil(() => keyboardTypes(auto).length >= 3);
     expect(keyboardTypes(auto).every((v) => v === "auto")).toBe(true);
     expect(auto.count("id:dig-seg-month")).toBe(1);
 
     const explicit = await openCase("keyboard-type", {
       kt: "decimal-pad",
-      scope: "touch",
+      testInput: "touch",
     });
     await explicit.waitUntil(() => keyboardTypes(explicit).length >= 3);
     expect(keyboardTypes(explicit).every((v) => v === "decimal-pad")).toBe(true);
@@ -315,8 +307,8 @@ describe("date-field mobile", () => {
   // has no Tab and the fixture holds no pressable outside the field — §7
   // records the choice); `date-field.web.test.tsx` already pins the same
   // semantics on web.
-  test("M-008 default environment baseline: keymap, focusLast, focus edges, parts", async () => {
-    const app = await openCase("default");
+  test("M-008 pointer baseline: keymap, focusLast, focus edges, parts", async () => {
+    const app = await openCase("default", { testInput: "pointer" });
 
     // Keymap editing: digits fill and advance, arrows cycle and commit
     // eagerly, Backspace deletes.
@@ -348,20 +340,20 @@ describe("date-field mobile", () => {
 
     // The part contract under the same default environment: the Label's
     // asterisk, the FieldError mount and the Description's invalid `hidden`.
-    const invalid = await openCase("required-invalid");
+    const invalid = await openCase("required-invalid", { testInput: "pointer" });
     expect(invalid.texts()).toContain("Date*");
     expect(invalid.shows("text:Please enter a valid date")).toBe(true);
 
-    const description = await openCase("description");
+    const description = await openCase("description", { testInput: "pointer" });
     expect(description.shows("text:Enter a date")).toBe(true);
 
     // `fullWidth`: the group stretches across the 400 pt frame; the default
     // case's group stays content-sized, well under it.
-    const wide = await openCase("full-width");
+    const wide = await openCase("full-width", { testInput: "pointer" });
     await wide.waitUntil(() => callsOf(wide, "group-bounds").length > 0);
     expect(groupBounds(wide).size.width).toBeGreaterThanOrEqual(400);
 
-    const narrow = await openCase("default");
+    const narrow = await openCase("default", { testInput: "pointer" });
     await narrow.waitUntil(() => callsOf(narrow, "group-bounds").length > 0);
     expect(groupBounds(narrow).size.width).toBeLessThan(400);
   }, 120_000);
@@ -371,7 +363,7 @@ describe("date-field mobile", () => {
   // same on both environments — same `onChange` silence, same FieldError and
   // Description effects.
   test("M-009 state and validation contract identical in both environments", async () => {
-    for (const params of [{}, { scope: "touch" }] as CaseParams[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as CaseParams[]) {
       const disabled = await openCase("disabled", params);
       expect(disabled.enabled("id:df-month")).toBe(false);
       await expect(disabled.press("id:df-day")).rejects.toMatchObject({
@@ -380,7 +372,7 @@ describe("date-field mobile", () => {
       expect(changeCount(disabled)).toBe(0);
 
       const readonly = await openCase("readonly", params);
-      if (params.scope === "touch") {
+      if (params.testInput === "touch") {
         await readonly.press("id:dig-seg-month");
       } else {
         await readonly.press("id:df-month");
@@ -409,7 +401,7 @@ describe("date-field mobile", () => {
   // segment records, keyboard-type readback, `onChange`, focus edges)
   // records.
   test("M-010 fixture Scoped mounts both environments with readable probes", async () => {
-    for (const params of [{}, { scope: "touch" }] as CaseParams[]) {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as CaseParams[]) {
       const app = await openCase("default", params);
       await app.waitUntil(() => callsOf(app, "group-bounds").length > 0);
       expect(callsOf(app, "segment-bounds").length).toBeGreaterThan(0);
