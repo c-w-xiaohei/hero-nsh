@@ -9,7 +9,10 @@ import type {
 import { computed, effect, keymap, signal, split, untracked, View } from "nsh";
 
 import { ColorInputGroupFieldContext } from "../color-input-group/context";
-import type { ColorInputGroupFieldValue } from "../color-input-group/context";
+import type {
+  ColorInputGroupEnterKeyHint,
+  ColorInputGroupFieldValue,
+} from "../color-input-group/context";
 import { ColorPickerColorContext } from "../color-picker/color-picker-context";
 import { DescriptionContext } from "../description/context";
 import type { DescriptionContextValue } from "../description/context";
@@ -155,6 +158,13 @@ export interface ColorFieldRootProps
   /** Accepted, no effect: NSH has no wheel events. */
   isWheelDisabled?: boolean;
 
+  /**
+   * Mapped to the soft keyboard's return key label on the inner
+   * `ColorField.Input`, where an explicit `enterKeyHint` / `returnKeyType`
+   * still wins (A-002, RAC's `AriaColorFieldProps`).
+   */
+  enterKeyHint?: ColorInputGroupEnterKeyHint;
+
   /** The input took the focus. */
   onFocus?: () => void;
 
@@ -280,6 +290,7 @@ function ColorFieldInstance(props: { field: ColorFieldRootProps }): JSX.Element 
     "autoFocus",
     "excludeFromTabOrder",
     "isWheelDisabled",
+    "enterKeyHint",
     "onFocus",
     "onBlur",
     "onFocusChange",
@@ -556,6 +567,9 @@ function ColorFieldInstance(props: { field: ColorFieldRootProps }): JSX.Element 
     onFocus: handleFocus,
     onBlur: handleBlur,
     onSubmit: () => handle.commit(),
+    // A-001: the read port color-input-group reserved (context.ts); the
+    // Input's own `enterKeyHint` / `returnKeyType` still wins.
+    enterKeyHint: () => local.enterKeyHint,
     registerInputFocus,
   };
 
