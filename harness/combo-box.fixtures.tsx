@@ -393,6 +393,7 @@ function Combo(props: ComboProps) {
         {props.bMobile ? <FieldCtxProbe /> : null}
         <Label>{props.label ?? "Favorite Animal"}</Label>
         <ComboBox.InputGroup>
+          <EnvironmentScope input={param("iptr") === "1" ? "pointer" : undefined}>
           <Input
             testID="combo-box-input"
             placeholder={props.placeholder ?? "Search animals..."}
@@ -411,6 +412,7 @@ function Combo(props: ComboProps) {
             onFocus={probe("inputFocus")}
             onBlur={probe("inputBlur")}
           />
+          </EnvironmentScope>
           <ComboBox.Trigger
             testID="combo-box-trigger"
             onFocus={probe("triggerFocus")}

@@ -273,8 +273,24 @@ describe("combo-box mobile", () => {
     const pointerBox = lastBox(pointer, "trigger-box");
     expect(pointerBox?.width).toBeGreaterThan(0);
 
-    const touch = await openCombo("b-mobile", { input: "touch" });
-    await touch.waitUntil(() => callsOf(touch, "ctx").length > 1);
+    // The everyday mount: the textfield unit's `min-h-11` touch cell grows
+    // the group's inline end with the input, so the trigger's `h-full` box
+    // reaches 44 pt and the seam's formula has nothing left to pad — the
+    // computed slop reads null while the seam stays enabled. Waiting on a
+    // second `ctx` report would hang here: a stable formula emits once.
+    const full = await openCombo("b-mobile", { input: "touch" });
+    await full.waitUntil(() => lastBox(full, "trigger-box") !== undefined);
+    const fullBox = lastBox(full, "trigger-box");
+    expect(fullBox?.height).toBeGreaterThanOrEqual(44);
+    const fullCtx = lastCtx(full);
+    expect(fullCtx.enabled).toBe(true);
+    expect(fullCtx.hitSlop).toBeNull();
+
+    // The formula's positive arm needs a trigger box under 44 pt: `iptr:"1"`
+    // scopes the sibling Input back to pointer so the group keeps its 33 pt
+    // row while the trigger's own seam still reads the injected touch.
+    const touch = await openCombo("b-mobile", { input: "touch", iptr: "1" });
+    await touch.waitUntil(() => lastBox(touch, "trigger-box") !== undefined);
     const touchBox = lastBox(touch, "trigger-box");
 
     // hitSlop is a view prop, not layout: the measured box is identical.
