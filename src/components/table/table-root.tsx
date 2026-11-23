@@ -1,6 +1,8 @@
 import type { JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
 import { computed, split, View } from "nsh";
 
+import { createDensity, createInput } from "../../primitives/environment";
+import { densityKey } from "../../tokens/density";
 import { TableContext } from "./table-context";
 import { tableVariants, type TableVariants } from "./table.styles";
 
@@ -51,7 +53,14 @@ export function TableRoot(props: TableRootProps) {
   ] as const);
 
   const variant = computed<"primary" | "secondary">(() => local.variant ?? "primary");
-  const slots = computed(() => tableVariants({ variant: variant() }));
+  // A-001: the environment's `input`/`density` accessors feed the two new
+  // axes next to `variant` — the default environment resolves
+  // `pointer`/`default`, which reproduces the port's classes verbatim.
+  const input = createInput();
+  const envDensity = createDensity();
+  const slots = computed(() =>
+    tableVariants({ variant: variant(), input: input(), density: densityKey(envDensity()) }),
+  );
   const direction = computed(() => local.dir);
 
   return (
