@@ -1,18 +1,7 @@
 name: CI
 
-# Types, the headless engine, a browser, Win32 and the packed tarball.
-#
-# Every test job takes one third of its file list, and three runners run those
-# thirds at once: `nsh test` takes a single path, so the file is the parallel
-# unit. On one machine a job runs four files at once (headless), two (web) or
-# one (Windows, where a second run would take the focus the cases assert).
-#
-# What runs where is the file name: `.headless.` needs the headless engine,
-# `.web.` needs a browser, `.windows.` needs Win32, `.ios.` needs the iOS
-# simulator, `.android.` needs an Android emulator or device; everything else
-# runs on the headless engine and on Windows. The phone jobs no-op while no
-# file carries their suffix — the harness' `.ios.`/`.android.` layer is the
-# host-gap acceptance lane, not a default suite.
+# .github/scripts/test.sh maps test suffixes to targets. Native targets run
+# one file at a time because the tests share a windowing host or device.
 
 on:
   push:
@@ -61,13 +50,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - name: Tests
+        shell: bash
         run: |
-          set -o pipefail
-          find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \
-            ! -name '*.web.test.*' ! -name '*.browser.test.*' ! -name '*.windows.test.*' \
-            ! -name '*.ios.test.*' ! -name '*.android.test.*' \
-            | sort | awk -v s='${{ matrix.shard }}' 'NR % 3 == s' \
-            | xargs -r -n1 -P4 nsh test 2>&1 | tee "$RUNNER_TEMP/tests.log"
+          bash .github/scripts/test.sh headless ${{ matrix.shard }} ${{ strategy.job-total }} 2>&1 | tee "$RUNNER_TEMP/tests.log"
           # An unknown class builds, passes and renders wrong; the warning is
           # the only signal. The tests run with no "tailwind" block in
           # harness/nsh.json, so a class that needs one shows up here.
@@ -85,14 +70,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-      # 0.5 ships only the host's runtime; the browser host is a component.
       - name: Web runtime
         run: nsh component add web
       - name: Tests
-        run: |
-          find harness/tests -name '*.web.test.tsx' \
-            | sort | awk -v s='${{ matrix.shard }}' 'NR % 3 == s' \
-            | xargs -r -n1 -P2 nsh test --target web
+        run: bash .github/scripts/test.sh web ${{ matrix.shard }} ${{ strategy.job-total }}
 
   windows:
     runs-on: windows-latest
@@ -105,59 +86,45 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Tests
         shell: bash
-        run: |
-          files=($(find harness/tests \( -name '*.test.tsx' -o -name '*.test.ts' \) \
-            ! -name '*.headless.test.*' ! -name '*.web.test.*' ! -name '*.browser.test.*' \
-            ! -name '*.ios.test.*' ! -name '*.android.test.*' \
-            | sort))
-          for ((i = ${{ matrix.shard }}; i < ${#files[@]}; i += 3)); do
-            nsh test "${files[$i]}" --target windows
-          done
+        run: bash .github/scripts/test.sh windows ${{ matrix.shard }} ${{ strategy.job-total }}
 
   ios:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-      - name: iOS tests
+      - id: tests
+        name: Discover iOS tests
         run: |
-          files=($(find harness/tests \( -name '*.ios.test.tsx' -o -name '*.ios.test.ts' \) | sort))
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No .ios. test files; the iOS lane stays empty."
-            exit 0
-          fi
-          for f in "${files[@]}"; do
-            nsh test "$f" --target ios
-          done
+          files=$(bash .github/scripts/test.sh --list ios)
+          if [[ -n "$files" ]]; then echo "found=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: ./.github/actions/setup
+        if: steps.tests.outputs.found == 'true'
+      - name: iOS tests
+        if: steps.tests.outputs.found == 'true'
+        run: bash .github/scripts/test.sh ios
 
   android:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-      - id: android-files
-        name: Discover .android. tests
+      - id: tests
+        name: Discover Android tests
         run: |
-          count=$(find harness/tests \( -name '*.android.test.tsx' -o -name '*.android.test.ts' \) | wc -l)
-          echo "count=$count" >> "$GITHUB_OUTPUT"
-          if [ "$count" -eq 0 ]; then
-            echo "No .android. test files; the Android lane stays empty."
-          fi
+          files=$(bash .github/scripts/test.sh --list android)
+          if [[ -n "$files" ]]; then echo "found=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: ./.github/actions/setup
+        if: steps.tests.outputs.found == 'true'
       - name: Android runtime
-        if: steps.android-files.outputs.count != '0'
+        if: steps.tests.outputs.found == 'true'
         run: nsh component add android
       - name: Android emulator
-        if: steps.android-files.outputs.count != '0'
+        if: steps.tests.outputs.found == 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
           profile: pixel_6
-          script: |
-            files=($(find harness/tests \( -name '*.android.test.tsx' -o -name '*.android.test.ts' \) | sort))
-            for f in "${files[@]}"; do
-              nsh test "$f" --target android
-            done
+          script: bash .github/scripts/test.sh android
 
   packaging:
     runs-on: ubuntu-24.04
