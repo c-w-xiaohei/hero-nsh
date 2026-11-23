@@ -397,6 +397,10 @@ export function TimeFieldRoot(props: TimeFieldRootProps): JSX.Element {
     return renderChildren(children as JSX.Element);
   };
 
+  // A-001: TimeField's owned state (`type`/`backspace`/`commit`) is the seam
+  // the shared soft-keyboard channel (date-input-group A-005) must reach — the
+  // provider is pre-existing; touch channel keys land on this state and drive
+  // TimeField's `commit()`/`onChange` (the `TimeValue` outbound bridge).
   return (
     <DateInputGroupFieldContext.Provider value={state}>
       <FieldContext.Provider value={fieldState}>

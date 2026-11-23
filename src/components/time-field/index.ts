@@ -23,6 +23,16 @@ import type { TimeFieldRenderProps, TimeFieldRootProps } from "./time-field-root
  * `TimeValue` to the field state, and the six `date-input-group` parts bound by
  * identity, exactly as upstream's `index.ts:17-25` does. Every part is a real
  * component, usable as `TimeField.Group` and as `DateInputGroupRoot`.
+ *
+ * A-002: `TimeField.Segment` is `DateInputGroupSegment` by identity — the
+ * soft-keyboard channel mount, `keyboardType` resolution and the `input`
+ * variant axis (`min-h-11`) all arrive through that part; this unit copies no
+ * axis and adds no style axis of its own.
+ *
+ * A-007: the harness-side 接轴 spot of adapt sheet time-field.md is realized
+ * in `harness/time-field.fixtures.tsx` — the `Scoped` wrapper (host.params
+ * `scope:"touch"` → `EnvironmentScope input="touch"`) around every case plus
+ * the `readonly` and `keyboard-type` cases with their probes.
  */
 export const TimeField = Object.assign(TimeFieldRoot, {
   Root: TimeFieldRoot,
