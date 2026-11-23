@@ -182,12 +182,13 @@ describe("alert-dialog mobile", () => {
   // window.
   //
   // The row's "short pull released gently settles back" half is asserted in
-  // `alert-dialog.mobile.web.test.tsx`: on headless every synthesized
-  // release carries flick velocity above the 0.5 pt/ms dismiss bound
-  // (`app.drag` and `dragAndHold`+`drop` both dismiss at dy=60 — measured),
-  // while the web host's gentler release reaches the settle branch. What
-  // this file asserts is what both targets agree on: engagement, the
-  // offset reset, and the distance-bound dismiss.
+  // `alert-dialog.mobile.web.test.tsx`: `app.drag` moves the finger 10 pt
+  // per display frame, so the release velocity scales with the drag's frame
+  // count — this file's dy=60 pull flings past the 0.5 pt/ms dismiss bound
+  // on every target (measured headless and web), while the web file's 20 pt
+  // pull stays under it and reaches the settle branch. What this file
+  // asserts is what every target agrees on at this drag length: engagement,
+  // the offset reset, and the velocity-bound dismiss.
   test("M-005 swipeable sheet: drag engages, offset resets, far pull dismisses", async () => {
     const app = await openDialog({
       scope: "touch-compact",
