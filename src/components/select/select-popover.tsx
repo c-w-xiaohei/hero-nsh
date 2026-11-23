@@ -299,14 +299,17 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
   });
 
   // The owner the children inside `carrier`'s branch see: identical to the
-  // field's except registration carries the branch's tag.
+  // field's except registration goes through `registerCarrierList`, which
+  // files the copy under this branch's name — the field forwards the active
+  // carrier's entry to `createSelectState` (A-002's retained-mount corollary,
+  // the dispatch this unit owns inside its own write scope).
   const carrierOwner = (carrier: SelectCarrier): ListOwner | undefined =>
     owner === undefined
       ? undefined
       : {
           ...owner,
           registerList: (state, controls) =>
-            owner.registerList(state, controls, carrier),
+            select.registerCarrierList(carrier, state, controls),
         };
 
   const resolved = computed(() => resolvePopoverPlacement(props.placement));

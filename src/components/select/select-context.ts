@@ -123,14 +123,30 @@ export interface SelectContextValue {
   disallowEmptySelection: Accessor<boolean>;
 
   /**
-   * The carrier `Select.Popover` last resolved while open (A-002). Each
-   * carrier branch keeps its own `ListBox` mounted, so this picks which
-   * registration `list` / `listControls` / `selectionManager` mean.
+   * The carrier `Select.Popover` last resolved (A-002). Each carrier branch
+   * keeps its own `ListBox` mounted, so this picks which registration `list` /
+   * `listControls` / `selectionManager` mean.
    */
   activeCarrier: Accessor<SelectCarrier | undefined>;
 
-  /** `Select.Popover` reports the latched carrier here on open. */
+  /** `Select.Popover` reports the carrier this open latched — and, while
+   * closed, the one the next open will latch. */
   setActiveCarrier: (carrier: SelectCarrier) => void;
+
+  /**
+   * A carrier branch's `ListBox` reports its state and focus controls here,
+   * under the carrier name: the field holds one registration per retained
+   * branch and forwards the active carrier's to the list owner, so the
+   * resolved list is always the visible one. Returns the unregister, run
+   * when the copy unmounts (A-002's retained-mount corollary, realized
+   * inside this unit: `createSelectState` / `ListOwner` keep their
+   * single-list contract).
+   */
+  registerCarrierList: (
+    carrier: SelectCarrier,
+    state: ListState,
+    controls: ListOwnerListControls,
+  ) => () => void;
 
   /** The list's state, once the ListBox inside the popover registered it. */
   list: Accessor<ListState | undefined>;

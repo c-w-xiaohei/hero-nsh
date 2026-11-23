@@ -403,8 +403,11 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
   });
 
   // A-002's retained-mount corollary: the popover's carriers each keep their
-  // own ListBox mounted, so the popover names the carrier it last opened with
-  // and the registrations below resolve that branch's list.
+  // own ListBox mounted, so the popover names the carrier it resolved and the
+  // registrations below forward that branch's list. The tag tracks
+  // `presentation()` continuously — while closed it previews the carrier the
+  // next open will latch, so `open()`'s `markFocus` (which runs before
+  // `setIsOpen` commits) already resolves the copy the open is about to show.
   const activeCarrier = signal<SelectCarrier | undefined>(undefined);
 
   const selectState = createSelectState({
@@ -412,7 +415,54 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
     setIsOpen: overlay.setIsOpen,
     collection: () => selectState.list()?.collection(),
     selectionManager: () => selectState.list()?.selectionManager(),
-    activeTag: () => activeCarrier(),
+  });
+
+  // The per-carrier registrations: `registerCarrierList` files a branch's
+  // (state, controls) under its carrier name, and this effect forwards the
+  // active carrier's entry to the owner — the cleanup the effect's return
+  // value is un-registers it first, so the owner always resolves exactly the
+  // visible branch's list. `createSelectState` keeps its single-slot
+  // contract; the three-copy dispatch lives here, inside the unit.
+  interface CarrierListEntry {
+    state: ListState;
+    controls: ListOwnerListControls;
+  }
+
+  const carrierLists = signal<ReadonlyMap<SelectCarrier, CarrierListEntry>>(
+    new Map(),
+  );
+
+  const registerCarrierList = (
+    carrier: SelectCarrier,
+    state: ListState,
+    controls: ListOwnerListControls,
+  ): (() => void) => {
+    const entry: CarrierListEntry = { state, controls };
+
+    carrierLists.update((current) => new Map(current).set(carrier, entry));
+
+    return () => {
+      carrierLists.update((current) => {
+        if (current.get(carrier) !== entry) {
+          return current;
+        }
+
+        const next = new Map(current);
+        next.delete(carrier);
+        return next;
+      });
+    };
+  };
+
+  effect(() => {
+    const carrier = activeCarrier();
+    const entry = carrier === undefined ? undefined : carrierLists().get(carrier);
+
+    if (carrier === undefined || entry === undefined) {
+      return;
+    }
+
+    return selectState.registerList(entry.state, entry.controls);
   });
 
   const { list, controls: listControls, open, close, toggle } = selectState;
@@ -579,11 +629,8 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
     closeOnSelection: () => !isMultiple(),
     close,
     isActive: overlay.isOpen,
-    registerList: (
-      state: ListState,
-      controls: ListOwnerListControls,
-      tag?: string,
-    ) => selectState.registerList(state, controls, tag),
+    registerList: (state: ListState, controls: ListOwnerListControls) =>
+      selectState.registerList(state, controls),
   };
 
   /* -------------------------------------------------------------------------------------------
@@ -659,6 +706,7 @@ export function SelectRoot<T>(props: SelectRootProps<T>): JSX.Element {
     toggle,
     activeCarrier,
     setActiveCarrier: (carrier) => activeCarrier.set(carrier),
+    registerCarrierList,
     selectionMode,
     disallowEmptySelection: () => local.disallowEmptySelection ?? false,
     list,

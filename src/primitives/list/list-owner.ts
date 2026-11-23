@@ -152,16 +152,11 @@ export interface ListOwner {
 
   /**
    * The list reports its state and focus controls. Returns the unregister
-   * function, run when the list unmounts. `tag` names which of the field's
-   * lists this registration is — a field whose overlay can mount the list
-   * inside more than one retained carrier (Select's three presentation
-   * branches) scopes the owner per branch and passes the carrier, so the
-   * state resolves the visible list instead of whichever mounted last.
+   * function, run when the list unmounts.
    */
   registerList: (
     state: ListState,
     controls: ListOwnerListControls,
-    tag?: string,
   ) => () => void;
 
   /**
