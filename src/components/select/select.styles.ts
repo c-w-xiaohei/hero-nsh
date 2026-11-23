@@ -2,7 +2,18 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, radius, shadow } from "../../tokens/geometry";
+// `ease.smooth`, `radius.field` and `shadow.{field,overlay}.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker imports this file
+// through Node ESM, which does not resolve extensionless relative specifiers,
+// so the geometry module cannot be imported from a `.styles.ts`. Same pattern
+// as `number-field.styles.ts`; keep in sync with `EASE_VALUES.smooth`,
+// `radius` and `SHADOW_VALUES.{field,overlay}`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const RADIUS_FIELD = "rounded-(--radius-field)";
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
+const SHADOW_OVERLAY_BOTH =
+  "shadow-[0_2px_8px_0_rgba(0,0,0,0.06),0_-6px_12px_0_rgba(0,0,0,0.03),0_14px_28px_0_rgba(0,0,0,0.08)] dark:shadow-[0_0_1px_0_rgba(255,255,255,0.3)_inset]";
 
 /**
  * Select's variant table, mirroring `@heroui/styles` 3.2.7
@@ -40,8 +51,8 @@ export const selectVariants = tv({
     // R-050: `.select__trigger--full-width` → `w-full`, on the `fullWidth`
     // dimension. `px-3 py-2` moved into the `density` axis (A-001).
     trigger: [
-      `relative flex min-h-9 items-center ${radius.field} border-0 border-field-border bg-field text-sm text-field-foreground ${shadow.field.both} select-none cursor-pointer`,
-      `duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `relative flex min-h-9 items-center ${RADIUS_FIELD} border-0 border-field-border bg-field text-sm text-field-foreground ${SHADOW_FIELD_BOTH} select-none cursor-pointer`,
+      `duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     ].join(" "),
     // R-018: `.select__value` → `flex-1 text-start text-base text-current
     // sm:text-sm`. `wrap-break-word` is dropped: NSH has neither the class nor
@@ -68,7 +79,7 @@ export const selectVariants = tv({
       // upstream's `:active` is not hover-gated, and the JS `pressed` channel
       // has no second writer to it.
       "active:scale-[0.93]",
-      `transition-opacity duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `transition-opacity duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     ].join(" "),
     // R-046: `.select__popover` → the 22pt overlay card. `radius-2xl` (16) +
     // `spacing` (4) × 1.5 = 22 in this theme, so the min() cap never applies.
@@ -78,8 +89,8 @@ export const selectVariants = tv({
     // R-036 / R-037: the duration and curve of the enter and exit transitions
     // (the property list and the shorter exit are inline).
     popover: [
-      `bg-overlay p-0 text-sm text-overlay-foreground rounded-[22px] ${shadow.overlay.both} overflow-hidden`,
-      `duration-150 ${ease.smooth}`,
+      `bg-overlay p-0 text-sm text-overlay-foreground rounded-[22px] ${SHADOW_OVERLAY_BOTH} overflow-hidden`,
+      `duration-150 ${EASE_SMOOTH}`,
     ].join(" "),
   },
   defaultVariants: {
