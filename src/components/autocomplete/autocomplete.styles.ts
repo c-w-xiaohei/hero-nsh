@@ -2,7 +2,19 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { ease, radius, shadow } from "../../tokens/geometry";
+// `ease.smooth`, `radius.field` and `shadow.field.both` / `shadow.overlay.both`
+// of `src/tokens/geometry.ts` written out: the M2 class walker imports this
+// file through plain Node ESM, which does not resolve extensionless relative
+// specifiers, so the geometry module cannot be imported from a `.styles.ts`
+// (which may only import `tailwind-variants`). Same pattern as
+// `number-field.styles.ts` / `tag.styles.ts`; keep in sync with
+// `EASE_VALUES.smooth`, `radius` and `SHADOW_VALUES.*`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const RADIUS_FIELD = "rounded-(--radius-field)";
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
+const SHADOW_OVERLAY_BOTH =
+  "shadow-[0_2px_8px_0_rgba(0,0,0,0.06),0_-6px_12px_0_rgba(0,0,0,0.03),0_14px_28px_0_rgba(0,0,0,0.08)] dark:shadow-[0_0_1px_0_rgba(255,255,255,0.3)_inset]";
 
 /**
  * Autocomplete's variant table, mirroring `@heroui/styles` 3.2.7
@@ -54,8 +66,8 @@ export const autocompleteVariants = tv({
     // `px-3 py-2` moved into the `density` axis (A-001); `min-h-9` stays: the
     // touch minimum is the `input` axis' `min-h-11` cell (A-001).
     trigger: [
-      `relative flex min-h-9 items-center ${radius.field} border-0 border-field-border bg-field text-sm text-field-foreground ${shadow.field.both} select-none cursor-pointer`,
-      `duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `relative flex min-h-9 items-center ${RADIUS_FIELD} border-0 border-field-border bg-field text-sm text-field-foreground ${SHADOW_FIELD_BOTH} select-none cursor-pointer`,
+      `duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     ].join(" "),
     // R-012: `.autocomplete__value` → `flex-1 text-start text-base
     // wrap-break-word text-current sm:text-sm`. `wrap-break-word` is dropped:
@@ -83,8 +95,8 @@ export const autocompleteVariants = tv({
     // upstream's custom keyframes are registered (§8).
     // `pt-2` and `rounded-[22px]` moved into the `density` axis (A-001).
     popover: [
-      `flex flex-col bg-overlay p-0 text-sm ${shadow.overlay.both} overflow-hidden`,
-      `duration-150 ${ease.smooth}`,
+      `flex flex-col bg-overlay p-0 text-sm ${SHADOW_OVERLAY_BOTH} overflow-hidden`,
+      `duration-150 ${EASE_SMOOTH}`,
     ].join(" "),
     // R-037: `.autocomplete__clear-button` → the small cross inside the
     // trigger; `isolate`, `no-highlight` and `transform-gpu` have no
@@ -105,7 +117,7 @@ export const autocompleteVariants = tv({
     clearButton: [
       "relative flex size-5 shrink-0 origin-center items-center justify-center self-center bg-transparent text-muted select-none cursor-pointer",
       "active:scale-[0.93]",
-      `transition-opacity duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `transition-opacity duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
     ].join(" "),
     // Upstream's `filter` slot carries a BEM class with no declarations: the
     // React Aria `Autocomplete` primitive renders no element of its own, so
