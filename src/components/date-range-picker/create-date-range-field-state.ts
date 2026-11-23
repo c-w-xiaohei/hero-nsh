@@ -230,15 +230,16 @@ export function createDateRangeFieldState(
     },
   });
 
-  // A-013: a key that auto-advances (a full typing buffer, Backspace at a
-  // placeholder) and the arrow keys run `focusAdjacent`, whose `focus()` call
-  // dispatches the leaving segment's blur before the arriving segment's focus
-  // lands. That transient is read two ways: the group's `isFocusWithin` dips
-  // and its commit boundary fires `field.commit()` mid-edit, and the blur's
-  // `focusSegment(null)` report lands after the move already recorded the new
-  // segment (a focus-first host order would erase it again). `focusMoveInFlight`
-  // brackets every entry that can move the focus — `type` and `backspace`
-  // reach `focusAdjacent` through the inner state's own closure, so the window
+  // A-013 (the commit guard of the A-006 channel): a key that auto-advances
+  // (a full typing buffer, Backspace at a placeholder) and the arrow keys run
+  // `focusAdjacent`, whose `focus()` call dispatches the leaving segment's
+  // blur before the arriving segment's focus lands. That transient is read
+  // two ways: the group's `isFocusWithin` dips and its commit boundary fires
+  // `field.commit()` mid-edit, and the blur's `focusSegment(null)` report
+  // lands after the move already recorded the new segment (a focus-first
+  // host order would erase it again). `focusMoveInFlight` brackets every
+  // entry that can move the focus — `type` and `backspace` reach
+  // `focusAdjacent` through the inner state's own closure, so the window
   // wraps the whole call, not the `focusAdjacent` member — and both sides
   // share it, since an end-side move trips the group's single `field.commit`
   // the same way.
