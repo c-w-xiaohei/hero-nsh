@@ -88,37 +88,46 @@ jobs:
         shell: bash
         run: bash .github/scripts/test.sh windows ${{ matrix.shard }} ${{ strategy.job-total }}
 
+  native-tests:
+    runs-on: ubuntu-24.04
+    outputs:
+      ios: ${{ steps.tests.outputs.ios }}
+      android: ${{ steps.tests.outputs.android }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: tests
+        name: Discover native mobile tests
+        shell: bash
+        run: |
+          for target in ios android; do
+            files=$(bash .github/scripts/test.sh --list "$target")
+            if [[ -n "$files" ]]; then
+              echo "$target=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$target=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
   ios:
+    needs: native-tests
+    if: needs.native-tests.outputs.ios == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
-      - id: tests
-        name: Discover iOS tests
-        run: |
-          files=$(bash .github/scripts/test.sh --list ios)
-          if [[ -n "$files" ]]; then echo "found=true" >> "$GITHUB_OUTPUT"; fi
       - uses: ./.github/actions/setup
-        if: steps.tests.outputs.found == 'true'
       - name: iOS tests
-        if: steps.tests.outputs.found == 'true'
         run: bash .github/scripts/test.sh ios
 
   android:
+    needs: native-tests
+    if: needs.native-tests.outputs.android == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - id: tests
-        name: Discover Android tests
-        run: |
-          files=$(bash .github/scripts/test.sh --list android)
-          if [[ -n "$files" ]]; then echo "found=true" >> "$GITHUB_OUTPUT"; fi
       - uses: ./.github/actions/setup
-        if: steps.tests.outputs.found == 'true'
       - name: Android runtime
-        if: steps.tests.outputs.found == 'true'
         run: nsh component add android
       - name: Android emulator
-        if: steps.tests.outputs.found == 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
