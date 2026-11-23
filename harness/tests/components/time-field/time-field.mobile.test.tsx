@@ -244,8 +244,11 @@ describe("time-field mobile", () => {
 
     expect(app.count("id:dig-seg-dayPeriod")).toBe(1);
 
-    // `tf-input` is the Input part: its press is the padding/focusLast path.
-    await app.press("id:tf-input");
+    // The Input's centre is a segment, so `id:tf-input` hit-tests onto it on
+    // web; the ":" literal is group area that hears no press, so its press
+    // runs the Input's `focusLast` — the padding-press path on both engines
+    // (date-input-group.mobile.test.tsx's "/" literal precedent).
+    await app.press("text::");
     await waitFocused(app, "dayPeriod");
 
     await app.type("id:dig-seg-dayPeriod", "p");
@@ -367,8 +370,10 @@ describe("time-field mobile", () => {
     await waitFocused(app, "dayPeriod");
 
     // Padding press → focusLast lands on the last segment; the keyboard press
-    // that follows is what raises the focus-visible ring input.
-    await app.press("id:tf-input");
+    // that follows is what raises the focus-visible ring input. The ":"
+    // literal is the non-segment press target — `id:tf-input`'s centre is a
+    // segment on web's real hit test.
+    await app.press("text::");
     await waitFocused(app, "dayPeriod");
     await app.keyboard.press("arrowup");
     await app.waitUntil(() => {
