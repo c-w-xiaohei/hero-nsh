@@ -480,7 +480,9 @@ export function SelectPopover(props: SelectPopoverProps): JSX.Element {
   // from the caller's — `<id>-panel` on the anchored overlay, `<id>-sheet` on
   // the SheetContent, `<id>-dialog` on the fullscreen box — so `shows`/`count`
   // discriminate which carrier `presentation` mounted (the popover unit's
-  // `<id>-default` convention).
+  // `<id>-default` convention). The A-013 fixture mounts
+  // `testID="sel-pop"` to read them, and the A-014 assertion files are what
+  // these observable ids answer to.
   const panelTestID = () =>
     local.testID !== undefined ? `${local.testID}-panel` : undefined;
   const sheetTestID = () =>
