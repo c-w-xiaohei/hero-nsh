@@ -257,9 +257,22 @@ describe("pagination mobile", () => {
       .filter((h) => h.name === "link-2" && h.midHold === true)
       .at(-1)!;
     expect(held.seamPressed).toBe(true);
-    expect(held.scale).toBeLessThan(1);
-    const expected = 1 - 0.015 * (300 / width);
-    expect(Math.abs(held.scale - expected)).toBeLessThan(0.15);
+    const scaleEnv = lastOf<{ reduceMotion: boolean }>(touch, "env");
+    // The held scale's end value follows the host's motion preference:
+    // Android CI runs with `animator_duration_scale 0.0`, which the host
+    // reports as reduce-motion (`env` probe) and `createPressFeedback`
+    // honors by pinning the channel at 1 (`press-feedback.ts:197` —
+    // contract behavior, not a dropped press: `seamPressed` still
+    // records the hold). Where the host animates, the held value must
+    // dip below 1 at the width coefficient as before — the same branch
+    // button M-004 introduced (0a56376).
+    if (scaleEnv.reduceMotion) {
+      expect(held.scale).toBe(1);
+    } else {
+      expect(held.scale).toBeLessThan(1);
+      const expected = 1 - 0.015 * (300 / width);
+      expect(Math.abs(held.scale - expected)).toBeLessThan(0.15);
+    }
 
     // The +1100 ms sample lands after release and the return animation:
     // the channel is back at rest.

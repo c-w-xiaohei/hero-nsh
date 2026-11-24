@@ -1,4 +1,4 @@
-import { effect, host, mount, signal, Text, View } from "nsh";
+import { effect, host, mount, platform, reduceMotion, signal, Text, View } from "nsh";
 import type { JSX } from "nsh";
 import {
   Description,
@@ -851,6 +851,15 @@ function SubmitCase() {
 
 function Fixture() {
   const name = String(host.params.case ?? "parts");
+
+  // The host's own report (the button/pressable `env` convention):
+  // `reduceMotion` tells tests whether the scale channel can move at
+  // all — Android CI runs with `animator_duration_scale 0.0`, which the
+  // host reports as reduce-motion and `createPressFeedback` honors by
+  // pinning `scale` at 1 (press-feedback.ts:197). M-002's held-scale arm
+  // asserts the right end value per host instead of assuming motion
+  // everywhere — the same pattern button M-004 introduced (0a56376).
+  probe("env")({ os: platform.os, reduceMotion: reduceMotion() });
 
   // A-012: every case mounts inside `Scoped` — `scope="touch"` injects the
   // mobile environment, an absent param keeps the host default, so the

@@ -473,6 +473,11 @@ describe("modal mobile", () => {
             expect(scrollOffsets(app).length).toBeGreaterThan(0);
           }
 
+          // The native overlay registers its pressables after the
+          // container: `id:mo-card` on screen does not imply `id:mo-close`
+          // has a native view yet, so wait for the actual press target
+          // before acting (Android would miss the press otherwise).
+          await app.waitFor("id:mo-close");
           await app.press("id:mo-close");
           await app.waitFor("id:mo-card", { state: "gone", timeout: 10_000 });
           expect(falseOpenChanges(app)).toContain(false);
@@ -506,6 +511,11 @@ describe("modal mobile", () => {
 
       // `isKeyboardDismissDisabled=false` (the default): Escape closes through
       // the native Dialog's `closeOnEscape`.
+      // `settleOpen` only advances the manual clock — the native overlay
+      // presents its interactive views after that, so wait for the dialog's
+      // close trigger to exist before sending the key (Android otherwise
+      // fires Escape before the overlay is focused).
+      await app.waitFor("id:mo-close");
       await app.keyboard.press("escape");
       if (hostOs(app) === "ios") {
         // iOS degraded acceptance (registered gap, native-overlay-root-cause
@@ -535,6 +545,10 @@ describe("modal mobile", () => {
       // read off the merged probe stream.
       const closing = await openModal();
       await settleOpen(closing);
+      // Same overlay race as above: the close trigger's native view
+      // registers after the container, so wait for the press target
+      // (Android would find no pressable for `id:mo-close` yet).
+      await closing.waitFor("id:mo-close");
       await closing.press("id:mo-close");
       await closing.waitFor("id:mo-card", { state: "gone", timeout: 10_000 });
 

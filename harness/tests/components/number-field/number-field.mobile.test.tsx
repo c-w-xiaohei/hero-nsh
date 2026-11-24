@@ -296,9 +296,22 @@ describe("number-field mobile", () => {
       seamHolds(app, "inc", true).some((h) => h.seamPressed),
     );
     const held = seamHolds(app, "inc", true).filter((h) => h.seamPressed).at(-1)!;
-    expect(held.scale).toBeLessThan(1);
-    expect(held.scale).toBeGreaterThan(0.9);
-    expect(Math.abs(held.scale - 0.97)).toBeLessThan(0.05);
+    const scaleEnv = lastOf<{ reduceMotion: boolean }>(app, "env");
+    // The held scale's end value follows the host's motion preference:
+    // Android CI runs with `animator_duration_scale 0.0`, which the host
+    // reports as reduce-motion (`env` probe) and `createPressFeedback`
+    // honors by pinning the channel at 1 (`press-feedback.ts:197` —
+    // contract behavior, not a dropped press: `seamPressed` still
+    // records the hold). Where the host animates, the held value must
+    // dip to the flat 0.97 as before — the same branch button M-004
+    // introduced (0a56376).
+    if (scaleEnv.reduceMotion) {
+      expect(held.scale).toBe(1);
+    } else {
+      expect(held.scale).toBeLessThan(1);
+      expect(held.scale).toBeGreaterThan(0.9);
+      expect(Math.abs(held.scale - 0.97)).toBeLessThan(0.05);
+    }
     expect(held.enabled).toBe(true);
     expect(held.hitSlop).toBeNull();
 

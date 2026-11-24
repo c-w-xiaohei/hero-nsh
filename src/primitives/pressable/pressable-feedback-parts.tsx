@@ -73,20 +73,38 @@ function driveFeedbackChannel(
     timing: () => TimingConfig;
     disabled: () => boolean;
     rest: number;
+    /** Where the channel starts before the first drive; it may differ from `rest` for a customized highlight. */
+    initial: number;
   },
 ): void {
+  // The last target this drive ran toward — seeded with the channel's own
+  // start. A target already in place must not start a timer: mount schedules
+  // no press, so without this every instance would kick off a no-op
+  // `timing(rest)` that keeps the app clock busy and can overshoot
+  // `app.clock.runFor()` (Codex P2 on PR #3). Seeding from `initial`, not
+  // `rest`, keeps the first convergence when a customized highlight rest
+  // differs from the channel's birth value.
+  let lastTarget = options.initial;
+
   effect(() => {
     if (options.disabled()) {
       value.set(options.rest);
+      lastTarget = options.rest;
       return;
     }
 
+    const target = options.target();
     if (reduceMotion()) {
-      value.set(options.target());
+      value.set(target);
+      lastTarget = target;
       return;
     }
 
-    void value.timing(options.target(), options.timing()).catch(() => undefined);
+    if (target === lastTarget) {
+      return;
+    }
+    lastTarget = target;
+    void value.timing(target, options.timing()).catch(() => undefined);
   });
 }
 
@@ -157,6 +175,7 @@ export function PressableFeedbackScale(
     timing: () => scaleTiming,
     disabled,
     rest: 1,
+    initial: 1,
   });
 
   const style = (): StyleProp<ViewStyle> => {
@@ -222,6 +241,9 @@ export function PressableFeedbackHighlight(
     timing: () => opacityTiming,
     disabled,
     rest: opacityValues[0],
+    // `highlightOpacity` is born at 0 (pressable-feedback.tsx); a caller's
+    // customized rest may be non-zero, so the first drive still converges.
+    initial: 0,
   });
 
   const style = (): StyleProp<ViewStyle> => {

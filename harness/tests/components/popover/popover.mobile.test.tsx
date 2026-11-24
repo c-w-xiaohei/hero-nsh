@@ -145,6 +145,10 @@ describe("popover mobile", () => {
 
     await narrow.press("id:pop-trigger");
     expect(narrow.count("id:pop-sheet")).toBe(1);
+    // The native overlay registers its pressables after the carrier: wait
+    // for the actual press target before acting (Android has no native
+    // view for `pop-close` immediately after the sheet opens).
+    await narrow.waitFor("id:pop-close");
     await narrow.press("id:pop-close");
     expect(callsOf(narrow, "openChange")).toEqual([[true], [false]]);
 
@@ -165,6 +169,10 @@ describe("popover mobile", () => {
   test("M-009 Dialog close render-prop closes on both carriers", async () => {
     const panel = await openMobile("mobile");
     await panel.press("id:pop-trigger");
+    // The native overlay registers its pressables after the carrier: wait
+    // for the actual press target before acting (Android has no native
+    // view for `pop-close` immediately after the panel opens).
+    await panel.waitFor("id:pop-close");
     await panel.press("id:pop-close");
     expect(callsOf(panel, "dialogClose")).toEqual([["dialog"]]);
     expect(callsOf(panel, "openChange")).toEqual([[true], [false]]);
@@ -174,6 +182,10 @@ describe("popover mobile", () => {
     const sheet = await openMobile("mobile", { input: "touch", width: "compact" });
     await sheet.press("id:pop-trigger");
     expect(sheet.count("id:pop-sheet")).toBe(1);
+    // The native overlay registers its pressables after the carrier: wait
+    // for the actual press target before acting (Android has no native
+    // view for `pop-close` immediately after the sheet opens).
+    await sheet.waitFor("id:pop-close");
     await sheet.press("id:pop-close");
     expect(callsOf(sheet, "dialogClose")).toEqual([["dialog"]]);
     expect(callsOf(sheet, "openChange")).toEqual([[true], [false]]);

@@ -224,7 +224,15 @@ describe("drawer-mobile", () => {
       expect(lastDrag(app).keys).toBe(0);
       expect(lastDrag(app).panelKeys).toBe(0);
 
-      await app.drag("id:dr-handle", { x: 0, y: 200 });
+      // 40pt, not 200: on Android a release that lands outside the panel is
+      // a press on the backdrop, so the 200pt travel dismissed through the
+      // outside-press path rather than through any handle gesture (run
+      // 45477161285: `openChange` recorded [[false]]). The touch handle is
+      // at least 44pt tall (`min-h-11`), so 40pt from its center ends just
+      // below the handle on the `top` panel's header, and well inside the
+      // `h-full` panel for `left`/`right` — the short drag proves the same
+      // thing: no gesture path mounts to claim it.
+      await app.drag("id:dr-handle", { x: 0, y: 40 });
       await settle(app);
 
       expect(lastDrag(app).offset).toBe(0);
@@ -283,6 +291,13 @@ describe("drawer-mobile", () => {
     // press runs on the closed drawer: Escape closes, the trigger reopens.
     const app = await openDrawer("basic");
     await settle(app);
+    // `settle` waits on the JS-side drag probe, which resolves before the
+    // native host has finished presenting and focusing the overlay — on
+    // Android the Escape sent at that point dies at the surface root (run
+    // 45477161285: `id:dr-dialog` never went away in 5 s). Wait for the
+    // drawer's own interactive content instead, so the key lands after the
+    // native presentation, not before it.
+    await app.waitFor("id:dr-close");
     await app.keyboard.press("escape");
     if (hostOs(app) === "ios") {
       // iOS degraded acceptance (registered gap, native-overlay-root-cause
@@ -332,6 +347,10 @@ describe("drawer-mobile", () => {
     // The keyboard gate: Escape stays inert when dismissal is disabled.
     const locked = await openDrawer("basic", { keyboardDismissDisabled: true });
     await settle(locked);
+    // Same presentation wait as above: without it an Escape that dies
+    // before the Android presentation would pass this row trivially — the
+    // assertions can't tell "gate held" from "key never arrived".
+    await locked.waitFor("id:dr-close");
     await locked.keyboard.press("escape");
     await settle(locked);
     expect(locked.shows("id:dr-dialog")).toBe(true);
@@ -341,6 +360,9 @@ describe("drawer-mobile", () => {
     // before the caller's press callback.
     const closer = await openDrawer("basic");
     await settle(closer);
+    // Same native-registration wait as the Escape rows: the press target
+    // must exist before M-014's CloseTrigger half can exercise it.
+    await closer.waitFor("id:dr-close");
     await closer.press("id:dr-close");
     await settle(closer);
     const closerEvents = calls(closer).map((entry) => entry.name);
