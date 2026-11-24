@@ -113,9 +113,12 @@ describe("icons mobile", () => {
 
       const keys = boxes[id]!;
       expect(keys).toHaveLength(1);
+      // Native layout reports fractional-px bounds (Android measured
+      // 52.1905/27.8095 for 52/28pt elsewhere): each icon's default square
+      // is a contract asserted within a 0.25pt quantization window.
       const box = JSON.parse(keys[0]!) as { width: number; height: number };
-      expect(box.width).toBe(size);
-      expect(box.height).toBe(size);
+      expect(Math.abs(box.width - size)).toBeLessThan(0.25);
+      expect(Math.abs(box.height - size)).toBeLessThan(0.25);
     }
   });
 
@@ -130,13 +133,14 @@ describe("icons mobile", () => {
 
     const boxes = boxSet(app);
 
+    // Same fractional-px bound as M-001: exact override boxes ±0.25pt.
     const sized = JSON.parse(boxes["size-props"]![0]!) as { width: number; height: number };
-    expect(sized.width).toBe(24);
-    expect(sized.height).toBe(12);
+    expect(Math.abs(sized.width - 24)).toBeLessThan(0.25);
+    expect(Math.abs(sized.height - 12)).toBeLessThan(0.25);
 
     const classed = JSON.parse(boxes["class-name"]![0]!) as { width: number; height: number };
-    expect(classed.width).toBe(12);
-    expect(classed.height).toBe(12);
+    expect(Math.abs(classed.width - 12)).toBeLessThan(0.25);
+    expect(Math.abs(classed.height - 12)).toBeLessThan(0.25);
   });
 
   // adapt-sheets/icons.md M-003 (A-001…A-003): `EnvironmentScope
@@ -144,18 +148,27 @@ describe("icons mobile", () => {
   // axis (there is no tv() table to feed it to), so every testID and every
   // bounds set equals the pointer environment's, box for box.
   test("M-003 injected touch: identical testIDs and bounds to the pointer environment", async () => {
+    // Snapshot the touch app fully before the next open: a native open
+    // relaunches the single host and invalidates every earlier App.
     const touch = await openMobile({ input: "touch" });
-    const pointer = await openMobile({ input: "pointer" });
     await settleLayout(touch);
+    const touchTexts = touch.texts();
+    const touchBoxes = boxSet(touch);
+    const touchPresence = ICON_SIZES.map(([id]) => ({
+      shown: touch.shows(`id:${id}`),
+      count: touch.count(`id:${id}`),
+    }));
+
+    const pointer = await openMobile({ input: "pointer" });
     await settleLayout(pointer);
 
-    expect(touch.texts()).toContain("env:input=touch density=default");
+    expect(touchTexts).toContain("env:input=touch density=default");
 
-    for (const [id] of ICON_SIZES) {
-      expect(touch.shows(`id:${id}`)).toBe(true);
-      expect(touch.count(`id:${id}`)).toBe(1);
+    for (const presence of touchPresence) {
+      expect(presence.shown).toBe(true);
+      expect(presence.count).toBe(1);
     }
-    expect(boxSet(touch)).toEqual(boxSet(pointer));
+    expect(touchBoxes).toEqual(boxSet(pointer));
   });
 
   // adapt-sheets/icons.md M-004 (A-001): `EnvironmentScope
@@ -164,12 +177,15 @@ describe("icons mobile", () => {
   // bounds equal the default environment's.
   test("M-004 injected compact density: identical bounds to the default environment", async () => {
     const compact = await openMobile({ input: "pointer", density: "compact" });
-    const plain = await openMobile({ input: "pointer" });
     await settleLayout(compact);
+    const compactTexts = compact.texts();
+    const compactBoxes = boxSet(compact);
+
+    const plain = await openMobile({ input: "pointer" });
     await settleLayout(plain);
 
-    expect(compact.texts()).toContain("env:input=pointer density=compact");
-    expect(boxSet(compact)).toEqual(boxSet(plain));
+    expect(compactTexts).toContain("env:input=pointer density=compact");
+    expect(compactBoxes).toEqual(boxSet(plain));
   });
 
   // adapt-sheets/icons.md M-005 (A-004): a decorative Canvas is not a press
@@ -194,9 +210,12 @@ describe("icons mobile", () => {
   // in-scope `createInput()`/`createDensity()` witnesses report them.
   test("M-006 scope injection reaches createInput and createDensity", async () => {
     const touch = await openMobile({ input: "touch", density: "compact" });
-    const pointer = await openMobile({ input: "pointer" });
+    const touchTexts = touch.texts();
 
-    expect(touch.texts()).toContain("env:input=touch density=compact");
-    expect(pointer.texts()).toContain("env:input=pointer density=default");
+    const pointer = await openMobile({ input: "pointer" });
+    const pointerTexts = pointer.texts();
+
+    expect(touchTexts).toContain("env:input=touch density=compact");
+    expect(pointerTexts).toContain("env:input=pointer density=default");
   });
 });

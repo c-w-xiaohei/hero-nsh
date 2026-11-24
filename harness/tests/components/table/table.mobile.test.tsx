@@ -5,7 +5,8 @@ import { callsOf } from "../../helpers/calls";
 /*
  * Mobile assertions for the table adapt unit, one test per row of
  * adapt-sheets/table.md §4 the shared (native + headless + web) targets can
- * observe: M-001…M-005, M-007, M-010…M-012 and M-014. The drag
+ * observe: M-001…M-005, M-007, M-010…M-012, M-014 and M-015 (the
+ * cell→row ownership regression). The drag
  * arbitration, held-press sampling and `platform:"ios"` halves live in
  * `table.mobile.headless.test.tsx` (M-006 headless half, M-008, M-013); the
  * hover row (M-009) and M-011's `platform:"web"` typeahead half live in
@@ -90,6 +91,8 @@ function lastOf<T>(app: App, name: string): T {
 function isWeb(app: App): boolean {
   return lastOf<unknown>(app, "platform") === "web";
 }
+
+
 
 function layouts(app: App, name: string): LayoutEntry[] {
   return callsOf(app, "layout")
@@ -239,11 +242,18 @@ describe("table mobile", () => {
   // environment keeps the port's current padding-driven heights (the
   // column header sits under 44 pt there — the axis is what changes it).
   test("M-005 touch lifts cells and columns to 44pt, default environment unchanged", async () => {
+    // Native relaunches the single host per `open()` — the touch run's
+    // heights are snapshotted as plain numbers before the pointer open
+    // replaces the host (reads off the old app die with it).
     const touch = await openTable("layout", { input: "touch" });
     await touch.waitUntil(() => layouts(touch, "cell-one").length > 0);
-    expect(lastLayout(touch, "cell-one").height).toBeGreaterThanOrEqual(44);
-    expect(lastLayout(touch, "column-role").height).toBeGreaterThanOrEqual(44);
-    expect(lastLayout(touch, "column-name").height).toBeGreaterThanOrEqual(44);
+    const touchCellHeight = lastLayout(touch, "cell-one").height;
+    const touchColumnRoleHeight = lastLayout(touch, "column-role").height;
+    const touchColumnNameHeight = lastLayout(touch, "column-name").height;
+
+    expect(touchCellHeight).toBeGreaterThanOrEqual(44);
+    expect(touchColumnRoleHeight).toBeGreaterThanOrEqual(44);
+    expect(touchColumnNameHeight).toBeGreaterThanOrEqual(44);
 
     const pointer = await openTable("layout", { input: "pointer" });
     await pointer.waitUntil(() => layouts(pointer, "cell-one").length > 0);
@@ -255,7 +265,7 @@ describe("table mobile", () => {
     // below the touch cell's own height, but the pointer cell is never
     // required to reach 44 — that is exactly what the axis lifts.
     expect(lastLayout(pointer, "cell-one").height).toBeLessThanOrEqual(
-      lastLayout(touch, "cell-one").height,
+      touchCellHeight,
     );
   }, 120_000);
 
@@ -287,6 +297,13 @@ describe("table mobile", () => {
     await app.waitUntil(() => callsOf(app, "selection").length >= 1);
     expect(callsOf(app, "selection")).toEqual([[["one"]]]);
 
+    // On a real device a tap on the row hits a cell — the cells tile the
+    // row and UIKit's hit test claims the press at the deepest pressable
+    // node (the headless engine delivers to the picked row instead). The
+    // cell claims for selection and owns no seam of its own, so whether
+    // the row's `onPress*` chain — the seam's driver — still runs on
+    // native is the production question this row exposes (kept asserted,
+    // not scoped out).
     if (!isWeb(app)) {
       await app.waitUntil(() =>
         callsOf(app, "ctx-pressed").some(
@@ -362,17 +379,29 @@ describe("table mobile", () => {
   // all shrink relative to `density="default"`; an uninjected environment
   // resolves `default` identically to the explicit preset.
   test("M-010 density compact tightens column, cell and footer spacing", async () => {
+    // Snapshot per open (native relaunches the single host): each run's
+    // heights are read while its host is alive, compared as plain numbers.
     const compact = await openTable("layout", { input: "pointer", density: "compact" });
-    const explicit = await openTable("layout", { input: "pointer", density: "default" });
-    const bare = await openTable("layout", { input: "pointer" });
+    await compact.waitUntil(() => layouts(compact, "footer").length > 0);
+    const compactHeights = ["column-role", "cell-one", "footer"].map(
+      (name) => lastLayout(compact, name).height,
+    );
 
-    for (const name of ["column-role", "cell-one", "footer"]) {
-      expect(lastLayout(compact, name).height).toBeLessThan(
-        lastLayout(explicit, name).height,
-      );
-      expect(lastLayout(bare, name).height).toBe(
-        lastLayout(explicit, name).height,
-      );
+    const explicit = await openTable("layout", { input: "pointer", density: "default" });
+    await explicit.waitUntil(() => layouts(explicit, "footer").length > 0);
+    const explicitHeights = ["column-role", "cell-one", "footer"].map(
+      (name) => lastLayout(explicit, name).height,
+    );
+
+    const bare = await openTable("layout", { input: "pointer" });
+    await bare.waitUntil(() => layouts(bare, "footer").length > 0);
+    const bareHeights = ["column-role", "cell-one", "footer"].map(
+      (name) => lastLayout(bare, name).height,
+    );
+
+    for (const [index] of compactHeights.entries()) {
+      expect(compactHeights[index]).toBeLessThan(explicitHeights[index]);
+      expect(bareHeights[index]).toBe(explicitHeights[index]);
     }
   }, 120_000);
 
@@ -477,7 +506,9 @@ describe("table mobile", () => {
       expect(callsOf(app, "action").length).toBe(actBefore);
       // The press chain still ran — the row is not inert under
       // `disabledBehavior:"selection"` (web dispatches no row `onPress*`,
-      // so the chain half is headless-only there).
+      // so the chain half is headless-only there; whether native tap
+      // delivery reaches the row's props is the open question the row
+      // keeps asserted).
       if (!isWeb(app)) {
         expect(callsOf(app, "events").some(
           (c) => (c[0] as EventEntry).part === "row-muted" && (c[0] as EventEntry).kind === "press",
@@ -515,7 +546,11 @@ describe("table mobile", () => {
       // Select the parent first so the selection set is non-empty; the
       // child's press must then either add to it (expanded) or leave it
       // untouched (collapsed — the child is not a collection member).
-      await app.press("id:row-parent");
+      // `text:Parent` names the parent's own cell: on a real device a tap
+      // on `id:row-parent`'s center lands inside a nested child row (the
+      // child rows render in the parent row's bounds, so its geometric
+      // middle is the child's surface, not the parent's).
+      await app.press("text:Parent");
       await app.waitUntil(() => callsOf(app, "selection").length >= 1);
       expect(callsOf(app, "selection")).toEqual([[["parent"]]]);
 
@@ -571,6 +606,9 @@ describe("table mobile", () => {
     expect(callsOf(app, "action")).toHaveLength(0);
     expect(callsOf(app, "rowAction")).toHaveLength(0);
     // Web dispatches no `onPress*` on row parts (see the cell note below).
+    // On a real device the same press point lands inside a cell (UIKit's
+    // deepest-hit claim): whether the row's props still hear it is the
+    // production question this chain keeps asserted rather than scoped.
     if (!isWeb(app)) {
       expect(eventsOf(app, "row").map((e) => e.kind)).toEqual(["down", "up", "press"]);
     }
@@ -583,13 +621,19 @@ describe("table mobile", () => {
     expect(callsOf(app, "selection")[1][0]).toEqual([]);
     expect(callsOf(app, "action")).toHaveLength(0);
     expect(callsOf(app, "rowAction")).toHaveLength(0);
-    // The press focuses the cell first (pointer modality focuses a
-    // pressable view on this host), then the down → up → press chain runs.
-    // On web the host dispatches no `onPress*` on row or cell at all
-    // (measured: the `events` probe stays empty while selection still
-    // works — a registered dispatch gap), so the chain is headless-only.
+    // The down → up → press chain runs on the claimed cell. On web the
+    // host dispatches no `onPress*` on row or cell at all (measured: the
+    // `events` probe stays empty while selection still works — a
+    // registered dispatch gap), so the chain is non-web evidence. The
+    // pre-press `focus` event is host-dependent (pointer modality focuses
+    // a pressable view on hosts that deliver view focus; headless does
+    // not — measured), so it's filtered like every other `focus` entry.
     if (!isWeb(app)) {
-      expect(eventsOf(app, "cell").map((e) => e.kind)).toEqual(["focus", "down", "up", "press"]);
+      expect(eventsOf(app, "cell").map((e) => e.kind).filter((k) => k !== "focus")).toEqual([
+        "down",
+        "up",
+        "press",
+      ]);
     }
 
     // A press on the href row's own view follows the URL (a press that
@@ -601,6 +645,9 @@ describe("table mobile", () => {
     expect(callsOf(app, "selection")[2][0]).toEqual(["two"]);
     // Web follows the href through its own navigation instead of the
     // headless `openedUrls` channel, so the URL half is headless-only.
+    // On native the tap claims a cell (deepest hit): `followHref` lives
+    // in the row's `handlePress` — whether a cell claim still reaches it
+    // is the production gap this assertion keeps on the table.
     if (!isWeb(app)) {
       await app.waitUntil(() => app.openedUrls().length >= 1);
       expect(app.openedUrls()).toEqual(["https://example.test/row-two"]);
@@ -650,7 +697,9 @@ describe("table mobile", () => {
     const events = await openTable("events", params);
     await events.press("id:row-one");
     await events.waitUntil(() => callsOf(events, "selection").length >= 1);
-    // Web dispatches no `onPress*` on row parts (the M-012 note).
+    // Web dispatches no `onPress*` on row parts (the M-012 note); on
+    // native the tap's deepest-hit claim is the open question M-012
+    // records — the same assertion stays on.
     if (!isWeb(events)) {
       expect(eventsOf(events, "row").length).toBeGreaterThan(0);
     }
@@ -666,5 +715,92 @@ describe("table mobile", () => {
 
   test("M-014 the fixture mounts in every environment and every probe records (compact density scope)", async () => {
     await probeFixtureChannels({ input: "pointer", density: "compact" });
+  }, 120_000);
+
+  // adapt-sheets/table.md A-009 + the cell→row ownership fix: a press
+  // landing on a cell is the row's press too — the cell claims it for
+  // selection/`onRowAction`, then the row's own continuation runs exactly
+  // as upstream's bubble path describes (`claimPress`'s `!claimPress`
+  // branch: `onAction`, `followHref`, `local.onPress*` and the feedback
+  // seam). Native taps produce only cell claims (deepest hit, §15), so
+  // without the continuation row props are dead on a real device. The
+  // half-dispatch here is `text:` selectors — the same landing a finger
+  // produces — asserted on headless where it is provable before CI.
+  test("M-015 cell press reaches the row's own contract: chain order, onAction, href and seam", async () => {
+    const app = await openTable("events", { input: "pointer" });
+
+    // A press on the member-name cell claims at the cell — exactly the
+    // landing a native tap produces. Selection still happens once, and
+    // the row's own props now observe the same press, in the upstream
+    // order: the cell's chain completes before the row's continuation
+    // (child first, then ancestor — as a DOM bubble runs).
+    await app.press("text:Ada");
+    await app.waitUntil(() => callsOf(app, "selection").length >= 1);
+    expect(callsOf(app, "selection")).toEqual([[["one"]]]);
+    expect(callsOf(app, "action")).toHaveLength(0);
+    expect(callsOf(app, "rowAction")).toHaveLength(0);
+    // Web dispatches no `onPress*` on row/cell parts at all (§6), so the
+    // chain halves are non-web evidence. Cell `focus` precedes its press
+    // on hosts that deliver focus (pointer modality); filtered out.
+    if (!isWeb(app)) {
+      const chain = callsOf(app, "events")
+        .map((c) => c[0] as EventEntry)
+        .filter((e) => e.kind !== "focus");
+      expect(chain).toEqual([
+        { part: "cell", kind: "down" },
+        { part: "row", kind: "down" },
+        { part: "cell", kind: "up" },
+        { part: "row", kind: "up" },
+        { part: "cell", kind: "press" },
+        { part: "row", kind: "press" },
+      ]);
+    }
+
+    // The href row: a cell-claimed press follows the URL — `followHref`
+    // rides the row's continuation, which is what made `href` rows dead
+    // on a phone before the fix. `multiple` accumulates, so the set is
+    // both rows (M-012's bare ["two"] follows its earlier toggle-off).
+    await app.press("text:Grace");
+    await app.waitUntil(() => callsOf(app, "selection").length >= 2);
+    expect(callsOf(app, "selection")[1][0]).toEqual(["one", "two"]);
+    if (!isWeb(app)) {
+      await app.waitUntil(() => app.openedUrls().length >= 1);
+      expect(app.openedUrls()).toEqual(["https://example.test/row-two"]);
+    }
+
+    // selectionMode="none": the cell claim reports the Content-level
+    // `onRowAction` and the forwarded continuation adds the row's own
+    // `onAction` prop — each exactly once.
+    const none = await openTable("rows", { mode: "none", input: "pointer" });
+    await none.press("text:Ada");
+    await none.wait(300);
+    expect(callsOf(none, "selection")).toHaveLength(0);
+    if (!isWeb(none)) {
+      expect(callsOf(none, "action")).toEqual([["one"]]);
+      expect(callsOf(none, "rowAction")).toEqual([["one"]]);
+    }
+
+    // The feedback seam: the forwarded pressDown/pressUp drive the row's
+    // `createPressFeedback` — the cell's `SeamProbe` reads the row's
+    // context (cells own no seam), so a cell press must produce the same
+    // isPressed roundtrip a row-view press does.
+    const seam = await openTable("ctx-probe", { input: "touch" });
+    await seam.press("text:Ada");
+    await seam.waitUntil(() => callsOf(seam, "selection").length >= 1);
+    if (!isWeb(seam)) {
+      await seam.waitUntil(() =>
+        callsOf(seam, "ctx-pressed").some(
+          (c) => (c[0] as { id: string; pressed: boolean }).id === "cell-one" &&
+            (c[0] as { pressed: boolean }).pressed === true,
+        ),
+      );
+      const edges = callsOf(seam, "ctx-pressed")
+        .map((c) => c[0] as { id: string; pressed: boolean })
+        .filter((e) => e.id === "cell-one")
+        .map((e) => e.pressed);
+      expect(edges[0]).toBe(false);
+      expect(edges).toContain(true);
+      expect(edges.at(-1)).toBe(false);
+    }
   }, 120_000);
 });

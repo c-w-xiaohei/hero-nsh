@@ -76,27 +76,26 @@ import { probe } from "@scenario/probe";
 type Scope = "" | "touch";
 
 function Scoped(props: { children?: JSX.Element }) {
-  const scope = String(host.params.scope ?? "") as Scope;
-  // Test-harness environment param (only the mobile tests set it —
-  // absent keeps the host-derived default): `testInput` injects an outer
-  // EnvironmentScope input so the pointer baseline is host-independent
-  // (inner `scope` overrides still win).
-  const testInput = String(host.params.testInput ?? "");
+  // Test-harness environment params (only the mobile tests set them —
+  // absent keeps the host-derived default): `scope="touch"` is the inner
+  // override, `testInput` ("pointer"/"touch") injects the scope so the
+  // pointer baseline is host-independent (the inner `scope` still wins).
+  // One provider only: `props.children` is placed inside it directly —
+  // pre-building a fragment first would mount the children under this
+  // component's own creation scope instead of the provider.
+  const input =
+    String(host.params.scope ?? "") === "touch"
+      ? "touch"
+      : ((v) => (v === "pointer" || v === "touch" ? v : undefined))(
+          String(host.params.testInput ?? ""),
+        );
 
-  const body =
-    scope === "touch" ? (
-      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
-    ) : (
-      <>{props.children}</>
-    );
-
-  return testInput === "pointer" || testInput === "touch" ? (
-    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
+  return input !== undefined ? (
+    <EnvironmentScope input={input}>{props.children}</EnvironmentScope>
   ) : (
-    body
+    <>{props.children}</>
   );
 }
-
 /* Label + input; the shapes the rows above share. */
 function Field(props: {
   label: string;
@@ -123,7 +122,8 @@ function Field(props: {
       onChange={props.onChange}
     >
       <Label>{props.label}</Label>
-      <Input testID="name" onBlur={props.onBlur} onFocus={props.onFocus} />
+      <Input
+        autoCapitalize={textParam("testAutoCapitalize")} testID="name" onBlur={props.onBlur} onFocus={props.onFocus} />
       {props.description ? <Description>{props.description}</Description> : null}
       {props.error ? <FieldError>{props.error}</FieldError> : null}
     </TextField>
@@ -138,6 +138,7 @@ function LogCase() {
       <TextField name="name" onChange={probe("onChange")}>
         <Label>Your name</Label>
         <Input
+          autoCapitalize={textParam("testAutoCapitalize")}
           testID="name"
           ref={(node) => {
             input.current = node;
@@ -173,7 +174,8 @@ function ControlledCase() {
     <Stage>
       <TextField name="name" value={value()} onChange={probe("onChange")}>
         <Label>Your name</Label>
-        <Input testID="name" />
+        <Input
+          autoCapitalize={textParam("testAutoCapitalize")} testID="name" />
       </TextField>
       <View
         testID="set-value"
@@ -252,7 +254,8 @@ function TextAreaCase() {
     <Stage>
       <TextField name="bio" onChange={probe("onChange")}>
         <Label>Bio</Label>
-        <TextArea testID="bio" />
+        <TextArea
+          autoCapitalize={textParam("testAutoCapitalize")} testID="bio" />
       </TextField>
     </Stage>
   );
@@ -263,7 +266,8 @@ function TextAreaInvalidCase() {
     <Stage>
       <TextField isInvalid name="bio">
         <Label>Bio</Label>
-        <TextArea testID="bio" />
+        <TextArea
+          autoCapitalize={textParam("testAutoCapitalize")} testID="bio" />
         <FieldError>Bio is required</FieldError>
       </TextField>
     </Stage>
@@ -273,7 +277,8 @@ function TextAreaInvalidCase() {
 function StandaloneInputCase() {
   return (
     <Stage>
-      <Input aria-label="Name" placeholder="John" testID="name" onChange={probe("onChange")} />
+      <Input
+        autoCapitalize={textParam("testAutoCapitalize")} aria-label="Name" placeholder="John" testID="name" onChange={probe("onChange")} />
     </Stage>
   );
 }
@@ -281,7 +286,8 @@ function StandaloneInputCase() {
 function AriaLabelCase() {
   return (
     <Stage>
-      <Input aria-label="My Favorite Pet" testID="pet" />
+      <Input
+        autoCapitalize={textParam("testAutoCapitalize")} aria-label="My Favorite Pet" testID="pet" />
     </Stage>
   );
 }
@@ -289,7 +295,8 @@ function AriaLabelCase() {
 function StandaloneInputDisabledCase() {
   return (
     <Stage>
-      <Input aria-label="Name" disabled placeholder="John" testID="name" />
+      <Input
+        autoCapitalize={textParam("testAutoCapitalize")} aria-label="Name" disabled placeholder="John" testID="name" />
     </Stage>
   );
 }
@@ -298,6 +305,7 @@ function StandaloneTextAreaCase() {
   return (
     <Stage>
       <TextArea
+        autoCapitalize={textParam("testAutoCapitalize")}
         aria-label="Bio"
         placeholder="Tell us about yourself"
         testID="bio"
@@ -310,7 +318,8 @@ function StandaloneTextAreaCase() {
 function StandaloneTextAreaDisabledCase() {
   return (
     <Stage>
-      <TextArea aria-label="Bio" disabled placeholder="Tell us about yourself" testID="bio" />
+      <TextArea
+        autoCapitalize={textParam("testAutoCapitalize")} aria-label="Bio" disabled placeholder="Tell us about yourself" testID="bio" />
     </Stage>
   );
 }
@@ -339,7 +348,8 @@ function CompositionCase() {
     <Stage>
       <TextField name="name" onCompositionChange={probe("onCompositionChange")}>
         <Label>Your name</Label>
-        <Input testID="name" />
+        <Input
+          autoCapitalize={textParam("testAutoCapitalize")} testID="name" />
         <CompositionTrigger />
       </TextField>
     </Stage>
@@ -362,6 +372,7 @@ function FocusCase() {
       <TextField name="name">
         <Label>Your name</Label>
         <Input
+          autoCapitalize={textParam("testAutoCapitalize")}
           testID="name"
           onBlur={probe("onBlur")}
           onFocus={probe("onFocus")}
@@ -389,7 +400,8 @@ function RenderChildrenCase() {
         {(values: { isRequired: () => boolean }) => (
           <>
             <Label>Your name</Label>
-            <Input testID="name" />
+            <Input
+              autoCapitalize={textParam("testAutoCapitalize")} testID="name" />
             <Description>{values.isRequired() ? "Required" : "Optional"}</Description>
           </>
         )}
@@ -412,6 +424,7 @@ function SubmitCase() {
       <TextField name="name" onSubmit={probe("field-submit")}>
         <Label>Your name</Label>
         <Input
+          autoCapitalize={textParam("testAutoCapitalize")}
           testID="name"
           submitBehavior={
             submitBehavior === ""
@@ -440,6 +453,7 @@ function SubmitStandaloneCase() {
   return (
     <Stage>
       <Input
+        autoCapitalize={textParam("testAutoCapitalize")}
         aria-label="Name"
         testID="name"
         submitBehavior={
@@ -465,6 +479,7 @@ function SubmitTextAreaCase() {
   return (
     <Stage>
       <TextArea
+        autoCapitalize={textParam("testAutoCapitalize")}
         aria-label="Bio"
         testID="bio"
         submitBehavior={
@@ -490,6 +505,7 @@ function HoverCase() {
   return (
     <Stage>
       <Input
+        autoCapitalize={textParam("testAutoCapitalize")}
         aria-label="Name"
         testID="name"
         className={({ isHovered }) => {
@@ -507,6 +523,16 @@ function HoverCase() {
   );
 }
 
+
+/** Test-only literal-typing prop: the mobile tests pass `testAutoCapitalize`
+ * ("none") so a literal typed text cannot meet the host keyboard's
+ * sentence-capitalization (iOS synthesizes real key events). Absent the
+ * param the prop is undefined and the control keeps its default. */
+function textParam(name: string): string | undefined {
+  const value = host.params[name];
+  return typeof value === "string" ? value : undefined;
+}
+
 /* A-008: `onLayout` bounds on both controls (M-001) — the Input's height
  * proves the `input` axis's `min-h-11` under touch and the 40 pt pointer
  * baseline; the TextArea's rows height stays put in both. */
@@ -515,6 +541,7 @@ function LayoutCase() {
     <Stage>
       <View class="flex-col gap-2 w-64">
         <Input
+          autoCapitalize={textParam("testAutoCapitalize")}
           aria-label="Name"
           testID="name"
           onLayout={(e) =>
@@ -522,6 +549,7 @@ function LayoutCase() {
           }
         />
         <TextArea
+          autoCapitalize={textParam("testAutoCapitalize")}
           aria-label="Bio"
           testID="bio"
           onLayout={(e) =>
@@ -582,7 +610,8 @@ function BaselineCase() {
         onFocusChange={probe("onFocusChange")}
       >
         <Label>Baseline name</Label>
-        <Input testID="baseline-name" />
+        <Input
+          autoCapitalize={textParam("testAutoCapitalize")} testID="baseline-name" />
         <FieldError>Baseline error</FieldError>
       </TextField>
 
@@ -590,17 +619,20 @@ function BaselineCase() {
        * (upstream `.textfield[data-invalid] [data-slot=description]`). */}
       <TextField name="baseline-controlled" value={controlled()} onChange={probe("controlled-change")}>
         <Label>Controlled</Label>
-        <Input testID="baseline-controlled-input" />
+        <Input
+          autoCapitalize={textParam("testAutoCapitalize")} testID="baseline-controlled-input" />
         <Description>Baseline hint</Description>
       </TextField>
 
       <Input
+        autoCapitalize={textParam("testAutoCapitalize")}
         aria-label="Password"
         testID="baseline-password"
         type="password"
         onChange={probe("onChange")}
       />
       <Input
+        autoCapitalize={textParam("testAutoCapitalize")}
         aria-label="Masked"
         masked
         testID="baseline-masked"
@@ -610,6 +642,7 @@ function BaselineCase() {
       <TextField name="baseline-bio">
         <Label>Bio</Label>
         <TextArea
+          autoCapitalize={textParam("testAutoCapitalize")}
           testID="baseline-bio"
           rows={3}
           onChange={probe("onChange")}

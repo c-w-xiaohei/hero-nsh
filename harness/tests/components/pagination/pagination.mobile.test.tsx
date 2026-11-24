@@ -372,13 +372,14 @@ describe("pagination mobile", () => {
   // every pressable part's `onLayout` bounds under touch equal the pointer
   // environment's exactly.
   test("M-007 injected touch moves no laid-out box", async () => {
+    // Snapshot the touch boxes before the next open: a native open
+    // relaunches the single host and invalidates every earlier App.
     const touch = await openPagination("press", { scope: "touch" });
-    const pointer = await openPagination("press", { scope: "pointer" });
-
     await waitForBoxes(touch, PRESS_PARTS);
-    await waitForBoxes(pointer, PRESS_PARTS);
-
     const touchBoxes = lastBoxes(touch);
+
+    const pointer = await openPagination("press", { scope: "pointer" });
+    await waitForBoxes(pointer, PRESS_PARTS);
     const pointerBoxes = lastBoxes(pointer);
     for (const name of PRESS_PARTS) {
       expect(touchBoxes[name]).toEqual(pointerBoxes[name]);

@@ -108,4 +108,20 @@ describe("color-input-group mobile (headless)", () => {
     expect(callsOf(app, "input-blur")).toHaveLength(1);
     expect(records().every((r) => r.isFocusVisible === r.isFocusWithin)).toBe(true);
   }, 120_000);
+
+  // The typed-half of M-009's S-003 row in
+  // `color-input-group.mobile.test.tsx`: the shared file drops `app.type`
+  // on the disabled input because a real iOS host inserts the keys into
+  // whichever input still holds the first responder (the controlled input
+  // picked them up as "#22c55e#ff0000" in CI). Headless, where the type
+  // step simply refuses a non-editable target, the refusal itself is the
+  // assertion.
+  test("M-009 S-003 (typed half): the disabled input refuses typed keys", async () => {
+    const app = await openCase("baseline", { testInput: "pointer" });
+
+    expect(app.enabled("id:b-disabled-input")).toBe(false);
+    await app.type("id:b-disabled-input", "#ff0000").catch(() => undefined);
+    expect(app.value("id:b-disabled-input")).toBe("");
+    expect(callsOf(app, "onChange")).toHaveLength(0);
+  }, 120_000);
 });

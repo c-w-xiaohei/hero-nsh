@@ -229,16 +229,31 @@ describe("menu mobile", () => {
   // read between adjacent row bounds); the uninjected environment resolves
   // `default`, identical to the explicit `density="default"`.
   test("M-002 touch lifts rows to 44pt; compact tightens root padding and row gap one step", async () => {
-    const pointer = await openMenu("m-seam");
-    expect(lastLayout(pointer, "row-a").height).toBe(36);
+    // Native single-host rule: each `open()` retargets the host, so every
+    // app's boxes are snapshot into numbers before the next app exists.
+    const measure = async (params: Parameters<typeof openMenu>[1]) => {
+      const app = await openMenu("m-seam", params);
+      const a = lastLayout(app, "row-a");
+      const b = lastLayout(app, "row-b");
+      const root = lastLayout(app, "menu-root");
+      return {
+        height: a.height,
+        inset: a.x - root.x,
+        pitch: b.y - (a.y + a.height),
+      };
+    };
 
-    const touch = await openMenu("m-seam", { input: "touch" });
-    expect(lastLayout(touch, "row-a").height).toBeGreaterThanOrEqual(44);
+    const pointer = await measure(undefined);
+    expect(pointer.height).toBe(36);
+
+    const touch = await measure({ input: "touch" });
+    expect(touch.height).toBeGreaterThanOrEqual(44);
 
     // The narrow row (36 pt wide, w-9): same height rule, and the seam
     // computes slop on the under-width axis only.
     const narrowPointer = await openMenu("m-narrow");
-    expect(lastLayout(narrowPointer, "row-n").height).toBe(36);
+    const narrowPointerHeight = lastLayout(narrowPointer, "row-n").height;
+    expect(narrowPointerHeight).toBe(36);
     const narrowTouch = await openMenu("m-narrow", { input: "touch" });
     expect(lastLayout(narrowTouch, "row-n").height).toBeGreaterThanOrEqual(44);
 
@@ -246,26 +261,18 @@ describe("menu mobile", () => {
     // `gap-1`→`gap-0.5` (4→2 pt between the first two rows). A row's own
     // height stays 36 under pointer because `min-h-9` still binds, so the
     // pitch measurement reads the gap directly.
-    const compact = await openMenu("m-seam", { density: "compact" });
-    const explicit = await openMenu("m-seam", { density: "default" });
+    const compact = await measure({ density: "compact" });
+    const explicit = await measure({ density: "default" });
 
-    const inset = (app: App) =>
-      lastLayout(app, "row-a").x - lastLayout(app, "menu-root").x;
-    const pitch = (app: App) => {
-      const a = lastLayout(app, "row-a");
-      const b = lastLayout(app, "row-b");
-      return b.y - (a.y + a.height);
-    };
-
-    expect(inset(explicit)).toBeGreaterThan(inset(compact));
-    expect(inset(explicit)).toBe(4);
-    expect(inset(compact)).toBe(2);
-    expect(pitch(explicit)).toBeGreaterThan(pitch(compact));
-    expect(pitch(explicit)).toBe(4);
-    expect(pitch(compact)).toBe(2);
+    expect(explicit.inset).toBeGreaterThan(compact.inset);
+    expect(explicit.inset).toBe(4);
+    expect(compact.inset).toBe(2);
+    expect(explicit.pitch).toBeGreaterThan(compact.pitch);
+    expect(explicit.pitch).toBe(4);
+    expect(compact.pitch).toBe(2);
     // The bare environment resolves `default` exactly.
-    expect(inset(pointer)).toBe(inset(explicit));
-    expect(pitch(pointer)).toBe(pitch(explicit));
+    expect(pointer.inset).toBe(explicit.inset);
+    expect(pointer.pitch).toBe(explicit.pitch);
   }, 120_000);
 
   // adapt-sheets/menu.md M-003 (A-002): injected touch suppresses the hover

@@ -92,7 +92,9 @@ import { probe } from "@scenario/probe";
  * `hide=<key>` gates that row of the `items` path behind `<If>` so it never
  * mounts (the F-consumption regression); `kt`/`rtk`/`ekh`/`im`/`mask` feed
  * the caller `Input`'s `keyboardType`/`returnKeyType`/`enterKeyHint`/
- * `inputMode`/`masked` (the G channel).
+ * `inputMode`/`masked` (the G channel); `numeric="1"` swaps `b-mobile`'s
+ * items for digit-named rows, so a phone-pad/`masked` field can still run
+ * the type → filter chain (M-010).
  *
  * Case `b-mobile`: the `Combo` plus the probes the mobile assertions read —
  * `trigger-box` (the Trigger's `onLayout` bounds, the only observable input
@@ -242,6 +244,13 @@ const ITEMS: ItemData[] = [
   { id: "1", name: "One" },
   { id: "2", name: "Two" },
   { id: "3", name: "Three" },
+];
+
+/** `b-mobile` + `numeric="1"`: digit-named rows a phone-pad field accepts. */
+const NUMERIC: ItemData[] = [
+  { id: "n1", name: "11 Monkeys" },
+  { id: "n2", name: "12 Apples" },
+  { id: "n3", name: "23 Beers" },
 ];
 
 const FRUIT: ItemData[] = [
@@ -796,7 +805,7 @@ function Case() {
   if (name === "b-mobile") {
     return (
       <View class="items-start gap-4 p-4">
-        <Combo bMobile items={PETS} />
+        <Combo bMobile items={param("numeric") === "1" ? NUMERIC : PETS} />
       </View>
     );
   }

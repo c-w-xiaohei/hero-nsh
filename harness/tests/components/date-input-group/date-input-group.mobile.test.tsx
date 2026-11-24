@@ -219,6 +219,17 @@ describe("date-input-group mobile", () => {
     expect(app.count("id:dig-seg-day")).toBe(1);
     expect(app.count("id:dig-seg-year")).toBe(1);
 
+    // The channel must be hit-testable where it mounts: native UIKit (and
+    // NSH's own hit walkers) skip any view with alpha < 0.01, so the touch
+    // a user or `app.press` makes can never land in an `opacity-0` channel —
+    // the iOS M-005/M-006/M-008 failures' pinned root. `effectiveOpacity`
+    // is the model-visible form of the hittability precondition; the
+    // channel still paints nothing (controlled empty value, no caret).
+    for (const type of ["month", "day", "year"]) {
+      expect(app.viewStyle(`id:dig-seg-${type}`)?.effectiveOpacity).toBeGreaterThan(0.01);
+      expect(app.value(`id:dig-seg-${type}`)).toBe("");
+    }
+
     await app.press("id:dig-seg-month");
     await waitFocused(app, "month");
 

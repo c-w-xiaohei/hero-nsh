@@ -195,6 +195,8 @@ describe("button mobile", () => {
     expect(heldHighlight.origin).not.toBeNull();
 
     // auto resolves to scale-highlight on touch: same channel, same end.
+    // Native relaunches the single host per open(): every held sample is
+    // asserted before the next app opens — an older handle is dead after.
     const auto = await openButton("basic", { testInput: "touch", preset: "auto" });
     await auto.longPress("id:btn");
     await auto.waitUntil(() => heldSamples(auto).length >= 1);

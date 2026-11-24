@@ -175,21 +175,29 @@ describe("scroll-shadow mobile", () => {
   // environment-invariant.
   test("M-003 injected touch: states, texts and bounds identical to the pointer baseline", async () => {
     for (const caseName of ["default", "horizontal", "fits"] as const) {
-      const pointer = await openShadow(caseName, { input: "pointer" });
-      const touch = await openShadow(caseName, { input: "touch" });
-
       const resting =
         caseName === "default"
           ? "bottom"
           : caseName === "horizontal"
             ? "right"
             : "none";
+
+      // Snapshot the pointer app before the touch open: a native open
+      // relaunches the single host and invalidates every earlier App.
+      const pointer = await openShadow(caseName, { input: "pointer" });
       await pointer.waitFor(`text:/^state:${resting}/`);
+      const pointerSnap = {
+        texts: pointer.texts(),
+        state: lastVisibility(pointer),
+        layout: layoutSet(pointer),
+      };
+
+      const touch = await openShadow(caseName, { input: "touch" });
       await touch.waitFor(`text:/^state:${resting}/`);
 
-      expect(touch.texts()).toEqual(pointer.texts());
-      expect(lastVisibility(touch)).toBe(lastVisibility(pointer));
-      expect(layoutSet(touch)).toEqual(layoutSet(pointer));
+      expect(touch.texts()).toEqual(pointerSnap.texts);
+      expect(lastVisibility(touch)).toBe(pointerSnap.state);
+      expect(layoutSet(touch)).toEqual(pointerSnap.layout);
     }
   }, 120_000);
 
@@ -199,8 +207,14 @@ describe("scroll-shadow mobile", () => {
   // so bounds and detection states match the default environment's
   // exactly.
   test("M-004 injected compact density: bounds and states identical to default", async () => {
+    // Read the baseline fully before the compact open relaunches the host.
     const baseline = await openShadow("default", { input: "pointer" });
     await baseline.waitFor("text:/^state:bottom@/");
+    const baselineSnap = {
+      texts: baseline.texts(),
+      state: lastVisibility(baseline),
+      layout: layoutSet(baseline),
+    };
 
     const compact = await openShadow("default", {
       input: "touch",
@@ -208,9 +222,9 @@ describe("scroll-shadow mobile", () => {
     });
     await compact.waitFor("text:/^state:bottom@/");
 
-    expect(compact.texts()).toEqual(baseline.texts());
-    expect(lastVisibility(compact)).toBe(lastVisibility(baseline));
-    expect(layoutSet(compact)).toEqual(layoutSet(baseline));
+    expect(compact.texts()).toEqual(baselineSnap.texts);
+    expect(lastVisibility(compact)).toBe(baselineSnap.state);
+    expect(layoutSet(compact)).toEqual(baselineSnap.layout);
   }, 120_000);
 
   // adapt-sheets/scroll-shadow.md M-005 (A-003): injected touch — the root

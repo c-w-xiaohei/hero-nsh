@@ -62,27 +62,26 @@ import { probe } from "@scenario/probe";
 type Scope = "" | "touch";
 
 function Scoped(props: { children?: JSX.Element }) {
-  const scope = String(host.params.scope ?? "") as Scope;
-  // Test-harness environment param (only the mobile tests set it —
-  // absent keeps the host-derived default): `testInput` injects an outer
-  // EnvironmentScope input so the pointer baseline is host-independent
-  // (inner `scope` overrides still win).
-  const testInput = String(host.params.testInput ?? "");
+  // Test-harness environment params (only the mobile tests set them —
+  // absent keeps the host-derived default): `scope="touch"` is the inner
+  // override, `testInput` ("pointer"/"touch") injects the scope so the
+  // pointer baseline is host-independent (the inner `scope` still wins).
+  // One provider only: `props.children` is placed inside it directly —
+  // pre-building a fragment first would mount the children under this
+  // component's own creation scope instead of the provider.
+  const input =
+    String(host.params.scope ?? "") === "touch"
+      ? "touch"
+      : ((v) => (v === "pointer" || v === "touch" ? v : undefined))(
+          String(host.params.testInput ?? ""),
+        );
 
-  const body =
-    scope === "touch" ? (
-      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
-    ) : (
-      <>{props.children}</>
-    );
-
-  return testInput === "pointer" || testInput === "touch" ? (
-    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
+  return input !== undefined ? (
+    <EnvironmentScope input={input}>{props.children}</EnvironmentScope>
   ) : (
-    body
+    <>{props.children}</>
   );
 }
-
 function Frame(props: { children?: JSX.Element }) {
   return (
     <View class="flex-1 items-start gap-4 bg-background p-6">

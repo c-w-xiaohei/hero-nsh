@@ -476,7 +476,8 @@ describe("dropdown mobile", () => {
   // environments: `onAction`/`onSelectionChange` payloads, a row appended
   // under the live collection, and a `hide`-gated unmounted row. The
   // registry's own assertions live in `menu.mobile.*`; this row only proves
-  // the dropdown wrappers stay transparent.
+  // the dropdown wrappers stay transparent. 4 opens × the ~5s native host
+  // relaunch each — over the 30s default.
   test("M-016 items data path matches the static path on both environments", async () => {
     const envs: Params[] = [{}, { input: "touch", width: "compact" }];
 
@@ -509,7 +510,7 @@ describe("dropdown mobile", () => {
       await static_.clock!.runFor(150);
       expect(callsOf(static_, "onAction")).toEqual([["delete-file"]]);
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/dropdown.md M-017 (A-011…A-013): the fixture machinery
   // itself — `Scoped` injection reaches `EnvironmentScope` (touch+compact

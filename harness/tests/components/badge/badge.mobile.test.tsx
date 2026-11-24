@@ -126,11 +126,16 @@ describe("badge mobile", () => {
     const app = await openBadge({ input: "pointer" });
     await settleLayout(app);
 
+    // Native layout reports fractional-px bounds (Android measured 27.8095
+    // at its device dpi, iOS 4.00000047 on the pad diff): the contracts —
+    // ≥28pt minimum, 4pt of horizontal padding, corner-flush placement —
+    // are asserted within a 0.25pt quantization window, not a tolerance on
+    // the geometry.
     const md = lastBox(app, "root");
-    expect(md.width).toBeGreaterThanOrEqual(28);
-    expect(md.height).toBeGreaterThanOrEqual(28);
-    expect(md.width).toBeLessThanOrEqual(30);
-    expect(md.height).toBeLessThanOrEqual(30);
+    expect(md.width).toBeGreaterThanOrEqual(28 - 0.25);
+    expect(md.height).toBeGreaterThanOrEqual(28 - 0.25);
+    expect(md.width).toBeLessThanOrEqual(30 + 0.25);
+    expect(md.height).toBeLessThanOrEqual(30 + 0.25);
 
     for (const text of ["1", "5", "9", "99", "Paint"]) {
       expect(app.texts()).toContain(text);
@@ -139,16 +144,16 @@ describe("badge mobile", () => {
     // label (px-0.5) minus the bare Text of the same face = 4pt of padding.
     const label = lastBox(app, "label");
     const textRef = lastBox(app, "text-ref");
-    expect(label.width - textRef.width).toBe(4);
+    expect(Math.abs(label.width - textRef.width - 4)).toBeLessThan(0.25);
 
     // The badge's bounds are relative to its Anchor parent: right:0 top:0
     // puts its right edge on the anchor's right edge (80pt box) and its top
     // edge on the anchor's top.
     const anchor = lastBox(app, "anchor");
-    expect(anchor.width).toBe(80);
-    expect(anchor.height).toBe(80);
-    expect(md.x + md.width).toBe(anchor.width);
-    expect(md.y).toBe(0);
+    expect(Math.abs(anchor.width - 80)).toBeLessThan(0.25);
+    expect(Math.abs(anchor.height - 80)).toBeLessThan(0.25);
+    expect(Math.abs(md.x + md.width - anchor.width)).toBeLessThan(0.25);
+    expect(Math.abs(md.y)).toBeLessThan(0.25);
   });
 
   // adapt-sheets/badge.md M-002 (baseline): the size axis keeps its minimum
@@ -163,10 +168,11 @@ describe("badge mobile", () => {
     const sm = lastBox(app, "root-sm");
     const lg = lastBox(app, "root-lg");
 
-    expect(sm.width).toBe(16);
-    expect(sm.height).toBe(16);
-    expect(lg.width).toBe(32);
-    expect(lg.height).toBe(32);
+    // Same fractional-px bound as M-001: exact tiers ±0.25pt.
+    expect(Math.abs(sm.width - 16)).toBeLessThan(0.25);
+    expect(Math.abs(sm.height - 16)).toBeLessThan(0.25);
+    expect(Math.abs(lg.width - 32)).toBeLessThan(0.25);
+    expect(Math.abs(lg.height - 32)).toBeLessThan(0.25);
 
     expect(app.spanStyle("text:Paint").color).toBe(ACCENT_SOFT_FOREGROUND);
   });
@@ -175,14 +181,20 @@ describe("badge mobile", () => {
   // seam — under injected touch every probed box and every rendered string
   // is identical to the pointer baseline.
   test("M-003 injected touch changes no bound and no text", async () => {
+    // Snapshot the touch app before the next open — a native open
+    // relaunches the single host and invalidates every earlier App.
     const touch = await openBadge({ input: "touch" });
-    const pointer = await openBadge({ input: "pointer" });
-
     await settleLayout(touch);
-    await settleLayout(pointer);
+    const touchBoxes = boxSet(touch);
+    const touchTexts = touch.texts();
 
-    expect(boxSet(touch)).toEqual(boxSet(pointer));
-    expect(touch.texts()).toEqual(pointer.texts());
+    const pointer = await openBadge({ input: "pointer" });
+    await settleLayout(pointer);
+    const pointerBoxes = boxSet(pointer);
+    const pointerTexts = pointer.texts();
+
+    expect(touchBoxes).toEqual(pointerBoxes);
+    expect(touchTexts).toEqual(pointerTexts);
   });
 
   // adapt-sheets/badge.md M-004 (A-001…A-003): the density preset resolves
@@ -190,13 +202,17 @@ describe("badge mobile", () => {
   // `density="compact"` moves nothing either.
   test("M-004 injected compact density changes no bound and no text", async () => {
     const compact = await openBadge({ input: "pointer", density: "compact" });
-    const plain = await openBadge({ input: "pointer" });
-
     await settleLayout(compact);
-    await settleLayout(plain);
+    const compactBoxes = boxSet(compact);
+    const compactTexts = compact.texts();
 
-    expect(boxSet(compact)).toEqual(boxSet(plain));
-    expect(compact.texts()).toEqual(plain.texts());
+    const plain = await openBadge({ input: "pointer" });
+    await settleLayout(plain);
+    const plainBoxes = boxSet(plain);
+    const plainTexts = plain.texts();
+
+    expect(compactBoxes).toEqual(plainBoxes);
+    expect(compactTexts).toEqual(plainTexts);
   });
 
   // adapt-sheets/badge.md M-005 (A-004): pure display — pressing the badge

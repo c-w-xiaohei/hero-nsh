@@ -505,6 +505,7 @@ describe("select mobile", () => {
   // the static path produce the same `selectionChange` payload shape and
   // the same unmounted-key `textValue` read-back on both environments — the
   // collection consumption the popover's persistent mount protects.
+  // 4 opens × the ~5s native host relaunch each — over the 30s default.
   test("M-017 items and static paths select identically on both environments", async () => {
     for (const input of ["", "touch"] as const) {
       const params: Record<string, string> = {};
@@ -535,14 +536,15 @@ describe("select mobile", () => {
       ]);
       expect(select.triggerShows(statics, "Texas")).toBe(true);
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/select.md M-018 (baseline): the default environment is
   // byte-identical — trigger toggle, Escape close, outside-press close,
   // single-select close-on-selection, multiple staying open, non-modal
   // having no underlay, `isKeyboardDismissDisabled` blocking Escape, a
   // disabled root refusing the press, the deprecated `onChange` alias, the
-  // `value` alias, `disabledKeys` and `disallowEmptySelection`.
+  // `value` alias, `disabledKeys` and `disallowEmptySelection`. 8 opens ×
+  // the ~5s native host relaunch each — over the 30s default.
   test("M-018 default-environment baseline: toggle, dismissals, selection rules, aliases", async () => {
     const app = await openSelect("items-outside");
 
@@ -625,7 +627,7 @@ describe("select mobile", () => {
       disabledKeys.press("role:option[Two]"),
     ).rejects.toMatchObject({ code: "ERR_NSH_TEST_DISABLED" });
     expect(callsOf(disabledKeys, "selectionChange")).toHaveLength(0);
-  });
+  }, 120_000);
 
   // adapt-sheets/select.md M-019 (A-013, A-014): the fixture machinery
   // itself — the dual environments mount, the params switch the carrier,

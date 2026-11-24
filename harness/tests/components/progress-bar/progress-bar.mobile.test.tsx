@@ -130,7 +130,10 @@ describe("progress-bar mobile", () => {
 
     expect(app.texts()).toContain("60%");
     expect(app.shows("id:track >> id:fill")).toBe(true);
-    expect(lastBox(app, "track").width).toBe(200);
+    // Native layout reports fractional-px bounds (Android measured
+    // 52.1905/27.8095 for 52/28pt elsewhere): the 200pt track is a
+    // contract asserted within a 0.25pt quantization window.
+    expect(Math.abs(lastBox(app, "track").width - 200)).toBeLessThan(0.25);
     expect(Math.abs(lastBox(app, "fill").width - 120)).toBeLessThan(0.6);
   });
 
@@ -145,9 +148,10 @@ describe("progress-bar mobile", () => {
     await settleLayout(app, CASE_BOXES.sizes);
 
     expect(app.texts()).toEqual(["sm", "50%", "md", "50%", "lg", "50%"]);
-    expect(lastBox(app, "track-sm").height).toBe(4);
-    expect(lastBox(app, "track-md").height).toBe(8);
-    expect(lastBox(app, "track-lg").height).toBe(12);
+    // Fractional-px bound as M-001: exact tier heights ±0.25pt.
+    expect(Math.abs(lastBox(app, "track-sm").height - 4)).toBeLessThan(0.25);
+    expect(Math.abs(lastBox(app, "track-md").height - 8)).toBeLessThan(0.25);
+    expect(Math.abs(lastBox(app, "track-lg").height - 12)).toBeLessThan(0.25);
     expect(Math.abs(lastBox(app, "fill-lg").width - 100)).toBeLessThan(0.6);
   });
 
@@ -215,13 +219,18 @@ describe("progress-bar mobile", () => {
   // environments. One case per test keeps the web runner's app count low.
   for (const name of ["geometry", "sizes", "render-prop"]) {
     test(`M-003 injected touch: ${name} equals the pointer baseline`, async () => {
+      // Snapshot the touch app before the next open: a native open
+      // relaunches the single host and invalidates every earlier App.
       const touch = await openFixture({ case: name, value: 60, input: "touch" });
-      const pointer = await openFixture({ case: name, value: 60, input: "pointer" });
       await settleLayout(touch, CASE_BOXES[name]);
+      const touchTexts = touch.texts();
+      const touchBoxes = boxSet(touch);
+
+      const pointer = await openFixture({ case: name, value: 60, input: "pointer" });
       await settleLayout(pointer, CASE_BOXES[name]);
 
-      expect(touch.texts()).toEqual(pointer.texts());
-      expect(boxSet(touch)).toEqual(boxSet(pointer));
+      expect(touchTexts).toEqual(pointer.texts());
+      expect(touchBoxes).toEqual(boxSet(pointer));
     });
   }
 
@@ -231,12 +240,15 @@ describe("progress-bar mobile", () => {
   for (const name of ["geometry", "sizes"]) {
     test(`M-004 density compact: ${name} equals the default preset`, async () => {
       const compact = await openFixture({ case: name, value: 60, input: "pointer", density: "compact" });
-      const plain = await openFixture({ case: name, value: 60, input: "pointer" });
       await settleLayout(compact, CASE_BOXES[name]);
+      const compactTexts = compact.texts();
+      const compactBoxes = boxSet(compact);
+
+      const plain = await openFixture({ case: name, value: 60, input: "pointer" });
       await settleLayout(plain, CASE_BOXES[name]);
 
-      expect(compact.texts()).toEqual(plain.texts());
-      expect(boxSet(compact)).toEqual(boxSet(plain));
+      expect(compactTexts).toEqual(plain.texts());
+      expect(compactBoxes).toEqual(boxSet(plain));
     });
   }
 
@@ -294,7 +306,7 @@ describe("progress-bar mobile", () => {
     await settleLayout(app, GEOMETRY_BOXES);
     expect(app.shows("role:progressbar[Progress Bar]")).toBe(true);
     expect(app.texts()).toContain("60%");
-    expect(lastBox(app, "track").width).toBe(200);
+    expect(Math.abs(lastBox(app, "track").width - 200)).toBeLessThan(0.25);
   });
 
   // adapt-sheets/progress-bar.md M-007 (A-007): this file itself — the

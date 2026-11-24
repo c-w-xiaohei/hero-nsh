@@ -126,8 +126,11 @@ describe("skeleton mobile", () => {
 
     const box = layouts(app).filter((e) => e.name === "skel").at(-1);
     expect(box).toBeDefined();
-    expect(box?.width).toBe(120);
-    expect(box?.height).toBe(20);
+    // Native layout reports fractional-px bounds (Android measured
+    // 52.1905/27.8095 for 52/28pt elsewhere): the 120×20 placeholder is a
+    // contract asserted within a 0.25pt quantization window.
+    expect(Math.abs(box!.width - 120)).toBeLessThan(0.25);
+    expect(Math.abs(box!.height - 20)).toBeLessThan(0.25);
   }, 120_000);
 
   // adapt-sheets/skeleton.md M-002 (基线): default environment — the `flip`
@@ -214,17 +217,24 @@ describe("skeleton mobile", () => {
   // side of e-parts M-022, replayed across all three cases).
   test("M-005 injected touch: every case renders identically to the pointer baseline", async () => {
     for (const caseName of ["single", "flip", "group"] as const) {
+      // Snapshot the pointer app before the touch open: a native open
+      // relaunches the single host and invalidates every earlier App.
       const pointer = await openSkeleton(caseName, { scope: "pointer" });
-      const touch = await openSkeleton(caseName, { scope: "touch" });
-
       await settleCase(pointer, caseName);
+      const pointerSnap = {
+        texts: pointer.texts(),
+        shimmers: pointer.count("id:skeleton-shimmer"),
+        layout: layoutSet(pointer),
+      };
+
+      const touch = await openSkeleton(caseName, { scope: "touch" });
       await settleCase(touch, caseName);
 
-      expect(touch.texts()).toEqual(pointer.texts());
+      expect(touch.texts()).toEqual(pointerSnap.texts);
       expect(touch.count("id:skeleton-shimmer")).toEqual(
-        pointer.count("id:skeleton-shimmer"),
+        pointerSnap.shimmers,
       );
-      expect(layoutSet(touch)).toEqual(layoutSet(pointer));
+      expect(layoutSet(touch)).toEqual(pointerSnap.layout);
     }
   }, 120_000);
 
@@ -236,16 +246,20 @@ describe("skeleton mobile", () => {
   test("M-006 injected compact density: bounds, texts and shimmer identical to default", async () => {
     for (const caseName of ["single", "group"] as const) {
       const baseline = await openSkeleton(caseName, { scope: "pointer" });
+      await settleCase(baseline, caseName);
+      const baselineSnap = {
+        texts: baseline.texts(),
+        layout: layoutSet(baseline),
+      };
+
       const compact = await openSkeleton(caseName, {
         scope: "pointer",
         density: "compact",
       });
-
-      await settleCase(baseline, caseName);
       await settleCase(compact, caseName);
 
-      expect(compact.texts()).toEqual(baseline.texts());
-      expect(layoutSet(compact)).toEqual(layoutSet(baseline));
+      expect(compact.texts()).toEqual(baselineSnap.texts);
+      expect(layoutSet(compact)).toEqual(baselineSnap.layout);
     }
   }, 120_000);
 

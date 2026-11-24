@@ -139,17 +139,20 @@ describe("separator mobile", () => {
 
     expect(app.shows("id:separator")).toBe(true);
     expect(app.count("id:separator")).toBe(1);
+    // Native layout reports fractional-px bounds (Android measured
+    // 52.1905/27.8095 for 52/28pt elsewhere): the 1pt × 300pt hairline is
+    // a contract asserted within a 0.25pt quantization window.
     const divider = lastBox(app, "separator");
-    expect(divider.height).toBe(1);
-    expect(divider.width).toBe(300);
+    expect(Math.abs(divider.height - 1)).toBeLessThan(0.25);
+    expect(Math.abs(divider.width - 300)).toBeLessThan(0.25);
 
     const variants = await openMobile("variants", { input: "pointer" });
     await settleLayout(variants, CASE_BOXES.variants);
     for (const id of ["separator-default", "separator-secondary", "separator-tertiary"]) {
       expect(variants.shows(`id:${id}`)).toBe(true);
       const box = lastBox(variants, id);
-      expect(box.height).toBe(1);
-      expect(box.width).toBe(300);
+      expect(Math.abs(box.height - 1)).toBeLessThan(0.25);
+      expect(Math.abs(box.width - 300)).toBeLessThan(0.25);
     }
   });
 
@@ -163,8 +166,9 @@ describe("separator mobile", () => {
     await settleLayout(app, ["separator"]);
 
     const divider = lastBox(app, "separator");
-    expect(divider.width).toBe(1);
-    expect(divider.height).toBe(20);
+    // Same fractional-px bound as M-001: 1pt wide, 20pt tall ±0.25pt.
+    expect(Math.abs(divider.width - 1)).toBeLessThan(0.25);
+    expect(Math.abs(divider.height - 20)).toBeLessThan(0.25);
     expect(divider.height).toBeGreaterThanOrEqual(8);
 
     const decorative = await openMobile("decorative", { input: "pointer" });
@@ -173,10 +177,10 @@ describe("separator mobile", () => {
       expect(decorative.shows(`id:${id}`)).toBe(true);
       expect(decorative.count(`id:${id}`)).toBe(1);
     }
-    expect(lastBox(decorative, "divider-horizontal").height).toBe(1);
+    expect(Math.abs(lastBox(decorative, "divider-horizontal").height - 1)).toBeLessThan(0.25);
     const vertical = lastBox(decorative, "divider-vertical");
-    expect(vertical.width).toBe(1);
-    expect(vertical.height).toBe(20);
+    expect(Math.abs(vertical.width - 1)).toBeLessThan(0.25);
+    expect(Math.abs(vertical.height - 20)).toBeLessThan(0.25);
   });
 
   // adapt-sheets/separator.md M-003 (基线, A-004): default environment —
@@ -189,13 +193,14 @@ describe("separator mobile", () => {
     const app = await openMobile("context", { input: "pointer" });
     await settleLayout(app, CASE_BOXES.context);
 
+    // Fractional-px bound as M-001: exact pins ±0.25pt.
     const inherit = lastBox(app, "sep-inherit");
-    expect(inherit.width).toBe(1);
-    expect(inherit.height).toBe(20);
+    expect(Math.abs(inherit.width - 1)).toBeLessThan(0.25);
+    expect(Math.abs(inherit.height - 20)).toBeLessThan(0.25);
 
     const prop = lastBox(app, "sep-prop");
-    expect(prop.width).toBe(150);
-    expect(prop.height).toBe(1);
+    expect(Math.abs(prop.width - 150)).toBeLessThan(0.25);
+    expect(Math.abs(prop.height - 1)).toBeLessThan(0.25);
   });
 
   // adapt-sheets/separator.md M-004 (A-001…A-004): injected `input="touch"`

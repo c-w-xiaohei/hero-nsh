@@ -173,31 +173,44 @@ describe("breadcrumbs mobile", () => {
   // box one step (gap-1.5→gap-1, size-3→size-2.5), and an explicit
   // `density="default"` scope resolves to the same boxes as no scope.
   test("M-005 density compact shrinks the row gap and the separator box; explicit default matches", async () => {
+    // Every app is fully read before the next open: a native open
+    // relaunches the single host and invalidates every earlier App.
     const compact = await openMobile("links", {
       input: "pointer",
       density: "compact",
     });
+    await settleLayout(compact);
+    const compactSnap = {
+      gaps: rowGaps(compact),
+      separator: separatorBox(compact),
+    };
+
     const plain = await openMobile("links", { input: "pointer" });
+    await settleLayout(plain);
+    const plainSnap = {
+      boxes: boxSet(plain),
+      gaps: rowGaps(plain),
+      separator: separatorBox(plain),
+    };
+
     const explicit = await openMobile("links", {
       input: "pointer",
       density: "default",
     });
-
-    await settleLayout(compact);
-    await settleLayout(plain);
     await settleLayout(explicit);
+    const explicitBoxes = boxSet(explicit);
 
     // 现值: gap-1.5 = 6pt between item boxes, size-3 = 12×12 separator.
-    expect(rowGaps(plain)).toEqual([6, 6]);
-    expect(separatorBox(plain)).toEqual({ width: 12, height: 12 });
+    expect(plainSnap.gaps).toEqual([6, 6]);
+    expect(plainSnap.separator).toEqual({ width: 12, height: 12 });
 
     // compact: gap-1 = 4pt, size-2.5 = 10×10 — strictly tighter.
-    expect(rowGaps(compact)).toEqual([4, 4]);
-    expect(separatorBox(compact)).toEqual({ width: 10, height: 10 });
+    expect(compactSnap.gaps).toEqual([4, 4]);
+    expect(compactSnap.separator).toEqual({ width: 10, height: 10 });
 
     // An explicit density="default" scope lays out exactly like the
     // pointer baseline with no density cell.
-    expect(boxSet(explicit)).toEqual(boxSet(plain));
+    expect(explicitBoxes).toEqual(plainSnap.boxes);
   });
 
   // adapt-sheets/breadcrumbs.md M-006 (A-001, A-002): `input="touch"` with
@@ -208,11 +221,13 @@ describe("breadcrumbs mobile", () => {
   // the item box already contains link + separator.
   test("M-006 injected touch changes no laid-out box", async () => {
     const touch = await openMobile("links", { input: "touch" });
-    const pointer = await openMobile("links", { input: "pointer" });
-
     await settleLayout(touch);
+    // Read the set before the next open relaunches the host.
+    const touchBoxes = boxSet(touch);
+
+    const pointer = await openMobile("links", { input: "pointer" });
     await settleLayout(pointer);
 
-    expect(boxSet(touch)).toEqual(boxSet(pointer));
+    expect(touchBoxes).toEqual(boxSet(pointer));
   });
 });

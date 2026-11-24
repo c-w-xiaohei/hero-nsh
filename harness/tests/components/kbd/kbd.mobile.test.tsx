@@ -103,7 +103,10 @@ describe("kbd mobile", () => {
     expect(app.shows("text:K")).toBe(true);
 
     const box = rootBox(app, "kbd-basic");
-    expect(box.height).toBe(24);
+    // Native layout reports fractional-px bounds (Android measured
+    // 52.1905/27.8095 for 52/28pt elsewhere): the 24pt root is a contract
+    // asserted within a 0.25pt quantization window.
+    expect(Math.abs(box.height - 24)).toBeLessThan(0.25);
     expect(app.spanStyle("id:content-basic >> text:K").fontSize).toBe(14);
 
     const keys = await openKbd("keys", { input: "pointer" });
@@ -147,17 +150,22 @@ describe("kbd mobile", () => {
       "inline",
       "bare-text",
     ] as const) {
+      // Snapshot the pointer app before the touch open: a native open
+      // relaunches the single host and invalidates every earlier App.
       const pointer = await openKbd(caseName, { input: "pointer" });
+      const pointerTexts = pointer.texts();
+      const pointerLayout = layoutSet(pointer);
+
       const touch = await openKbd(caseName, { input: "touch" });
 
-      expect(touch.texts()).toEqual(pointer.texts());
-      expect(layoutSet(touch)).toEqual(layoutSet(pointer));
+      expect(touch.texts()).toEqual(pointerTexts);
+      expect(layoutSet(touch)).toEqual(pointerLayout);
     }
 
     const touch = await openKbd("basic", { input: "touch" });
     expect(touch.shows("id:kbd-basic")).toBe(true);
     expect(touch.spanStyle("id:content-basic >> text:K").fontSize).toBe(14);
-    expect(rootBox(touch, "kbd-basic").height).toBe(24);
+    expect(Math.abs(rootBox(touch, "kbd-basic").height - 24)).toBeLessThan(0.25);
   }, 120_000);
 
   // adapt-sheets/kbd.md M-004 (A-001): injected `density="compact"` (on the
@@ -166,14 +174,17 @@ describe("kbd mobile", () => {
   // default environment's exactly: 24 pt tall, 14 pt, same texts.
   test("M-004 injected compact density: bounds and span identical to default", async () => {
     const baseline = await openKbd("basic", { input: "pointer" });
+    const baselineTexts = baseline.texts();
+    const baselineLayout = layoutSet(baseline);
+
     const compact = await openKbd("basic", {
       input: "pointer",
       density: "compact",
     });
 
-    expect(compact.texts()).toEqual(baseline.texts());
-    expect(layoutSet(compact)).toEqual(layoutSet(baseline));
-    expect(rootBox(compact, "kbd-basic").height).toBe(24);
+    expect(compact.texts()).toEqual(baselineTexts);
+    expect(layoutSet(compact)).toEqual(baselineLayout);
+    expect(Math.abs(rootBox(compact, "kbd-basic").height - 24)).toBeLessThan(0.25);
     expect(compact.spanStyle("id:content-basic >> text:K").fontSize).toBe(14);
   }, 120_000);
 

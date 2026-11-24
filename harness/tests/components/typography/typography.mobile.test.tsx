@@ -261,16 +261,24 @@ describe("typography mobile", () => {
     };
 
     for (const caseName of Object.keys(waits)) {
+      // Snapshot the pointer app before the touch open: a native open
+      // relaunches the single host and invalidates every earlier App.
       const pointer = await openTypo(caseName, { input: "pointer" });
-      const touch = await openTypo(caseName, { input: "touch" });
       await settleLayout(pointer, waits[caseName]!.layouts);
-      await settleLayout(touch, waits[caseName]!.layouts);
       await settleLines(pointer, waits[caseName]!.lines);
+      const pointerSnap = {
+        texts: pointer.texts(),
+        layout: layoutSet(pointer),
+        lines: linesOf(pointer),
+      };
+
+      const touch = await openTypo(caseName, { input: "touch" });
+      await settleLayout(touch, waits[caseName]!.layouts);
       await settleLines(touch, waits[caseName]!.lines);
 
-      expect(touch.texts()).toEqual(pointer.texts());
-      expect(layoutSet(touch)).toEqual(layoutSet(pointer));
-      expect(linesOf(touch)).toEqual(linesOf(pointer));
+      expect(touch.texts()).toEqual(pointerSnap.texts);
+      expect(layoutSet(touch)).toEqual(pointerSnap.layout);
+      expect(linesOf(touch)).toEqual(pointerSnap.lines);
     }
 
     const touch = await openTypo("variants", { input: "touch" });
@@ -286,17 +294,23 @@ describe("typography mobile", () => {
   // environment's.
   test("M-006 injected compact density: bounds and spans identical to default", async () => {
     for (const caseName of ["variants", "prose"] as const) {
+      const names = caseName === "variants" ? VARIANT_LAYOUTS : PROSE_LAYOUTS;
+
       const baseline = await openTypo(caseName, { input: "pointer" });
+      await settleLayout(baseline, names);
+      const baselineSnap = {
+        texts: baseline.texts(),
+        layout: layoutSet(baseline),
+      };
+
       const compact = await openTypo(caseName, {
         input: "pointer",
         density: "compact",
       });
-      const names = caseName === "variants" ? VARIANT_LAYOUTS : PROSE_LAYOUTS;
-      await settleLayout(baseline, names);
       await settleLayout(compact, names);
 
-      expect(compact.texts()).toEqual(baseline.texts());
-      expect(layoutSet(compact)).toEqual(layoutSet(baseline));
+      expect(compact.texts()).toEqual(baselineSnap.texts);
+      expect(layoutSet(compact)).toEqual(baselineSnap.layout);
     }
 
     const compact = await openTypo("variants", {
@@ -315,16 +329,22 @@ describe("typography mobile", () => {
   // the `EnvironmentScope` injection took.
   test("M-007 injected touch on scaling: passthrough identical, env probe reports touch", async () => {
     const pointer = await openTypo("scaling", { input: "pointer" });
-    const touch = await openTypo("scaling", { input: "touch" });
     await settleLayout(pointer, SCALING_LAYOUTS);
-    await settleLayout(touch, SCALING_LAYOUTS);
     await settleLines(pointer, SCALING_LINES);
+    const pointerSnap = {
+      texts: pointer.texts(),
+      layout: layoutSet(pointer),
+      lines: linesOf(pointer),
+    };
+
+    const touch = await openTypo("scaling", { input: "touch" });
+    await settleLayout(touch, SCALING_LAYOUTS);
     await settleLines(touch, SCALING_LINES);
 
     expect(envOf(touch).input).toBe("touch");
-    expect(touch.texts()).toEqual(pointer.texts());
-    expect(layoutSet(touch)).toEqual(layoutSet(pointer));
-    expect(linesOf(touch)).toEqual(linesOf(pointer));
+    expect(touch.texts()).toEqual(pointerSnap.texts);
+    expect(layoutSet(touch)).toEqual(pointerSnap.layout);
+    expect(linesOf(touch)).toEqual(pointerSnap.lines);
 
     expect(touch.shows("id:ty-noscale")).toBe(true);
     expect(touch.shows("id:ty-clamp")).toBe(true);

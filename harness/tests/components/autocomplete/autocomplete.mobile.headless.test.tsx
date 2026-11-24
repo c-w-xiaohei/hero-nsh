@@ -2,6 +2,15 @@ import { describe, expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
 
+type LayoutEntry = { name: string; x: number; y: number; width: number; height: number };
+
+function layoutFor(app: App, name: string): LayoutEntry {
+  const entries = callsOf(app, "layout")
+    .map((c) => c[0] as LayoutEntry)
+    .filter((e) => e.name === name);
+  return entries[entries.length - 1];
+}
+
 /*
  * Headless-only mobile assertions for the autocomplete adapt unit: M-016
  * and M-017 of adapt-sheets/autocomplete.md §4.
@@ -32,6 +41,19 @@ function openMobileIos(
 }
 
 describe("autocomplete mobile (headless)", () => {
+  // adapt-sheets/autocomplete.md M-001 (A-001), the exact pointer half: the
+  // shared file asserts the pointer box only as `>=36 && <44` because iOS
+  // device hosts measured `min-h-9` at 40pt (a floor whose cause is
+  // unproven). On the ios headless engine the pointer environment's trigger
+  // measures the class's exact 36pt — the zero-drift pin the range relaxes.
+  test("M-001 headless half: the pointer trigger box measures exactly 36pt", async () => {
+    const pointer = await openMobileIos("m", { input: "pointer" });
+    await pointer.waitUntil(() =>
+      callsOf(pointer, "layout").some((c) => (c[0] as LayoutEntry).name === "trigger"),
+    );
+    expect(layoutFor(pointer, "trigger").height).toBe(36);
+  }, 120_000);
+
   // adapt-sheets/autocomplete.md M-016 (A-006): the presentation value
   // latches on the open edge — resizing the window to regular while the
   // sheet is open must not swap carriers mid-open; after close the next

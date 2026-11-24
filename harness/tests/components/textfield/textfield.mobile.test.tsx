@@ -51,7 +51,10 @@ type Params = Record<string, string>;
 function openCase(name: string, params: Params = {}): Promise<App> {
   return open("../../../textfield.fixtures.tsx", {
     locale: "en-US",
-    host: { params: { case: name, ...params } },
+    host: {
+      // iOS types real key events; "none" keeps a literal string literal.
+      params: { case: name, testAutoCapitalize: "none", ...params },
+    },
   });
 }
 

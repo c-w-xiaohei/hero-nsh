@@ -207,17 +207,21 @@ describe("empty-state mobile", () => {
   // scope resolves to the same boxes and paddings as no scope at all — the
   // default cell is the pre-axis p-2 verbatim.
   test("M-004 explicit default density lays out identical to no scope", async () => {
+    // Snapshot the plain app before the next open — a native open
+    // relaunches the single host and invalidates every earlier App.
     const plain = await openMobile("layout", { input: "pointer" });
+    await settleLayout(plain, ["root", "content"]);
+    const plainBoxes = boxSet(plain);
+    const plainPads = paddings(plain);
+
     const explicit = await openMobile("layout", {
       input: "pointer",
       density: "default",
     });
-
-    await settleLayout(plain, ["root", "content"]);
     await settleLayout(explicit, ["root", "content"]);
 
-    expect(boxSet(explicit)).toEqual(boxSet(plain));
-    expect(paddings(explicit)).toEqual(paddings(plain));
+    expect(boxSet(explicit)).toEqual(plainBoxes);
+    expect(paddings(explicit)).toEqual(plainPads);
     expect(paddings(explicit)).toEqual({ top: 8, right: 8, bottom: 8, left: 8 });
   });
 
@@ -228,33 +232,52 @@ describe("empty-state mobile", () => {
   // `focusable=false` shape has no query; it is the same code path in both
   // environments (`local.focusable ?? false`, env-free).
   test("M-005 injected touch without density changes no observable", async () => {
+    // Each pair snapshots the touch app before opening pointer: a native
+    // open relaunches the single host and invalidates every earlier App.
     const touchInherited = await openMobile("inherited", { input: "touch" });
-    const plainInherited = await openMobile("inherited", { input: "pointer" });
+    const touchInheritedSnap = {
+      texts: touchInherited.texts(),
+      shown: touchInherited.shows("text:No results found"),
+      span: touchInherited.spanStyle("text:No results found"),
+    };
 
-    expect(touchInherited.texts()).toEqual(plainInherited.texts());
-    expect(touchInherited.shows("text:No results found")).toBe(true);
-    expect(touchInherited.spanStyle("text:No results found")).toEqual(
-      plainInherited.spanStyle("text:No results found"),
-    );
+    const plainInherited = await openMobile("inherited", { input: "pointer" });
+    const plainInheritedSnap = {
+      texts: plainInherited.texts(),
+      span: plainInherited.spanStyle("text:No results found"),
+    };
+
+    expect(touchInheritedSnap.texts).toEqual(plainInheritedSnap.texts);
+    expect(touchInheritedSnap.shown).toBe(true);
+    expect(touchInheritedSnap.span).toEqual(plainInheritedSnap.span);
 
     const touchLayout = await openMobile("layout", { input: "touch" });
-    const plainLayout = await openMobile("layout", { input: "pointer" });
-
     await settleLayout(touchLayout, ["root", "content"]);
+    const touchLayoutBoxes = boxSet(touchLayout);
+
+    const plainLayout = await openMobile("layout", { input: "pointer" });
     await settleLayout(plainLayout, ["root", "content"]);
-    expect(boxSet(touchLayout)).toEqual(boxSet(plainLayout));
+    expect(touchLayoutBoxes).toEqual(boxSet(plainLayout));
 
     const touchPress = await openMobile("press", { input: "touch" });
-    const plainPress = await openMobile("press", { input: "pointer" });
-
     await touchPress.press("id:press-root");
-    await plainPress.press("id:press-root");
+    const touchPressSnap = {
+      texts: touchPress.texts(),
+      onPress: callsOf(touchPress, "onPress"),
+      style: touchPress.viewStyle("id:press-root"),
+    };
 
-    expect(touchPress.texts()).toEqual(plainPress.texts());
-    expect(callsOf(touchPress, "onPress")).toEqual(callsOf(plainPress, "onPress"));
-    expect(touchPress.viewStyle("id:press-root")).toEqual(
-      plainPress.viewStyle("id:press-root"),
-    );
+    const plainPress = await openMobile("press", { input: "pointer" });
+    await plainPress.press("id:press-root");
+    const plainPressSnap = {
+      texts: plainPress.texts(),
+      onPress: callsOf(plainPress, "onPress"),
+      style: plainPress.viewStyle("id:press-root"),
+    };
+
+    expect(touchPressSnap.texts).toEqual(plainPressSnap.texts);
+    expect(touchPressSnap.onPress).toEqual(plainPressSnap.onPress);
+    expect(touchPressSnap.style).toEqual(plainPressSnap.style);
   });
 
   // adapt-sheets/empty-state.md M-006 (A-003, A-004): under injected touch
@@ -285,15 +308,22 @@ describe("empty-state mobile", () => {
   // button unit.
   test("M-007 injected touch: embedded Button leaves root bounds and copy unchanged", async () => {
     const touch = await openMobile("press", { input: "touch" });
-    const pointer = await openMobile("press", { input: "pointer" });
-
     await settleLayout(touch, ["root"]);
+    // Snapshot before the pointer open relaunches the host.
+    const touchSnap = {
+      boxes: boxSet(touch),
+      texts: touch.texts().slice().sort(),
+      emptyShown: touch.shows("text:No results found"),
+      actionShown: touch.shows("text:Action"),
+    };
+
+    const pointer = await openMobile("press", { input: "pointer" });
     await settleLayout(pointer, ["root"]);
 
-    expect(boxSet(touch)).toEqual(boxSet(pointer));
-    expect(touch.texts().slice().sort()).toEqual(pointer.texts().slice().sort());
-    expect(touch.shows("text:No results found")).toBe(true);
-    expect(touch.shows("text:Action")).toBe(true);
+    expect(touchSnap.boxes).toEqual(boxSet(pointer));
+    expect(touchSnap.texts).toEqual(pointer.texts().slice().sort());
+    expect(touchSnap.emptyShown).toBe(true);
+    expect(touchSnap.actionShown).toBe(true);
   });
 
   // adapt-sheets/empty-state.md M-008 (A-006, A-007): every fixture case

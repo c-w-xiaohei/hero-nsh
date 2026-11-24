@@ -327,6 +327,11 @@ describe("number-field mobile", () => {
     expect(touchSamples.get(700)).toBeGreaterThanOrEqual(2);
     expect(touchSamples.get(1100)).toBeGreaterThan(touchSamples.get(700)!);
 
+    // Native relaunches the single host per open(): the touch app's change
+    // list must be plain data before `pointer` opens — its handle is dead
+    // after.
+    const touchChanges = callsOf(touch, "onChange").map((c) => c[0] as number);
+
     const pointer = await openField("hold", { testInput: "pointer" });
     await pointer.longPress("id:nf-inc");
     await pointer.waitUntil(() => holdSamples(pointer).length >= 4);
@@ -339,8 +344,10 @@ describe("number-field mobile", () => {
 
     // One `onChange` per step, values 1..N — the step contract itself is
     // untouched by the axis (each app committed its own count above).
-    for (const app of [touch, pointer]) {
-      const changes = callsOf(app, "onChange").map((c) => c[0] as number);
+    for (const changes of [
+      touchChanges,
+      callsOf(pointer, "onChange").map((c) => c[0] as number),
+    ]) {
       expect(changes.length).toBeGreaterThanOrEqual(2);
       expect(changes).toEqual(changes.map((_, i) => i + 1));
     }

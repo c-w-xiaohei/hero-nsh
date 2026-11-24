@@ -280,25 +280,25 @@ describe("list-box mobile", () => {
   // `px` (read through the padprobe child's origin). The uninjected
   // environment resolves `default`, identical to the explicit preset.
   test("M-007 density compact tightens root padding/spacing and row padding", async () => {
+    // Native single-host rule: the second `open()` retargets the host, so
+    // the compact app's boxes are read before the bare app exists.
     const compact = await openListBox("b-item", { density: "compact" });
-    const bare = await openListBox("b-item");
-
     await compact.waitUntil(() => layouts(compact, "row-2").length > 0);
+    await compact.waitUntil(() => layouts(compact, "pad-1").length > 0);
+    const compactRoot = lastLayout(compact, "root").height;
+    const compactRowY = lastLayout(compact, "row-2").y;
+    const compactPad = lastLayout(compact, "pad-1");
+
+    const bare = await openListBox("b-item");
     await bare.waitUntil(() => layouts(bare, "row-2").length > 0);
+    await bare.waitUntil(() => layouts(bare, "pad-1").length > 0);
 
     // `p-1 space-y-1` → `p-0.5 space-y-0.5`: the list is shorter and the
     // second row starts higher.
-    expect(lastLayout(compact, "root").height).toBeLessThan(
-      lastLayout(bare, "root").height,
-    );
-    expect(lastLayout(compact, "row-2").y).toBeLessThan(
-      lastLayout(bare, "row-2").y,
-    );
+    expect(compactRoot).toBeLessThan(lastLayout(bare, "root").height);
+    expect(compactRowY).toBeLessThan(lastLayout(bare, "row-2").y);
 
     // `px-2` → `px-1.5` on the row: its content child starts at 6 pt, not 8.
-    await compact.waitUntil(() => layouts(compact, "pad-1").length > 0);
-    await bare.waitUntil(() => layouts(bare, "pad-1").length > 0);
-    const compactPad = lastLayout(compact, "pad-1");
     const barePad = lastLayout(bare, "pad-1");
     expect(compactPad.x).toBeLessThan(barePad.x);
     expect(compactPad.x).toBeGreaterThan(0);

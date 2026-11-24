@@ -93,27 +93,33 @@ describe("header mobile", () => {
   // Header realizes no `input` cell, so the same tree's shows/texts/
   // spanStyle/onLayout bounds are identical to the default environment.
   test("M-002 injected touch: rendering and bounds are identical to the pointer baseline", async () => {
-    const plain = await openHeader("basic", { input: "pointer" });
-    const touch = await openHeader("basic", { input: "touch" });
+    // Snapshot each app before the next open: a native open relaunches
+    // the single host and invalidates every earlier App.
+    const snap = async (app: App) => ({
+      showsActions: app.shows("text:Actions"),
+      texts: app.texts(),
+      span: app.spanStyle("text:Actions"),
+      boxes: await boxSet(app),
+    });
 
-    expect(touch.shows("text:Actions")).toBe(plain.shows("text:Actions"));
-    expect(touch.texts()).toEqual(plain.texts());
-    expect(touch.spanStyle("text:Actions")).toEqual(
-      plain.spanStyle("text:Actions"),
-    );
-    expect(await boxSet(touch)).toEqual(await boxSet(plain));
+    const plain = await openHeader("basic", { input: "pointer" });
+    const plainSnap = await snap(plain);
+
+    const touch = await openHeader("basic", { input: "touch" });
+    const touchSnap = await snap(touch);
+
+    expect(touchSnap).toEqual(plainSnap);
 
     const attrPlain = await openHeader("attributed", { input: "pointer" });
-    const attrTouch = await openHeader("attributed", { input: "touch" });
+    const attrPlainSnap = await snap(attrPlain);
+    const attrHeaderShown = attrPlain.shows("id:section-header");
 
-    expect(attrTouch.shows("id:section-header")).toBe(
-      attrPlain.shows("id:section-header"),
-    );
-    expect(attrTouch.texts()).toEqual(attrPlain.texts());
-    expect(attrTouch.spanStyle("text:Actions")).toEqual(
-      attrPlain.spanStyle("text:Actions"),
-    );
-    expect(await boxSet(attrTouch)).toEqual(await boxSet(attrPlain));
+    const attrTouch = await openHeader("attributed", { input: "touch" });
+    const attrTouchSnap = await snap(attrTouch);
+    const attrTouchHeaderShown = attrTouch.shows("id:section-header");
+
+    expect(attrTouchHeaderShown).toBe(attrHeaderShown);
+    expect(attrTouchSnap).toEqual(attrPlainSnap);
   }, 120_000);
 
   // adapt-sheets/header.md M-003 (A-001): injected `density="compact"` —
@@ -121,15 +127,16 @@ describe("header mobile", () => {
   // no class difference: bounds and resolved style equal the baseline.
   test("M-003 injected compact density: bounds and style are identical to the baseline", async () => {
     const plain = await openHeader("basic", { input: "pointer" });
+    const plainBoxes = await boxSet(plain);
+    const plainSpan = plain.spanStyle("text:Actions");
+
     const compact = await openHeader("basic", {
       input: "pointer",
       density: "compact",
     });
 
-    expect(await boxSet(compact)).toEqual(await boxSet(plain));
-    expect(compact.spanStyle("text:Actions")).toEqual(
-      plain.spanStyle("text:Actions"),
-    );
+    expect(await boxSet(compact)).toEqual(plainBoxes);
+    expect(compact.spanStyle("text:Actions")).toEqual(plainSpan);
   }, 120_000);
 
   // adapt-sheets/header.md M-004 (A-004): injected touch — the bare Text is
@@ -137,10 +144,14 @@ describe("header mobile", () => {
   // which is itself the "no press path" evidence; the text stays on screen
   // and the only probe calls are the layout reports.
   test("M-004 injected touch: no press path — press rejects and the text is unchanged", async () => {
-    const pointer = await openHeader("attributed", { input: "pointer" });
-    const touch = await openHeader("attributed", { input: "touch" });
-
-    for (const app of [pointer, touch]) {
+    // One app at a time: the earlier App is dead the moment the next
+    // `open()` relaunches the host, so each environment's press and reads
+    // complete before the next open.
+    for (const env of [
+      { input: "pointer" },
+      { input: "touch" },
+    ] as EnvParams[]) {
+      const app = await openHeader("attributed", env);
       await boxSet(app);
       const before = calls(app);
 
@@ -161,16 +172,17 @@ describe("header mobile", () => {
   // identical to the default environment.
   test("M-005 ScopedMobile injection: attributed case is identical under touch + compact", async () => {
     const plain = await openHeader("attributed", { input: "pointer" });
+    const plainSpan = plain.spanStyle("text:Actions");
+    const plainBoxes = await boxSet(plain);
+
     const scoped = await openHeader("attributed", {
       input: "touch",
       density: "compact",
     });
 
     expect(scoped.shows("id:section-header")).toBe(true);
-    expect(scoped.spanStyle("text:Actions")).toEqual(
-      plain.spanStyle("text:Actions"),
-    );
-    expect(await boxSet(scoped)).toEqual(await boxSet(plain));
+    expect(scoped.spanStyle("text:Actions")).toEqual(plainSpan);
+    expect(await boxSet(scoped)).toEqual(plainBoxes);
   }, 120_000);
 
   // adapt-sheets/header.md M-006 (A-006): the pointer scope — what the old

@@ -114,6 +114,21 @@ function allPartsShown(app: App): void {
   }
 }
 
+/*
+ * Every value a cross-environment comparison needs, read off the app
+ * before the next `open()`. Native runs one host per open — the earlier
+ * app's dev session dies the moment the second `open()` launches, so any
+ * `app.*`/`callsOf` read on it after that point fails with "no host".
+ */
+function snapAlert(app: App) {
+  return {
+    boxes: boxSet(app),
+    partCount: PART_IDS.filter((id) => app.shows(`id:${id}`)).length,
+    titleColor: app.spanStyle("id:alert-title >> text:Update available")
+      .color,
+  };
+}
+
 describe("alert mobile", () => {
   // adapt-sheets/alert.md M-001 (A-001, baseline): the host-derived
   // environment — pointer + default density — renders all five parts with
@@ -172,16 +187,17 @@ describe("alert mobile", () => {
   // spanStyle is unchanged as well.
   test("M-002 injected touch: identical boxes and status styling", async () => {
     const touch = await openMobile({ input: "touch" });
-    const pointer = await openMobile({ input: "pointer" });
-
     await settleLayout(touch);
+    // Snapshot everything before the second open relaunches the host.
+    const touchSnap = snapAlert(touch);
+
+    const pointer = await openMobile({ input: "pointer" });
     await settleLayout(pointer);
+    const pointerSnap = snapAlert(pointer);
 
-    allPartsShown(touch);
-    expect(boxSet(touch)).toEqual(boxSet(pointer));
-
-    const title = "id:alert-title >> text:Update available";
-    expect(touch.spanStyle(title).color).toBe(pointer.spanStyle(title).color);
+    expect(touchSnap.partCount).toBe(PART_IDS.length);
+    expect(touchSnap.boxes).toEqual(pointerSnap.boxes);
+    expect(touchSnap.titleColor).toBe(pointerSnap.titleColor);
   });
 
   // adapt-sheets/alert.md M-003 (A-001): `density` owns the gap and padding
@@ -190,40 +206,60 @@ describe("alert mobile", () => {
   // texts stay visible, and an explicit `density="default"` scope resolves
   // to the same boxes as no scope.
   test("M-003 density compact shrinks gap, padding and indicator box; explicit default matches", async () => {
+    // Every app is fully read before the next open: a native open
+    // relaunches the single host and invalidates every earlier App.
     const compact = await openMobile({ input: "pointer", density: "compact" });
+    await settleLayout(compact);
+    const compactSnap = {
+      boxes: boxSet(compact),
+      gap: indicatorGap(compact),
+      indicatorWidth: Math.round(boxOf(compact, "indicator").width),
+      padY: Math.round(
+        boxOf(compact, "root").height - boxOf(compact, "content").height,
+      ),
+      rootHeight: boxOf(compact, "root").height,
+      partCount: PART_IDS.filter((id) => compact.shows(`id:${id}`)).length,
+      titleShown: compact.shows(
+        "id:alert-title >> text:Update available",
+      ),
+      descShown: compact.shows(
+        "id:alert-description >> text:A new version is ready to install.",
+      ),
+    };
+
     const plain = await openMobile({ input: "pointer" });
+    await settleLayout(plain);
+    const plainSnap = {
+      boxes: boxSet(plain),
+      gap: indicatorGap(plain),
+      indicatorWidth: Math.round(boxOf(plain, "indicator").width),
+      rootHeight: boxOf(plain, "root").height,
+    };
+
     const explicit = await openMobile({
       input: "pointer",
       density: "default",
     });
-
-    await settleLayout(compact);
-    await settleLayout(plain);
     await settleLayout(explicit);
+    const explicitBoxes = boxSet(explicit);
 
     // Baseline values as in M-001.
-    expect(indicatorGap(plain)).toBe(16);
-    expect(Math.round(boxOf(plain, "indicator").width)).toBe(24);
+    expect(plainSnap.gap).toBe(16);
+    expect(plainSnap.indicatorWidth).toBe(24);
 
     // compact: every spacing literal strictly tighter, still > 0.
-    expect(indicatorGap(compact)).toBe(12);
-    expect(Math.round(boxOf(compact, "indicator").width)).toBe(20);
-    const compactRoot = boxOf(compact, "root");
-    const compactContent = boxOf(compact, "content");
-    expect(Math.round(compactRoot.height - compactContent.height)).toBe(20);
-    expect(compactRoot.height).toBeLessThan(boxOf(plain, "root").height);
+    expect(compactSnap.gap).toBe(12);
+    expect(compactSnap.indicatorWidth).toBe(20);
+    expect(compactSnap.padY).toBe(20);
+    expect(compactSnap.rootHeight).toBeLessThan(plainSnap.rootHeight);
 
     // The tighter row does not clip the texts.
-    allPartsShown(compact);
-    expect(compact.shows("id:alert-title >> text:Update available")).toBe(true);
-    expect(
-      compact.shows(
-        "id:alert-description >> text:A new version is ready to install.",
-      ),
-    ).toBe(true);
+    expect(compactSnap.partCount).toBe(PART_IDS.length);
+    expect(compactSnap.titleShown).toBe(true);
+    expect(compactSnap.descShown).toBe(true);
 
     // An explicit default scope lays out exactly like the uninjected one.
-    expect(boxSet(explicit)).toEqual(boxSet(plain));
+    expect(explicitBoxes).toEqual(plainSnap.boxes);
   });
 
   // adapt-sheets/alert.md M-004 (A-002, A-003, A-004): there is nothing to

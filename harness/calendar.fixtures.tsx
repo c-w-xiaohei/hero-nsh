@@ -345,31 +345,31 @@ function CalendarFrame(props: FrameProps) {
 
 function Scoped(props: { children?: JSX.Element }) {
   // Test-harness environment params (only the mobile tests set them —
-  // absent keeps the host-derived default): `testInput` injects an outer
-  // EnvironmentScope input so the pointer baseline is host-independent
-  // (inner `scope` overrides still win); `testWidth` (points) wraps the
-  // mounted tree in a fixed-width View, standing in for the window pin
-  // native hosts reject.
-  const testInput = String(host.params.testInput ?? "");
+  // absent keeps the host-derived default): `scope="touch"` is the inner
+  // override, `testInput` ("pointer"/"touch") injects the scope so the
+  // pointer baseline is host-independent (the inner `scope` still wins);
+  // `testWidth` (points) wraps the mounted tree in a fixed-width View,
+  // standing in for the window pin native hosts reject. One provider
+  // only: `props.children` is placed inside it directly — pre-building a
+  // fragment first would mount the children under this component's own
+  // creation scope instead of the provider.
   const testWidth = Number(host.params.testWidth ?? 0);
+  const input =
+    String(host.params.scope ?? "") === "touch"
+      ? "touch"
+      : ((v) => (v === "pointer" || v === "touch" ? v : undefined))(
+          String(host.params.testInput ?? ""),
+        );
 
-  const body =
-    String(host.params.scope ?? "") === "touch" ? (
-      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  const scoped =
+    input !== undefined ? (
+      <EnvironmentScope input={input}>{props.children}</EnvironmentScope>
     ) : (
       <>{props.children}</>
     );
 
-  const scoped =
-    testInput === "pointer" || testInput === "touch" ? (
-      <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
-    ) : (
-      body
-    );
-
   return testWidth > 0 ? <View style={{ width: testWidth }}>{scoped}</View> : scoped;
 }
-
 function Fixture() {
   const name = String(host.params.case ?? "default");
   const weekday = String(host.params.weekday ?? "") as "narrow" | "short" | "long" | "";

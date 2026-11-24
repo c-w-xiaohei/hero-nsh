@@ -111,16 +111,21 @@ describe("color-swatch mobile", () => {
   // cell (no input/density axis engages on a static display part), and
   // `role=image` plus the name synthesis are unchanged.
   test("M-002 injected touch: matrix bounds identical to pointer, role=image and names unchanged", async () => {
+    // Native relaunches the single host per `open()` — every read off an
+    // earlier app dies with it, so the pointer run's cells are snapshotted
+    // (plain data) before the touch open replaces the host.
     const pointer = await openSwatch("matrix", { scope: "pointer" });
-    const touch = await openSwatch("matrix", { scope: "touch" });
     await pointer.waitUntil(() => callsOf(pointer, "layout").length >= 12);
+    const pointerCells = layouts(pointer).map((cell) => ({ ...cell }));
+
+    const touch = await openSwatch("matrix", { scope: "touch" });
     await touch.waitUntil(() => callsOf(touch, "layout").length >= 12);
 
     const byName = new Map(
       layouts(touch).map((e) => [e.name, e] as const),
     );
     expect(byName.size).toBe(12);
-    for (const cell of layouts(pointer)) {
+    for (const cell of pointerCells) {
       expect(byName.get(cell.name)?.width).toBe(cell.width);
       expect(byName.get(cell.name)?.height).toBe(cell.height);
     }

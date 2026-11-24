@@ -117,9 +117,12 @@ describe("avatar mobile", () => {
     const clipFirst = lastLayout(grid, "clip-first");
     const clipFifth = lastLayout(grid, "clip-fifth");
 
-    expect(second.x - first.x).toBe(48);
-    expect([fifth.x - first.x, fifth.y - first.y]).toEqual([0, 48]);
-    expect(clipFifth.y - clipFirst.y).toBe(0);
+    // Native bounds are fractional-px quantized (see M-005): the contract
+    // is the 48pt compact step, asserted within a 0.25pt window.
+    expect(Math.abs(second.x - first.x - 48)).toBeLessThan(0.25);
+    expect(Math.abs(fifth.x - first.x)).toBeLessThan(0.25);
+    expect(Math.abs(fifth.y - first.y - 48)).toBeLessThan(0.25);
+    expect(Math.abs(clipFifth.y - clipFirst.y)).toBeLessThan(0.25);
 
     const overlap = await openAvatar("geometry-overlap", {
       scope: "pointer",
@@ -130,7 +133,7 @@ describe("avatar mobile", () => {
     const oFirst = lastLayout(overlap, "first");
     const oSecond = lastLayout(overlap, "second");
 
-    expect(oSecond.x - oFirst.x).toBe(32);
+    expect(Math.abs(oSecond.x - oFirst.x - 32)).toBeLessThan(0.25);
   });
 
   // adapt-sheets/avatar.md M-002 (A-003): the overlap geometry is one coupled
@@ -149,7 +152,8 @@ describe("avatar mobile", () => {
         const first = lastLayout(app, "first");
         const second = lastLayout(app, "second");
 
-        expect(second.x - first.x).toBe(32);
+        // 32pt overlap step; fractional-px bound as in M-001/M-005.
+        expect(Math.abs(second.x - first.x - 32)).toBeLessThan(0.25);
       }
     }
   });
@@ -166,16 +170,22 @@ describe("avatar mobile", () => {
     ];
 
     for (const { fixture, names, texts: expectedTexts } of cases) {
+      // Snapshot the touch app fully before the next open: a native open
+      // relaunches the single host and invalidates every earlier App.
       const touch = await openAvatar(fixture, { scope: "touch" });
-      const pointer = await openAvatar(fixture, { scope: "pointer" });
-
       await settleLayout(touch, names);
+      const touchBoxes = boxSet(touch);
+      const touchShows = expectedTexts.map((text) =>
+        touch.shows(`text:${text}`),
+      );
+
+      const pointer = await openAvatar(fixture, { scope: "pointer" });
       await settleLayout(pointer, names);
+      const pointerBoxes = boxSet(pointer);
 
-      expect(boxSet(touch)).toEqual(boxSet(pointer));
-
-      for (const text of expectedTexts) {
-        expect(touch.shows(`text:${text}`)).toBe(true);
+      expect(touchBoxes).toEqual(pointerBoxes);
+      for (const shown of touchShows) {
+        expect(shown).toBe(true);
       }
     }
   });
@@ -190,9 +200,9 @@ describe("avatar mobile", () => {
     });
     await settleLayout(app, SIZE_NAMES);
 
-    expect(lastLayout(app, "sm").width).toBe(32);
-    expect(lastLayout(app, "md").width).toBe(40);
-    expect(lastLayout(app, "lg").width).toBe(48);
+    expect(Math.abs(lastLayout(app, "sm").width - 32)).toBeLessThan(0.25);
+    expect(Math.abs(lastLayout(app, "md").width - 40)).toBeLessThan(0.25);
+    expect(Math.abs(lastLayout(app, "lg").width - 48)).toBeLessThan(0.25);
   });
 
   // adapt-sheets/avatar.md M-005 (baseline): the desktop contract the existing
@@ -204,9 +214,10 @@ describe("avatar mobile", () => {
     const sizes = await openAvatar("geometry-sizes", { scope: "pointer" });
     await settleLayout(sizes, SIZE_NAMES);
 
-    expect(lastLayout(sizes, "sm").width).toBe(32);
-    expect(lastLayout(sizes, "md").width).toBe(40);
-    expect(lastLayout(sizes, "lg").width).toBe(48);
+    // Fractional-px bound as below: exact tiers ±0.25pt.
+    expect(Math.abs(lastLayout(sizes, "sm").width - 32)).toBeLessThan(0.25);
+    expect(Math.abs(lastLayout(sizes, "md").width - 40)).toBeLessThan(0.25);
+    expect(Math.abs(lastLayout(sizes, "lg").width - 48)).toBeLessThan(0.25);
 
     const grid = await openAvatar("geometry-grid", { scope: "pointer" });
     await settleLayout(grid, GRID_NAMES);
@@ -214,9 +225,19 @@ describe("avatar mobile", () => {
     const first = lastLayout(grid, "grid-first");
     const fifth = lastLayout(grid, "grid-fifth");
 
-    expect(lastLayout(grid, "grid-second").x - first.x).toBe(52);
-    expect([fifth.x - first.x, fifth.y - first.y]).toEqual([0, 52]);
-    expect(lastLayout(grid, "clip-fifth").y - lastLayout(grid, "clip-first").y).toBe(0);
+    // 40pt avatar + 12pt gap-3 = 52pt step. Native layout reports
+    // fractional-px bounds (Android measured 52.1905 at its device dpi);
+    // the contract is the 52pt step, so the bound is a 0.25pt quantization
+    // window, not a tolerance on the geometry.
+    const step = lastLayout(grid, "grid-second").x - first.x;
+    expect(Math.abs(step - 52)).toBeLessThan(0.25);
+    expect(Math.abs(fifth.x - first.x)).toBeLessThan(0.25);
+    expect(Math.abs(fifth.y - first.y - 52)).toBeLessThan(0.25);
+    expect(
+      Math.abs(
+        lastLayout(grid, "clip-fifth").y - lastLayout(grid, "clip-first").y,
+      ),
+    ).toBeLessThan(0.25);
 
     const count = await openAvatar("geometry-count", { scope: "pointer" });
     await settleLayout(count, COUNT_NAMES);
@@ -241,19 +262,23 @@ describe("avatar mobile", () => {
   // owner — under injected touch the "+N" counts and the no-src fallback
   // texts are the same set the default environment renders.
   test("M-006 injected touch keeps the +N counts and fallback texts identical", async () => {
+    // Snapshot the touch app before the pointer open relaunches the host.
     const touch = await openAvatar("geometry-count", { scope: "touch" });
-    const pointer = await openAvatar("geometry-count", { scope: "pointer" });
-
     await settleLayout(touch, COUNT_NAMES);
+    const touchTexts = [...touch.texts()].sort();
+    const touchShows = ["+2", "9+", "A", "B", "E"].map((text) =>
+      touch.shows(`text:${text}`),
+    );
+
+    const pointer = await openAvatar("geometry-count", { scope: "pointer" });
     await settleLayout(pointer, COUNT_NAMES);
+    const pointerTexts = [...pointer.texts()].sort();
 
-    expect([...touch.texts()].sort()).toEqual([...pointer.texts()].sort());
+    expect(touchTexts).toEqual(pointerTexts);
 
-    expect(touch.shows("text:+2")).toBe(true);
-    expect(touch.shows("text:9+")).toBe(true);
-    expect(touch.shows("text:A")).toBe(true);
-    expect(touch.shows("text:B")).toBe(true);
-    expect(touch.shows("text:E")).toBe(true);
+    for (const shown of touchShows) {
+      expect(shown).toBe(true);
+    }
   });
 
   // adapt-sheets/avatar.md M-007 (A-007): the fixture's injection levels —

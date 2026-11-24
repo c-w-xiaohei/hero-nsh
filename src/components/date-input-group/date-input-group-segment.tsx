@@ -682,7 +682,13 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
           readonly={!canEdit()}
           keyboardType={channelKeyboardType()}
           submitBehavior="blurAndSubmit"
-          class="absolute inset-0 opacity-0"
+          // The channel must stay hit-testable: iOS (and NSH's own hit
+          // walkers) skip a view with alpha < 0.01, which `opacity-0`
+          // made — a touch could never land in the channel and the
+          // soft-keyboard editing path was dead on iOS. It still paints
+          // nothing: controlled empty value, no caret, the platform input
+          // draws no background or border on its own.
+          class="absolute inset-0"
           onPress={handleChannelPress}
           onKeyPress={handleChannelKeyPress}
           onFocus={handleFocus}

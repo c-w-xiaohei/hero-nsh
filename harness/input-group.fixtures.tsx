@@ -56,24 +56,33 @@ import { probe } from "@scenario/probe";
  * -----------------------------------------------------------------------------------------------*/
 
 function Scoped(props: { children?: JSX.Element }) {
-  // Test-harness environment param (only the mobile tests set it —
-  // absent keeps the host-derived default): `testInput` injects an outer
-  // EnvironmentScope input so the pointer baseline is host-independent
-  // (inner `scope` overrides still win).
-  const testInput = String(host.params.testInput ?? "");
+  // Test-harness environment params (only the mobile tests set them —
+  // absent keeps the host-derived default): `scope="touch"` is the inner
+  // override, `testInput` ("pointer"/"touch") injects the scope so the
+  // pointer baseline is host-independent (the inner `scope` still wins).
+  // One provider only: `props.children` is placed inside it directly —
+  // pre-building a fragment first would mount the children under this
+  // component's own creation scope instead of the provider.
+  const input =
+    String(host.params.scope ?? "") === "touch"
+      ? "touch"
+      : ((v) => (v === "pointer" || v === "touch" ? v : undefined))(
+          String(host.params.testInput ?? ""),
+        );
 
-  const body =
-    String(host.params.scope ?? "") === "touch" ? (
-      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
-    ) : (
-      <>{props.children}</>
-    );
-
-  return testInput === "pointer" || testInput === "touch" ? (
-    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
+  return input !== undefined ? (
+    <EnvironmentScope input={input}>{props.children}</EnvironmentScope>
   ) : (
-    body
+    <>{props.children}</>
   );
+}
+/** Test-only literal-typing prop: the mobile tests pass `testAutoCapitalize`
+ * ("none") so a literal typed text cannot meet the host keyboard's
+ * sentence-capitalization (iOS synthesizes real key events). Absent the
+ * param the prop is undefined and the control keeps its default. */
+function textParam(name: string): string | undefined {
+  const value = host.params[name];
+  return typeof value === "string" ? value : undefined;
 }
 
 type LayoutEvent = {
@@ -106,6 +115,7 @@ function amountField(disabled = false) {
       <InputGroup testID="ig-root">
         <InputGroup.Prefix testID="ig-prefix">$</InputGroup.Prefix>
         <InputGroup.Input
+          autoCapitalize={textParam("testAutoCapitalize")}
           className="w-[200px]"
           onBlur={() => probe("focus")({ part: "input", focused: false })}
           onFocus={() => probe("focus")({ part: "input", focused: true })}
@@ -133,6 +143,7 @@ function TextAreaCase() {
         <InputGroup testID="ig-root">
           <InputGroup.Prefix testID="ig-prefix">#</InputGroup.Prefix>
           <InputGroup.TextArea
+            autoCapitalize={textParam("testAutoCapitalize")}
             className="w-[220px]"
             rows={3}
             testID="ig-textarea"
@@ -151,7 +162,8 @@ function SecondaryCase() {
         <Label>Amount</Label>
         <InputGroup testID="ig-root">
           <InputGroup.Prefix testID="ig-prefix">$</InputGroup.Prefix>
-          <InputGroup.Input className="w-[200px]" testID="ig-input" />
+          <InputGroup.Input
+            autoCapitalize={textParam("testAutoCapitalize")} className="w-[200px]" testID="ig-input" />
           <InputGroup.Suffix testID="ig-suffix">USD</InputGroup.Suffix>
         </InputGroup>
       </TextField>
@@ -167,7 +179,8 @@ function FullWidthCase() {
           <Label>Amount</Label>
           <InputGroup fullWidth testID="ig-root">
             <InputGroup.Prefix testID="ig-prefix">$</InputGroup.Prefix>
-            <InputGroup.Input testID="ig-input" />
+            <InputGroup.Input
+              autoCapitalize={textParam("testAutoCapitalize")} testID="ig-input" />
             <InputGroup.Suffix testID="ig-suffix">USD</InputGroup.Suffix>
           </InputGroup>
         </TextField>
@@ -184,6 +197,7 @@ function ControlledCase() {
         <InputGroup testID="ig-root">
           <InputGroup.Prefix testID="ig-prefix">$</InputGroup.Prefix>
           <InputGroup.Input
+            autoCapitalize={textParam("testAutoCapitalize")}
             className="w-[200px]"
             defaultValue="10"
             onChange={probe("onChange")}
@@ -205,7 +219,8 @@ function RenderPropsCase() {
           {(values) => (
             <>
               <InputGroup.Prefix testID="ig-prefix">$</InputGroup.Prefix>
-              <InputGroup.Input className="w-[200px]" testID="ig-input" />
+              <InputGroup.Input
+                autoCapitalize={textParam("testAutoCapitalize")} className="w-[200px]" testID="ig-input" />
               <InputGroup.Suffix testID="ig-suffix">
                 <Text>{values.isFocusWithin() ? "focused" : "USD"}</Text>
               </InputGroup.Suffix>
@@ -230,7 +245,8 @@ function LayoutCase() {
           <InputGroup.Prefix onLayout={layoutProbe("prefix")} testID="ig-prefix">
             $
           </InputGroup.Prefix>
-          <InputGroup.Input className="w-[200px]" testID="ig-input" />
+          <InputGroup.Input
+            autoCapitalize={textParam("testAutoCapitalize")} className="w-[200px]" testID="ig-input" />
           <InputGroup.Suffix onLayout={layoutProbe("suffix")} testID="ig-suffix">
             USD
           </InputGroup.Suffix>
@@ -255,6 +271,7 @@ function HoverCase() {
             <>
               <InputGroup.Prefix testID="ig-prefix">$</InputGroup.Prefix>
               <InputGroup.Input
+                autoCapitalize={textParam("testAutoCapitalize")}
                 className="w-[200px]"
                 onBlur={() => probe("focus")({ part: "input", focused: false })}
                 onFocus={() => probe("focus")({ part: "input", focused: true })}
@@ -278,6 +295,7 @@ function SubmitCase() {
         <InputGroup testID="ig-root">
           <InputGroup.Prefix testID="ig-prefix">$</InputGroup.Prefix>
           <InputGroup.Input
+            autoCapitalize={textParam("testAutoCapitalize")}
             aria-label="Amount"
             className="w-[200px]"
             defaultValue="10"
@@ -299,6 +317,7 @@ function KbdCase() {
       <View class="flex-col w-[320px]">
         <InputGroup testID="ig-root-keyboard">
           <InputGroup.Input
+            autoCapitalize={textParam("testAutoCapitalize")}
             aria-label="Keyboard"
             keyboardType="email-address"
             placeholder="keyboard"
@@ -307,6 +326,7 @@ function KbdCase() {
         </InputGroup>
         <InputGroup testID="ig-root-inputmode">
           <InputGroup.Input
+            autoCapitalize={textParam("testAutoCapitalize")}
             aria-label="InputMode"
             inputMode="numeric"
             placeholder="inputmode"
@@ -315,6 +335,7 @@ function KbdCase() {
         </InputGroup>
         <InputGroup testID="ig-root-type">
           <InputGroup.Input
+            autoCapitalize={textParam("testAutoCapitalize")}
             aria-label="Type"
             placeholder="type"
             testID="kbd-type"
@@ -323,6 +344,7 @@ function KbdCase() {
         </InputGroup>
         <InputGroup testID="ig-root-return">
           <InputGroup.Input
+            autoCapitalize={textParam("testAutoCapitalize")}
             aria-label="Return"
             placeholder="return"
             returnKeyType="search"

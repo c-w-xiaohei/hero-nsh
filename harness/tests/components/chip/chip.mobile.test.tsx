@@ -133,16 +133,19 @@ describe("chip mobile", () => {
       code: "ERR_NSH_TEST_NOT_FOUND",
     });
 
+    // Snapshot each grid's cells before the next open — a native open
+    // relaunches the single host and invalidates every earlier App.
     const pointer = await openChips("grid", { scope: "pointer" });
-    const touch = await openChips("grid", { scope: "touch" });
     await pointer.waitUntil(() => callsOf(pointer, "layout").length >= 12);
-    await touch.waitUntil(() => callsOf(touch, "layout").length >= 12);
+    const pointerCells = layouts(pointer);
 
+    const touch = await openChips("grid", { scope: "touch" });
+    await touch.waitUntil(() => callsOf(touch, "layout").length >= 12);
     const byName = new Map(
       layouts(touch).map((e) => [e.name, e] as const),
     );
     expect(byName.size).toBe(12);
-    for (const cell of layouts(pointer)) {
+    for (const cell of pointerCells) {
       expect(byName.get(cell.name)?.width).toBe(cell.width);
       expect(byName.get(cell.name)?.height).toBe(cell.height);
     }

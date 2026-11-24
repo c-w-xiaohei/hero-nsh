@@ -75,6 +75,16 @@ type GroupValues = {
   isInvalid: () => boolean;
 };
 
+
+/** Test-only literal-typing prop: the mobile tests pass `testAutoCapitalize`
+ * ("none") so a literal typed text cannot meet the host keyboard's
+ * sentence-capitalization (iOS synthesizes real key events). Absent the
+ * param the prop is undefined and the input keeps its default. */
+function textParam(name: string): string | undefined {
+  const value = host.params[name];
+  return typeof value === "string" ? value : undefined;
+}
+
 type InputValues = {
   isHovered: () => boolean;
   isFocused: () => boolean;
@@ -88,27 +98,26 @@ type InputValues = {
 // same case bodies run under the default (pointer) and the injected (touch)
 // environment (close-button / date-input-group / number-field convention).
 function Scoped(props: { children?: JSX.Element }) {
-  const scope = String(host.params.scope ?? "") as Scope;
-  // Test-harness environment param (only the mobile tests set it —
-  // absent keeps the host-derived default): `testInput` injects an outer
-  // EnvironmentScope input so the pointer baseline is host-independent
-  // (inner `scope` overrides still win).
-  const testInput = String(host.params.testInput ?? "");
+  // Test-harness environment params (only the mobile tests set them —
+  // absent keeps the host-derived default): `scope="touch"` is the inner
+  // override, `testInput` ("pointer"/"touch") injects the scope so the
+  // pointer baseline is host-independent (the inner `scope` still wins).
+  // One provider only: `props.children` is placed inside it directly —
+  // pre-building a fragment first would mount the children under this
+  // component's own creation scope instead of the provider.
+  const input =
+    String(host.params.scope ?? "") === "touch"
+      ? "touch"
+      : ((v) => (v === "pointer" || v === "touch" ? v : undefined))(
+          String(host.params.testInput ?? ""),
+        );
 
-  const body =
-    scope === "touch" ? (
-      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
-    ) : (
-      <>{props.children}</>
-    );
-
-  return testInput === "pointer" || testInput === "touch" ? (
-    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
+  return input !== undefined ? (
+    <EnvironmentScope input={input}>{props.children}</EnvironmentScope>
   ) : (
-    body
+    <>{props.children}</>
   );
 }
-
 /** The stock field: Label + Group + icon + input + clear button. */
 function FieldParts(props: { children?: JSX.Element }) {
   return (
@@ -116,7 +125,8 @@ function FieldParts(props: { children?: JSX.Element }) {
       <Label>Search</Label>
       <SearchField.Group testID="sf-group">
         <SearchField.SearchIcon />
-        <SearchField.Input testID="sf-input" placeholder="Search..." />
+        <SearchField.Input
+          autoCapitalize={textParam("testAutoCapitalize")} testID="sf-input" placeholder="Search..." />
         <SearchField.ClearButton />
         {props.children}
       </SearchField.Group>
@@ -152,6 +162,7 @@ function LayoutCase() {
         >
           <SearchField.SearchIcon />
           <SearchField.Input
+          autoCapitalize={textParam("testAutoCapitalize")}
             testID="sf-input"
             placeholder="Search..."
             onLayout={(event) => probe("input-layout")(event.bounds)}
@@ -191,6 +202,7 @@ function HoverCase() {
         >
           <SearchField.SearchIcon />
           <SearchField.Input
+          autoCapitalize={textParam("testAutoCapitalize")}
             testID="sf-input"
             placeholder="Search..."
             onHoverChange={(isHovered) => hover(["input", "change", isHovered])}
@@ -223,6 +235,7 @@ function SubmitCase() {
         <SearchField.Group testID="sf-group">
           <SearchField.SearchIcon />
           <SearchField.Input
+          autoCapitalize={textParam("testAutoCapitalize")}
             testID="sf-input"
             placeholder="Search..."
             autoComplete={host.params.autoComplete as string | undefined}
@@ -345,7 +358,8 @@ function InvalidCase() {
         <Label>Search</Label>
         <SearchField.Group testID="sf-group">
           <SearchField.SearchIcon />
-          <SearchField.Input testID="sf-input" placeholder="Search..." />
+          <SearchField.Input
+          autoCapitalize={textParam("testAutoCapitalize")} testID="sf-input" placeholder="Search..." />
           <SearchField.ClearButton />
         </SearchField.Group>
         <Description>Search by title or author</Description>
@@ -391,6 +405,7 @@ function KbdCase() {
           <SearchField.Group>
             <SearchField.SearchIcon />
             <SearchField.Input
+          autoCapitalize={textParam("testAutoCapitalize")}
               {...variant.input}
               testID={`kbd-${variant.slug}`}
               placeholder={variant.label}

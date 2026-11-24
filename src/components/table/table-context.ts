@@ -127,6 +127,23 @@ export interface TableRowContextValue {
 
   /** The next cell's column index, in the row's own cell order. */
   nextCellIndex: () => number;
+
+  /**
+   * The row's own press handlers, callable by the parts inside it. A press
+   * a cell claims is the row's press too: upstream's bubble hands the row's
+   * `onPress*`/`onAction`/`href` and feedback seam a second sighting of the
+   * event (`claimPress`'s `!claimPress` branch). The engine delivers a press
+   * to the hit view only, so the cell invokes these after its own work —
+   * child first, then ancestor, the order a bubble runs. Per-row, per-phase
+   * dedupe inside the handlers keeps a dispatch that also lands on the row
+   * view from running twice, and only the nearest row is invoked (a nested
+   * row's cells see their own row's context).
+   */
+  pressEdge: {
+    down: (event: PressEvent) => void;
+    up: (event: PressEvent) => void;
+    press: (event: PressEvent) => void;
+  };
 }
 
 export const TableRowContext = context<TableRowContextValue | undefined>(undefined);

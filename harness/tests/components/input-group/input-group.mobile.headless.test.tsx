@@ -114,4 +114,31 @@ describe("input-group mobile (headless)", () => {
     );
     expect(layoutFor(app, "root").height).toBeGreaterThanOrEqual(44);
   }, 120_000);
+
+  // adapt-sheets/input-group.md M-001's exact desktop pin: the shared file
+  // bounds the pointer row to `>=36 && <44` because native iOS measures the
+  // same line box taller (host font metrics — the 40 vs 36 row there).
+  // Headless keeps the exact `min-h-9` → 36 pt contract the desktop lane
+  // asserts, so the pin is not lost across targets.
+  test("M-001 pointer half: the group row keeps the exact 36pt desktop metric", async () => {
+    const app = await openCase("layout", { testInput: "pointer" });
+    expect(app.shows("label:Amount")).toBe(true);
+    await app.waitUntil(() =>
+      callsOf(app, "layout").some((c) => (c[0] as LayoutEntry).name === "root"),
+    );
+    expect(layoutFor(app, "root").height).toBe(36);
+  }, 120_000);
+
+  // The typed-half of input-group.mobile.test.tsx M-007's disabled row:
+  // the shared file drops `app.type` on the non-editable input because on
+  // a real iOS host the step kills the tester session outright ("no host
+  // that takes test steps is connected") and on a focused sibling it
+  // leaks the keys in instead. Headless, where the type step simply
+  // refuses a non-editable target, the refusal itself is the assertion.
+  test("M-007 (typed half): the disabled input refuses typed keys", async () => {
+    const disabled = await openCase("disabled", { testInput: "pointer" });
+    expect(disabled.enabled("label:Amount")).toBe(false);
+    await disabled.type("label:Amount", "x").catch(() => undefined);
+    expect(disabled.value("label:Amount")).toBe("10");
+  }, 120_000);
 });

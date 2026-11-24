@@ -155,9 +155,18 @@ describe("progress-circle mobile", () => {
     const sizes = await openCircle("sizes", { input: "pointer" });
     await settleSizes(sizes);
 
-    expect(trackSize(sizes, "track-sm")).toEqual({ width: 20, height: 20 });
-    expect(trackSize(sizes, "track-md")).toEqual({ width: 28, height: 28 });
-    expect(trackSize(sizes, "track-lg")).toEqual({ width: 36, height: 36 });
+    // Native layout reports fractional-px bounds (Android measured
+    // 52.1905/27.8095 for 52/28pt elsewhere): the size-variant track
+    // contract is asserted within a 0.25pt quantization window.
+    for (const [name, side] of [
+      ["track-sm", 20],
+      ["track-md", 28],
+      ["track-lg", 36],
+    ] as const) {
+      const box = trackSize(sizes, name);
+      expect(Math.abs(box.width - side)).toBeLessThan(0.25);
+      expect(Math.abs(box.height - side)).toBeLessThan(0.25);
+    }
 
     const indeterminate = await openCircle("indeterminate", { input: "pointer" });
     await settleStrokes(indeterminate);
@@ -177,32 +186,32 @@ describe("progress-circle mobile", () => {
   // the styles table took no `input` axis (the hit-area / hover-removal
   // duties do not apply to a read-only meter).
   test("M-003 injected touch: track boxes and paint signature identical to the default environment", async () => {
+    // Snapshot each app before the next open: a native open relaunches
+    // the single host and invalidates every earlier App.
     const touch = await openCircle("sizes", { input: "touch" });
-    const pointer = await openCircle("sizes", { input: "pointer" });
-
     await settleSizes(touch);
+    const touchBoxes = boxSet(touch);
+
+    const pointer = await openCircle("sizes", { input: "pointer" });
     await settleSizes(pointer);
 
-    expect(boxSet(touch)).toEqual(boxSet(pointer));
+    expect(touchBoxes).toEqual(boxSet(pointer));
 
     const touchPaint = await openCircle("paint", { input: "touch" });
-    const pointerPaint = await openCircle("paint", { input: "pointer" });
-
     await settleStrokes(touchPaint);
+    const touchSignature = paintSignature(touchPaint);
+    const touchExpected = expectedPaint(touchPaint);
+
+    const pointerPaint = await openCircle("paint", { input: "pointer" });
     await settleStrokes(pointerPaint);
+    const pointerSignature = paintSignature(pointerPaint);
 
     // Paints are token strings each app resolved in its own appearance, so
     // they are compared within the app (against the probe) and the
     // signatures across apps only on shape.
-    expect(paintSignature(touchPaint).fillPaint).toBe(
-      expectedPaint(touchPaint),
-    );
-    expect(paintSignature(pointerPaint).fillPaint).toBe(
-      expectedPaint(pointerPaint),
-    );
-    expect(paintSignature(touchPaint).fillDash).toEqual(
-      paintSignature(pointerPaint).fillDash,
-    );
+    expect(touchSignature.fillPaint).toBe(touchExpected);
+    expect(pointerSignature.fillPaint).toBe(expectedPaint(pointerPaint));
+    expect(touchSignature.fillDash).toEqual(pointerSignature.fillDash);
   });
 
   // adapt-sheets/progress-circle.md M-004 (A-001/A-002/A-003): injected
@@ -212,25 +221,25 @@ describe("progress-circle mobile", () => {
   // the default environment's.
   test("M-004 injected compact density: track boxes and paint signature identical to the default environment", async () => {
     const compact = await openCircle("sizes", { input: "pointer", density: "compact" });
-    const baseline = await openCircle("sizes", { input: "pointer" });
-
     await settleSizes(compact);
+    const compactBoxes = boxSet(compact);
+
+    const baseline = await openCircle("sizes", { input: "pointer" });
     await settleSizes(baseline);
 
-    expect(boxSet(compact)).toEqual(boxSet(baseline));
+    expect(compactBoxes).toEqual(boxSet(baseline));
 
     const compactPaint = await openCircle("paint", { input: "pointer", density: "compact" });
-    const baselinePaint = await openCircle("paint", { input: "pointer" });
-
     await settleStrokes(compactPaint);
-    await settleStrokes(baselinePaint);
+    const compactSignature = paintSignature(compactPaint);
+    const compactExpected = expectedPaint(compactPaint);
 
-    expect(paintSignature(compactPaint).fillPaint).toBe(
-      expectedPaint(compactPaint),
-    );
-    expect(paintSignature(compactPaint).fillDash).toEqual(
-      paintSignature(baselinePaint).fillDash,
-    );
+    const baselinePaint = await openCircle("paint", { input: "pointer" });
+    await settleStrokes(baselinePaint);
+    const baselineSignature = paintSignature(baselinePaint);
+
+    expect(compactSignature.fillPaint).toBe(compactExpected);
+    expect(compactSignature.fillDash).toEqual(baselineSignature.fillDash);
   });
 
   // adapt-sheets/progress-circle.md M-005 (A-005): injected touch adds no
@@ -272,13 +281,13 @@ describe("progress-circle mobile", () => {
   test("M-007 dual environment: the scoped open works under every target", async () => {
     const baseline = await openCircle("paint", { input: "pointer" });
     await settleStrokes(baseline);
-    expect(baseline.shows("role:progressbar[Loading]")).toBe(true);
+    const baselineShown = baseline.shows("role:progressbar[Loading]");
+    const baselineDash = paintSignature(baseline).fillDash;
 
     const touch = await openCircle("paint", { input: "touch" });
     await settleStrokes(touch);
+    expect(baselineShown).toBe(true);
     expect(touch.shows("role:progressbar[Loading]")).toBe(true);
-    expect(paintSignature(touch).fillDash).toEqual(
-      paintSignature(baseline).fillDash,
-    );
+    expect(paintSignature(touch).fillDash).toEqual(baselineDash);
   });
 });

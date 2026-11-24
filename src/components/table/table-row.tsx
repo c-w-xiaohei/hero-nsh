@@ -23,6 +23,7 @@ import {
   TableRowContext,
   TableStateContext,
   claimPress,
+  type TableRowContextValue,
   type TableRowRenderProps,
 } from "./table-context";
 import { type TablePartProps } from "./table-props";
@@ -319,7 +320,21 @@ export function TableRow(props: TableRowProps) {
     }
   };
 
+  // Per-row, per-phase dedupe for the press this row hears: a press
+  // forwarded by a claiming cell and a press the host dispatches to the
+  // row view are the same event — whichever sighting comes first runs
+  // the body, the second skips it (claimPress's own WeakSet shape, held
+  // at the row because the dedupe is this row's own).
+  const seenPressDown = new WeakSet<object>();
+  const seenPressUp = new WeakSet<object>();
+  const seenPress = new WeakSet<object>();
+
   const handlePressDown = (event: PressEvent) => {
+    if (seenPressDown.has(event)) {
+      return;
+    }
+    seenPressDown.add(event);
+
     isPressed.set(true);
     // A-002: the seam sees the press after the component's own flag, before
     // the modality write and the forwarded callbacks; it gates itself on
@@ -337,6 +352,11 @@ export function TableRow(props: TableRowProps) {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    if (seenPressUp.has(event)) {
+      return;
+    }
+    seenPressUp.add(event);
+
     // A-002: the seam's end edge — release and cancel share `onPressUp`.
     feedback.pressUp(event);
     isPressed.set(false);
@@ -344,6 +364,11 @@ export function TableRow(props: TableRowProps) {
   };
 
   const handlePress = (event: PressEvent) => {
+    if (seenPress.has(event)) {
+      return;
+    }
+    seenPress.add(event);
+
     isPressed.set(false);
 
     if (!isKeyboardPress(event)) {
@@ -382,10 +407,19 @@ export function TableRow(props: TableRowProps) {
         .reduce((total, cell) => total + Math.max(1, cell.colSpan()), 0),
     );
 
-  const contextValue = {
+  const contextValue: TableRowContextValue = {
     rowKey: key,
     level: level(),
     nextCellIndex,
+    // The cell invokes these after its own work on a press it claims —
+    // the row-local ownership path upstream's bubble provided (§1 events,
+    // the `!claimPress` branch). Only the nearest row is reachable here:
+    // a nested row's cells read the inner provider.
+    pressEdge: {
+      down: handlePressDown,
+      up: handlePressUp,
+      press: handlePress,
+    },
   };
 
   // This row's `Checkbox slot="selection"` (port sheet table §5): its checked

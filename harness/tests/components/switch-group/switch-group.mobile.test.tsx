@@ -132,10 +132,19 @@ describe("switch-group mobile", () => {
   // layout semantics the environment does not move.
   test("M-005 group bounds are environment-invariant; horizontal gap stays 16pt", async () => {
     const pointer = await openCase({ still: "1", testInput: "pointer" });
+    // Native relaunches the single host per open(): the pointer app's
+    // bounds must be plain data before `touch` opens — its handle is dead
+    // after.
+    const pointerLayouts = {
+      group: lastLayout(pointer, "group"),
+      wifi: lastLayout(pointer, "wifi"),
+      bluetooth: lastLayout(pointer, "bluetooth"),
+    };
+
     const touch = await openCase({ still: "1", testInput: "touch" });
 
     for (const name of ["group", "wifi", "bluetooth"] as const) {
-      const a = lastLayout(pointer, name);
+      const a = pointerLayouts[name];
       const b = lastLayout(touch, name);
       expectClose(b.x, a.x);
       expectClose(b.y, a.y);

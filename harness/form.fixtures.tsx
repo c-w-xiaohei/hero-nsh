@@ -38,26 +38,26 @@ import { FieldErrorContext } from "../src/components/field-error/context";
  */
 
 function Scoped(props: { children?: JSX.Element }) {
-  // Test-harness environment param (only the mobile tests set it —
-  // absent keeps the host-derived default): `testInput` injects an outer
-  // EnvironmentScope input so the pointer baseline is host-independent
-  // (inner `scope` overrides still win).
-  const testInput = String(host.params.testInput ?? "");
+  // Test-harness environment params (only the mobile tests set them —
+  // absent keeps the host-derived default): `scope="touch"` is the inner
+  // override, `testInput` ("pointer"/"touch") injects the scope so the
+  // pointer baseline is host-independent (the inner `scope` still wins).
+  // One provider only: `props.children` is placed inside it directly —
+  // pre-building a fragment first would mount the children under this
+  // component's own creation scope instead of the provider.
+  const input =
+    String(host.params.scope ?? "") === "touch"
+      ? "touch"
+      : ((v) => (v === "pointer" || v === "touch" ? v : undefined))(
+          String(host.params.testInput ?? ""),
+        );
 
-  const body =
-    String(host.params.scope ?? "") === "touch" ? (
-      <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
-    ) : (
-      <>{props.children}</>
-    );
-
-  return testInput === "pointer" || testInput === "touch" ? (
-    <EnvironmentScope input={testInput}>{body}</EnvironmentScope>
+  return input !== undefined ? (
+    <EnvironmentScope input={input}>{props.children}</EnvironmentScope>
   ) : (
-    body
+    <>{props.children}</>
   );
 }
-
 /*
  * The mobile layer's keyboard-submit consumer (adapt sheet A-005/A-008): a
  * single-line `nsh/base` Input whose Return is bridged into

@@ -124,6 +124,8 @@ describe("error-message mobile", () => {
   // on the mobile side): bare's text box is content height only (15), the
   // container's carries the 4pt padding on both sides (23).
   test("M-002 default environment: caller gate removes the message; partClass pads its box", async () => {
+    // Drive the gated app to completion before the bare open — a native
+    // open relaunches the single host and invalidates every earlier App.
     const app = await openMobile("gated", { input: "pointer" });
 
     expect(app.shows(MESSAGE_SELECTOR)).toBe(true);
@@ -132,17 +134,20 @@ describe("error-message mobile", () => {
     await settleLayout(app);
     const gatedBoxes = messageBoxes(app);
 
+    await app.press("id:clear");
+    await app.waitUntil(() => !app.shows(MESSAGE_SELECTOR));
+    const messageGone = !app.shows(MESSAGE_SELECTOR);
+
     const bare = await openMobile("bare", { input: "pointer" });
     await settleLayout(bare);
 
     const gatedBox = JSON.parse(gatedBoxes[0]!) as Omit<Box, "name">;
     const bareBox = JSON.parse(messageBoxes(bare)[0]!) as Omit<Box, "name">;
-    expect(gatedBox.height).toBe(bareBox.height + 8);
+    // The gated row is the bare row plus its 8pt gap-2; fractional-px
+    // native bounds are asserted within a 0.25pt window (badge/avatar).
+    expect(Math.abs(gatedBox.height - bareBox.height - 8)).toBeLessThan(0.25);
 
-    await app.press("id:clear");
-    await app.waitUntil(() => !app.shows(MESSAGE_SELECTOR));
-
-    expect(app.shows(MESSAGE_SELECTOR)).toBe(false);
+    expect(messageGone).toBe(true);
   });
 
   // adapt-sheets/error-message.md M-003 (A-001, A-002): the `input` axis is
@@ -151,15 +156,19 @@ describe("error-message mobile", () => {
   // identical to the pointer default across all three cases.
   test("M-003 injected touch: every observable matches the pointer default", async () => {
     for (const caseName of ["in-container", "gated", "bare"]) {
+      // Snapshot the pointer app before the touch open: a native open
+      // relaunches the single host and invalidates every earlier App.
       const pointer = await openMobile(caseName, { input: "pointer" });
-      const touch = await openMobile(caseName, { input: "touch" });
-
       await settleLayout(pointer);
+      const pointerSnap = snapshot(pointer);
+      const pointerRegistered = callsOf(pointer, "error-message.registered");
+
+      const touch = await openMobile(caseName, { input: "touch" });
       await settleLayout(touch);
 
-      expect(snapshot(touch)).toEqual(snapshot(pointer));
+      expect(snapshot(touch)).toEqual(pointerSnap);
       expect(callsOf(touch, "error-message.registered")).toEqual(
-        callsOf(pointer, "error-message.registered"),
+        pointerRegistered,
       );
     }
   });
@@ -170,15 +179,16 @@ describe("error-message mobile", () => {
   // bounds and span style stay identical to the default environment.
   test("M-004 injected density compact: bounds and span style unchanged", async () => {
     const plain = await openMobile("in-container", { input: "pointer" });
+    await settleLayout(plain);
+    const plainSnap = snapshot(plain);
+
     const compact = await openMobile("in-container", {
       input: "touch",
       density: "compact",
     });
-
-    await settleLayout(plain);
     await settleLayout(compact);
 
-    expect(snapshot(compact)).toEqual(snapshot(plain));
+    expect(snapshot(compact)).toEqual(plainSnap);
   });
 
   // adapt-sheets/error-message.md M-005 (A-003): the registration channel is
@@ -234,6 +244,8 @@ describe("error-message mobile", () => {
     expect(callsOf(plain, "error-message.registered")).toEqual([]);
 
     await settleLayout(plain);
+    // Snapshot before the injected opens: each relaunches the host.
+    const plainSnap = snapshot(plain);
 
     for (const env of [
       { input: "touch" },
@@ -242,7 +254,7 @@ describe("error-message mobile", () => {
       const injected = await openMobile("bare", env);
       await settleLayout(injected);
 
-      expect(snapshot(injected)).toEqual(snapshot(plain));
+      expect(snapshot(injected)).toEqual(plainSnap);
       expect(callsOf(injected, "error-message.registered")).toEqual([]);
     }
   });

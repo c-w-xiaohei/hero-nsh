@@ -66,6 +66,34 @@ describe("combo-box mobile (web)", () => {
     expect(touchIdle).toBe(pointerIdle);
   });
 
+  // adapt-sheets/combo-box.md M-010 (A-006), the letter half: the caller
+  // `Input`'s keyboard parameters mounted, the type → filter chain is
+  // unaffected. This local Web case retains the original letter filter;
+  // the shared native case checks the full chain with digit-named options
+  // and numeric input compatible with the requested phone-pad keyboard.
+  test("M-010 web half: the type → filter chain is unaffected by the Input keyboard params", async () => {
+    const app = await openCombo("b-mobile", {
+      kt: "phone-pad",
+      rtk: "search",
+      ekh: "search",
+      im: "tel",
+      mask: "1",
+      acorr: "off",
+      acap: "none",
+      sb: "blurAndSubmit",
+      ac: "email",
+    });
+
+    await app.press("id:combo-box-trigger");
+    await app.waitFor("role:listbox");
+    await app.type("id:combo-box-input", "do");
+    await app.clock!.runFor(80);
+
+    expect(app.shows("role:option[Dog]")).toBe(true);
+    expect(app.shows("role:option[Cat]")).toBe(false);
+    expect(app.value("id:combo-box-input")).toBe("do");
+  });
+
   // adapt-sheets/combo-box.md M-014 (基线), the blur-Tab half: Tab moves
   // focus to the sibling input, which commits the highlighted key and hands
   // the list off — the row's own guard. `keyboard.press("tab")` moving real

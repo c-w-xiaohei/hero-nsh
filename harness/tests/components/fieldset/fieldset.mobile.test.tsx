@@ -175,22 +175,6 @@ describe("fieldset mobile", () => {
   // excluded from the box set; group.y→group.bottom→actions.y still
   // brackets it.) A press on the container records no callback.
   test("M-003 injected touch: identical fieldset bounds, container press records nothing", async () => {
-    const touch = await openMobile("mobile", { input: "touch" });
-    const pointer = await openMobile("mobile", { input: "pointer" });
-
-    await settleLayout(touch);
-    await settleLayout(pointer);
-
-    const withoutMember = (set: Record<string, string[]>) => {
-      const { "member-two": _memberTwo, "group": _group, "root": _root, "actions": _actions, ...rest } = set;
-      return rest;
-    };
-    expect(withoutMember(boxSet(touch))).toEqual(
-      withoutMember(boxSet(pointer)),
-    );
-
-    // Fieldset-owned spacing around the adaptive member: same gap above it,
-    // same space-y margin, same stack gap to the actions row.
     const g = (app: App) => {
       const memberTwo = box(app, "member-two");
       const memberOne = box(app, "member-one");
@@ -204,14 +188,34 @@ describe("fieldset mobile", () => {
         memberTop: Math.round(memberTwo.y - group.y),
       };
     };
-    expect(g(touch)).toEqual(g(pointer));
+
+    // Drive the touch app to completion before the pointer open — a
+    // native open relaunches the single host and invalidates every
+    // earlier App.
+    const touch = await openMobile("mobile", { input: "touch" });
+    await settleLayout(touch);
+    const touchBoxes = boxSet(touch);
+    const touchGaps = g(touch);
 
     // 负断言: the container itself is not pressable — no gesture path
     // exists under touch — and nothing records a callback.
     await expect(touch.press("id:fieldset-root")).rejects.toMatchObject({
       code: "ERR_NSH_TEST_NOT_FOUND",
     });
-    expect(callsOf(touch, "member-press")).toHaveLength(0);
+    const touchMemberPresses = callsOf(touch, "member-press").length;
+
+    const pointer = await openMobile("mobile", { input: "pointer" });
+    await settleLayout(pointer);
+
+    const withoutMember = (set: Record<string, string[]>) => {
+      const { "member-two": _memberTwo, "group": _group, "root": _root, "actions": _actions, ...rest } = set;
+      return rest;
+    };
+    expect(withoutMember(touchBoxes)).toEqual(
+      withoutMember(boxSet(pointer)),
+    );
+    expect(touchGaps).toEqual(g(pointer));
+    expect(touchMemberPresses).toBe(0);
   });
 
   // adapt-sheets/fieldset.md M-004 (A-001…A-004): `density="compact"`
@@ -219,28 +223,33 @@ describe("fieldset mobile", () => {
   // spacing 16→8, actions pad 4→2, action gap 8→6 — and an explicit
   // `density="default"` scope lays out exactly like the uninjected one.
   test("M-004 density compact tightens every gap; explicit default matches", async () => {
+    // Every app is fully read before the next open: a native open
+    // relaunches the single host and invalidates every earlier App.
     const compact = await openMobile("mobile", {
       input: "pointer",
       density: "compact",
     });
+    await settleLayout(compact);
+    const compactGaps = gaps(compact);
+
     const plain = await openMobile("mobile", { input: "pointer" });
+    await settleLayout(plain);
+    const plainBoxes = boxSet(plain);
+
     const explicit = await openMobile("mobile", {
       input: "pointer",
       density: "default",
     });
-
-    await settleLayout(compact);
-    await settleLayout(plain);
     await settleLayout(explicit);
+    const explicitBoxes = boxSet(explicit);
 
-    const g = gaps(compact);
-    expect(g.legendToGroup).toBe(16);
-    expect(g.memberGap).toBe(8);
-    expect(g.groupToActions).toBe(16);
-    expect(g.actionsPadTop).toBe(2);
-    expect(g.actionGap).toBe(6);
+    expect(compactGaps.legendToGroup).toBe(16);
+    expect(compactGaps.memberGap).toBe(8);
+    expect(compactGaps.groupToActions).toBe(16);
+    expect(compactGaps.actionsPadTop).toBe(2);
+    expect(compactGaps.actionGap).toBe(6);
 
-    expect(boxSet(explicit)).toEqual(boxSet(plain));
+    expect(explicitBoxes).toEqual(plainBoxes);
   });
 
   // adapt-sheets/fieldset.md M-005 (A-005, A-008): under `compact` the

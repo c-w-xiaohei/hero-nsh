@@ -226,6 +226,9 @@ describe("color-picker mobile", () => {
     await app.press("role:option >> nth=1");
     expect(callsOf(app, "onChange")).toEqual([[{ hex: "#22c55e" }]]);
 
+    // Escape dismiss (T-007): on Android the delivered Escape KeyEvent
+    // does not reach the popover's dismiss chain — a registered
+    // platform gap the assertion keeps visible, not routed around.
     await app.keyboard.press("escape");
     expect(callsOf(app, "openChange")).toEqual([[true], [false]]);
     // The 100ms exit hold keeps the carrier mounted, then releases it.

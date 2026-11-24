@@ -147,12 +147,14 @@ describe("label mobile", () => {
       ["basic", BASIC_STYLES],
       ["states", STATES_STYLES],
     ] as const) {
+      // Snapshot the touch app before the next open: a native open
+      // relaunches the single host and invalidates every earlier App.
       const touch = await openLabel(caseName, { scope: "touch" });
+      const touchSnap = snapshot(touch, [...selectors]);
+
       const plain = await openLabel(caseName, { scope: "pointer" });
 
-      expect(snapshot(touch, [...selectors])).toEqual(
-        snapshot(plain, [...selectors]),
-      );
+      expect(touchSnap).toEqual(snapshot(plain, [...selectors]));
     }
   }, 120_000);
 
@@ -167,11 +169,11 @@ describe("label mobile", () => {
       const compact = await openLabel(caseName, {
         scope: "pointer,density",
       });
+      const compactSnap = snapshot(compact, [...selectors]);
+
       const plain = await openLabel(caseName, { scope: "pointer" });
 
-      expect(snapshot(compact, [...selectors])).toEqual(
-        snapshot(plain, [...selectors]),
-      );
+      expect(compactSnap).toEqual(snapshot(plain, [...selectors]));
     }
   }, 120_000);
 
@@ -253,16 +255,18 @@ describe("label mobile", () => {
       fieldInvalid: "1",
     };
 
-    const plain = await openLabel("field", { ...params, scope: "pointer" });
-    const touch = await openLabel("field", { ...params, scope: "touch" });
-
     const reads = (app: App) => ({
       asterisk: app.shows("text:/Field label\\*/"),
       opacity: app.viewStyle("id:field-label")?.opacity,
       color: app.spanStyle("text:Field label").color,
     });
 
+    // Read the pointer app before the touch open relaunches the host.
+    const plain = await openLabel("field", { ...params, scope: "pointer" });
     const expected = reads(plain);
+
+    const touch = await openLabel("field", { ...params, scope: "touch" });
+
     expect(expected.asterisk).toBe(true);
     expect(expected.opacity).toBe(0.5);
     expect(expected.color).toBe(DANGER);

@@ -121,6 +121,20 @@ const SIZE_BOXES: Record<string, { width: number; height: number }> = {
 
 const SIZE_NAMES = ["sm", "md", "lg", "xl"] as const;
 
+/*
+ * Native layout reports fractional-px bounds (Android measured
+ * 52.1905/27.8095 for 52/28pt elsewhere at its device dpi): an exact box
+ * contract is asserted within a 0.25pt quantization window, not a
+ * tolerance on the geometry.
+ */
+function expectBox(
+  box: Box,
+  expected: { width: number; height: number },
+): void {
+  expect(Math.abs(box.width - expected.width)).toBeLessThan(0.25);
+  expect(Math.abs(box.height - expected.height)).toBeLessThan(0.25);
+}
+
 describe("spinner mobile", () => {
   // adapt-sheets/spinner.md M-001 (基线): the `sizes` case under the default
   // environment — the four size variants report their contract squares
@@ -132,7 +146,7 @@ describe("spinner mobile", () => {
 
     await settleLayout(app, [...SIZE_NAMES]);
     for (const name of SIZE_NAMES) {
-      expect(lastBox(app, name)).toMatchObject(SIZE_BOXES[name]);
+      expectBox(lastBox(app, name), SIZE_BOXES[name]);
       expect(app.shows(`id:spinner-${name}`)).toBe(true);
     }
 
@@ -160,8 +174,8 @@ describe("spinner mobile", () => {
 
     const layout = await openCase("layout", { input: "pointer" });
     await settleLayout(layout, ["lg", "md"]);
-    expect(lastBox(layout, "lg")).toMatchObject({ width: 32, height: 32 });
-    expect(lastBox(layout, "md")).toMatchObject({ width: 24, height: 24 });
+    expectBox(lastBox(layout, "lg"), { width: 32, height: 32 });
+    expectBox(lastBox(layout, "md"), { width: 24, height: 24 });
 
     const gradient = await openCase("gradient", { input: "pointer" });
     const stops = gradientStops(gradient);
@@ -193,30 +207,42 @@ describe("spinner mobile", () => {
   // baseline — the component table carries no `input` axis and the canvas
   // draw has no environment branch, so the render is constant on both ends.
   test("M-003 injected touch changes no bound, name, icon or gradient stop", async () => {
+    // Each pair reads the first app fully before the next open: a native
+    // open relaunches the single host and invalidates every earlier App.
     const sizesPointer = await openCase("sizes", { input: "pointer" });
+    await settleLayout(sizesPointer, [...SIZE_NAMES]);
+    const sizesPointerSnap = {
+      texts: sizesPointer.texts(),
+      boxes: boxSet(sizesPointer),
+    };
+
     const sizesTouch = await openCase("sizes", { input: "touch" });
+    await settleLayout(sizesTouch, [...SIZE_NAMES]);
 
     // The scope really engaged — without this line the comparisons below
     // would pass even if `host.params.input` never reached EnvironmentScope.
     expect(sizesTouch.texts()).toContain("env=input:touch density:default");
-    expect(sizesPointer.texts()).toContain("env=input:pointer density:default");
-
-    await settleLayout(sizesPointer, [...SIZE_NAMES]);
-    await settleLayout(sizesTouch, [...SIZE_NAMES]);
-    expect(boxSet(sizesTouch)).toEqual(boxSet(sizesPointer));
+    expect(sizesPointerSnap.texts).toContain(
+      "env=input:pointer density:default",
+    );
+    expect(boxSet(sizesTouch)).toEqual(sizesPointerSnap.boxes);
     expect(sizesTouch.shows("role:progressbar[Loading] >> id:spinner-icon")).toBe(true);
 
     const layoutPointer = await openCase("layout", { input: "pointer" });
-    const layoutTouch = await openCase("layout", { input: "touch" });
     await settleLayout(layoutPointer, ["lg", "md"]);
+    const layoutPointerBoxes = boxSet(layoutPointer);
+
+    const layoutTouch = await openCase("layout", { input: "touch" });
     await settleLayout(layoutTouch, ["lg", "md"]);
-    expect(boxSet(layoutTouch)).toEqual(boxSet(layoutPointer));
+    expect(boxSet(layoutTouch)).toEqual(layoutPointerBoxes);
 
     const labelPointer = await openCase("label", { input: "pointer" });
-    const labelTouch = await openCase("label", { input: "touch" });
     await settleLayout(labelPointer, ["label"]);
+    const labelPointerBoxes = boxSet(labelPointer);
+
+    const labelTouch = await openCase("label", { input: "touch" });
     await settleLayout(labelTouch, ["label"]);
-    expect(boxSet(labelTouch)).toEqual(boxSet(labelPointer));
+    expect(boxSet(labelTouch)).toEqual(labelPointerBoxes);
     expect(labelTouch.shows("role:progressbar[Loading]")).toBe(true);
 
     const namedTouch = await openSpinner({
@@ -227,8 +253,10 @@ describe("spinner mobile", () => {
     expect(namedTouch.shows("role:progressbar[Saving changes]")).toBe(true);
 
     const gradientPointer = await openCase("gradient", { input: "pointer" });
+    const gradientPointerStops = gradientStops(gradientPointer);
+
     const gradientTouch = await openCase("gradient", { input: "touch" });
-    expect(gradientStops(gradientTouch)).toEqual(gradientStops(gradientPointer));
+    expect(gradientStops(gradientTouch)).toEqual(gradientPointerStops);
   }, 120_000);
 
   // adapt-sheets/spinner.md M-004 (A-001, A-002): under injected
@@ -239,20 +267,29 @@ describe("spinner mobile", () => {
   test("M-004 injected compact density changes no bound", async () => {
     for (const caseName of ["sizes", "layout"] as const) {
       const names = caseName === "sizes" ? [...SIZE_NAMES] : ["lg", "md"];
+
+      // Every app is fully read before the next open: a native open
+      // relaunches the single host and invalidates every earlier App.
       const plain = await openCase(caseName, { input: "pointer" });
-      const compact = await openCase(caseName, { input: "pointer", density: "compact" });
-      const both = await openCase(caseName, { input: "touch", density: "compact" });
-
-      // Same non-vacuity guard as M-003: both presets must be mounted.
-      expect(compact.texts()).toContain("env=input:pointer density:compact");
-      expect(both.texts()).toContain("env=input:touch density:compact");
-
       await settleLayout(plain, names);
+      const plainBoxes = boxSet(plain);
+
+      const compact = await openCase(caseName, { input: "pointer", density: "compact" });
       await settleLayout(compact, names);
+      const compactSnap = {
+        texts: compact.texts(),
+        boxes: boxSet(compact),
+      };
+
+      const both = await openCase(caseName, { input: "touch", density: "compact" });
       await settleLayout(both, names);
 
-      expect(boxSet(compact)).toEqual(boxSet(plain));
-      expect(boxSet(both)).toEqual(boxSet(plain));
+      // Same non-vacuity guard as M-003: both presets must be mounted.
+      expect(compactSnap.texts).toContain("env=input:pointer density:compact");
+      expect(both.texts()).toContain("env=input:touch density:compact");
+
+      expect(compactSnap.boxes).toEqual(plainBoxes);
+      expect(boxSet(both)).toEqual(plainBoxes);
     }
   }, 120_000);
 
@@ -286,30 +323,42 @@ describe("spinner mobile", () => {
   // acceptance degrades to mount/geometry/reachability invariance.
   test("M-006 reducedMotion + injected touch: mount, geometry and name constant", async () => {
     // The plain-touch run is the comparison baseline; the two reducedMotion
-    // opens are the same mounts under the weakened-motion host option.
+    // opens are the same mounts under the weakened-motion host option. Each
+    // app is fully read before the next open: a native open relaunches the
+    // single host and invalidates every earlier App.
     const plain = await openCase("sizes", { input: "touch" });
+    await settleLayout(plain, [...SIZE_NAMES]);
+    const plainBoxes = boxSet(plain);
+
     const reduced = await open("../../../spinner.fixtures.tsx", {
       reducedMotion: true,
       host: { params: { case: "sizes", input: "touch" } },
     });
+    await settleLayout(reduced, [...SIZE_NAMES]);
+    const reducedSnap = {
+      boxes: boxSet(reduced),
+      sizes: SIZE_NAMES.map((name) => lastBox(reduced, name)),
+      shown: reduced.shows("role:progressbar[Loading]"),
+      icon: reduced.shows("role:progressbar[Loading] >> id:spinner-icon"),
+    };
+
     const reducedLabel = await open("../../../spinner.fixtures.tsx", {
       reducedMotion: true,
       host: { params: { case: "label", input: "touch" } },
     });
-
-    await settleLayout(plain, [...SIZE_NAMES]);
-    await settleLayout(reduced, [...SIZE_NAMES]);
-
-    expect(boxSet(reduced)).toEqual(boxSet(plain));
-    for (const name of SIZE_NAMES) {
-      expect(lastBox(reduced, name)).toMatchObject(SIZE_BOXES[name]);
-    }
-    expect(reduced.shows("role:progressbar[Loading]")).toBe(true);
-    expect(reduced.shows("role:progressbar[Loading] >> id:spinner-icon")).toBe(true);
-
-    expect(reducedLabel.shows("role:progressbar[Loading]")).toBe(true);
+    const reducedLabelShown = reducedLabel.shows("role:progressbar[Loading]");
     await settleLayout(reducedLabel, ["label"]);
-    expect(lastBox(reducedLabel, "label")).toMatchObject({ width: 24, height: 24 });
+    const labelBox = lastBox(reducedLabel, "label");
+
+    expect(reducedSnap.boxes).toEqual(plainBoxes);
+    for (const [index, name] of SIZE_NAMES.entries()) {
+      expectBox(reducedSnap.sizes[index]!, SIZE_BOXES[name]);
+    }
+    expect(reducedSnap.shown).toBe(true);
+    expect(reducedSnap.icon).toBe(true);
+
+    expect(reducedLabelShown).toBe(true);
+    expectBox(labelBox, { width: 24, height: 24 });
   }, 120_000);
 
   // adapt-sheets/spinner.md M-007 (A-006, A-007): the fixture channel works —
@@ -349,7 +398,7 @@ describe("spinner mobile", () => {
     // pins the full assertion; this is the channel-level recheck).
     const layout = await openCase("layout", { input: "pointer" });
     await settleLayout(layout, ["lg", "md"]);
-    expect(lastBox(layout, "lg")).toMatchObject({ width: 32, height: 32 });
-    expect(lastBox(layout, "md")).toMatchObject({ width: 24, height: 24 });
+    expectBox(lastBox(layout, "lg"), { width: 32, height: 32 });
+    expectBox(lastBox(layout, "md"), { width: 24, height: 24 });
   }, 120_000);
 });

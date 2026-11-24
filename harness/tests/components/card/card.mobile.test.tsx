@@ -189,22 +189,35 @@ describe("card mobile", () => {
   // 2pt — while the painted half (title/description color and size) stays
   // exactly what the default environment resolved.
   test("M-002 compact density: padding 12, block gap 8, content gap 2, paint unchanged", async () => {
+    // Snapshot the compact app fully before the next open: a native open
+    // relaunches the single host and invalidates every earlier App.
     const compact = await openCard("mobile", {
       input: "pointer",
       density: "compact",
     });
-    const plain = await openCard("mobile", { input: "pointer" });
     await settleLayout(compact);
+    const compactSnap = {
+      padding: padding(compact),
+      blockGaps: blockGaps(compact),
+      contentGap: contentGap(compact),
+      spans: ["Mobile title", "Mobile description"].map((label) =>
+        spanStyleOf(compact, label),
+      ),
+    };
+
+    const plain = await openCard("mobile", { input: "pointer" });
     await settleLayout(plain);
+    const plainSpans = ["Mobile title", "Mobile description"].map((label) =>
+      spanStyleOf(plain, label),
+    );
 
-    expect(padding(compact)).toEqual({ top: 12, left: 12, right: 12, bottom: 12 });
-    expect(blockGaps(compact)).toEqual([8, 8]);
-    expect(contentGap(compact)).toBe(2);
+    expect(compactSnap.padding).toEqual({ top: 12, left: 12, right: 12, bottom: 12 });
+    expect(compactSnap.blockGaps).toEqual([8, 8]);
+    expect(compactSnap.contentGap).toBe(2);
 
-    for (const label of ["Mobile title", "Mobile description"]) {
-      const before = spanStyleOf(plain, label);
-      const after = spanStyleOf(compact, label);
-
+    for (const [after, before] of compactSnap.spans.map(
+      (span, index) => [span, plainSpans[index]!] as const,
+    )) {
       expect(after.color).toBe(before.color);
       expect(after.fontSize).toBe(before.fontSize);
       expect(after.fontWeight).toBe(before.fontWeight);
@@ -220,10 +233,20 @@ describe("card mobile", () => {
       input: "pointer",
       density: "compact",
     });
-    const plain = await openCard("mobile", { input: "pointer" });
+    // Read both labels off compact before the next open relaunches the host.
+    const compactSpans = ["Mobile title", "Mobile description"].map((label) =>
+      spanStyleOf(compact, label),
+    );
 
-    for (const label of ["Mobile title", "Mobile description"]) {
-      expect(spanStyleOf(compact, label)).toEqual(spanStyleOf(plain, label));
+    const plain = await openCard("mobile", { input: "pointer" });
+    const plainSpans = ["Mobile title", "Mobile description"].map((label) =>
+      spanStyleOf(plain, label),
+    );
+
+    for (const [compactSpan, plainSpan] of compactSpans.map(
+      (span, index) => [span, plainSpans[index]!] as const,
+    )) {
+      expect(compactSpan).toEqual(plainSpan);
     }
   }, 120_000);
 
@@ -267,22 +290,26 @@ describe("card mobile", () => {
   // `focusable={false}` form has no `nsh/test` read-back; the layout and
   // callback halves are what this row can observe.
   test("M-005 injected touch: identical layout boxes and unchanged onPress pass-through", async () => {
+    // Drive the touch app to completion — settle, read, press, read —
+    // before the pointer open relaunches the host and kills its session.
     const touch = await openCard("mobile", { input: "touch", press: true });
+    await settleLayout(touch);
+    const touchBoxes = boxSet(touch);
+    await touch.press("id:card-mobile");
+    const touchPresses = callsOf(touch, "onPress").length;
+
     const pointer = await openCard("mobile", {
       input: "pointer",
       press: true,
     });
-
-    await settleLayout(touch);
     await settleLayout(pointer);
-
-    expect(boxSet(touch)).toEqual(boxSet(pointer));
-
-    await touch.press("id:card-mobile");
-    expect(callsOf(touch, "onPress")).toHaveLength(1);
-
+    const pointerBoxes = boxSet(pointer);
     await pointer.press("id:card-mobile");
-    expect(callsOf(pointer, "onPress")).toHaveLength(1);
+    const pointerPresses = callsOf(pointer, "onPress").length;
+
+    expect(touchBoxes).toEqual(pointerBoxes);
+    expect(touchPresses).toBe(1);
+    expect(pointerPresses).toBe(1);
   }, 120_000);
 });
 

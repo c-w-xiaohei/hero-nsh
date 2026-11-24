@@ -56,7 +56,9 @@ import type { ViewRef } from "nsh";
  * `host.params.input` / `host.params.width` / `host.params.density` feed the
  * `EnvironmentScope` `Scoped` always mounts (absent fields inherit the host
  * baseline — the popover A-010 convention; a no-param fragment would break
- * the popover presence chain).
+ * the popover presence chain). `host.params.acap` forwards to the mobile
+ * SearchField.Input's `autoCapitalize` (the literal-typing rows set "none":
+ * iOS capitalizes even synthesized keystrokes).
  *
  * It sits next to harness/nsh.json on purpose: NSH takes the entry's own
  * directory as the app root, so an entry under harness/tests/... finds no
@@ -296,6 +298,7 @@ type MobileCaseProps = {
   controlled?: boolean;
   controlledInput?: boolean;
   defaultOpen?: boolean;
+  autoCapitalize?: string;
 };
 
 function MobileCase(props: MobileCaseProps) {
@@ -399,6 +402,7 @@ function MobileCase(props: MobileCaseProps) {
                   <SearchField.Input
                     testID="ac-search-input"
                     placeholder="Search animals..."
+                    autoCapitalize={props.autoCapitalize}
                   />
                 </SearchField.Group>
               </SearchField>
@@ -490,6 +494,11 @@ function Fixture() {
         controlled={flag("controlled")}
         controlledInput={flag("controlledInput")}
         defaultOpen={flag("open")}
+        // Literal-typing rows: iOS applies UITextInput autocapitalization even
+        // to synthesized key events; the param stays absent otherwise.
+        autoCapitalize={
+          host.params.acap === undefined ? undefined : String(host.params.acap)
+        }
       />
     </Scoped>
   );

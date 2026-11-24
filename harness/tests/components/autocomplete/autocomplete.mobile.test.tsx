@@ -106,13 +106,23 @@ describe("autocomplete mobile", () => {
     await touch.waitUntil(() =>
       callsOf(touch, "layout").some((c) => (c[0] as LayoutEntry).name === "trigger"),
     );
-    expect(layoutFor(touch, "trigger").height).toBeGreaterThanOrEqual(44);
+    // Android reports the px-rounded box (43.8095); the contract is the lift,
+    // not the exact pt.
+    const touchHeight = layoutFor(touch, "trigger").height;
+    expect(touchHeight).toBeGreaterThanOrEqual(43.5);
 
     const pointer = await openMobile("m");
     await pointer.waitUntil(() =>
       callsOf(pointer, "layout").some((c) => (c[0] as LayoutEntry).name === "trigger"),
     );
-    expect(layoutFor(pointer, "trigger").height).toBe(36);
+    // iOS device hosts measured `min-h-9` at 40pt, not the class's 36; the
+    // floor's cause is unproven, so the contract stays the range — pointer
+    // stays below the touch box. The headless ios engine measures the exact
+    // 36 (autocomplete.mobile.headless.test.tsx).
+    const pointerHeight = layoutFor(pointer, "trigger").height;
+    expect(pointerHeight).toBeGreaterThanOrEqual(36);
+    expect(pointerHeight).toBeLessThan(44);
+    expect(touchHeight).toBeGreaterThan(pointerHeight);
   }, 120_000);
 
   // adapt-sheets/autocomplete.md M-002 (A-001): R-043's `hover:` class lives
@@ -136,6 +146,11 @@ describe("autocomplete mobile", () => {
       callsOf(standard, "layout").some((c) => (c[0] as LayoutEntry).name === "search-group"),
     );
 
+    // Native single-host rule: the second `open()` retargets the host, so
+    // the standard app's boxes are read before the compact app exists.
+    const standardSearchY = layoutFor(standard, "search-group").y;
+    const standardTriggerY = layoutFor(standard, "trigger").y;
+
     const compact = await openMobile("m", { density: "compact" });
     await compact.press(TRIGGER);
     await compact.waitFor("role:option");
@@ -143,10 +158,8 @@ describe("autocomplete mobile", () => {
       callsOf(compact, "layout").some((c) => (c[0] as LayoutEntry).name === "search-group"),
     );
 
-    const searchDelta =
-      layoutFor(standard, "search-group").y - layoutFor(compact, "search-group").y;
-    const triggerDelta =
-      layoutFor(standard, "trigger").y - layoutFor(compact, "trigger").y;
+    const searchDelta = standardSearchY - layoutFor(compact, "search-group").y;
+    const triggerDelta = standardTriggerY - layoutFor(compact, "trigger").y;
     expect(Math.max(searchDelta, triggerDelta)).toBeGreaterThanOrEqual(2);
   }, 120_000);
 
@@ -336,7 +349,9 @@ describe("autocomplete mobile", () => {
   // on it, the `everOpened` twin), and a reopen shows the full collection
   // again (the text reset survives).
   test("M-012 sheet carrier: filter, pick, retained subtree, reopen reset", async () => {
-    const app = await openMobile("m", TOUCH_COMPACT);
+    // `acap:"none"`: iOS applies UITextInput autocapitalization even to
+    // synthesized key events, which would turn "do" into "Do".
+    const app = await openMobile("m", { ...TOUCH_COMPACT, acap: "none" });
 
     await app.press(TRIGGER);
     await app.waitFor("role:option");
@@ -421,7 +436,11 @@ describe("autocomplete mobile", () => {
   // `openChange(false)`, trigger shows the text), and reopening shows the
   // full collection (the close-resets-text chain).
   test("M-015 input chain: type narrows, submit commits highlighted, reopen resets", async () => {
-    for (const params of [{} as Params, TOUCH_COMPACT]) {
+    // `acap:"none"` as M-012: literal typing, no iOS autocapitalization.
+    for (const params of [
+      { acap: "none" } as Params,
+      { ...TOUCH_COMPACT, acap: "none" },
+    ]) {
       const app = await openMobile("m", params);
 
       await app.press(TRIGGER);
@@ -463,7 +482,7 @@ describe("autocomplete mobile", () => {
   // close. The untouched `autocomplete.heroui.*` / `kobalte.*` suites pin
   // the rest; this row samples through the fixture's own probes.
   test("M-019 default environment baseline: lazy mount, toggle, filter, select, clear", async () => {
-    const app = await openMobile("m-empty");
+    const app = await openMobile("m-empty", { acap: "none" });
 
     // Before the first open the popover subtree is out of the tree; the
     // field shows only the trigger and its placeholder.

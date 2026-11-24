@@ -290,14 +290,17 @@ describe("toolbar mobile", () => {
   // geometry (rows stacked with 8pt gaps, children aligned at the leading
   // edge) in both environments.
   test("M-006 layout bounds are identical under pointer and touch; vertical keeps its geometry", async () => {
+    // Native relaunches the single host per `open()` — the pointer run's
+    // frames are snapshotted (copied data) before the touch open replaces
+    // the host; reads off the earlier app die with it.
     const pointer = await openToolbar("wide");
     await firstFrame(pointer, ...WIDE_NAMES);
+    const pointerFrames = WIDE_NAMES.map((name) => [name, { ...lastFrame(pointer, name) }] as const);
 
     const touch = await openToolbar("wide", "touch");
     await firstFrame(touch, ...WIDE_NAMES);
 
-    for (const name of WIDE_NAMES) {
-      const a = lastFrame(pointer, name);
+    for (const [name, a] of pointerFrames) {
       const b = lastFrame(touch, name);
 
       expect(Math.abs(a.x - b.x)).toBeLessThan(0.01);

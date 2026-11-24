@@ -204,7 +204,12 @@ describe("combo-box mobile", () => {
   // by the backdrop on web (§6 host gap — the covered input is
   // unreachable to a press, the focused one is not).
   test("M-003 injected touch+compact+modal resolves auto to the sheet carrier", async () => {
-    const app = await openCombo("b-mobile", { ...TOUCH_COMPACT_MODAL });
+    // `acap:"none"`: iOS applies UITextInput autocapitalization even to
+    // synthesized keystrokes, which would turn "dog" into "Dog".
+    const app = await openCombo("b-mobile", {
+      ...TOUCH_COMPACT_MODAL,
+      acap: "none",
+    });
 
     await app.press("id:combo-box-input");
     await app.waitFor("role:listbox");
@@ -343,8 +348,9 @@ describe("combo-box mobile", () => {
   // selection-derived text (empty here) and leaves the list open.
   test("M-009 typing, virtual focus and Enter commit work on panel and sheet carriers", async () => {
     // Panel carrier under injected touch (auto resolves panel while the
-    // popover stays non-modal).
-    const panel = await openCombo("b-mobile", { input: "touch" });
+    // popover stays non-modal). `acap:"none"` as M-003: literal typing, no
+    // iOS autocapitalization.
+    const panel = await openCombo("b-mobile", { input: "touch", acap: "none" });
     await panel.type("id:combo-box-input", "dog");
     await panel.clock!.runFor(80);
 
@@ -368,7 +374,10 @@ describe("combo-box mobile", () => {
     // press opens it (focus trigger) and keeps focus under the backdrop;
     // typing goes key by key — `app.type`'s focusing press cannot reach a
     // backdrop-covered input on web (same §6 gap as M-003).
-    const sheet = await openCombo("b-mobile", { ...TOUCH_COMPACT_MODAL });
+    const sheet = await openCombo("b-mobile", {
+      ...TOUCH_COMPACT_MODAL,
+      acap: "none",
+    });
     await sheet.press("id:combo-box-input");
     await sheet.waitFor("role:listbox");
     await sheet.clock!.runFor(60);
@@ -394,7 +403,7 @@ describe("combo-box mobile", () => {
     // No highlighted key: Enter runs `commitValue` — the text lands on the
     // selection-derived value (empty with nothing selected), no `change`
     // fires and the list stays open.
-    const idle = await openCombo("b-mobile", { input: "touch" });
+    const idle = await openCombo("b-mobile", { input: "touch", acap: "none" });
     await idle.type("id:combo-box-input", "dog");
     await idle.clock!.runFor(80);
     // focusedKey is null after filtering without an arrow: Enter commits
@@ -414,6 +423,14 @@ describe("combo-box mobile", () => {
   // reaches `TextFieldContext.autoComplete`, read back by the fixture's
   // `fieldCtx` probe. (The soft-keyboard labels themselves are the sheet's
   // §6 host gap — real-device acceptance.)
+  //
+  // Split: the letter half of the type → filter chain lives in
+  // combo-box.mobile.web.test.tsx (a text field takes letters there). This
+  // half mounts the same phone-pad/tel/masked params against the fixture's
+  // digit-named rows (`numeric="1"`), so the full chain — every param
+  // mounted, the typed digits land, the collection filters to the matching
+  // option only — runs natively. If a native host refuses the digit insert
+  // too, that is the iOS type-delivery gap (E-1), not a param effect.
   test("M-010 caller Input keyboard params and Root autoComplete mount and filter", async () => {
     const app = await openCombo("b-mobile", {
       kt: "phone-pad",
@@ -425,16 +442,23 @@ describe("combo-box mobile", () => {
       acap: "none",
       sb: "blurAndSubmit",
       ac: "email",
+      numeric: "1",
     });
 
     await app.press("id:combo-box-trigger");
     await app.waitFor("role:listbox");
-    await app.type("id:combo-box-input", "do");
+    await app.type("id:combo-box-input", "12");
     await app.clock!.runFor(80);
 
-    expect(app.shows("role:option[Dog]")).toBe(true);
-    expect(app.shows("role:option[Cat]")).toBe(false);
-    expect(app.value("id:combo-box-input")).toBe("do");
+    // The chain ran end to end: digits reached the field's value exactly
+    // (masked hides the echo, not the value) and the filter left the one
+    // matching option — no others.
+    expect(app.value("id:combo-box-input")).toBe("12");
+    expect(app.shows("role:listbox")).toBe(true);
+    expect(app.shows("role:option[12 Apples]")).toBe(true);
+    expect(app.shows("role:option[11 Monkeys]")).toBe(false);
+    expect(app.shows("role:option[23 Beers]")).toBe(false);
+    expect(app.count("role:option")).toBe(1);
 
     const field = callsOf(app, "fieldCtx")
       .map((call) => call[0] as { autoComplete: string | null })

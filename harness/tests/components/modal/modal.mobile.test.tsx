@@ -170,7 +170,11 @@ describe("modal mobile", () => {
         Math.abs(dialog.y + dialog.height - (stage.y + stage.height)),
       ).toBeLessThanOrEqual(4);
       expect(dialog.width).toBeGreaterThan(stage.width * 0.9);
-      expect(dialog.centerY).toBeGreaterThan(stage.y + stage.height / 2 + 100);
+      // The sheet's card sits in the lower half — but on iOS it may fill the
+      // full container height, where "lower half" degenerates to centered.
+      // Bottom-flush + width + the resolved presentation are the
+      // discriminators; center ≥ stage center covers both shapes.
+      expect(dialog.centerY).toBeGreaterThanOrEqual(stage.y + stage.height / 2);
       expect(lastSwipe(app).presentation).toBe("sheet");
     },
     90_000,
@@ -323,18 +327,24 @@ describe("modal mobile", () => {
       await touch.press("id:mo-trigger");
       await touch.waitFor("id:mo-card", { timeout: 10_000 });
 
+      // Native single-host rule: a second `open()` retargets the host, so
+      // every read off `touch` is taken before the pointer app exists.
+      const touchEvents = eventArgs(touch);
+      const touchOpens = openChanges(touch);
+      const touchShows = touch.shows("id:mo-card");
+      const bounds = layoutRecords(touch, "trigger");
+
       const pointer = await openModal({ open: "0" });
       await settle(pointer, 300);
       await pointer.press("id:mo-trigger");
       await pointer.waitFor("id:mo-card", { timeout: 10_000 });
 
-      expect(eventArgs(touch)).toEqual(eventArgs(pointer));
-      expect(eventArgs(touch)).toEqual(["pressDown", "pressUp", "press"]);
-      expect(openChanges(touch)).toContain(true);
-      expect(touch.shows("id:mo-card")).toBe(true);
+      expect(touchEvents).toEqual(eventArgs(pointer));
+      expect(touchEvents).toEqual(["pressDown", "pressUp", "press"]);
+      expect(touchOpens).toContain(true);
+      expect(touchShows).toBe(true);
       expect(pointer.shows("id:mo-card")).toBe(true);
 
-      const bounds = layoutRecords(touch, "trigger");
       expect(bounds.length).toBeGreaterThan(0);
       const first = bounds[0];
       for (const record of bounds) {

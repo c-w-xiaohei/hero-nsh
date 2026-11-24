@@ -142,19 +142,30 @@ describe("description mobile", () => {
   // pointer environment's. (`focusable ?? false` stays untouched too; there
   // is no focus query to read it by.)
   test("M-003 injected touch: typography and bounds equal the pointer baseline", async () => {
+    // Snapshot the touch app fully before the next open: a native open
+    // relaunches the single host and invalidates every earlier App.
     const touch = await openFixture({ case: "basic", scope: "touch" });
-    const pointer = await openFixture({ case: "basic", scope: "pointer" });
     await settleLayout(touch, BASIC_BOXES);
-    await settleLayout(pointer, BASIC_BOXES);
+    const touchSnap = {
+      spans: DESC_SELECTORS.map((selector) => spanOf(touch, selector)),
+      shows: DESC_IDS.map((id) => touch.shows(`id:${id}`)),
+      texts: contentTexts(touch),
+      boxes: boxSet(touch),
+    };
 
-    for (const selector of DESC_SELECTORS) {
-      expect(spanOf(touch, selector)).toEqual(spanOf(pointer, selector));
-    }
-    for (const id of DESC_IDS) {
-      expect(touch.shows(`id:${id}`)).toBe(pointer.shows(`id:${id}`));
-    }
-    expect(contentTexts(touch)).toEqual(contentTexts(pointer));
-    expect(boxSet(touch)).toEqual(boxSet(pointer));
+    const pointer = await openFixture({ case: "basic", scope: "pointer" });
+    await settleLayout(pointer, BASIC_BOXES);
+    const pointerSnap = {
+      spans: DESC_SELECTORS.map((selector) => spanOf(pointer, selector)),
+      shows: DESC_IDS.map((id) => pointer.shows(`id:${id}`)),
+      texts: contentTexts(pointer),
+      boxes: boxSet(pointer),
+    };
+
+    expect(touchSnap.spans).toEqual(pointerSnap.spans);
+    expect(touchSnap.shows).toEqual(pointerSnap.shows);
+    expect(touchSnap.texts).toEqual(pointerSnap.texts);
+    expect(touchSnap.boxes).toEqual(pointerSnap.boxes);
   });
 
   // adapt-sheets/description.md M-004 (A-001): `density="compact"` changes
@@ -162,25 +173,38 @@ describe("description mobile", () => {
   // produces no class or bounds difference; combining it with touch (the
   // sheet's alternate form) matches too.
   test("M-004 density compact: typography and bounds equal the default preset", async () => {
+    // Every app is fully read before the next open: a native open
+    // relaunches the single host and invalidates every earlier App.
     const compact = await openFixture({
       case: "basic",
       scope: "pointer,density",
     });
-    const both = await openFixture({ case: "basic", scope: "touch,density" });
-    const plain = await openFixture({ case: "basic", scope: "pointer" });
     await settleLayout(compact, BASIC_BOXES);
-    await settleLayout(both, BASIC_BOXES);
-    await settleLayout(plain, BASIC_BOXES);
+    const compactSnap = {
+      spans: DESC_SELECTORS.map((selector) => spanOf(compact, selector)),
+      shows: DESC_IDS.map((id) => compact.shows(`id:${id}`)),
+      texts: contentTexts(compact),
+      boxes: boxSet(compact),
+    };
 
-    for (const selector of DESC_SELECTORS) {
-      expect(spanOf(compact, selector)).toEqual(spanOf(plain, selector));
-    }
-    for (const id of DESC_IDS) {
-      expect(compact.shows(`id:${id}`)).toBe(plain.shows(`id:${id}`));
-    }
-    expect(contentTexts(compact)).toEqual(contentTexts(plain));
-    expect(boxSet(compact)).toEqual(boxSet(plain));
-    expect(boxSet(both)).toEqual(boxSet(plain));
+    const both = await openFixture({ case: "basic", scope: "touch,density" });
+    await settleLayout(both, BASIC_BOXES);
+    const bothBoxes = boxSet(both);
+
+    const plain = await openFixture({ case: "basic", scope: "pointer" });
+    await settleLayout(plain, BASIC_BOXES);
+    const plainSnap = {
+      spans: DESC_SELECTORS.map((selector) => spanOf(plain, selector)),
+      shows: DESC_IDS.map((id) => plain.shows(`id:${id}`)),
+      texts: contentTexts(plain),
+      boxes: boxSet(plain),
+    };
+
+    expect(compactSnap.spans).toEqual(plainSnap.spans);
+    expect(compactSnap.shows).toEqual(plainSnap.shows);
+    expect(compactSnap.texts).toEqual(plainSnap.texts);
+    expect(compactSnap.boxes).toEqual(plainSnap.boxes);
+    expect(bothBoxes).toEqual(plainSnap.boxes);
   });
 
   // adapt-sheets/description.md M-005 (A-003): the context's two channels are

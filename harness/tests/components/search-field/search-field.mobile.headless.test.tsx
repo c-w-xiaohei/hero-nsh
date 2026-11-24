@@ -145,4 +145,23 @@ describe("search-field mobile (headless)", () => {
     expect(lastOf<InputProps>(pointer, "input-props").isHovered).toBe(false);
     pointer.dispose();
   }, 120_000);
+
+  // The typed-half of search-field.mobile.test.tsx M-009's disabled and
+  // readonly rows: the shared file drops `app.type` on the non-editable
+  // inputs because on a real iOS host the step kills the tester session
+  // outright ("no host that takes test steps is connected") and on a
+  // focused sibling it leaks the keys in instead. Headless, where the
+  // type step simply refuses a non-editable target, the refusal itself
+  // is the assertion.
+  test("M-009 (typed half): disabled and readonly inputs refuse typed keys", async () => {
+    const disabled = await openCase("disabled", { testInput: "pointer" });
+    expect(disabled.enabled(INPUT)).toBe(false);
+    await disabled.type(INPUT, "x").catch(() => undefined);
+    expect(disabled.value(INPUT)).toBe("hero");
+
+    const readonly = await openCase("readonly", { testInput: "pointer" });
+    expect(readonly.enabled(INPUT)).toBe(false);
+    await readonly.type(INPUT, "x").catch(() => undefined);
+    expect(readonly.value(INPUT)).toBe("hero");
+  }, 120_000);
 });

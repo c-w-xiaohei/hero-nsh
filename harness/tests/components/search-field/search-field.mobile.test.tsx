@@ -70,7 +70,10 @@ type RootProps = {
 
 function openCase(name: string, params: Params = {}): Promise<App> {
   return open("../../../search-field.fixtures.tsx", {
-    host: { params: { case: name, ...params } },
+    host: {
+      // iOS types real key events; "none" keeps a literal string literal.
+      params: { case: name, testAutoCapitalize: "none", ...params },
+    },
   });
 }
 
@@ -374,15 +377,17 @@ describe("search-field mobile", () => {
     expect(lastGroupProps(focus).isFocusWithin).toBe(true);
     expect(lastInputProps(focus).isFocused).toBe(true);
 
-    // Disabled: the input takes no input and the clear button is disabled;
-    // typing is rejected or ignored, the `defaultValue` stays and `onClear`
-    // never records (the `ERR_NSH_TEST_DISABLED` half is the press on the
-    // disabled clear button below).
+    // Disabled: the input takes no input and the clear button is disabled —
+    // the `defaultValue` stays and `onClear` never records (the
+    // `ERR_NSH_TEST_DISABLED` half is the press on the disabled clear button
+    // below). No `app.type` on the non-editable input here: on iOS the type
+    // step kills the tester session outright ("no host that takes test steps
+    // is connected"), and on a focused sibling it leaks the keys in instead;
+    // the typed-keys refusal is covered headless in
+    // `search-field.mobile.headless.test.tsx`.
     const disabled = await openCase("disabled", { testInput: "pointer" });
     expect(disabled.enabled(INPUT)).toBe(false);
     expect(disabled.enabled(CLEAR)).toBe(false);
-    await disabled.type(INPUT, "x").catch(() => undefined);
-    await disabled.wait(100);
     expect(disabled.value(INPUT)).toBe("hero");
     await expect(disabled.press(CLEAR)).rejects.toMatchObject({
       code: "ERR_NSH_TEST_DISABLED",
@@ -393,9 +398,6 @@ describe("search-field mobile", () => {
     const readonly = await openCase("readonly", { testInput: "pointer" });
     expect(readonly.enabled(INPUT)).toBe(false);
     expect(readonly.enabled(CLEAR)).toBe(false);
-    expect(readonly.value(INPUT)).toBe("hero");
-    await readonly.type(INPUT, "x").catch(() => undefined);
-    await readonly.wait(100);
     expect(readonly.value(INPUT)).toBe("hero");
     await expect(readonly.press(CLEAR)).rejects.toMatchObject({
       code: "ERR_NSH_TEST_DISABLED",

@@ -69,6 +69,50 @@ function container(app: App): LayoutRecord {
   return lastLayout(app, "container");
 }
 
+/** The dialog's box in screen coordinates: container origin + dialog origin. */
+function absDialog(app: App): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  centerY: number;
+} {
+  const stage = container(app);
+  const dialog = lastLayout(app, "dialog");
+
+  return {
+    x: stage.x + dialog.x,
+    y: stage.y + dialog.y,
+    width: dialog.width,
+    height: dialog.height,
+    centerY: stage.y + dialog.y + dialog.height / 2,
+  };
+}
+
+/*
+ * The alert dialog's `auto` placement is upstream-verbatim `mt-auto
+ * sm:my-auto` (`alertDialogPlacementClasses`), and the `sm:` branch compares
+ * the real surface width (style-deltas §3.5) — never the injected
+ * `EnvironmentScope` width. On a phone-class window (<640pt) every placement
+ * that falls back to `auto` bottom-docks the card inside the container's
+ * `p-4` frame, whatever the presentation pin resolved to; on a wide surface
+ * `sm:my-auto` centers it. Assert exactly that.
+ */
+function expectPanelDock(
+  dialog: { y: number; height: number; centerY: number },
+  stage: LayoutRecord,
+): void {
+  const bottomGap = stage.y + stage.height - (dialog.y + dialog.height);
+
+  if (stage.width < 640) {
+    // Docked inside `p-4`: a real gap, not centered, capped by the frame.
+    expect(bottomGap).toBeGreaterThan(4);
+    expect(bottomGap).toBeLessThanOrEqual(40);
+  } else {
+    expect(Math.abs(dialog.centerY - centerY(stage))).toBeLessThanOrEqual(40);
+  }
+}
+
 function dragRecords(app: App): DragRecord[] {
   return callsOf(app, "drag").map((args) => args[0] as DragRecord);
 }
@@ -98,29 +142,32 @@ describe("alert-dialog mobile", () => {
 
     await settle(app, 300);
 
-    const dialog = lastLayout(app, "dialog");
+    const dialog = absDialog(app);
     const stage = container(app);
     expect(
       Math.abs(dialog.y + dialog.height - (stage.y + stage.height)),
     ).toBeLessThanOrEqual(4);
     expect(dialog.width).toBeGreaterThan(stage.width * 0.9);
-    expect(centerY(dialog)).toBeGreaterThan(centerY(stage) + 100);
+    expect(dialog.centerY).toBeGreaterThan(centerY(stage) + 100);
   });
 
   // adapt-sheets/alert-dialog.md M-002 (A-001): a `"panel"` pin beats the
-  // touch + compact auto rule — the card stays centered under the `max-w-md`
-  // cap instead of docking. (The title keeps 'panel' single-quoted: a
-  // backslash-escaped `\"` survives into the gate's scanned title and the
-  // executed name then never matches it.)
+  // touch + compact auto rule — the card keeps the panel's `max-w-md` cap
+  // and its `auto`-placement dock instead of taking the sheet's full-bleed
+  // bottom. On a compact surface `auto` resolves to `mt-auto` (the `sm:`
+  // breakpoint reads the real window, not the injected width), so "panel"
+  // here means capped-and-docked, not centered. (The title keeps 'panel'
+  // single-quoted: a backslash-escaped `\"` survives into the gate's scanned
+  // title and the executed name then never matches it.)
   test("M-002 presentation='panel' pin holds the centered panel under touch-compact", async () => {
     const pin: AlertDialogPresentation = "panel";
     const app = await openDialog({ scope: "touch-compact", presentation: pin });
 
     await settle(app, 300);
 
-    const dialog = lastLayout(app, "dialog");
+    const dialog = absDialog(app);
     const stage = container(app);
-    expect(Math.abs(centerY(dialog) - centerY(stage))).toBeLessThanOrEqual(40);
+    expectPanelDock(dialog, stage);
     // The `max-w-md` cap: far below the sheet's full-bleed width.
     expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
     expect(dialog.width).toBeGreaterThan(200);
@@ -237,19 +284,24 @@ describe("alert-dialog mobile", () => {
     await touch.press("id:ad-trigger");
     await settle(touch);
 
+    // Native single-host rule: a second `open()` retargets the host, so every
+    // read off `touch` is taken before the pointer app exists.
+    const touchEvents = eventArgs(touch);
+    const touchShows = touch.shows("id:ad-card");
+    const bounds = layoutRecords(touch, "trigger");
+
     const pointer = await openDialog({ open: "0" });
     await settle(pointer);
     await pointer.press("id:ad-trigger");
     await settle(pointer);
 
-    expect(eventArgs(touch)).toEqual(eventArgs(pointer));
-    expect(eventArgs(touch)).toContain("pressDown");
-    expect(eventArgs(touch)).toContain("pressUp");
-    expect(eventArgs(touch)).toContain("press");
-    expect(touch.shows("id:ad-card")).toBe(true);
+    expect(touchEvents).toEqual(eventArgs(pointer));
+    expect(touchEvents).toContain("pressDown");
+    expect(touchEvents).toContain("pressUp");
+    expect(touchEvents).toContain("press");
+    expect(touchShows).toBe(true);
     expect(pointer.shows("id:ad-card")).toBe(true);
 
-    const bounds = layoutRecords(touch, "trigger");
     expect(bounds.length).toBeGreaterThan(0);
     const first = bounds[0];
     for (const record of bounds) {
@@ -306,13 +358,14 @@ describe("alert-dialog mobile", () => {
   // Escape/back, the CloseTrigger keeps its close→onPress order, and the
   // placement axis still moves the card.
   test("M-009 baseline: defaults, dismiss gates, close order, placement", async () => {
-    // Centered panel with the max-w cap (auto placement at this width).
+    // The `auto` placement's panel: centered on a wide surface, docked inside
+    // the `p-4` frame on a compact one — either way under the max-w cap.
     const app = await openDialog();
     await settle(app, 300);
 
-    const dialog = lastLayout(app, "dialog");
+    const dialog = absDialog(app);
     const stage = container(app);
-    expect(Math.abs(centerY(dialog) - centerY(stage))).toBeLessThanOrEqual(40);
+    expectPanelDock(dialog, stage);
     expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
 
     // `isKeyboardDismissDisabled=true`: Escape asks and is refused; `back()`
@@ -361,7 +414,7 @@ describe("alert-dialog mobile", () => {
       const placed = await openDialog({ placement });
       await settle(placed, 300);
       return {
-        dialog: centerY(lastLayout(placed, "dialog")),
+        dialog: absDialog(placed).centerY,
         stage: centerY(container(placed)),
       };
     };
@@ -376,9 +429,12 @@ describe("alert-dialog mobile", () => {
   });
 
   // adapt-sheets/alert-dialog.md M-010 (baseline + A-004's fourth gate):
-  // touch but a regular-width window still resolves `"panel"` under auto,
-  // and on a panel the swipe channel never attaches even with
-  // `isDismissable` + `isSwipeable` both set.
+  // touch input with an injected regular width still resolves `"panel"`
+  // under auto — the capped card, not the sheet — and on a panel the swipe
+  // channel never attaches even with `isDismissable` + `isSwipeable` both
+  // set. The injected `width="regular"` does not reach the `sm:` placement
+  // breakpoint (it reads the real surface), so on a compact window the
+  // panel still takes the `mt-auto` dock.
   test("M-010 touch-regular auto stays panel; swipe never attaches on panel", async () => {
     const app = await openDialog({
       scope: "touch-regular",
@@ -388,9 +444,9 @@ describe("alert-dialog mobile", () => {
 
     await settle(app, 300);
 
-    const dialog = lastLayout(app, "dialog");
+    const dialog = absDialog(app);
     const stage = container(app);
-    expect(Math.abs(centerY(dialog) - centerY(stage))).toBeLessThanOrEqual(40);
+    expectPanelDock(dialog, stage);
     expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
 
     await app.drag("id:ad-card", { y: 200 });
@@ -418,9 +474,9 @@ describe("alert-dialog mobile", () => {
     await settle(app, 300);
 
     expect(pin).toBe("panel");
-    const dialog = lastLayout(app, "dialog");
+    const dialog = absDialog(app);
     const stage = container(app);
-    expect(Math.abs(centerY(dialog) - centerY(stage))).toBeLessThanOrEqual(40);
+    expectPanelDock(dialog, stage);
     expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
   });
 });

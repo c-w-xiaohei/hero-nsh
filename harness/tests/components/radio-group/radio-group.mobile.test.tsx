@@ -175,12 +175,19 @@ describe("radio-group mobile", () => {
       const app = await openGroup({ ...params, orientation: "horizontal" });
       await app.waitUntil(
         () =>
+          layouts(app, "group").length > 0 &&
           layouts(app, "radio", "Dogs").length > 0 &&
           layouts(app, "radio", "Cats").length > 0,
       );
-      expect(lastLayout(app, "radio", "Cats").y).toBe(
-        lastLayout(app, "radio", "Dogs").y,
-      );
+      // Same-row y-equality is ambiguous on a phone-width host — the
+      // `flex-row flex-wrap` style may legitimately wrap a second item
+      // onto the next line. What `orientation="horizontal"` guarantees
+      // instead is main-axis sizing: each item is content-sized
+      // (narrower than the group), where `flex-col` would stretch it to
+      // the group's full cross-axis width.
+      const groupWidth = lastLayout(app, "group").width;
+      expect(lastLayout(app, "radio", "Cats").width).toBeLessThan(groupWidth);
+      expect(lastLayout(app, "radio", "Dogs").width).toBeLessThan(groupWidth);
     }
   }, 120_000);
 

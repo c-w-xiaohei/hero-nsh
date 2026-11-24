@@ -120,8 +120,12 @@ describe("meter mobile", () => {
     expect(app.shows("id:track >> id:fill")).toBe(true);
 
     await settleLayout(app, ["root", "track", "fill"]);
-    expect(lastBox(app, "track").width).toBe(300);
-    expect(lastBox(app, "fill").width).toBe(180);
+    // Native layout reports fractional-px bounds (Android measured
+    // 52.1905/27.8095 for 52/28pt elsewhere at its device dpi): the
+    // contracts are the 300pt track and 60% fill, asserted within a
+    // 0.25pt quantization window, not a tolerance on the geometry.
+    expect(Math.abs(lastBox(app, "track").width - 300)).toBeLessThan(0.25);
+    expect(Math.abs(lastBox(app, "fill").width - 180)).toBeLessThan(0.25);
   }, 120_000);
 
   // adapt-sheets/meter.md M-002 (baseline): every other case's geometry and
@@ -134,20 +138,21 @@ describe("meter mobile", () => {
     const sizes = await openMobile("sizes", { input: "pointer" });
     await settleLayout(sizes, ["track-sm", "track-md", "track-lg", "fill-sm", "fill-md", "fill-lg"]);
 
-    expect(lastBox(sizes, "track-sm").height).toBe(4);
-    expect(lastBox(sizes, "track-md").height).toBe(8);
-    expect(lastBox(sizes, "track-lg").height).toBe(12);
-    expect(lastBox(sizes, "track-sm").width).toBe(300);
-    expect(lastBox(sizes, "fill-sm").width).toBe(120);
-    expect(lastBox(sizes, "fill-md").width).toBe(180);
-    expect(lastBox(sizes, "fill-lg").width).toBe(240);
+    // Fractional-px bound as M-001: exact track/fill pins ±0.25pt.
+    expect(Math.abs(lastBox(sizes, "track-sm").height - 4)).toBeLessThan(0.25);
+    expect(Math.abs(lastBox(sizes, "track-md").height - 8)).toBeLessThan(0.25);
+    expect(Math.abs(lastBox(sizes, "track-lg").height - 12)).toBeLessThan(0.25);
+    expect(Math.abs(lastBox(sizes, "track-sm").width - 300)).toBeLessThan(0.25);
+    expect(Math.abs(lastBox(sizes, "fill-sm").width - 120)).toBeLessThan(0.25);
+    expect(Math.abs(lastBox(sizes, "fill-md").width - 180)).toBeLessThan(0.25);
+    expect(Math.abs(lastBox(sizes, "fill-lg").width - 240)).toBeLessThan(0.25);
     expect(sizes.shows("id:output-sm >> text:40%")).toBe(true);
     expect(sizes.shows("id:output-lg >> text:80%")).toBe(true);
 
     const colors = await openMobile("colors", { input: "pointer" });
     await settleLayout(colors, ["fill-success", "fill-danger"]);
 
-    expect(lastBox(colors, "fill-success").width).toBe(150);
+    expect(Math.abs(lastBox(colors, "fill-success").width - 150)).toBeLessThan(0.25);
     const successFill = colors.viewStyle("id:fill-success");
     const dangerFill = colors.viewStyle("id:fill-danger");
     expect(successFill?.backgroundColor).toBeTruthy();
@@ -157,23 +162,23 @@ describe("meter mobile", () => {
     const valueLabel = await openMobile("value-label", { input: "pointer" });
     await settleLayout(valueLabel, ["fill"]);
     expect(valueLabel.shows("id:value-label >> text:3 of 10 completed")).toBe(true);
-    expect(lastBox(valueLabel, "fill").width).toBe(90);
+    expect(Math.abs(lastBox(valueLabel, "fill").width - 90)).toBeLessThan(0.25);
 
     const customFormat = await openMobile("custom-format", { input: "pointer" });
     await settleLayout(customFormat, ["fill"]);
     expect(customFormat.texts().some((text) => text.includes("$750"))).toBe(true);
-    expect(lastBox(customFormat, "fill").width).toBe(225);
+    expect(Math.abs(lastBox(customFormat, "fill").width - 225)).toBeLessThan(0.25);
 
     const disabled = await openMobile("disabled", { input: "pointer" });
     await settleLayout(disabled, ["fill"]);
     expect(disabled.enabled("role:progressbar[Storage]")).toBe(false);
     expect(disabled.shows("id:output >> text:50%")).toBe(true);
-    expect(lastBox(disabled, "fill").width).toBe(150);
+    expect(Math.abs(lastBox(disabled, "fill").width - 150)).toBeLessThan(0.25);
 
     const renderProp = await openMobile("render-prop", { input: "pointer" });
     await settleLayout(renderProp, ["fill"]);
     expect(renderProp.shows("id:output >> text:done 40% (40%)")).toBe(true);
-    expect(lastBox(renderProp, "fill").width).toBe(120);
+    expect(Math.abs(lastBox(renderProp, "fill").width - 120)).toBeLessThan(0.25);
   }, 120_000);
 
   // adapt-sheets/meter.md M-003 (A-001, A-002, A-003): under injected
@@ -181,19 +186,26 @@ describe("meter mobile", () => {
   // identical to the pointer baseline — the component table carries no
   // `input` axis, so nothing may move.
   test("M-003 injected touch changes no box and no text", async () => {
+    // Snapshot the pointer app fully before the next open: a native open
+    // relaunches the single host and invalidates every earlier App.
     const pointer = await openMobile("default", { input: "pointer" });
+    await settleLayout(pointer, ["root", "output", "track", "fill"]);
+    const pointerSnap = {
+      texts: pointer.texts(),
+      boxes: boxSet(pointer),
+      content: contentTexts(pointer),
+    };
+
     const touch = await openMobile("default", { input: "touch" });
+    await settleLayout(touch, ["root", "output", "track", "fill"]);
 
     // The scope really engaged — without this line the comparison below
     // would pass even if `host.params.input` never reached EnvironmentScope.
     expect(touch.texts()).toContain("env=input:touch density:default");
-    expect(pointer.texts()).toContain("env=input:pointer density:default");
+    expect(pointerSnap.texts).toContain("env=input:pointer density:default");
 
-    await settleLayout(pointer, ["root", "output", "track", "fill"]);
-    await settleLayout(touch, ["root", "output", "track", "fill"]);
-
-    expect(boxSet(touch)).toEqual(boxSet(pointer));
-    expect(contentTexts(touch)).toEqual(contentTexts(pointer));
+    expect(boxSet(touch)).toEqual(pointerSnap.boxes);
+    expect(contentTexts(touch)).toEqual(pointerSnap.content);
   }, 120_000);
 
   // adapt-sheets/meter.md M-004 (A-001, A-002): under injected
@@ -202,15 +214,17 @@ describe("meter mobile", () => {
   // and the radii do not follow the preset.
   test("M-004 injected compact density changes no box", async () => {
     const plain = await openMobile("default", { input: "pointer" });
+    await settleLayout(plain, ["root", "output", "track", "fill"]);
+    const plainBoxes = boxSet(plain);
+
     const compact = await openMobile("default", { input: "pointer", density: "compact" });
 
     // Same non-vacuity guard as M-003: the compact preset must be mounted.
     expect(compact.texts()).toContain("env=input:pointer density:compact");
 
-    await settleLayout(plain, ["root", "output", "track", "fill"]);
     await settleLayout(compact, ["root", "output", "track", "fill"]);
 
-    expect(boxSet(compact)).toEqual(boxSet(plain));
+    expect(boxSet(compact)).toEqual(plainBoxes);
   }, 120_000);
 
   // adapt-sheets/meter.md M-005 (A-004): under injected touch, pressing the
@@ -285,11 +299,11 @@ describe("meter mobile", () => {
     const baseline = await openMobile("default", { input: "pointer" });
     await settleLayout(baseline, ["fill"]);
     expect(baseline.shows("role:progressbar[Storage]")).toBe(true);
-    expect(lastBox(baseline, "fill").width).toBe(180);
+    expect(Math.abs(lastBox(baseline, "fill").width - 180)).toBeLessThan(0.25);
 
     const touch = await openMobile("default", { input: "touch" });
     await settleLayout(touch, ["fill"]);
     expect(touch.shows("role:progressbar[Storage]")).toBe(true);
-    expect(lastBox(touch, "fill").width).toBe(180);
+    expect(Math.abs(lastBox(touch, "fill").width - 180)).toBeLessThan(0.25);
   }, 120_000);
 });

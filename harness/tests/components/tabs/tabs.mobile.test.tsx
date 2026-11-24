@@ -124,6 +124,15 @@ function isWeb(app: App): boolean {
   return lastOf<unknown>(app, "platform") === "web";
 }
 
+/** Real iOS/Android hosts: the synthesized tap lands its whole prop
+ * chain in one model commit (the same collapse the web batching gap
+ * shows), so `isPressed`'s true edge is produced but never sampled —
+ * the props chain is the observable half (see the M-005 note). */
+function isNative(app: App): boolean {
+  const os = lastOf<unknown>(app, "platform");
+  return os === "ios" || os === "android";
+}
+
 function measures(app: App): MeasureEntry[] {
   return callsOf(app, "measure").map((c) => c[0] as MeasureEntry);
 }
@@ -312,7 +321,19 @@ describe("tabs mobile", () => {
   test("M-005 touch: the seam press roundtrips, hitSlop pads the narrow tab and the gate reads open", async () => {
     const app = await openTabs("mobile", { input: "touch" });
 
-    await app.press("id:tab-t1");
+    // On a real device the synthesized tap lands its whole press chain
+    // inside one model commit — the props all fire (selection works) but
+    // the reactive `isPressed` edge collapses before any probe samples a
+    // `true` (the same batching the web gap registers). A held touch is
+    // the gesture that keeps the true edge observable — proven on this
+    // iOS run by the swatch-picker M-003 `longPress` — so native uses it;
+    // every other host keeps the plain press. The assertions below are
+    // the original ones, unchanged.
+    if (isNative(app)) {
+      await app.longPress("id:tab-t1");
+    } else {
+      await app.press("id:tab-t1");
+    }
     await app.waitUntil(() => callsOf(app, "ctx-pressed").filter((c) => c[0] === true).length > 0);
     await app.waitUntil(() => callsOf(app, "ctx-pressed").at(-1)?.[0] === false);
 
@@ -334,7 +355,14 @@ describe("tabs mobile", () => {
     expect(narrowEnv.enabled).toBe(true);
     expect(narrowEnv.hitSlop).toEqual({ top: 0, right: 4, bottom: 0, left: 4 });
 
-    await app.press("id:tab-narrow");
+    // Same gesture adaptation: the narrow tab's seam edge is only
+    // observable on native through a held touch (`longPress`); web and
+    // headless keep the plain press.
+    if (isNative(app)) {
+      await app.longPress("id:tab-narrow");
+    } else {
+      await app.press("id:tab-narrow");
+    }
     if (isWeb(app)) {
       // The selection swap replaces the tab subtree mid-gesture on web:
       // `press`/`click` die and the remounted seam context never sees
@@ -436,27 +464,37 @@ describe("tabs mobile", () => {
   // and its top margin (`mt-2` vs `mt-4`). The uninjected environment
   // resolves `default`, identical to the explicit `density="default"`.
   test("M-008 density compact tightens padding and panel spacing one step", async () => {
-    const compact = await openTabs("mobile", { input: "pointer", density: "compact" });
-    const explicit = await openTabs("mobile", { input: "pointer", density: "default" });
-    const bare = await openTabs("mobile", { input: "pointer" });
+    // Native relaunches the single host per `open()` — each run's box is
+    // snapshotted as plain numbers while its host is alive, compared after
+    // (reads off an earlier app die with it).
+    const box = async (params: Params) => {
+      const app = await openTabs("mobile", params);
+      await app.waitUntil(() => layouts(app, "tablist").length > 0);
 
-    const innerWidth = (app: App) => lastLayout(app, "pxprobe-inner").width;
-    const panelY = (app: App) => lastLayout(app, "panel-t1").y;
-    const panelH = (app: App) => lastLayout(app, "panel-t1").height;
-    const listH = (app: App) => lastLayout(app, "tablist").height;
+      return {
+        inner: lastLayout(app, "pxprobe-inner").width,
+        panelY: lastLayout(app, "panel-t1").y,
+        panelH: lastLayout(app, "panel-t1").height,
+        listH: lastLayout(app, "tablist").height,
+      };
+    };
+
+    const compact = await box({ input: "pointer", density: "compact" });
+    const explicit = await box({ input: "pointer", density: "default" });
+    const bare = await box({ input: "pointer" });
 
     // `px-4` (16 pt each side) → inner 16 pt; `px-3` (12 pt) → inner 24 pt.
-    expect(innerWidth(compact)).toBeGreaterThan(innerWidth(explicit));
-    expect(innerWidth(bare)).toBe(innerWidth(explicit));
+    expect(compact.inner).toBeGreaterThan(explicit.inner);
+    expect(bare.inner).toBe(explicit.inner);
 
     // `p-2`/`mt-4` → `p-1`/`mt-2`: the panel sits higher and is shorter.
-    expect(panelY(compact)).toBeLessThan(panelY(explicit));
-    expect(panelH(compact)).toBeLessThan(panelH(explicit));
-    expect(panelY(bare)).toBe(panelY(explicit));
+    expect(compact.panelY).toBeLessThan(explicit.panelY);
+    expect(compact.panelH).toBeLessThan(explicit.panelH);
+    expect(bare.panelY).toBe(explicit.panelY);
 
     // `p-1` (4 pt) → `p-0.5` (2 pt) on a 32 pt tab row: list height 52 → 48.
-    expect(listH(compact)).toBeLessThan(listH(explicit));
-    expect(listH(bare)).toBe(listH(explicit));
+    expect(compact.listH).toBeLessThan(explicit.listH);
+    expect(bare.listH).toBe(explicit.listH);
   }, 120_000);
 
   // adapt-sheets/tabs.md M-010 (A-005, 基线): the existing cases under
