@@ -155,7 +155,12 @@ function holdSamples(app: App): HoldSample[] {
  * both inputs (A-004 leaves the order untouched): the field's `onChange`
  * marker first — `step()` runs at the head of `handlePressDown` — then
  * down/start/changeT on the way down and up/end/changeF/press on the way
- * up. */
+ * up. `onChange` markers repeat: the button's hold-repeat is a real
+ * behavior and a synthesized `app.press` holds the touch for a
+ * host-dependent duration — iOS's lands past the 400 ms pointer first
+ * delay, so its stream shows extra `["onChange"]` entries between
+ * `changeT` and `up` (run 45344508005: value "6" from one press). The
+ * phase chain itself is asserted verbatim below. */
 const INC_PRESS_SEQUENCE = [
   ["onChange"],
   ["inc", "down"],
@@ -166,6 +171,29 @@ const INC_PRESS_SEQUENCE = [
   ["inc", "changeF"],
   ["inc", "press"],
 ] as const;
+
+/* The stream the one press records: `onChange` heads it (step runs at
+ * press-down), the button's phase chain is verbatim, and hold-repeat
+ * `onChange` markers may interleave — but only inside the hold window:
+ * `handlePressUp` clears the timer (`step-button.tsx:382`) before `up`
+ * reports, so an `onChange` at or after release is a stray step the
+ * contract forbids, never a tolerated repeat. */
+function pressStream(app: App): unknown[][] {
+  const stream = eventStream(app);
+  expect(stream[0]).toEqual(["onChange"]);
+
+  const up = stream.findIndex((e) => e[0] === "inc" && e[1] === "up");
+  const phases = stream.filter(
+    // Drop only repeat `onChange` markers strictly inside the hold
+    // window: `clearHold()` precedes `up`, so one landing at or after
+    // release is a stray step and must stay for the verbatim check —
+    // filtering it out too would silently mask it.
+    (e, i) => e[0] !== "onChange" || i === 0 || i >= up,
+  );
+  expect(phases).toEqual([...INC_PRESS_SEQUENCE]);
+
+  return stream;
+}
 
 function eventStream(app: App): unknown[][] {
   return callsOf(app, "events");
@@ -183,10 +211,15 @@ describe("number-field mobile", () => {
     await app.press("id:nf-inc");
     await app.waitUntil(() => buttonPhases(app, "inc").includes("press"));
 
-    // The contract half: one step committed, the full press chain recorded.
-    expect(app.value("id:nf-input")).toBe("1");
-    expect(eventStream(app)).toEqual([...INC_PRESS_SEQUENCE]);
+    // The contract half: each committed step reported `onChange` once and
+    // the value equals the step count (0 + N — a long synthesized press
+    // may legitimately repeat, iOS CI proved), the full press chain
+    // recorded, `onPress` exactly once.
+    pressStream(app);
     expect(callsOf(app, "onPress")).toEqual([["inc"]]);
+    const steps = callsOf(app, "events").filter((c) => c[0] === "onChange").length;
+    expect(steps).toBeGreaterThanOrEqual(1);
+    expect(app.value("id:nf-input")).toBe(String(steps));
 
     // The seam half: every edge report is seam=false (the mount-time false
     // included), the gate reads closed with no slop, and a held press still
@@ -230,9 +263,13 @@ describe("number-field mobile", () => {
     await app.press("id:nf-inc");
     await app.waitUntil(() => buttonPhases(app, "inc").includes("press"));
 
-    // The user-visible contract is unchanged under touch.
-    expect(app.value("id:nf-input")).toBe("1");
-    expect(eventStream(app)).toEqual([...INC_PRESS_SEQUENCE]);
+    // The user-visible contract is unchanged under touch: the verbatim
+    // press chain with hold-repeat `onChange` markers allowed past the
+    // first, and the value tracking the committed step count.
+    pressStream(app);
+    const touchSteps = callsOf(app, "events").filter((c) => c[0] === "onChange").length;
+    expect(touchSteps).toBeGreaterThanOrEqual(1);
+    expect(app.value("id:nf-input")).toBe(String(touchSteps));
 
     // The seam's own flag round-tripped through the button's context probe.
     const seams = seamEdges(app, "inc");
@@ -414,17 +451,22 @@ describe("number-field mobile", () => {
 
       await app.press("id:nf-inc");
       await app.waitUntil(() => buttonPhases(app, "inc").includes("press"));
-      expect(eventStream(app)).toEqual([...INC_PRESS_SEQUENCE]);
+      pressStream(app);
 
       // focusInput ran on press-down: the input holds the focus, so the
       // keymap binding is live and a following type lands in the same box.
+      // The step count before arrowup is host-dependent (a held press may
+      // repeat — see `pressStream`), so it is read, not pinned.
+      const stepsSoFar = callsOf(app, "events").filter((c) => c[0] === "onChange").length;
       await app.keyboard.press("arrowup");
       await app.waitUntil(
-        () => callsOf(app, "events").filter((c) => c[0] === "onChange").length === 2,
+        () => callsOf(app, "events").filter((c) => c[0] === "onChange").length === stepsSoFar + 1,
       );
-      // 0 → press step 1 → arrowup step 2 → typed "3" appends → "23".
+      // The type lands in the focused input and appends to its current
+      // text: 0 → N press steps → arrowup step → typed "3" → "<N+1>3".
+      const text = app.value("id:nf-input");
       await app.type("id:nf-input", "3");
-      expect(app.value("id:nf-input")).toBe("23");
+      expect(app.value("id:nf-input")).toBe(`${text}3`);
     }
   }, 120_000);
 

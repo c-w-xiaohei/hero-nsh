@@ -19,6 +19,13 @@ import { callsOf } from "../../helpers/calls";
  * M-015 is the host-derived half of the environment contract:
  * `open({platform:"ios"})` carries no scope injection and the host reports
  * touch itself.
+ *
+ * M-014's Escape half carries its strict copy here: the shared mobile
+ * file's iOS arm asserts only the degraded acceptance for the registered
+ * E-3 gap (`ModalHost.present` installs no first responder, so Escape
+ * dies at the surface root on the UIKit host) — headless has no such gap
+ * and closes through JS key bubbling, so the strict contract stays
+ * verified on this engine.
  */
 
 type DragRecord = {
@@ -211,6 +218,21 @@ describe("drawer-mobile", () => {
         .slice(reclaim)
         .some((record) => record.offset > 0),
     ).toBe(true);
+  });
+
+  // adapt-sheets/drawer.md M-014 (baseline), Escape half, strict copy:
+  // headless has no E-3 first-responder gap — the key bubbles to the
+  // Dialog — so the strict contract stays verified here: Escape closes
+  // through `openChange(false)` and the dialog leaves.
+  test("M-014 strict: Escape closes through openChange(false)", async () => {
+    const app = await openDrawer("basic");
+
+    await settle(app);
+    expect(app.shows("id:dr-dialog")).toBe(true);
+
+    await app.keyboard.press("escape");
+    expect(callsOf(app, "openChange").at(-1)?.[0]).toBe(false);
+    await app.waitFor("id:dr-dialog", { state: "gone" });
   });
 
   // adapt-sheets/drawer.md M-015 (A-001, A-002): `open({platform:"ios"})`

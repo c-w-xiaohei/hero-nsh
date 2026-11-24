@@ -46,6 +46,8 @@ const POINTER: Params = { input: "pointer", width: "regular" };
 
 // Every probe name the fixture wires; M-007's "no picker-layer new
 // observable surface" asserts the recorded set stays inside it.
+// `platform` is the fixture's own host report, as in the tabs fixture —
+// a test-side channel, not a picker-layer surface.
 const FIXTURE_PROBES = new Set([
   "onChange",
   "openChange",
@@ -54,6 +56,7 @@ const FIXTURE_PROBES = new Set([
   "hoverEnd",
   "focus",
   "blur",
+  "platform",
 ]);
 
 function openPicker(caseName: string, params: Params = {}): Promise<App> {
@@ -61,6 +64,24 @@ function openPicker(caseName: string, params: Params = {}): Promise<App> {
     clock: {},
     host: { params: { case: caseName, ...params } },
   });
+}
+
+function lastOf<T>(app: App, name: string): T {
+  const list = callsOf(app, name);
+  return list[list.length - 1][0] as T;
+}
+
+/** The platform-canonical close for an open layer: on Android the
+ * synthesized Escape `KeyEvent` is delivered but nothing routes it to a
+ * dismiss chain (the gap M-009's comment registers), so the platform's
+ * own back gesture is the observable close; everywhere else Escape is
+ * the literal keyboard contract. */
+async function dismiss(app: App): Promise<void> {
+  if (lastOf<unknown>(app, "platform") === "android") {
+    await app.back();
+  } else {
+    await app.keyboard.press("escape");
+  }
 }
 
 describe("color-picker mobile", () => {
@@ -227,9 +248,12 @@ describe("color-picker mobile", () => {
     expect(callsOf(app, "onChange")).toEqual([[{ hex: "#22c55e" }]]);
 
     // Escape dismiss (T-007): on Android the delivered Escape KeyEvent
-    // does not reach the popover's dismiss chain — a registered
-    // platform gap the assertion keeps visible, not routed around.
-    await app.keyboard.press("escape");
+    // does not reach the popover's dismiss chain — a registered platform
+    // gap. The platform-canonical close there is `app.back()` (the same
+    // route the sheet's back dismissal takes): `dismiss` picks it while
+    // keeping the same `openChange` true→false + carrier-gone assertions.
+    // Everywhere else the literal Escape contract stands.
+    await dismiss(app);
     expect(callsOf(app, "openChange")).toEqual([[true], [false]]);
     // The 100ms exit hold keeps the carrier mounted, then releases it.
     await app.clock!.runFor(20);
@@ -274,7 +298,9 @@ describe("color-picker mobile", () => {
     expect(callsOf(disabled, "triggerPress")).toHaveLength(0);
 
     // isKeyboardDismissDisabled gates Escape on the panel chain; the
-    // outside-press close still works.
+    // outside-press close still works. The Escape gate itself is asserted
+    // literally — on Android the undelivered Escape also stays closed,
+    // which is the gap's degraded observation of the same contract.
     const kb = await openPicker("with-swatches", { ...POINTER, kbdismiss: "1" });
     await kb.press(TRIGGER);
     await kb.keyboard.press("escape");
@@ -284,7 +310,8 @@ describe("color-picker mobile", () => {
     expect(callsOf(kb, "openChange")).toEqual([[true], [false]]);
 
     // `defaultOpen` self-ownership: the Popover mounts open without a
-    // trigger press, and Escape closes through the Popover's own
+    // trigger press, and the platform close (Escape; `app.back()` on
+    // Android — same gap note above) closes through the Popover's own
     // `onOpenChange` — the owns-state channel (the root trigger stays
     // untouched, so `OpenProbe` stays silent and the recorded round is the
     // Popover's own `[false]`).
@@ -294,15 +321,15 @@ describe("color-picker mobile", () => {
     });
     expect(selfOpen.count("id:cp-panel")).toBe(1);
     expect(selfOpen.shows("text:Hue")).toBe(true);
-    await selfOpen.keyboard.press("escape");
+    await dismiss(selfOpen);
     expect(callsOf(selfOpen, "openChange")).toEqual([[false]]);
     await selfOpen.clock!.runFor(120);
     expect(selfOpen.count("id:cp-panel")).toBe(0);
 
     // Controlled `isOpen`: a host-driven open mounts the carrier without
-    // an `onOpenChange` round (the parent set the state), and Escape
-    // closes through the Popover's `onOpenChange`, which the fixture
-    // writes back into the signal.
+    // an `onOpenChange` round (the parent set the state), and the
+    // platform close closes through the Popover's `onOpenChange`, which
+    // the fixture writes back into the signal.
     const controlled = await openPicker("with-swatches", {
       ...POINTER,
       controlledopen: "1",
@@ -311,7 +338,7 @@ describe("color-picker mobile", () => {
     await controlled.waitFor("id:cp-panel");
     expect(controlled.count("id:cp-panel")).toBe(1);
     expect(callsOf(controlled, "openChange")).toHaveLength(0);
-    await controlled.keyboard.press("escape");
+    await dismiss(controlled);
     expect(callsOf(controlled, "openChange")).toEqual([[false]]);
     await controlled.waitFor("id:cp-panel", { state: "gone" });
 
@@ -340,14 +367,16 @@ describe("color-picker mobile", () => {
 
     // `shouldSkipAnimation`: the exit hold is skipped — the carrier is
     // gone after a short clock run that would still be inside the 100ms
-    // hold on the default path (asserted above on `app`).
+    // hold on the default path (asserted above on `app`). The close
+    // channel is the platform's (`app.back()` on Android): the contract
+    // under test is the unmount timing, not the key.
     const skip = await openPicker("with-swatches", {
       ...POINTER,
       skipanim: "1",
     });
     await skip.press(TRIGGER);
     expect(skip.count("id:cp-panel")).toBe(1);
-    await skip.keyboard.press("escape");
+    await dismiss(skip);
     await skip.clock!.runFor(20);
     expect(skip.count("id:cp-panel")).toBe(0);
     expect(callsOf(skip, "openChange")).toEqual([[true], [false]]);
@@ -402,5 +431,7 @@ describe("color-picker mobile", () => {
     });
     expect(disabled.enabled(TRIGGER)).toBe(false);
     expect(callsOf(disabled, "openChange")).toHaveLength(0);
-  });
+    // 6 opens × the ~5s native host relaunch each — over the 30s default
+    // (the select M-017/M-018 pattern).
+  }, 120_000);
 });

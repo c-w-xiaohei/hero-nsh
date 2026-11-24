@@ -420,9 +420,21 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
 
     const key = event.key;
 
+    // Backspace stays ungated: `field.backspace` refuses the edit itself on
+    // a read-only or non-editable segment, but keeps its placeholder
+    // focus-move — the same split the keymap path has.
     if (key === "Backspace" || key === "Delete" || key === "backspace" || key === "delete") {
       field?.backspace(props.segment);
 
+      return;
+    }
+
+    // A read-only or non-editable segment's channel is enabled (the host
+    // must keep it focusable — see the mount below) but takes no typed
+    // characters: `field.type` is withheld here, as React Aria's
+    // `useDateSegment` ignores `e.data` on a read-only segment
+    // (`useDateSegment.ts:190-240`). `typeKey` gates the same check again.
+    if (!canEdit()) {
       return;
     }
 
@@ -670,7 +682,12 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
           segment a Tab stop. Under `pointer` it does not exist at all (M-004's
           negative assertion); the A-001 `relative` anchors it to the raised
           segment box. A read-only or non-editable segment keeps the channel
-          focusable but `readonly`, so the soft keyboard stays closed. */}
+          focusable: `readonly` cannot carry the gate — NSH maps it to
+          `editable: false`, which on iOS is `UITextField.setEnabled(false)`,
+          and a disabled field refuses `becomeFirstResponder` (the readonly
+          `waitFocused` failures' root, input.rs). The host therefore keeps
+          `editable` and `handleChannelKeyPress` withholds `field.type`;
+          the field state gates the same edits again. */}
       <If when={isInTabOrder() && input() === "touch"}>
         <Input
           ref={(value) => {
@@ -679,7 +696,6 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
           testID={`dig-seg-${props.segment.type}`}
           value=""
           caret={false}
-          readonly={!canEdit()}
           keyboardType={channelKeyboardType()}
           submitBehavior="blurAndSubmit"
           // The channel must stay hit-testable: iOS (and NSH's own hit

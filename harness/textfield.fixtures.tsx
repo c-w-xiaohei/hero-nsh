@@ -583,7 +583,13 @@ function KeyboardCase() {
         enterKeyHint={enterKeyHint === "" ? undefined : (enterKeyHint as TextFieldEnterKeyHint)}
         autoComplete={autoComplete === "" ? undefined : autoComplete}
         autoCorrect={autoCorrect === "" ? undefined : autoCorrect}
-        autoCapitalize={autoCapitalize === "" ? undefined : autoCapitalize}
+        // `autoCapitalize` is the param this case exists to forward; when
+        // it is unset the test-only `testAutoCapitalize` keeps typed
+        // literals literal — iOS types real key events and the default
+        // `sentences` capitalized the M-005 "z" (expected "Z" to be "z").
+        autoCapitalize={
+          autoCapitalize === "" ? textParam("testAutoCapitalize") : autoCapitalize
+        }
         maxLength={maxLength === "" ? undefined : Number(maxLength)}
         onChange={probe("onChange")}
       />

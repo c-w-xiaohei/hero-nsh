@@ -281,9 +281,13 @@ describe("time-field mobile", () => {
     expect(readonly.count("id:dig-seg-hour")).toBe(1);
     expect(readonly.count("id:dig-seg-minute")).toBe(1);
     expect(readonly.count("id:dig-seg-dayPeriod")).toBe(1);
-    // `enabled` is false for a readonly input: the channel is focusable but
-    // takes no editing.
-    expect(readonly.enabled("id:dig-seg-hour")).toBe(false);
+    // `enabled` reports the host edit gate: the channel stays enabled —
+    // a host-disabled input cannot become first responder on iOS
+    // (`input.rs` `setEnabled(config.editable)` on the `readonly` prop,
+    // the readonly-channel waitFocused failures' root). Read-only is
+    // honored by refusing the edits (`field.type` is gated), not by
+    // disabling the field.
+    expect(readonly.enabled("id:dig-seg-hour")).toBe(true);
 
     await readonly.press("id:dig-seg-hour");
     await waitFocused(readonly, "hour");
@@ -430,7 +434,7 @@ describe("time-field mobile", () => {
 
       const readonly = await openCase("readonly", params);
       if (params.testInput === "touch") {
-        expect(readonly.enabled("id:dig-seg-hour")).toBe(false);
+        expect(readonly.enabled("id:dig-seg-hour")).toBe(true);
         await readonly.press("id:dig-seg-hour");
         await waitFocused(readonly, "hour");
         await readonly.keyboard.press("1");

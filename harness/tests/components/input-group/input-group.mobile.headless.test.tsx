@@ -1,6 +1,7 @@
 import { describe, expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
 import { callsOf } from "../../helpers/calls";
+import { lastFocus } from "../../testers/input-group";
 
 /*
  * Headless mobile assertions for the input-group adapt unit — the halves
@@ -30,6 +31,12 @@ function focusedRecords(app: App): FocusRecord[] {
   return callsOf(app, "focus")
     .map((c) => c[0] as FocusRecord)
     .filter((r) => r.part === "input" && r.focused === true);
+}
+
+function blurredRecords(app: App): FocusRecord[] {
+  return callsOf(app, "focus")
+    .map((c) => c[0] as FocusRecord)
+    .filter((r) => r.part === "input" && r.focused === false);
 }
 
 function openCase(name: string, params: Record<string, string> = {}): Promise<App> {
@@ -127,6 +134,32 @@ describe("input-group mobile (headless)", () => {
       callsOf(app, "layout").some((c) => (c[0] as LayoutEntry).name === "root"),
     );
     expect(layoutFor(app, "root").height).toBe(36);
+  }, 120_000);
+
+  // adapt-sheets/input-group.md M-003's strict half (A-008): the shared
+  // file gates the zero-blur edge behind `hostOs !== "ios"` because the
+  // real iOS host's outside-tap resign records a transient blur
+  // (native-input-root-cause.md §affix-blur) — and the headless engine
+  // reports `platform.os` "ios" too, so the gate alone would drop the
+  // edge on the only host class where it is provable. The
+  // `platform:"windows"` pin makes this run strictly headless: affix and
+  // group presses focus the input, record no blur edge, and never edit.
+  test("M-003 (strict half): affix and group presses focus with zero blur edges", async () => {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }]) {
+      const app = await openCase("default", params);
+
+      await app.press("id:ig-prefix");
+      await app.waitUntil(() => focusedRecords(app).length > 0);
+      expect(lastFocus(app, "input")).toBe(true);
+
+      await app.press("id:ig-suffix");
+      await app.press("id:ig-root");
+      expect(lastFocus(app, "input")).toBe(true);
+      expect(app.value("label:Amount")).toBe("10");
+      // Strict edge: every recorded edge is a focus gain — no press
+      // blurred the input.
+      expect(blurredRecords(app)).toHaveLength(0);
+    }
   }, 120_000);
 
   // The typed-half of input-group.mobile.test.tsx M-007's disabled row:

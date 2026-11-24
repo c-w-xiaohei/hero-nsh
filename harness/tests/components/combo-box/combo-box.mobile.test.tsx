@@ -414,7 +414,9 @@ describe("combo-box mobile", () => {
     expect(callsOf(idle, "change")).toHaveLength(0);
     expect(idle.value("id:combo-box-input")).toBe("");
     expect(idle.shows("role:listbox")).toBe(true);
-  });
+    // 3 opens × the ~5s native host relaunch each — logged past the 30s
+    // default on iOS (run 45344508005).
+  }, 120_000);
 
   // adapt-sheets/combo-box.md M-010 (A-006): the caller `Input`'s keyboard
   // parameters (`keyboardType`/`returnKeyType`/`enterKeyHint`/`inputMode`/
@@ -510,7 +512,9 @@ describe("combo-box mobile", () => {
     // cell, so the trigger text keeps the placeholder colour throughout.
     // `platform:"web"`/`app.hover`/`spanStyle` are web-only — that half lives
     // in combo-box.mobile.web.test.tsx.
-  });
+    // 2 opens × the ~5s native host relaunch each — logged past the 30s
+    // default on iOS (run 45344508005).
+  }, 120_000);
 
   // adapt-sheets/combo-box.md M-012 (A-007): the F(消费) contract — rows
   // the `items` path never mounts still resolve through the collection:
@@ -561,7 +565,9 @@ describe("combo-box mobile", () => {
     expect(defaults.count("role:option")).toBe(1);
     expect(defaults.shows("role:option[Two]")).toBe(true);
     expect(defaults.shows("role:option[One]")).toBe(false);
-  });
+    // 3 opens × the ~5s native host relaunch each — logged past the 30s
+    // default on iOS (run 45344508005).
+  }, 120_000);
 
   // adapt-sheets/combo-box.md M-014 (基线): default-environment zero-drift
   // sample — the pre-existing semantics the existing suites pin, re-asserted
@@ -836,5 +842,7 @@ describe("combo-box mobile", () => {
       .at(-1)!;
     expect(field.autoComplete).toBe("email");
     expect(fields.shows("role:option[Cat]")).toBe(true);
-  });
+    // 6 opens × the ~5s native host relaunch each — logged past the 30s
+    // default on iOS (run 45344508005).
+  }, 120_000);
 });

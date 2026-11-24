@@ -213,14 +213,25 @@ describe("color-input-group mobile", () => {
     for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const app = await openCase("events", params);
 
-      await app.paste("id:group-input", { text: "#abcdef" });
-      expect(callsOf(app, "onPaste")).toHaveLength(1);
+      // Registered gap: `app.paste` has no Android driver — the call
+      // rejects "pasting in tests is not supported on this platform yet"
+      // (documented NSH gap, CI 7e00f79). Only that one step is gated on
+      // the fixture's `env` platform report; paste coverage stays on iOS,
+      // web and headless, and the key-press half runs on Android too.
+      const os = (callsOf(app, "env").at(-1)?.[0] as { os?: string } | undefined)?.os;
+      expect(os).toBeDefined();
+      if (os !== "android") {
+        await app.paste("id:group-input", { text: "#abcdef" });
+        expect(callsOf(app, "onPaste")).toHaveLength(1);
+      }
 
       await app.type("id:group-input", "xyz");
       // iOS delivers the paste itself as exactly one synthetic key event
-      // carrying the whole text; desktop/Android deliver none. The full
-      // sequence is therefore one of two exact shapes — anything else
-      // typed or leaked on either host still fails.
+      // carrying the whole text; desktop and Android deliver none — and
+      // Android's `app.paste` step above does not run at all, so its
+      // sequence is exactly the three typed keys. The full sequence is
+      // therefore one of two exact shapes — anything else typed or
+      // leaked on either host still fails.
       const keyPresses = callsOf(app, "onKeyPress");
       if (keyPresses.length === 4) {
         expect(keyPresses[0]).toEqual([{ key: "#abcdef" }]);

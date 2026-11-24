@@ -60,6 +60,16 @@ function probeNames(app: App): string[] {
   return calls(app).map((c) => c.name);
 }
 
+// The host OS the fixture reports through its `platform` probe (the
+// table/tabs convention): `os === "ios"` is where M-006's NOT_FOUND
+// rejection degrades — every other assertion is host-blind. The strict
+// rejections also run in `color-field.mobile.headless.test.tsx` under a
+// `platform:"windows"` pin (the headless engine reports "ios" too, so an
+// os-name gate alone cannot keep coverage on it).
+function hostOs(app: App): unknown {
+  return callsOf(app, "platform").at(-1)?.[0];
+}
+
 // adapt-sheets/color-field.md M-009 (A-010) — the shared half of the two
 // M-009 rows below. Four sequential opens per scope: a dozen web hosts in
 // one test exhausts the web target, so the row splits one scope per test
@@ -190,19 +200,43 @@ describe("color-field mobile", () => {
     for (const params of [{ testInput: "pointer" }, { testInput: "touch" }] as Params[]) {
       const app = await openCase("prefix-suffix", params);
 
-      await expect(app.press("text:#")).rejects.toMatchObject({
-        code: "ERR_NSH_TEST_NOT_FOUND",
-      });
-      await expect(app.press("text:%")).rejects.toMatchObject({
-        code: "ERR_NSH_TEST_NOT_FOUND",
-      });
-      await expect(app.press("id:group")).rejects.toMatchObject({
-        code: "ERR_NSH_TEST_NOT_FOUND",
-      });
-      await expect(app.press("id:field-root")).rejects.toMatchObject({
-        code: "ERR_NSH_TEST_NOT_FOUND",
-      });
-      expect(calls(app)).toHaveLength(0);
+      if (hostOs(app) === "ios") {
+        // Two ios reporters, two physical press outcomes — registered NSH
+        // gap: the real iOS host's `app.press` resolves a selector through
+        // the ancestor hit test (CI 45344508005: all four presses resolved
+        // instead of rejecting), while the headless engine — which also
+        // reports `platform.os` "ios" and runs this file under bare
+        // `pnpm test` — keeps the strict resolver and rejects
+        // ERR_NSH_TEST_NOT_FOUND. Neither outcome is pinned here: what
+        // both hosts share, and what this arm asserts, is the contract's
+        // outcome — the presses happen and no component probe records
+        // (the zero-probe tail below). The catch still constrains any
+        // rejection to exactly NOT_FOUND, so a different failure (e.g.
+        // DISABLED on a wired surface) cannot slip through. The verbatim
+        // strict rejections run on Android in the else below and on a
+        // `platform:"windows"` headless pin in
+        // `color-field.mobile.headless.test.tsx`.
+        for (const selector of ["text:#", "text:%", "id:group", "id:field-root"]) {
+          await app.press(selector).catch((error) => {
+            expect(error).toMatchObject({ code: "ERR_NSH_TEST_NOT_FOUND" });
+          });
+        }
+      } else {
+        await expect(app.press("text:#")).rejects.toMatchObject({
+          code: "ERR_NSH_TEST_NOT_FOUND",
+        });
+        await expect(app.press("text:%")).rejects.toMatchObject({
+          code: "ERR_NSH_TEST_NOT_FOUND",
+        });
+        await expect(app.press("id:group")).rejects.toMatchObject({
+          code: "ERR_NSH_TEST_NOT_FOUND",
+        });
+        await expect(app.press("id:field-root")).rejects.toMatchObject({
+          code: "ERR_NSH_TEST_NOT_FOUND",
+        });
+      }
+      // `platform` is the fixture's own OS record, not an app probe.
+      expect(calls(app).filter((c) => c.name !== "platform")).toHaveLength(0);
     }
   }, 120_000);
 

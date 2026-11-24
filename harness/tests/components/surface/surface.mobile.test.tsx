@@ -187,6 +187,8 @@ describe("surface mobile", () => {
   // and the press record equal the pointer environment's. The press still
   // fires the caller's probe exactly once under touch: the component does
   // not auto-become a button (the A-002 rule's touch-side control).
+  // eight native relaunches (observeCase ×2) outrun the default 30s budget
+  // on iOS; raised like select M-017/018 for the same relaunch cost.
   test("M-004 injected touch changes no observable across all cases", async () => {
     const touch = await observeCase({ input: "touch" });
     const pointer = await observeCase({ input: "pointer" });
@@ -196,7 +198,7 @@ describe("surface mobile", () => {
     expect(touch.boxes).toEqual(pointer.boxes);
     expect(touch.pressCalls).toHaveLength(1);
     expect(touch.pressCalls).toEqual(pointer.pressCalls);
-  });
+  }, 120_000);
 
   // adapt-sheets/surface.md M-005 (A-001): `density="compact"` (with touch,
   // the most divergent injection) moves nothing — the table has no density

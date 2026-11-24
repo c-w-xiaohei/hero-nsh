@@ -1,4 +1,4 @@
-import { host, mount, Text, View } from "nsh";
+import { host, mount, platform, Text, View } from "nsh";
 import type { JSX } from "nsh";
 import { Button, EnvironmentScope, InputGroup, Label, TextField } from "@heroui/react";
 import { Stage } from "@scenario/stage";
@@ -382,6 +382,12 @@ function KbdCase() {
 
 function Fixture() {
   const name = String(host.params.case ?? "default");
+
+  // The host OS the app itself reports (the table/tabs convention): the
+  // mobile tests branch on it to register degraded acceptance where a
+  // native host gap (UIKit's outside-tap resign on M-003) makes the
+  // transient edge unobservable — never a silent skip.
+  probe("platform")(platform.os);
 
   if (name === "disabled") return <Scoped><DisabledCase /></Scoped>;
   if (name === "textarea") return <Scoped><TextAreaCase /></Scoped>;

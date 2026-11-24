@@ -1,4 +1,4 @@
-import { host, mount, signal, Text, View } from "nsh";
+import { host, mount, platform, signal, Text, View } from "nsh";
 import type { JSX } from "nsh";
 import { Button, createInput, EnvironmentScope, Tooltip } from "@heroui/react";
 import { probe } from "./probe";
@@ -162,6 +162,12 @@ function MobileOwnsCase() {
 
 function Fixture() {
   const name = String(host.params.case ?? "close-delay");
+
+  // The host OS the app itself reports (the table/tabs convention): mobile
+  // tests branch on it to register degraded acceptance where a native host
+  // gap (the synthesized long-press's extra open/close cycle) makes the
+  // event stream unobservable — final-state assertions stay literal.
+  probe("platform")(platform.os);
 
   if (name === "position-props") {
     const variant = String(host.params.variant ?? "default");

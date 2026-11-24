@@ -1,4 +1,4 @@
-import { effect, host, mount, signal, Text, View } from "nsh";
+import { effect, host, mount, platform, signal, Text, View } from "nsh";
 import type { JSX } from "nsh";
 import {
   createInput,
@@ -286,6 +286,12 @@ function HandoffCase() {
 
 function Fixture() {
   const name = String(host.params.case ?? "");
+
+  // The host OS the app itself reports (the table/tabs convention): mobile
+  // tests branch on it to register degraded acceptance where a native host
+  // gap (scroll-pan arbitration vs the JS move-claim) makes the physical
+  // layer unobservable — the iOS-only rows, never a silent skip.
+  probe("platform")(platform.os);
 
   if (name === "forward" || name === "back" || name === "cancel") {
     return <AnimationApp />;

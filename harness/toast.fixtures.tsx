@@ -1,4 +1,4 @@
-import { effect, host, mount, signal, Text, View } from "nsh";
+import { effect, host, mount, platform, signal, Text, View } from "nsh";
 import type { Component, JSX } from "nsh";
 import { Button, EnvironmentScope, Toast, ToastQueue, toast } from "@heroui/react";
 import type { ToastPlacement } from "../src/components/toast/toast-context";
@@ -972,33 +972,6 @@ function SwipeMixed() {
   );
 }
 
-/* M-004: the "top" and "top start" placements as sibling touch stacks. */
-function SwipeTopDual() {
-  return (
-    <Frame>
-      <SwipeStack
-        count={1}
-        placement="top"
-        providerSwipeable
-        scope="touch"
-        tag="top"
-        timeout={0}
-        titlePrefix="Top"
-      />
-      <SwipeStack
-        closeLabel="S"
-        count={1}
-        placement="top start"
-        providerSwipeable
-        scope="touch"
-        tag="ts"
-        timeout={0}
-        titlePrefix="TS"
-      />
-    </Frame>
-  );
-}
-
 /* M-007: row-level and provider-level `isSwipeable={false}` as sibling touch stacks. */
 function SwipeOff() {
   return (
@@ -1102,12 +1075,17 @@ const cases: Record<string, Component> = {
   "swipe-top": SwipeCase,
   "swipe-hold": SwipeCase,
   "swipe-mixed": SwipeMixed,
-  "swipe-top-dual": SwipeTopDual,
   "swipe-off": SwipeOff,
   "swipe-tri": SwipeTri,
 };
 
 function Fixture() {
+  // The host OS the app itself reports (the table/tabs convention): mobile
+  // tests branch on it to register degraded acceptance where a native host
+  // gap (scroll-pan arbitration vs the JS move-claim) makes the physical
+  // layer unobservable — the iOS-only rows, never a silent skip.
+  probe("platform")(platform.os);
+
   const Case = cases[String(host.params.case ?? "empty")] ?? Empty;
 
   return (

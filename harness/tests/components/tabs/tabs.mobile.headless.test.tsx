@@ -154,6 +154,37 @@ describe("tabs mobile (headless)", () => {
     expect(settled.scale).toBe(1);
   }, 120_000);
 
+  // adapt-sheets/tabs.md M-005 (A-003): the strict held-edge roundtrip the
+  // shared file's iOS arm cannot observe — `platform.os` reads "ios" on
+  // this headless engine too, but no `UIScrollView` sits under the app,
+  // so `longPress` records the full `ctx-pressed` edge sequence here
+  // while the device host's scroll PressIn arbitration drops it (the
+  // shared file's registered-gap degraded branch keeps the rest-state
+  // read there; Android keeps the edge in the same shared file). The
+  // assertions are the shared file's originals, verbatim.
+  test("M-005 held edge: the seam's isPressed roundtrips under longPress on a host that records it", async () => {
+    const app = await openTabs("mobile", { input: "touch" });
+
+    await app.longPress("id:tab-t1");
+    await app.waitUntil(() =>
+      callsOf(app, "ctx-pressed").filter((c) => c[0] === true).length > 0,
+    );
+    await app.waitUntil(() => callsOf(app, "ctx-pressed").at(-1)?.[0] === false);
+    const edges = callsOf(app, "ctx-pressed").map((c) => c[0] as boolean);
+    expect(edges[0]).toBe(false);
+    expect(edges).toContain(true);
+    expect(edges.at(-1)).toBe(false);
+
+    await app.longPress("id:tab-narrow");
+    await app.waitUntil(() =>
+      callsOf(app, "narrow-ctx-pressed").filter((c) => c[0] === true).length > 0,
+    );
+    await app.waitUntil(() => callsOf(app, "narrow-ctx-pressed").at(-1)?.[0] === false);
+    const narrowEdges = callsOf(app, "narrow-ctx-pressed").map((c) => c[0] as boolean);
+    expect(narrowEdges).toContain(true);
+    expect(narrowEdges.at(-1)).toBe(false);
+  }, 120_000);
+
   // adapt-sheets/tabs.md M-009 (A-006, 基线): the panel has no drag path —
   // `app.drag` on the mounted panel changes neither `selectionChange` nor
   // the strip's scroll offset (the dual of "no swipe pager"), while the

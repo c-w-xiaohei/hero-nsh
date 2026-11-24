@@ -1,4 +1,4 @@
-import { effect, host, mount, Text } from "nsh";
+import { effect, host, mount, platform, Text } from "nsh";
 import type { JSX } from "nsh";
 import { AlertDialog, Button, EnvironmentScope } from "@heroui/react";
 import { probe } from "@scenario/probe";
@@ -202,6 +202,13 @@ const entries: Record<string, () => JSX.Element> = {
 
 function Fixture() {
   const name = String(host.params.fixture ?? "");
+
+  // The host OS the app itself reports (the table/tabs convention): mobile
+  // tests branch on it to register degraded acceptance where a native host
+  // gap (pan arbitration, Dialog Escape) makes the physical layer
+  // unobservable — the iOS-only rows, never a silent skip.
+  probe("platform")(platform.os);
+
   const Entry = entries[name];
 
   if (!Entry) return <Text>{`unknown fixture: ${name}`}</Text>;

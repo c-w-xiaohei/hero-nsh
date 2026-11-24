@@ -254,7 +254,9 @@ describe("popover mobile", () => {
     await skip.host.send("popover.close");
     await skip.clock!.runFor(20);
     expect(skip.count("text:Retained content")).toBe(0);
-  });
+    // 5 opens × the ~5s native host relaunch each — logged past the 30s
+    // default on iOS (run 45344508005).
+  }, 120_000);
 
   // adapt-sheets/popover.md M-012 (A-010): the fixture machinery itself —
   // `Scoped`'s `input`/`width` params reach `EnvironmentScope` (touch +

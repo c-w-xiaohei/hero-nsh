@@ -366,7 +366,15 @@ describe("date-range-picker mobile", () => {
     // no edit — a key press changes nothing and no `onChange` fires.
     const ro = await openDrp("default", { input: "touch", readonly: "1" });
     expect(ro.count(START_MONTH)).toBe(1);
-    expect(ro.enabled(START_MONTH)).toBe(false);
+    // `enabled` is `true` by contract, not by accident: NSH maps `readonly`
+    // to `editable: false`, which on iOS is `UITextField.setEnabled(false)`
+    // — a disabled field refuses `becomeFirstResponder`, so the readonly
+    // channel could never take the focus the readonly contract needs. The
+    // production fix keeps the channel host-editable and refuses the keys
+    // in `handleChannelKeyPress` instead (date-input-group-segment.tsx); a
+    // readonly field is focusable-but-refuses-edits, which is exactly what
+    // the assertions below pin.
+    expect(ro.enabled(START_MONTH)).toBe(true);
 
     await ro.press(START_MONTH);
     await waitSegmentFocused(ro, "start", "month");

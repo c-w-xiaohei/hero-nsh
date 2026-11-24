@@ -21,6 +21,13 @@ import { callsOf } from "../../helpers/calls";
  * Tab moves focus on macOS headless (and on the web target — the web half
  * lives in tooltip.mobile.web.test.tsx) but not on headless windows, the
  * registered host gap.
+ *
+ * M-002 and M-003 carry their strict copies here: the shared mobile
+ * file's iOS arm asserts only the final observable state for the
+ * registered E-4 gap (the synthesized long-press dispatches a redundant
+ * open/close cycle on the UIKit host). Headless's longPress synthesis
+ * emits exactly one cycle, so the strict stream equalities stay verified
+ * on this engine.
  */
 
 const MOBILE_TIP = "text:Mobile tip";
@@ -69,6 +76,57 @@ describe("tooltip mobile (headless)", () => {
     await app.waitUntil(() => openChanges(app).includes(false));
     await app.waitUntil(() => app.count(MOBILE_TIP) === 0);
     expect(openChanges(app)).toEqual([true, false]);
+  }, 120_000);
+
+  // adapt-sheets/tooltip.md M-002 (A-001), strict copy: headless's
+  // longPress synthesis emits exactly one cycle — no E-4 driver extra
+  // open/close — so the strict stream contract stays verified here:
+  // `openChange` records [true] on the open and [true,false] after the
+  // closing press.
+  test("M-002 strict: long-press stream is [true] then [true,false]", async () => {
+    const app = await openTooltip({ scope: "touch" }, "ios");
+
+    await app.longPress("id:trigger");
+    await app.waitUntil(() => openChanges(app).includes(true));
+    await app.waitFor(MOBILE_TIP);
+
+    expect(openChanges(app)).toEqual([true]);
+    expect(app.shows(MOBILE_TIP)).toBe(true);
+    expect(callsOf(app, "longPress")).toEqual([["trigger"]]);
+
+    // The hold already released inside `app.longPress`; the tip is still
+    // open — the trailing press (if the host dispatched one) was consumed.
+    await app.press("id:trigger");
+    await app.waitUntil(() => openChanges(app).includes(false));
+    await app.waitUntil(() => app.count(MOBILE_TIP) === 0);
+
+    expect(openChanges(app)).toEqual([true, false]);
+  }, 120_000);
+
+  // adapt-sheets/tooltip.md M-003 (A-001), strict copy: headless's
+  // longPress synthesis emits exactly one cycle — no E-4 driver extra
+  // open/close — so the strict gate contract stays verified here: under
+  // `isDisabled` and `trigger="focus"` the stream never contains a `true`.
+  test("M-003 strict: refused long-press streams contain no true", async () => {
+    const disabled = await openTooltip(
+      { scope: "touch", disabled: "1" },
+      "ios",
+    );
+    await disabled.longPress("id:trigger");
+    await disabled.wait(200);
+    expect(disabled.shows(MOBILE_TIP)).toBe(false);
+    expect(openChanges(disabled)).not.toContain(true);
+    expect(callsOf(disabled, "longPress")).toEqual([["trigger"]]);
+
+    const focusOnly = await openTooltip(
+      { scope: "touch", focusOnly: "1" },
+      "ios",
+    );
+    await focusOnly.longPress("id:trigger");
+    await focusOnly.wait(200);
+    expect(focusOnly.shows(MOBILE_TIP)).toBe(false);
+    expect(openChanges(focusOnly)).not.toContain(true);
+    expect(callsOf(focusOnly, "longPress")).toEqual([["trigger"]]);
   }, 120_000);
 
   // adapt-sheets/tooltip.md M-007 (A-004, 基线): the keyboard-focus channel

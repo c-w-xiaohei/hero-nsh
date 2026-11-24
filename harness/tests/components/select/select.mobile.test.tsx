@@ -694,5 +694,7 @@ describe("select mobile", () => {
     await keepopen.press("role:option[Two]");
     expect(keepopen.count("id:sel-pop-sheet")).toBe(1);
     expect(keepopen.count("role:listbox >> text:✓")).toBe(1);
-  });
+    // 5 opens × the ~5s native host relaunch each — logged past the 30s
+    // default on iOS (run 45344508005).
+  }, 120_000);
 });

@@ -252,6 +252,10 @@ describe("date-field mobile", () => {
     const ro = await openCase("readonly", { testInput: "touch" });
     expect(ro.count("id:dig-seg-month")).toBe(1);
     expect(segmentFlag(ro, "month", "isReadOnly")).toBe(true);
+    // The readonly channel stays enabled — a host-disabled input cannot
+    // become first responder on iOS, which is what its former `readonly`
+    // prop caused there; read-only is honored by refusing the edits.
+    expect(ro.enabled("id:dig-seg-month")).toBe(true);
 
     await ro.press("id:dig-seg-month");
     await waitFocused(ro, "month");
@@ -373,6 +377,7 @@ describe("date-field mobile", () => {
 
       const readonly = await openCase("readonly", params);
       if (params.testInput === "touch") {
+        expect(readonly.enabled("id:dig-seg-month")).toBe(true);
         await readonly.press("id:dig-seg-month");
       } else {
         await readonly.press("id:df-month");

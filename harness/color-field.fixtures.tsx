@@ -1,4 +1,4 @@
-import { host, mount, signal, Text, View } from "nsh";
+import { host, mount, platform, signal, Text, View } from "nsh";
 import type { JSX } from "nsh";
 import { Input } from "nsh/base";
 import {
@@ -568,6 +568,13 @@ function BaselineCase() {
 
 function Fixture() {
   const name = String(host.params.case ?? "basic");
+
+  // The host OS the app itself reports (the table/tabs convention): the
+  // mobile tests branch on it to register degraded acceptance where a
+  // native host gap (iOS press resolving through the ancestor hit test on
+  // M-006) makes the driver's NOT_FOUND path unobservable — never a
+  // silent skip.
+  probe("platform")(platform.os);
 
   if (name === "aria") return <Scoped><AriaCase /></Scoped>;
   if (name === "required-invalid") return <Scoped><RequiredInvalidCase /></Scoped>;

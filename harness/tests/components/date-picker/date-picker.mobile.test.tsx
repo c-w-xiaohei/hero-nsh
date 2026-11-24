@@ -149,6 +149,13 @@ describe("date-picker mobile", () => {
     expect(app.count(SHEET)).toBe(0);
 
     await app.press(TRIGGER);
+    /* Native carrier-mount lag: `press` resolves at app-quiet, before the
+     * carrier's testID-bearing view registers on screen — run 45344508005's
+     * dump had the calendar already mounted while `count(PANEL)` still read
+     * 0. `waitFor` bridges the lag (the select suite's convention); the
+     * discrimination between the two carriers stays unconditional — the
+     * wrong carrier mounts nothing the wait names. */
+    await app.waitFor(PANEL);
 
     expect(app.count(PANEL)).toBe(1);
     expect(app.count(SHEET)).toBe(0);
@@ -171,6 +178,7 @@ describe("date-picker mobile", () => {
     expect(trigger.width).toBeLessThan(44);
 
     await app.press(TRIGGER);
+    await app.waitFor(PANEL);
 
     expect(app.count(PANEL)).toBe(1);
     expect(openChanges(app)).toEqual([[true]]);
@@ -199,6 +207,7 @@ describe("date-picker mobile", () => {
     const app = await openDp("open", { input: "touch", width: "compact" });
 
     await app.press(TRIGGER);
+    await app.waitFor(SHEET);
 
     expect(app.count(SHEET)).toBe(1);
     expect(app.count(PANEL)).toBe(0);
@@ -214,6 +223,7 @@ describe("date-picker mobile", () => {
   test("M-004 explicit presentation pin beats the auto rule on both environments", async () => {
     const pinnedSheet = await openDp("open", { presentation: "sheet" });
     await pinnedSheet.press(TRIGGER);
+    await pinnedSheet.waitFor(SHEET);
     expect(pinnedSheet.count(SHEET)).toBe(1);
     expect(pinnedSheet.count(PANEL)).toBe(0);
     expect(pinnedSheet.shows(CALENDAR)).toBe(true);
@@ -224,6 +234,7 @@ describe("date-picker mobile", () => {
       width: "compact",
     });
     await pinnedPanel.press(TRIGGER);
+    await pinnedPanel.waitFor(PANEL);
     expect(pinnedPanel.count(PANEL)).toBe(1);
     expect(pinnedPanel.count(SHEET)).toBe(0);
     expect(pinnedPanel.shows(CALENDAR)).toBe(true);
@@ -241,6 +252,7 @@ describe("date-picker mobile", () => {
     });
 
     await app.press(TRIGGER);
+    await app.waitFor(PANEL);
 
     expect(app.count(PANEL)).toBe(1);
     expect(app.count(SHEET)).toBe(0);
@@ -277,6 +289,7 @@ describe("date-picker mobile", () => {
     expect(touchBox.width).toBeLessThanOrEqual(28);
 
     await touch.press(TRIGGER);
+    await touch.waitFor(PANEL);
 
     expect(touch.count(PANEL)).toBe(1);
     expect(touch.count(SHEET)).toBe(0);
@@ -459,18 +472,24 @@ describe("date-picker mobile", () => {
 
     // Trigger toggle closes: a press on the covered trigger lands on the
     // outside-press close (the underlay on web, the toggle dispatch
-    // headless — either way the picker reports the close once).
+    // headless — either way the picker reports the close once). The wait
+    // after the opening press keeps the second press from racing the
+    // carrier's native mount (the M-014/M-001 class of lag).
     const toggle = await openDp("open", {}, { clock: {} });
     await toggle.press(TRIGGER);
+    await toggle.waitFor(PANEL);
     expect(openChanges(toggle)).toEqual([[true]]);
     await toggle.press(TRIGGER);
     expect(openChanges(toggle)).toEqual([[true], [false]]);
     await toggle.clock!.runFor(120);
     expect(toggle.count(PANEL)).toBe(0);
 
-    // Escape closes; the content stays mounted through its exit hold.
+    // Escape closes; the content stays mounted through its exit hold. The
+    // wait keeps Escape from reaching the surface before the layer mounted
+    // (the run's `skip` half lost exactly that race — `expected 1 to be 0`).
     const esc = await openDp("open", {}, { clock: {} });
     await esc.press(TRIGGER);
+    await esc.waitFor(PANEL);
     expect(esc.count(PANEL)).toBe(1);
     await esc.keyboard.press("escape");
     expect(openChanges(esc)).toEqual([[true], [false]]);
@@ -481,6 +500,7 @@ describe("date-picker mobile", () => {
     // `isKeyboardDismissDisabled`: Escape is gated, the trigger still closes.
     const kb = await openDp("open", { kbdismiss: "1" }, { clock: {} });
     await kb.press(TRIGGER);
+    await kb.waitFor(PANEL);
     await kb.keyboard.press("escape");
     await kb.clock!.runFor(120);
     expect(kb.count(PANEL)).toBe(1);
@@ -491,6 +511,7 @@ describe("date-picker mobile", () => {
     // `shouldSkipAnimation`: the same Escape unmounts at once.
     const skip = await openDp("open", { skipanim: "1" }, { clock: {} });
     await skip.press(TRIGGER);
+    await skip.waitFor(PANEL);
     await skip.keyboard.press("escape");
     await skip.clock!.runFor(20);
     expect(skip.count(PANEL)).toBe(0);
@@ -499,6 +520,7 @@ describe("date-picker mobile", () => {
     // once and closes the layer.
     const select = await openDp("open", {}, { clock: {} });
     await select.press(TRIGGER);
+    await select.waitFor(PANEL);
     await select.waitFor(DAY_20);
     await select.press(DAY_20);
     await select.wait(20);
@@ -513,6 +535,7 @@ describe("date-picker mobile", () => {
     // stays open.
     const stay = await openDp("no-close-on-select", {}, { clock: {} });
     await stay.press(TRIGGER);
+    await stay.waitFor(PANEL);
     await stay.waitFor(DAY_20);
     await stay.press(DAY_20);
     await stay.wait(20);
@@ -541,11 +564,13 @@ describe("date-picker mobile", () => {
 
     const injected = await openDp("open", { input: "touch", width: "compact" });
     await injected.press(TRIGGER);
+    await injected.waitFor(SHEET);
     expect(injected.count(SHEET)).toBe(1);
     expect(injected.count(PANEL)).toBe(0);
 
     const pinned = await openDp("open", { presentation: "sheet" });
     await pinned.press(TRIGGER);
+    await pinned.waitFor(SHEET);
     expect(pinned.count(SHEET)).toBe(1);
     expect(pinned.count(PANEL)).toBe(0);
 

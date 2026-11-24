@@ -1,6 +1,6 @@
 import { describe, expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
-import { callsOf } from "../../helpers/calls";
+import { calls, callsOf } from "../../helpers/calls";
 
 /*
  * Headless mobile assertions for the color-field adapt unit — the rows of
@@ -58,6 +58,37 @@ describe("color-field mobile (headless)", () => {
     const layout = records[records.length - 1];
 
     expect(layout.height).toBeGreaterThanOrEqual(44);
+  }, 120_000);
+
+  // adapt-sheets/color-field.md M-006's strict half (A-005, A-007): the
+  // shared file degrades on `platform.os === "ios"` because the real iOS
+  // host's `app.press` resolves a selector through the ancestor hit test
+  // (CI 45344508005: all four presses resolved instead of rejecting) — and
+  // the headless engine reports `platform.os` "ios" too, so the os gate
+  // alone would drop the rejection on the only host class where it is
+  // provable. The `platform:"windows"` pin makes this run strictly
+  // headless: the bare affixes and both containers keep no press channel,
+  // so every press rejects ERR_NSH_TEST_NOT_FOUND and no app probe
+  // records at all.
+  test("M-006 (strict half): affix and container presses reject NOT_FOUND with zero probes", async () => {
+    for (const params of [{ testInput: "pointer" }, { testInput: "touch" }]) {
+      const app = await openCase("prefix-suffix", params);
+
+      await expect(app.press("text:#")).rejects.toMatchObject({
+        code: "ERR_NSH_TEST_NOT_FOUND",
+      });
+      await expect(app.press("text:%")).rejects.toMatchObject({
+        code: "ERR_NSH_TEST_NOT_FOUND",
+      });
+      await expect(app.press("id:group")).rejects.toMatchObject({
+        code: "ERR_NSH_TEST_NOT_FOUND",
+      });
+      await expect(app.press("id:field-root")).rejects.toMatchObject({
+        code: "ERR_NSH_TEST_NOT_FOUND",
+      });
+      // `platform` is the fixture's own OS record, not an app probe.
+      expect(calls(app).filter((c) => c.name !== "platform")).toHaveLength(0);
+    }
   }, 120_000);
 
   // adapt-sheets/color-field.md M-002 (A-004): under touch the group's

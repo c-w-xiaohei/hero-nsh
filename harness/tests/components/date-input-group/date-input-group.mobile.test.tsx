@@ -309,6 +309,10 @@ describe("date-input-group mobile", () => {
 
     const ro = await openDig("edit-gate", { gate: "readonly", testInput: "touch" });
     expect(ro.count("id:dig-seg-month")).toBe(1);
+    // The readonly channel stays enabled — a host-disabled input cannot
+    // become first responder on iOS, which is what its former `readonly`
+    // prop caused there; read-only is honored by refusing the edits.
+    expect(ro.enabled("id:dig-seg-month")).toBe(true);
 
     await ro.press("id:dig-seg-month");
     await waitFocused(ro, "month");
@@ -422,8 +426,11 @@ describe("date-input-group mobile", () => {
 
       const readonly = await openDig("edit-gate", { gate: "readonly", ...scope });
       if (scope.testInput === "touch") {
-        // The channel mounts but stays readonly: focusable, never editable.
+        // The channel mounts and stays enabled — focusable, its edits
+        // refused in the field layer (a host-disabled channel cannot
+        // focus on iOS).
         expect(readonly.count("id:dig-seg-month")).toBe(1);
+        expect(readonly.enabled("id:dig-seg-month")).toBe(true);
         await readonly.press("id:dig-seg-month");
         await waitFocused(readonly, "month");
         await readonly.keyboard.press("1");

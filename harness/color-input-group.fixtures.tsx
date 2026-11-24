@@ -1,4 +1,4 @@
-import { host, mount, signal, Text, View } from "nsh";
+import { host, mount, platform, signal, Text, View } from "nsh";
 import type { InputRef, JSX } from "nsh";
 import { ColorInputGroup, EnvironmentScope } from "@heroui/react";
 import { ColorInputGroupFieldContext } from "../src/components/color-input-group/context";
@@ -51,7 +51,9 @@ import { probe } from "@scenario/probe";
  *                  target (toolbar's press-root case), so the no-press-channel
  *                  assertion needs probes absent, not just silent
  *   events         the `rest` pass-through probes (`onPaste`, `onKeyPress`,
- *                  `onCompositionChange`) M-007 reads in both environments
+ *                  `onCompositionChange`) M-007 reads in both environments,
+ *                  plus an `env` platform report the test gates the
+ *                  Android-unsupported `app.paste` step on
  *   baseline       every default-environment contract face in one mount —
  *                  affix text, controlled value, disabled, read-only, the
  *                  render-prop hover / focus-within group and the variant
@@ -392,6 +394,12 @@ function PressCase() {
  * both environments; the case only wires the recorders, nothing in the
  * component reads them. */
 function EventsCase() {
+  // The host's own platform report: `app.paste` has no Android driver yet
+  // (it rejects "pasting in tests is not supported on this platform yet"),
+  // so M-007 reads `env` and gates only that one step — the key-press
+  // half still runs everywhere. The chip fixture reports the same probe.
+  probe("env")({ os: platform.os });
+
   return (
     <ColorInputGroup testID="group">
       <ColorInputGroup.Input

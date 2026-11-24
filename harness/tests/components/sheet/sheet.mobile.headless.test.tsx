@@ -10,6 +10,12 @@ import { callsOf } from "../../helpers/calls";
  * adapt-sheets/sheet-handoff.md M-007 lives here: on headless the Scroll's
  * native recognizer takes a drag the predicate releases and emits real
  * offset progress, which the web target cannot produce.
+ *
+ * M-007's pull half and M-008's dismiss half also carry their strict
+ * copies here: the shared mobile file's iOS arm asserts only the degraded
+ * acceptance for the registered E-2 pan-arbitration gap (the UIKit scroll
+ * pan cancels the JS claim before it resolves) — headless has no such
+ * gap, so the strict contract stays verified on this engine.
  */
 
 type DetentRecord = {
@@ -43,6 +49,10 @@ function lastDetent(app: App): DetentRecord {
   if (!last) throw new Error("the detent probe reported nothing");
 
   return last;
+}
+
+function bodyScrollCount(app: App): number {
+  return callsOf(app, "bodyScroll").length;
 }
 
 function lastBodyOffset(app: App): number {
@@ -97,5 +107,45 @@ describe("sheet-handoff", () => {
         .some((record) => record.length < 760),
     ).toBe(true);
     expect(app.shows("id:dialog")).toBe(true);
+  });
+
+  // adapt-sheets/sheet-handoff.md M-007 (A-005), pull half, strict copy:
+  // headless has no E-2 arbitration gap — the pull provably claims — so
+  // the strict contract stays verified here: the panel's reported length
+  // dips during the drag, the gesture claimed the touches before the
+  // Scroll (no body-scroll events on its account), and the sheet stays
+  // open.
+  test("M-007 strict: pull-down claims the gesture, shrinks the panel, no scroll", async () => {
+    const app = await openSheet("handoff-locked", "touch");
+
+    await settle(app);
+    expect(lastDetent(app).isExpanded).toBe(true);
+    expect(lastDetent(app).atTop).toBe(true);
+
+    const rest = Math.max(...lastDetent(app).detents);
+    const scrolls = bodyScrollCount(app);
+    const lengthsBefore = detentCalls(app).length;
+    await app.drag("id:body", { x: 0, y: 120 });
+    await settle(app);
+
+    expect(
+      detentCalls(app)
+        .slice(lengthsBefore)
+        .some((record) => record.length < rest - 10),
+    ).toBe(true);
+    expect(bodyScrollCount(app)).toBe(scrolls);
+    expect(app.shows("id:dialog")).toBe(true);
+  });
+
+  // adapt-sheets/sheet-handoff.md M-008 (A-005), dismiss half, strict
+  // copy: headless has no E-2 arbitration gap — the claim engages and the
+  // 320-point release clears the 25%-of-panel dismiss bound — so the
+  // strict contract stays verified: the sheet closes.
+  test("M-008 strict: drag past the threshold dismisses", async () => {
+    const dismissed = await openSheet("handoff-full", "touch");
+    await settle(dismissed);
+    await dismissed.drag("id:body", { x: 0, y: 320 });
+    await dismissed.clock?.runFor(600);
+    expect(dismissed.shows("id:dialog")).toBe(false);
   });
 });

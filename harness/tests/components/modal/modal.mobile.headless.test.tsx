@@ -27,6 +27,14 @@ import { callsOf } from "../../helpers/calls";
  *   "the gesture stays a scroll and the Body offset keeps changing" can
  *   only be observed where the Scroll's native recognizer takes the
  *   released drag (sheet-handoff M-007's split, adapt sheet §6).
+ *
+ * M-005 and M-009's Escape half carry their strict copies here: the
+ * shared mobile file's iOS arm asserts only the degraded acceptance for
+ * the registered E-2 (pan arbitration) and E-3 (Escape first responder)
+ * gaps — headless has neither, so the strict displacement/dismiss
+ * contract stays verified on this engine. M-013's own test below is
+ * already its strict copy (offset engages, the drag channel records
+ * displacement, the close fires through `openChange`).
  */
 
 const VIEWPORT_W = 1024;
@@ -105,6 +113,12 @@ function swipeRecords(app: App): SwipeRecord[] {
   return callsOf(app, "swipe").map((args) => args[0] as SwipeRecord);
 }
 
+function dragRecords(app: App): { from: number; to: number }[] {
+  return callsOf(app, "drag").map(
+    (args) => args[0] as { from: number; to: number },
+  );
+}
+
 function lastSwipe(app: App): SwipeRecord {
   const records = swipeRecords(app);
   const last = records.at(-1);
@@ -131,6 +145,72 @@ async function settle(app: App, ms = 120): Promise<void> {
 }
 
 describe("modal mobile (headless)", () => {
+  // adapt-sheets/modal.md M-005 (A-005), strict copy: headless has no
+  // E-2 arbitration gap — the claim provably engages — so the strict
+  // contract stays verified here: listeners mounted, the offset and the
+  // drag channel followed the pull, and the release dismisses through
+  // `openChange(false)`. On this engine every engaged release dismisses —
+  // `dragAndHold`/`drop` still carries enough release velocity to clear
+  // the bound even at 30pt — so the settle-at-rest sub-assertion is not
+  // producible here; it stays strict in the shared file's Android/web arm.
+  test("M-005 strict: pull engages the pan and drag channels, release dismisses", async () => {
+    const app = await openModal({
+      scope: "touch-compact",
+      dismissable: "1",
+      swipeable: "1",
+    });
+
+    await app.clock?.runFor(400);
+    const before = swipeRecords(app).length;
+    await app.dragAndHold("id:mo-card", { y: 60 });
+    await app.waitUntil(
+      () =>
+        swipeRecords(app)
+          .slice(before)
+          .some((record) => record.offset > 0),
+      { timeout: 15_000 },
+    );
+
+    const swipes = swipeRecords(app);
+    expect(swipes.some((record) => record.panKeys > 0)).toBe(true);
+    expect(swipes.some((record) => record.offset > 0)).toBe(true);
+    expect(dragRecords(app).some((record) => record.to > 0)).toBe(true);
+
+    await app.drop();
+    await settle(app, 400);
+    expect(falseOpenChanges(app)).toEqual([false]);
+    await app.waitFor("id:mo-card", { state: "gone", timeout: 10_000 });
+
+    // The far pull through the shared row's own `app.drag` path dismisses
+    // the same way.
+    const far = await openModal({
+      scope: "touch-compact",
+      dismissable: "1",
+      swipeable: "1",
+    });
+
+    await far.clock?.runFor(400);
+    await far.drag("id:mo-card", { y: 400 });
+    await far.waitFor("id:mo-card", { state: "gone", timeout: 10_000 });
+
+    expect(falseOpenChanges(far)).toEqual([false]);
+    expect(far.shows("id:mo-card")).toBe(false);
+  }, 90_000);
+
+  // adapt-sheets/modal.md M-009 (baseline), Escape half, strict copy:
+  // headless has no E-3 first-responder gap — JS key bubbling reaches the
+  // Dialog — so the strict `closeOnEscape` contract stays verified here:
+  // Escape closes through `openChange(false)` and the card leaves.
+  test("M-009 strict: Escape closes through openChange(false)", async () => {
+    const app = await openModal();
+    await app.clock?.runFor(400);
+    expect(app.shows("id:mo-card")).toBe(true);
+
+    await app.keyboard.press("escape");
+    await app.waitFor("id:mo-card", { state: "gone", timeout: 10_000 });
+    expect(falseOpenChanges(app)).toEqual([false]);
+  }, 90_000);
+
   // adapt-sheets/modal.md M-011 (A-001): `open({platform:"ios"})` at 390×844
   // with no scope — the host derives `input="touch"` (`platform.desktop`
   // false) and `width="compact"` (short side under 640), so

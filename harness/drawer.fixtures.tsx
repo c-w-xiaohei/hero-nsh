@@ -1,4 +1,4 @@
-import { effect, host, mount, Text } from "nsh";
+import { effect, host, mount, platform, Text } from "nsh";
 import { Drawer, EnvironmentScope } from "@heroui/react";
 import type { DrawerPlacement } from "@heroui/react";
 import { DrawerContext } from "../src/components/drawer/drawer-context";
@@ -154,6 +154,12 @@ function DrawerApp() {
  * mount → Fixture → DrawerApp → Drawer.
  */
 function Fixture() {
+  // The host OS the app itself reports (the table/tabs convention): mobile
+  // tests branch on it to register degraded acceptance where a native host
+  // gap (Dialog Escape's first-responder reach) makes the physical layer
+  // unobservable — the iOS-only rows, never a silent skip.
+  probe("platform")(platform.os);
+
   const scope = String(host.params.scope ?? "");
 
   if (scope === "touch") {

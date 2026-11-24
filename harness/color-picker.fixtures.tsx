@@ -1,4 +1,4 @@
-import { effect, host, mount, signal, Text, View } from "nsh";
+import { effect, host, mount, platform, signal, Text, View } from "nsh";
 import type { JSX } from "nsh";
 import type { Color } from "@heroui/react";
 import {
@@ -254,6 +254,12 @@ function Scoped(props: { children?: JSX.Element }) {
 
 function Fixture() {
   const name = String(host.params.case ?? "with-swatches");
+
+  // The host OS as the app itself sees it (the tabs fixture convention):
+  // tests gate per-platform channels on this probe — M-009 closes through
+  // `app.back()` on Android because the delivered Escape KeyEvent never
+  // reaches the popover there (the registered gap below records it).
+  probe("platform")(platform.os);
 
   if (name === "default") {
     return (

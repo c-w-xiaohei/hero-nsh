@@ -1,4 +1,4 @@
-import { effect, host, mount, Text, View } from "nsh";
+import { effect, host, mount, platform, Text, View } from "nsh";
 import type { Component, JSX } from "nsh";
 import { EnvironmentScope, Modal } from "@heroui/react";
 import type { ModalPresentation } from "@heroui/react";
@@ -220,6 +220,13 @@ const cases: Record<string, Component> = {
 
 function Fixture() {
   const name = String(host.params.case ?? "basic");
+
+  // The host OS the app itself reports (the table/tabs convention): mobile
+  // tests branch on it to register degraded acceptance where a native host
+  // gap (pan arbitration, Dialog Escape) makes the physical layer
+  // unobservable — the iOS-only rows, never a silent skip.
+  probe("platform")(platform.os);
+
   const Case = cases[name] ?? ModalTree;
 
   return (

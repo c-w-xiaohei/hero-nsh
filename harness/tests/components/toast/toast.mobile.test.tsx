@@ -30,9 +30,12 @@ import { advance, settleExit } from "../../testers/toast";
  * gate proved it twice — M-008's per-case opens in r1, a connect timeout
  * on the next `platform:"web"` open in r2), so every row that would open
  * an app per variant mounts its variants as sibling stacks in ONE page:
- * `swipe-mixed` (inert + timed), `swipe-top-dual` ("top" + "top start"),
+ * `swipe-mixed` (inert + timed),
  * `swipe-off` (row + provider opt-out), `swipe-tri` (default / pointer /
- * touch environments) and `focus-dual` (unscoped + touch). Each stack's
+ * touch environments) and `focus-dual` (unscoped + touch). (M-004's
+ * `swipe-top-dual` sibling mount proved self-occluding on the iOS host —
+ * the "top start" region covers "top"'s center — so its row runs two
+ * separate opens of the single `swipe` case instead.) Each stack's
  * toasts carry a `titlePrefix` (also the testID and layout title), the
  * `onClose` probes take a `closeLabel`, and the SwipeProbe records carry
  * the `tag`.
@@ -181,29 +184,35 @@ describe("toast mobile", () => {
   // so an upward drag past the threshold closes; the horizontal alignment
   // changes nothing.
   test("M-004 touch + top placements: an upward drag dismisses, alignment normalized", async () => {
-    // `swipe-top-dual` mounts the "top" and "top start" stacks (tags
-    // "top"/"ts", close probes `onClose-0`/`onCloseS-0`) under one open.
-    const app = await openToastMobile("swipe-top-dual");
+    // One open per case (the file's own note): the dual variant mounted
+    // both top-anchored stacks as siblings, and on the iOS host the
+    // later-mounted "top start" region's hit area occludes `Top-0`'s
+    // center — the synthesized upward drag never reached its pan
+    // (`offset` stayed 0, `onClose-0` empty, run 45344508005). Separate
+    // opens remove the occlusion so the real drag contract stays literal
+    // on every host. If an iOS row still fails after the split it is the
+    // same input-delivery gap family (native-overlay-root-cause E-2c),
+    // not an occlusion — re-triage then, never weaken these asserts.
+    for (const placement of ["top", "top start"] as const) {
+      const app = await openToastMobile("swipe", {
+        placement,
+        scope: "touch",
+      });
 
-    await app.waitUntil(() => swipeCalls(app, "top").length > 0);
-    await app.waitUntil(() => swipeCalls(app, "ts").length > 0);
-    expect(app.count("role:alert")).toBe(2);
+      await app.waitUntil(() => swipeCalls(app).length > 0);
+      expect(app.count("role:alert")).toBe(1);
 
-    await app.drag("id:Top-0", { x: 0, y: -120 });
-    await settle(app);
+      await app.drag("id:Swipe-0", { x: 0, y: -120 });
+      await settle(app);
 
-    // The drag engaged upward: the offset channel went negative.
-    expect(swipeCalls(app, "top").some((record) => record.offset < -50)).toBe(true);
-    expect(callsOf(app, "onClose-0")).toHaveLength(1);
+      // The drag engaged upward: the offset channel went negative, and the
+      // toast closed through the queue's own `onClose`.
+      expect(swipeCalls(app).some((record) => record.offset < -50)).toBe(true);
+      expect(callsOf(app, "onClose-0")).toHaveLength(1);
 
-    await app.drag("id:TS-0", { x: 0, y: -120 });
-    await settle(app);
-
-    expect(swipeCalls(app, "ts").some((record) => record.offset < -50)).toBe(true);
-    expect(callsOf(app, "onCloseS-0")).toHaveLength(1);
-
-    await settleExit(app);
-    expect(app.count("role:alert")).toBe(0);
+      await settleExit(app);
+      expect(app.count("role:alert")).toBe(0);
+    }
   }, 120_000);
 
   // adapt-sheets/toast.md M-005 (A-001): touch + `placement:"bottom"` — a
