@@ -219,7 +219,14 @@ describe("button mobile", () => {
     expect(heldRipple.ripple).toBeLessThanOrEqual(1);
     expect(heldRipple.origin).not.toBeNull();
 
-    // scale: no overlay channels move — highlight and ripple stay at rest.
+    // scale: no overlay channels move — highlight and ripple stay at
+    // rest. The scale end itself follows the host's motion preference:
+    // Android CI runs with `animator_duration_scale 0.0`, which the host
+    // reports as reduce-motion (`env` probe) and `createPressFeedback`
+    // honors by pinning the channel at 1 (`press-feedback.ts:197` —
+    // contract behavior, not a dropped press: `isPressed` and `pressed`
+    // still record the hold). Where the host animates, the held value
+    // must drop below 1 as before.
     const scaleOnly = await openButton("basic", {
       testInput: "touch",
       preset: "scale",
@@ -227,8 +234,14 @@ describe("button mobile", () => {
     await scaleOnly.longPress("id:btn");
     await scaleOnly.waitUntil(() => heldSamples(scaleOnly).length >= 1);
     const heldScale = heldSamples(scaleOnly).at(-1)!;
+    const scaleEnv = lastOf<{ reduceMotion: boolean }>(scaleOnly, "env");
     expect(heldScale.isPressed).toBe(true);
-    expect(heldScale.scale).toBeLessThan(1);
+    expect(heldScale.pressed).toBeGreaterThan(0.5);
+    if (scaleEnv.reduceMotion) {
+      expect(heldScale.scale).toBe(1);
+    } else {
+      expect(heldScale.scale).toBeLessThan(1);
+    }
     expect(heldScale.highlight).toBe(0);
     expect(heldScale.ripple).toBe(0);
 

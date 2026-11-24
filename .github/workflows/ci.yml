@@ -1,7 +1,9 @@
 name: CI
 
-# .github/scripts/test.sh maps test suffixes to targets. Native targets run
-# one file at a time because the tests share a windowing host or device.
+# nix/plan.nix maps changed paths to per-lane shards. One plan job evaluates
+# it; each lane consumes the matrix and run-files.sh executes one shard.
+# Native targets run one file at a time because they share a windowing host
+# or device.
 
 on:
   push:
@@ -33,15 +35,94 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      headless: ${{ steps.plan.outputs.headless }}
+      web: ${{ steps.plan.outputs.web }}
+      windows: ${{ steps.plan.outputs.windows }}
+      ios: ${{ steps.plan.outputs.ios }}
+      android: ${{ steps.plan.outputs.android }}
+      any_headless: ${{ steps.plan.outputs.any_headless }}
+      any_web: ${{ steps.plan.outputs.any_web }}
+      any_windows: ${{ steps.plan.outputs.any_windows }}
+      any_ios: ${{ steps.plan.outputs.any_ios }}
+      any_android: ${{ steps.plan.outputs.any_android }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # The plan only evaluates Nix; it deliberately skips the setup action,
+      # which would install Node, pnpm and nsh for no reason.
+      - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      # Restore only: the host jobs own the save, so a plan-only cache can
+      # never win the key without the nsh output in it.
+      - name: Restore Nix store
+        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix', 'nix/nsh.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          save: "false"
+      - id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          full=false
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            full=true
+          fi
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}" = "true" ]; then
+            full=true
+          fi
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --name-only "${{ github.event.pull_request.base.sha }}...HEAD" > "$RUNNER_TEMP/changed"
+          else
+            : > "$RUNNER_TEMP/changed"
+          fi
+
+          bash .github/scripts/plan.sh "$RUNNER_TEMP/changed" "$full" > "$RUNNER_TEMP/plan.json"
+
+          for lane in headless web windows ios android; do
+            echo "$lane=$(jq -c --arg lane "$lane" '.lanes[$lane].shards' "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
+            echo "any_$lane=$(jq -r --arg lane "$lane" '.any[$lane]' "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
+          done
+
+          {
+            echo "### Test plan"
+            echo
+            echo "Reason: \`$(jq -r .reason "$RUNNER_TEMP/plan.json")\`"
+            echo
+            echo "| lane | shards | files |"
+            echo "| --- | ---: | ---: |"
+            for lane in headless web windows ios android; do
+              echo "| $lane | $(jq --arg lane "$lane" '.lanes[$lane].shards | length' "$RUNNER_TEMP/plan.json") | $(jq --arg lane "$lane" '[.lanes[$lane].shards[].files[]] | length' "$RUNNER_TEMP/plan.json") |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
   check:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
+        with:
+          # One host job owns the save; the other host jobs and the plan
+          # only restore the same key.
+          save-nix-cache: 'true'
       - run: pnpm check
 
   headless:
+    needs: plan
+    if: needs.plan.outputs.any_headless == 'true'
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.headless) }}
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -49,7 +130,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          bash .github/scripts/test.sh headless 2>&1 | tee "$RUNNER_TEMP/tests.log"
+          bash .github/scripts/run-files.sh headless ${{ join(matrix.files, ' ') }} 2>&1 | tee "$RUNNER_TEMP/tests.log"
           # An unknown class builds, passes and renders wrong; the warning is
           # the only signal. The tests run with no "tailwind" block in
           # harness/nsh.json, so a class that needs one shows up here.
@@ -59,73 +140,65 @@ jobs:
           fi
 
   web:
+    needs: plan
+    if: needs.plan.outputs.any_web == 'true'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2]
+        include: ${{ fromJSON(needs.plan.outputs.web) }}
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - name: Web runtime
         run: nsh component add web
       - name: Tests
-        run: bash .github/scripts/test.sh web ${{ matrix.shard }} ${{ strategy.job-total }}
+        run: bash .github/scripts/run-files.sh web ${{ join(matrix.files, ' ') }}
 
   windows:
+    needs: plan
+    if: needs.plan.outputs.any_windows == 'true'
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2]
+        include: ${{ fromJSON(needs.plan.outputs.windows) }}
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - name: Tests
         shell: bash
-        run: bash .github/scripts/test.sh windows ${{ matrix.shard }} ${{ strategy.job-total }}
-
-  native-tests:
-    runs-on: ubuntu-24.04
-    outputs:
-      ios: ${{ steps.tests.outputs.ios }}
-      android: ${{ steps.tests.outputs.android }}
-    steps:
-      - uses: actions/checkout@v7
-      - id: tests
-        name: Discover native mobile tests
-        shell: bash
-        run: |
-          for target in ios android; do
-            files=$(bash .github/scripts/test.sh --list "$target")
-            if [[ -n "$files" ]]; then
-              echo "$target=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "$target=false" >> "$GITHUB_OUTPUT"
-            fi
-          done
+        run: bash .github/scripts/run-files.sh windows ${{ join(matrix.files, ' ') }}
 
   ios:
-    needs: native-tests
-    if: needs.native-tests.outputs.ios == 'true'
+    needs: plan
+    if: needs.plan.outputs.any_ios == 'true'
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.ios) }}
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - name: iOS tests
-        run: bash .github/scripts/test.sh ios
+        run: bash .github/scripts/run-files.sh ios ${{ join(matrix.files, ' ') }}
 
   android:
-    needs: native-tests
-    if: needs.native-tests.outputs.android == 'true'
+    needs: plan
+    if: needs.plan.outputs.any_android == 'true'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2]
+        include: ${{ fromJSON(needs.plan.outputs.android) }}
     steps:
       - uses: actions/checkout@v7
+      # The emulator lane installs the Android component into a writable
+      # distribution, so it keeps the installer rather than the Nix package.
       - uses: ./.github/actions/setup
+        with:
+          nix-nsh: 'false'
       - name: Android runtime
         run: nsh component add android
       - name: Enable Android emulator acceleration
@@ -143,10 +216,10 @@ jobs:
         with:
           api-level: 34
           arch: x86_64
-          profile: pixel_6
+          profile: Nexus 4
           disable-linux-hw-accel: 'false'
           emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim
-          script: bash .github/scripts/test.sh android ${{ matrix.shard }} ${{ strategy.job-total }}
+          script: bash .github/scripts/run-files.sh android ${{ join(matrix.files, ' ') }}
       - name: Android emulator crash data
         if: failure()
         uses: actions/upload-artifact@v7

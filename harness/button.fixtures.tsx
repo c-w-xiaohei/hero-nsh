@@ -1,4 +1,4 @@
-import { effect, host, mount, signal, Text, View } from "nsh";
+import { effect, host, mount, platform, reduceMotion, signal, Text, View } from "nsh";
 import type { Component, JSX, PressEvent } from "nsh";
 import {
   Button,
@@ -480,6 +480,15 @@ const cases: Record<string, Component> = {
 function Fixture() {
   const name = String(host.params.case ?? "basic");
   const Case = cases[name] ?? BasicCase;
+
+  // The host's own report (the chip/pressable `env` convention):
+  // `os` picks host branches and `reduceMotion` tells tests whether the
+  // scale channel can move at all — Android CI runs with
+  // `animator_duration_scale 0.0`, which the host reports as
+  // reduce-motion and `createPressFeedback` honors by pinning `scale`
+  // at 1 (press-feedback.ts:197). M-004's scale arm asserts the right
+  // end value per host instead of assuming motion everywhere.
+  probe("env")({ os: platform.os, reduceMotion: reduceMotion() });
 
   return (
     <Frame>
