@@ -33,7 +33,11 @@ runs:
       with:
         primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix', 'nix/nsh.nix') }}
         restore-prefixes-first-match: nix-${{ runner.os }}-
-        save: ${{ inputs.save-nix-cache == 'true' && github.ref == 'refs/heads/main' }}
+        # GitHub scopes a PR cache to that PR's merge ref: saving here warms
+        # later pushes to the same PR, while main's cache still seeds every
+        # PR. The check job remains the only saver.
+        save: ${{ inputs.save-nix-cache == 'true' && (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') }}
+        gc-max-store-size-linux: 3G
     - name: Install nsh (Linux, Nix)
       if: runner.os == 'Linux' && inputs.nix-nsh == 'true'
       shell: bash
