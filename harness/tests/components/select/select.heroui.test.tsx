@@ -221,6 +221,10 @@ test("X-001 custom value scenes follow the selection", async () => {
   expect(single.shows("role:button >> text:B")).toBe(true);
   expect(single.shows("role:button >> text:Select a user")).toBe(false);
 
+  // Two live apps stack real windows on the windows target; dispose the first
+  // so the second app's press cannot misdeliver.
+  single.dispose();
+
   const multiple = await openScenario("select/custom-value-multiple.split", {
     clock: {},
   });

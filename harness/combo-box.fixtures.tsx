@@ -640,12 +640,10 @@ function Case() {
   }
 
   if (name === "controlled-key") {
-    // `pad="1"` appends a fourth row below "Three": Android's registered
-    // overlay gap lands a row press one sibling above the named row, so the
-    // "select Three" press is delivered through "Four"'s bounds there.
     return (
       <Combo
-        items={param("pad") === "1" ? [...ITEMS, { id: "4", name: "Four" }] : ITEMS}
+        bMobile={param("bm") === "1"}
+        items={ITEMS}
         label="Label"
         valueKey="2"
       />
@@ -829,9 +827,8 @@ function Case() {
 // A-012: the `EnvironmentScope` wraps every case — absent params inherit the
 // host's baseline, so the default environment keeps desktop parity.
 function Fixture() {
-  // The host's own report: the Android overlay-row press shift the mobile
-  // tests branch on is host-specific, and `platform.os` is the only fact
-  // the test can read (the popover fixture's `env` convention).
+  // The host's own report: `platform.os` feeds the mobile tests' Android
+  // branches (the popover fixture's `env` convention).
   probe("env")({ os: platform.os });
 
   return (

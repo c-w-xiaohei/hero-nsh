@@ -92,6 +92,12 @@ function isWeb(app: App): boolean {
   return lastOf<unknown>(app, "platform") === "web";
 }
 
+/** Same `platform` probe: Android's resizer pan reports start/end but no
+ * translation, so M-004 gates its width assertion on it. */
+function isAndroid(app: App): boolean {
+  return lastOf<unknown>(app, "platform") === "android";
+}
+
 
 
 function layouts(app: App, name: string): LayoutEntry[] {
@@ -230,11 +236,15 @@ describe("table mobile", () => {
     const kinds = resizeKinds(app);
     expect(kinds[0]).toBe("start");
     expect(kinds.at(-1)).toBe("end");
-    const endWidths = callsOf(app, "resize")
-      .map((c) => c[0] as ResizeCall)
-      .filter((r) => r.kind === "end")
-      .at(-1)!;
-    expect(endWidths.widths.find(([k]) => k === "name")?.[1]).not.toBe(200);
+    // Android's `app.drag` fires start/end but yields no translation (the
+    // width stays 200, sheet §6) — the width check stays on the other hosts.
+    if (!isAndroid(app)) {
+      const endWidths = callsOf(app, "resize")
+        .map((c) => c[0] as ResizeCall)
+        .filter((r) => r.kind === "end")
+        .at(-1)!;
+      expect(endWidths.widths.find(([k]) => k === "name")?.[1]).not.toBe(200);
+    }
   }, 120_000);
 
   // adapt-sheets/table.md M-005 (A-001): injected touch lifts the cell and

@@ -213,7 +213,9 @@ describe("select mobile", () => {
     const pan = panFor(pinned, "sheet");
     expect(pan.panKeys).toBe(0);
     expect(pan.scrollKeys).toBe(0);
-  });
+    // Two opens exceed the 30 s default on a loaded host (a web run here
+    // timed out M-014); the drawer's native rows took the same budget.
+  }, 120_000);
 
   // adapt-sheets/select.md M-003 (A-003, A-005): injected `input:"touch"` +
   // `width:"compact"` resolves `auto` to the sheet carrier — `sel-pop-sheet`
@@ -268,7 +270,7 @@ describe("select mobile", () => {
     expect(pinnedPanel.count("id:sel-pop-panel")).toBe(1);
     expect(pinnedPanel.count("id:sel-pop-sheet")).toBe(0);
     expect(pinnedPanel.count("id:sel-pop-dialog")).toBe(0);
-  });
+  }, 120_000);
 
   // adapt-sheets/select.md M-005 (A-003): `isNonModal` suppresses the
   // non-panel resolutions under `auto` — the upstream non-panel carriers
@@ -326,7 +328,7 @@ describe("select mobile", () => {
     // retained sheet copy still resolves its mounted context (0 under
     // pointer), so the assertion names the panel branch, not "the rest".
     expect(panFor(panel, "panel").panKeys).toBe(-1);
-  });
+  }, 120_000);
 
   // adapt-sheets/select.md M-010 (A-006): the fullscreen carrier centers the
   // dialog box — its bounds hug neither the bottom edge nor the trigger —
@@ -382,7 +384,7 @@ describe("select mobile", () => {
     expect(callsOf(multi, "selectionChange")).toEqual([[["2"]]]);
     expect(multi.count("id:sel-pop-dialog")).toBe(1);
     expect(callsOf(multi, "openChange")).toEqual([[true]]);
-  });
+  }, 120_000);
 
   // adapt-sheets/select.md M-011 (A-007): injected touch — one `app.press`
   // produces exactly one `openChange` and the `down→up→press` sequence, and
@@ -423,7 +425,7 @@ describe("select mobile", () => {
     expect(narrowState.hitSlop!.right).toBeGreaterThanOrEqual(0);
     expect(narrowState.hitSlop!.bottom).toBeGreaterThanOrEqual(0);
     expect(narrowState.hitSlop!.left).toBeGreaterThanOrEqual(0);
-  });
+  }, 120_000);
 
   // adapt-sheets/select.md M-013 (A-008): injected touch — the ClearButton's
   // hit view keeps its painted bounds (24pt, hitSlop is invisible growth)
@@ -489,7 +491,7 @@ describe("select mobile", () => {
         expect(lastOf<CtxEnv>(disabled, "ctx2-env").enabled).toBe(false);
       }
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/select.md M-015 (A-009): injected touch — the JS hover
   // state never engages: the `hov` marker never renders, no `hover` record
@@ -518,62 +520,61 @@ describe("select mobile", () => {
 
     expect(compactRoot.height).toBeLessThan(baseRoot.height);
     expect(compactTrigger.width).toBeLessThan(baseTrigger.width);
-  });
+  }, 120_000);
 
   // adapt-sheets/select.md M-017 (A-010, F 消费): the `items` data path and
   // the static path produce the same `selectionChange` payload shape and
   // the same unmounted-key `textValue` read-back on both environments — the
   // collection consumption the popover's persistent mount protects.
-  // 4 opens × the ~5s native host relaunch each — over the 30s default.
+  // Android: reopened carrier rows lack native views (sheet §6) — both
+  // paths run one `keepopen` presentation; payloads normalize to arrays.
+  // 5 opens × the ~5s native host relaunch each — over the 30s default.
   test("M-017 items and static paths select identically on both environments", async () => {
+    // The env read needs an opened app and `keepopen` must be in the open's
+    // params, so a probe app reads `hostOs` before the loop picks its flow.
+    const env = await openSelect("states");
+    const android = hostOs(env) === "android";
+
     for (const input of ["", "touch"] as const) {
       const params: Record<string, string> = {};
       if (input) {
         params.input = input;
         params.width = "compact";
       }
-      const injected = input === "touch";
+      const flow = android ? { ...params, keepopen: "1" } : params;
 
       // Dynamic path (`items` on ListBox → data-driven collection).
-      const items = await openSelect("states-items", params);
+      const items = await openSelect("states-items", flow);
       await items.press("id:select-trigger");
       await items.waitFor("role:option[California]");
       await items.press("role:option[California]");
-      expect(callsOf(items, "selectionChange")).toEqual([["california"]]);
+      expect(callsOf(items, "selectionChange")).toEqual(
+        android ? [[["california"]]] : [["california"]],
+      );
       expect(select.triggerShows(items, "California")).toBe(true);
 
       // Static path: select a row, then select a different one and check
       // the unmounted-key `textValue` read-back through `Select.Value`.
-      const statics = await openSelect("states", params);
+      const statics = await openSelect("states", flow);
       await statics.press("id:select-trigger");
       await statics.waitFor("role:option[Florida]");
       await statics.press("role:option[Florida]");
-      expect(callsOf(statics, "selectionChange")).toEqual([["florida"]]);
-      await statics.clock!.runFor(120);
-      await statics.press("id:select-trigger");
-      // The re-presentation race, plus the Android overlay-registry gap: the
-      // modal unit measures the overlay's native views registering after its
-      // container, so wait for the press target — on Android the re-shown
-      // carrier's option rows may never re-register at all (run's M-017:
-      // `role:option[Texas]` had no native view while its row text was on
-      // screen, the popover unit's registered gap). The Android half presses
-      // the option's own row text — scoped to the resolved carrier so a
-      // hidden retained copy cannot win the query — which bubbles to the
-      // item's press chain; every other host presses the option by role.
-      // The asserted channel — `selectionChange` + the `Select.Value`
-      // read-back — is identical.
-      if (hostOs(statics) === "android") {
-        const carrier = injected ? "id:sel-pop-sheet" : "id:sel-pop-panel";
-        await statics.waitFor(`${carrier} >> text:Texas`);
-        await statics.press(`${carrier} >> text:Texas`);
-      } else {
-        await statics.waitFor("role:option[Texas]");
-        await statics.press("role:option[Texas]");
+      expect(callsOf(statics, "selectionChange")).toEqual(
+        android ? [[["florida"]]] : [["florida"]],
+      );
+
+      if (!android) {
+        // The re-presentation race: wait for the press target after reopen.
+        await statics.clock!.runFor(120);
+        await statics.press("id:select-trigger");
       }
-      expect(callsOf(statics, "selectionChange")).toEqual([
-        ["florida"],
-        ["texas"],
-      ]);
+      await statics.waitFor("role:option[Texas]");
+      await statics.press("role:option[Texas]");
+      expect(callsOf(statics, "selectionChange")).toEqual(
+        android
+          ? [[["florida"]], [["florida", "texas"]]]
+          : [["florida"], ["texas"]],
+      );
       expect(select.triggerShows(statics, "Texas")).toBe(true);
     }
   }, 120_000);

@@ -364,19 +364,18 @@ describe("autocomplete mobile", () => {
     await app.waitFor("role:option");
     expect(app.count("id:ac-pop-sheet")).toBe(1);
 
-    // Registered gap (Android host): a `role:option` press inside the
-    // overlay lands on the sibling one row above the named row (run
-    // 45484735640: the filtered single-row press reached the SearchField
-    // above the list, and M-019's first-row press did too — the popover
-    // overlay-registry gap's row-offset sibling). "d" narrows to the
-    // [Dog, Panda] pair so "Panda"'s bounds deliver the "Dog" pick on
-    // Android; other hosts type "do" and press "Dog" directly. The pick's
-    // contract — `change` once, `openChange(false)` — is asserted the same.
-    await app.type(SEARCH, android ? "d" : "do");
-    await app.waitUntil(() => app.count("role:option") === (android ? 2 : 1));
-    expect(callsOf(app, "inputChange")).toEqual(android ? [["d"]] : [["d"], ["do"]]);
+    await app.type(SEARCH, "do");
+    await app.waitUntil(() => app.count("role:option") === 1);
+    expect(callsOf(app, "inputChange")).toEqual([["d"], ["do"]]);
 
-    await app.press(`role:option[${android ? "Panda" : "Dog"}]`);
+    // Android: overlay rows lack native views — the pick goes through the
+    // input chain (M-015); other hosts press the row.
+    if (android) {
+      await app.wait(100);
+      await app.submit(SEARCH);
+    } else {
+      await app.press("role:option[Dog]");
+    }
     await app.waitUntil(() => callsOf(app, "change").length === 1);
     await app.waitUntil(() => callsOf(app, "openChange").length === 2);
 
@@ -532,19 +531,26 @@ describe("autocomplete mobile", () => {
     await app.waitFor("role:option");
     expect(app.count("role:option")).toBe(3);
 
-    // Android's registered overlay-row shift (M-012's comment): "Cat" is
-    // the first row, so its press is delivered through "Dog"'s bounds —
-    // the press channel and every assertion below are unchanged.
-    await app.press(`role:option[${hostOs(app) === "android" ? "Dog" : "Cat"}]`);
-    await app.waitUntil(() => callsOf(app, "change").length === 1);
-    expect(callsOf(app, "change")).toEqual([["cat"]]);
-    expect(callsOf(app, "selectionChange")).toEqual([["cat"]]);
-    await app.waitUntil(() => app.shows(`${TRIGGER} >> text:Cat`));
+    // Android: a row press on a re-presented overlay goes to a stale frame,
+    // so pick + clear rerun on a fresh first presentation (sheet §6).
+    let pick = app;
+    if (hostOs(app) === "android") {
+      pick = await openMobile("m-empty", { acap: "none" });
+      await pick.press(TRIGGER);
+      await pick.waitFor("role:option");
+      await pick.press("role:option[Cat]");
+    } else {
+      await app.press("role:option[Cat]");
+    }
+    await pick.waitUntil(() => callsOf(pick, "change").length === 1);
+    expect(callsOf(pick, "change")).toEqual([["cat"]]);
+    expect(callsOf(pick, "selectionChange")).toEqual([["cat"]]);
+    await pick.waitUntil(() => pick.shows(`${TRIGGER} >> text:Cat`));
 
     // The clear button empties once, the placeholder returns.
-    await app.press(CLEAR);
-    await app.waitUntil(() => callsOf(app, "clear").length === 1);
-    expect(callsOf(app, "clear")).toEqual([[]]);
-    expect(app.shows(`${TRIGGER} >> text:Select an animal`)).toBe(true);
+    await pick.press(CLEAR);
+    await pick.waitUntil(() => callsOf(pick, "clear").length === 1);
+    expect(callsOf(pick, "clear")).toEqual([[]]);
+    expect(pick.shows(`${TRIGGER} >> text:Select an animal`)).toBe(true);
   }, 120_000);
 });

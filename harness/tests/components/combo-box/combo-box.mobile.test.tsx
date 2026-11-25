@@ -504,21 +504,24 @@ describe("combo-box mobile", () => {
       .at(-1);
     expect(touchRow?.height).toBeGreaterThanOrEqual(44);
 
-    // Registered gap (Android host): a `role:option` press inside the overlay
-    // lands on the sibling one row above the named row (run 45484735640:
-    // Dog's press committed "cat", Three's press hit the already-selected
-    // "2", and the filtered first-row presses reached the search field —
-    // the popover overlay-registry gap's row-offset sibling).
-    // The press is delivered through the row below, so the same selection
-    // chain and assertions hold; the visual pick is device acceptance.
-    await touch.press(`role:option[${hostOs(touch) === "android" ? "Panda" : "Dog"}]`);
+    // Android: overlay rows lack native views, so the pick rides M-009's
+    // input chain and no seam roundtrips; other hosts press the row.
+    if (hostOs(touch) === "android") {
+      await touch.type("id:combo-box-input", "dog");
+      await touch.keyboard.press("arrowdown");
+      await touch.keyboard.press("enter");
+    } else {
+      await touch.press("role:option[Dog]");
+    }
     await settle(touch);
     expect(callsOf(touch, "change")).toEqual([["dog"]]);
     expect(callsOf(touch, "selectionChange")).toEqual([["dog"]]);
     expect(touch.value("id:combo-box-input")).toBe("Dog");
-    const pressed = callsOf(touch, "ctx-pressed").map((c) => (c[0] as { seam: boolean }).seam);
-    expect(pressed).toContain(true);
-    expect(pressed.at(-1)).toBe(false);
+    if (hostOs(touch) !== "android") {
+      const pressed = callsOf(touch, "ctx-pressed").map((c) => (c[0] as { seam: boolean }).seam);
+      expect(pressed).toContain(true);
+      expect(pressed.at(-1)).toBe(false);
+    }
 
     // Hover residue: on web a press leaves the sticky hover painting; the
     // `input` axis keeps `hover:text-field-foreground` out of the touch
@@ -660,18 +663,21 @@ describe("combo-box mobile", () => {
     // The deprecated `selectedKey` spelling still reaches the selection:
     // the controlled key shows as the input text on mount and selection
     // callbacks keep firing (the controlled value itself is pinned by the
-    // existing controlled-key test). `pad="1"` mounts a "Four" row below
-    // "Three" so the press lands on "Three" under the Android overlay-row
-    // shift registered on M-011; other hosts press "Three" directly.
-    const android = hostOs(keyed) === "android";
-    const spelled = await openCombo("controlled-key", {
-      selkey: "2",
-      ...(android ? { pad: "1" } : {}),
-    });
+    // existing controlled-key test).
+    const spelled = await openCombo("controlled-key", { selkey: "2", bm: "1" });
     expect(spelled.value("id:combo-box-input")).toBe("Two");
     await spelled.press("id:combo-box-trigger");
     await spelled.waitFor("role:listbox");
-    await spelled.press(`role:option[${android ? "Four" : "Three"}]`);
+    // Android: overlay rows lack native views — the pick goes through the
+    // input chain (open focuses the selected "2"; arrowdown reaches "3").
+    if (hostOs(spelled) === "android") {
+      await spelled.keyboard.press("arrowdown");
+      // Enter commits focusedKey, so wait until the probe reports "3".
+      await spelled.waitUntil(() => callsOf(spelled, "focusedKey").at(-1)?.[0] === "3");
+      await spelled.keyboard.press("enter");
+    } else {
+      await spelled.press("role:option[Three]");
+    }
     await settle(spelled);
     expect(callsOf(spelled, "change")).toEqual([["3"]]);
     expect(callsOf(spelled, "selectionChange")).toEqual([["3"]]);

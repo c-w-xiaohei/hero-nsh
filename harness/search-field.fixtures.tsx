@@ -1,4 +1,4 @@
-import { host, mount } from "nsh";
+import { host, mount, Scroll, View } from "nsh";
 import type { JSX } from "nsh";
 import {
   Description,
@@ -394,26 +394,32 @@ const KBD_VARIANTS: { slug: string; label: string; input: KbdInputProps }[] = [
 ];
 
 function KbdCase() {
+  // A phone-sized viewport clips the eight fields and nsh/test only reports
+  // what is on screen — the `Scroll` keeps them queryable (slider precedent).
   return (
     <Stage>
-      {KBD_VARIANTS.map((variant) => (
-        <SearchField
-          name={`kbd-${variant.slug}`}
-          onChange={probe(`kbd-${variant.slug}`)}
-        >
-          <Label>{variant.label}</Label>
-          <SearchField.Group>
-            <SearchField.SearchIcon />
-            <SearchField.Input
-          autoCapitalize={textParam("testAutoCapitalize")}
-              {...variant.input}
-              testID={`kbd-${variant.slug}`}
-              placeholder={variant.label}
-            />
-            <SearchField.ClearButton />
-          </SearchField.Group>
-        </SearchField>
-      ))}
+      <Scroll class="h-[600px] w-[400px]">
+        <View class="items-start gap-4">
+          {KBD_VARIANTS.map((variant) => (
+            <SearchField
+              name={`kbd-${variant.slug}`}
+              onChange={probe(`kbd-${variant.slug}`)}
+            >
+              <Label>{variant.label}</Label>
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
+              autoCapitalize={textParam("testAutoCapitalize")}
+                  {...variant.input}
+                  testID={`kbd-${variant.slug}`}
+                  placeholder={variant.label}
+                />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
+          ))}
+        </View>
+      </Scroll>
     </Stage>
   );
 }

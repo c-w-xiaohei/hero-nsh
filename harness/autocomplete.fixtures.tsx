@@ -330,9 +330,8 @@ function MobileCase(props: MobileCaseProps) {
     }
   };
 
-  // The host's own report: the Android overlay-row press shift the mobile
-  // tests branch on is host-specific, and `platform.os` is the only fact
-  // the test can read (the popover fixture's `env` convention).
+  // The host's own report: `platform.os` feeds the mobile tests' Android
+  // branches (the popover fixture's `env` convention).
   probe("env")({ os: platform.os });
 
   return (
