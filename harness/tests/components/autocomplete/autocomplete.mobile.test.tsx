@@ -531,26 +531,37 @@ describe("autocomplete mobile", () => {
     await app.waitFor("role:option");
     expect(app.count("role:option")).toBe(3);
 
-    // Android: a row press on a re-presented overlay goes to a stale frame,
-    // so pick + clear rerun on a fresh first presentation (sheet §6).
-    let pick = app;
+    // Android: overlay rows lack native views even on a first
+    // presentation — pick + clear rerun through the input chain.
     if (hostOs(app) === "android") {
-      pick = await openMobile("m-empty", { acap: "none" });
+      const pick = await openMobile("m-empty", { acap: "none" });
       await pick.press(TRIGGER);
       await pick.waitFor("role:option");
-      await pick.press("role:option[Cat]");
+      await pick.type(SEARCH, "ca");
+      await pick.waitUntil(() => pick.count("role:option") === 1);
+      await pick.wait(100);
+      await pick.submit(SEARCH);
+      await pick.waitUntil(() => callsOf(pick, "change").length === 1);
+      expect(callsOf(pick, "change")).toEqual([["cat"]]);
+      expect(callsOf(pick, "selectionChange")).toEqual([["cat"]]);
+      await pick.waitUntil(() => pick.shows(`${TRIGGER} >> text:Cat`));
+
+      await pick.press(CLEAR);
+      await pick.waitUntil(() => callsOf(pick, "clear").length === 1);
+      expect(callsOf(pick, "clear")).toEqual([[]]);
+      expect(pick.shows(`${TRIGGER} >> text:Select an animal`)).toBe(true);
     } else {
       await app.press("role:option[Cat]");
-    }
-    await pick.waitUntil(() => callsOf(pick, "change").length === 1);
-    expect(callsOf(pick, "change")).toEqual([["cat"]]);
-    expect(callsOf(pick, "selectionChange")).toEqual([["cat"]]);
-    await pick.waitUntil(() => pick.shows(`${TRIGGER} >> text:Cat`));
+      await app.waitUntil(() => callsOf(app, "change").length === 1);
+      expect(callsOf(app, "change")).toEqual([["cat"]]);
+      expect(callsOf(app, "selectionChange")).toEqual([["cat"]]);
+      await app.waitUntil(() => app.shows(`${TRIGGER} >> text:Cat`));
 
-    // The clear button empties once, the placeholder returns.
-    await pick.press(CLEAR);
-    await pick.waitUntil(() => callsOf(pick, "clear").length === 1);
-    expect(callsOf(pick, "clear")).toEqual([[]]);
-    expect(pick.shows(`${TRIGGER} >> text:Select an animal`)).toBe(true);
+      // The clear button empties once, the placeholder returns.
+      await app.press(CLEAR);
+      await app.waitUntil(() => callsOf(app, "clear").length === 1);
+      expect(callsOf(app, "clear")).toEqual([[]]);
+      expect(app.shows(`${TRIGGER} >> text:Select an animal`)).toBe(true);
+    }
   }, 120_000);
 });
