@@ -247,26 +247,34 @@ function RangeKeyboardCase() {
 function ControlledCase() {
   const value = signal(40);
 
+  // The 400 pt slider pushes `id:output` past the right edge of a
+  // phone-shaped viewport, and nsh/test only reports what is on screen
+  // (the M-005/M-008 "expected false to be true" failures, Android CI run
+  // 2026-11-24). `ScrollCase`'s answer: content inside a `Scroll` stays
+  // queryable past the clip, so the case mounts inside a vertical one —
+  // the same perpendicular axis the arbitration rows rely on.
   return (
     <Stage>
-      <View class="w-[400px]">
-        <Slider onChange={probe("onChange")} value={value()}>
-          <Label>Volume</Label>
-          <Slider.Output testID="output" />
-          <Slider.Track>
-            <Slider.Fill />
-            <Slider.Thumb />
-          </Slider.Track>
-        </Slider>
-      </View>
-      <View
-        class="bg-default px-3 py-1"
-        onPress={() => value.set(60)}
-        role="button"
-        testID="force-60"
-      >
-        <Text>force 60</Text>
-      </View>
+      <Scroll class="h-[600px] w-[400px]">
+        <View class="w-[400px]">
+          <Slider onChange={probe("onChange")} value={value()}>
+            <Label>Volume</Label>
+            <Slider.Output testID="output" />
+            <Slider.Track>
+              <Slider.Fill />
+              <Slider.Thumb />
+            </Slider.Track>
+          </Slider>
+        </View>
+        <View
+          class="bg-default px-3 py-1"
+          onPress={() => value.set(60)}
+          role="button"
+          testID="force-60"
+        >
+          <Text>force 60</Text>
+        </View>
+      </Scroll>
     </Stage>
   );
 }
@@ -647,63 +655,75 @@ function SeamProbe(props: { part: "track" | "thumb" }) {
 function MobileCase() {
   const vertical = host.params.orientation === "vertical";
 
+  // The 400 pt horizontal slider pushes `id:output` past the right edge of
+  // a phone-shaped viewport, and nsh/test only reports what is on screen
+  // (the M-005/M-008 "expected false to be true" failures, Android CI run
+  // 2026-11-24). `ScrollCase` proves a `Scroll` keeps its content queryable
+  // past the clip and leaves the pan's gestures working on the
+  // perpendicular axis, so the case mounts inside one: vertical for the
+  // horizontal slider, horizontal for the vertical one.
   return (
     <Stage>
-      <View class={vertical ? "h-[300px] w-[160px]" : "w-[400px]"}>
-        <Slider
-          aria-label="Volume"
-          defaultValue={sliderValue("defaultValue") ?? 30}
-          isDisabled={host.params.disabled === true || host.params.disabled === "1"}
-          maxValue={num("maxValue")}
-          minValue={num("minValue")}
-          onChange={probe("onChange")}
-          onChangeEnd={probe("onChangeEnd")}
-          orientation={vertical ? "vertical" : "horizontal"}
-          step={num("step")}
-        >
-          <Label>Volume</Label>
-          <Slider.Output testID="output" />
-          <Slider.Track
-            onHoverChange={probe("trackHoverChange")}
-            onHoverEnd={probe("trackHoverEnd")}
-            onHoverStart={probe("trackHoverStart")}
-            onLayout={layoutProbe("track")}
-            testID="track"
+      <Scroll
+        class={vertical ? "h-[400px] w-[600px]" : "h-[600px] w-[400px]"}
+        horizontal={vertical}
+      >
+        <View class={vertical ? "h-[300px] w-[160px]" : "w-[400px]"}>
+          <Slider
+            aria-label="Volume"
+            defaultValue={sliderValue("defaultValue") ?? 30}
+            isDisabled={host.params.disabled === true || host.params.disabled === "1"}
+            maxValue={num("maxValue")}
+            minValue={num("minValue")}
+            onChange={probe("onChange")}
+            onChangeEnd={probe("onChangeEnd")}
+            orientation={vertical ? "vertical" : "horizontal"}
+            step={num("step")}
           >
-            {({ isHovered }) => (
-              <>
-                <Slider.Fill />
-                <Slider.Thumb
-                  index={0}
-                  onBlur={probe("onBlur")}
-                  onFocus={probe("onFocus")}
-                  onHoverChange={probe("thumbHoverChange")}
-                  onHoverEnd={probe("thumbHoverEnd")}
-                  onHoverStart={probe("thumbHoverStart")}
-                  onLayout={layoutProbe("thumb")}
-                  testID="thumb"
-                >
-                  {({ isDragging, isHovered: thumbHovered }) => (
-                    <>
-                      <Text class="pointer-events-none" testID="dragging">
-                        {isDragging() ? "Dragging" : "Idle"}
-                      </Text>
-                      <Text class="pointer-events-none" testID="thumb-hover">
-                        {thumbHovered() ? "Hovered" : "Idle"}
-                      </Text>
-                      <SeamProbe part="thumb" />
-                    </>
-                  )}
-                </Slider.Thumb>
-                <Text class="pointer-events-none" testID="track-hover">
-                  {isHovered() ? "Hovered" : "Idle"}
-                </Text>
-                <SeamProbe part="track" />
-              </>
-            )}
-          </Slider.Track>
-        </Slider>
-      </View>
+            <Label>Volume</Label>
+            <Slider.Output testID="output" />
+            <Slider.Track
+              onHoverChange={probe("trackHoverChange")}
+              onHoverEnd={probe("trackHoverEnd")}
+              onHoverStart={probe("trackHoverStart")}
+              onLayout={layoutProbe("track")}
+              testID="track"
+            >
+              {({ isHovered }) => (
+                <>
+                  <Slider.Fill />
+                  <Slider.Thumb
+                    index={0}
+                    onBlur={probe("onBlur")}
+                    onFocus={probe("onFocus")}
+                    onHoverChange={probe("thumbHoverChange")}
+                    onHoverEnd={probe("thumbHoverEnd")}
+                    onHoverStart={probe("thumbHoverStart")}
+                    onLayout={layoutProbe("thumb")}
+                    testID="thumb"
+                  >
+                    {({ isDragging, isHovered: thumbHovered }) => (
+                      <>
+                        <Text class="pointer-events-none" testID="dragging">
+                          {isDragging() ? "Dragging" : "Idle"}
+                        </Text>
+                        <Text class="pointer-events-none" testID="thumb-hover">
+                          {thumbHovered() ? "Hovered" : "Idle"}
+                        </Text>
+                        <SeamProbe part="thumb" />
+                      </>
+                    )}
+                  </Slider.Thumb>
+                  <Text class="pointer-events-none" testID="track-hover">
+                    {isHovered() ? "Hovered" : "Idle"}
+                  </Text>
+                  <SeamProbe part="track" />
+                </>
+              )}
+            </Slider.Track>
+          </Slider>
+        </View>
+      </Scroll>
     </Stage>
   );
 }

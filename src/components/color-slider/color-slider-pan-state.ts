@@ -82,3 +82,35 @@ export function insideThumbHitArea(x: number, y: number): boolean {
     y <= thumbHitArea.y + thumbHitArea.height
   );
 }
+
+/*
+ * The identifier half of the same deferral: the thumb's `onTouchStart`
+ * records the finger it answered, the touch handlers forget it at end or
+ * cancel. It exists because the geometric half above is only as reliable as
+ * the host's `locationX`/`pageX` spaces — on Android CI the touch-start
+ * `locationX` arrives in surface coordinates, so `pageX - locationX` is 0
+ * and the published frame sits in the wrong space (measured: a
+ * `app.drag("id:thumb")` the track claimed, ending at hue 102 = the
+ * thumb-relative point run through the track's percentAt). A finger whose
+ * `onTouchStart` the thumb answered is inside its slop-expanded hit test by
+ * definition — no coordinate math can get that wrong — so the track
+ * consults this set first and the frame stays the second line of defense.
+ */
+
+/** Identifiers of the touches the thumb answered `onTouchStart` for and has not seen end or cancel. */
+const thumbTouches = new Set<number>();
+
+/** The thumb answered this finger's `onTouchStart`: it went down inside the thumb's own hit test. */
+export function markThumbTouch(identifier: number): void {
+  thumbTouches.add(identifier);
+}
+
+/** Whether this finger went down inside the thumb's hit test (slop included). */
+export function thumbTouch(identifier: number): boolean {
+  return thumbTouches.has(identifier);
+}
+
+/** The touch ended or was cancelled: forget the thumb-down mark. */
+export function releaseThumbTouch(identifier: number): void {
+  thumbTouches.delete(identifier);
+}

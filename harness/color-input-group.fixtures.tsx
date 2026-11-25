@@ -1,4 +1,4 @@
-import { host, mount, platform, signal, Text, View } from "nsh";
+import { host, mount, platform, Scroll, signal, Text, View } from "nsh";
 import type { InputRef, JSX } from "nsh";
 import { ColorInputGroup, EnvironmentScope } from "@heroui/react";
 import { ColorInputGroupFieldContext } from "../src/components/color-input-group/context";
@@ -332,38 +332,44 @@ function FieldMockCase() {
  * channel assertion (M-006); what the soft keyboard labels / autofills with
  * them is a real-device acceptance item (sheet §6). */
 function KbdCase() {
+  // Seventeen 44 pt rows (~750 pt) outrun a phone screen, and nsh/test
+  // only reports what is on screen (the M-006 `id:k-max` miss, Android CI
+  // run 2026-11-24). `Scroll` content stays queryable past the clip — the
+  // slider fixtures' convention — so the column mounts inside one.
   return (
-    <View class="flex-col gap-2">
-      {(["enter", "done", "go", "next", "previous", "search", "send"] as const).map(
-        (hint) => (
+    <Scroll class="h-[600px]">
+      <View class="flex-col gap-2">
+        {(["enter", "done", "go", "next", "previous", "search", "send"] as const).map(
+          (hint) => (
+            <ColorInputGroup>
+              <ColorInputGroup.Input testID={`kh-${hint}`} enterKeyHint={hint} />
+            </ColorInputGroup>
+          ),
+        )}
+        {(["done", "go", "next", "search", "send"] as const).map((kind) => (
           <ColorInputGroup>
-            <ColorInputGroup.Input testID={`kh-${hint}`} enterKeyHint={hint} />
+            <ColorInputGroup.Input testID={`kr-${kind}`} returnKeyType={kind} />
           </ColorInputGroup>
-        ),
-      )}
-      {(["done", "go", "next", "search", "send"] as const).map((kind) => (
+        ))}
         <ColorInputGroup>
-          <ColorInputGroup.Input testID={`kr-${kind}`} returnKeyType={kind} />
+          <ColorInputGroup.Input testID="k-type" type="email" />
         </ColorInputGroup>
-      ))}
-      <ColorInputGroup>
-        <ColorInputGroup.Input testID="k-type" type="email" />
-      </ColorInputGroup>
-      <ColorInputGroup>
-        <ColorInputGroup.Input testID="k-mode" inputMode="numeric" />
-      </ColorInputGroup>
-      <ColorInputGroup>
-        <ColorInputGroup.Input
-          testID="k-fill"
-          autoComplete="email"
-          autoCorrect="off"
-          autoCapitalize="none"
-        />
-      </ColorInputGroup>
-      <ColorInputGroup>
-        <ColorInputGroup.Input testID="k-max" maxLength={7} />
-      </ColorInputGroup>
-    </View>
+        <ColorInputGroup>
+          <ColorInputGroup.Input testID="k-mode" inputMode="numeric" />
+        </ColorInputGroup>
+        <ColorInputGroup>
+          <ColorInputGroup.Input
+            testID="k-fill"
+            autoComplete="email"
+            autoCorrect="off"
+            autoCapitalize="none"
+          />
+        </ColorInputGroup>
+        <ColorInputGroup>
+          <ColorInputGroup.Input testID="k-max" maxLength={7} />
+        </ColorInputGroup>
+      </View>
+    </Scroll>
   );
 }
 

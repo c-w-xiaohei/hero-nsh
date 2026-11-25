@@ -25,7 +25,9 @@ import type { FieldState } from "../label/context";
 import { joinClassNames } from "./class-names";
 import {
   claimSliderTouch,
+  markThumbTouch,
   releaseSliderTouch,
+  releaseThumbTouch,
   setThumbHitArea,
   sliderTouchClaimed,
 } from "./slider-pan-state";
@@ -528,6 +530,12 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
       width: size.width + (slop.left ?? 0) + (slop.right ?? 0),
       height: size.height + (slop.top ?? 0) + (slop.bottom ?? 0),
     });
+    // The identifier ledger is the space-free half of the track's deferral:
+    // a finger this handler answered is inside the thumb's hit test whatever
+    // space the host reports the frame above in (Android's touch-start
+    // `locationX` arrives surface-relative there — the geometric frame the
+    // line above computes sits in the wrong space).
+    markThumbTouch(event.identifier);
     releaseSliderTouch(event.identifier);
     local.onTouchStart?.(event);
   };
@@ -541,6 +549,7 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
   // bare chain committed on release and this handler adds nothing.
   const handleTouchEnd = (event: GestureResponderEvent) => {
     setThumbHitArea(null);
+    releaseThumbTouch(event.identifier);
     local.onTouchEnd?.(event);
 
     if (input() !== "touch") {
@@ -564,6 +573,7 @@ export function SliderThumb(props: SliderThumbProps): JSX.Element {
 
   const handleTouchCancel = (event: GestureResponderEvent) => {
     setThumbHitArea(null);
+    releaseThumbTouch(event.identifier);
     local.onTouchCancel?.(event);
     releaseSliderTouch(event.identifier);
   };

@@ -198,8 +198,19 @@ describe("color-slider mobile", () => {
   });
 
   test("track drag can start where the thumb was before a drag", async () => {
-    const app = await openSlider("mobile", { scope: "touch", value: "hsl(180, 100%, 50%)" });
+    const app = await openSlider("mobile", {
+      scope: "touch",
+      probe: "1",
+      value: "hsl(180, 100%, 50%)",
+    });
+    await app.waitUntil(() => callsOf(app, "ctx-env").length >= 2);
     await app.drag("id:thumb", { x: 80, y: 0 });
+
+    // The thumb's own pan must have claimed the drag — a `panActive` edge on
+    // the track instead is the steal this row exists to catch (the
+    // `insideThumbHitArea`/`thumbTouch` deferral in `shouldClaim`).
+    expect(ctxEnvAll(app, "thumb").some((record) => record.panActive)).toBe(true);
+    expect(ctxEnvAll(app, "track").every((record) => !record.panActive)).toBe(true);
     expect(onChangeHues(app).at(-1)!).toBeGreaterThan(235);
 
     const changes = onChangeHues(app).length;

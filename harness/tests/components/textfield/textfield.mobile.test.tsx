@@ -218,9 +218,15 @@ describe("textfield mobile", () => {
       autoCapitalize: "none",
     });
     expect(app.shows("id:name")).toBe(true);
-    await app.type("id:name", "abc");
-    expect(app.value("id:name")).toBe("abc");
-    expect((callsOf(app, "onChange").at(-1)![0] as ChangeRecord).value).toBe("abc");
+    // `keyboardType:"numeric"` + `inputMode:"decimal"` resolves to Android
+    // `inputType=numberDecimal`: the KeyListener filters letter key events
+    // before they reach the text, exactly as a real numeric keypad has no
+    // letter keys (run's M-005: `app.type("id:name","abc")` left `""`).
+    // Digits are the text this channel can carry on Android and they type
+    // identically on every other target.
+    await app.type("id:name", "123");
+    expect(app.value("id:name")).toBe("123");
+    expect((callsOf(app, "onChange").at(-1)![0] as ChangeRecord).value).toBe("123");
 
     const done = await openCase("keyboard", { ...params, enterKeyHint: "done" });
     expect(done.shows("id:name")).toBe(true);

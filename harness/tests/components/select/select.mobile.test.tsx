@@ -87,6 +87,13 @@ function lastOf<T>(app: App, name: string): T {
   return recorded[recorded.length - 1][0] as T;
 }
 
+/** The OS the fixture's `env` probe reports; the Android overlay-registry
+ * gap in M-017 branches on it (the popover unit's `hostOs` convention). */
+function hostOs(app: App): string {
+  const last = callsOf(app, "env").at(-1)?.[0] as { os?: string } | undefined;
+  return last?.os ?? "";
+}
+
 /** The `events` probe's string payloads, in order: "down"/"up"/"press". */
 function eventArgs(app: App): string[] {
   return callsOf(app, "events").map((c) => c[0] as string);
@@ -176,6 +183,18 @@ describe("select mobile", () => {
 
     // On-demand read after the press: the channels are still at rest
     // (a gated press raises no `isPressed` edge to schedule another sample).
+    // The sampler is unreachable while the popover is open — a modal
+    // carrier's underlay swallows every flow press into "dismiss" on every
+    // host, and on Android the earlier in-popover copy had no native view at
+    // all (the popover unit's registered overlay-registry gap; the query
+    // resolved to the hidden flow copy, whose tap dismissed the popover and
+    // starved `ctx-channels`, run's 5s timeout). The read therefore runs
+    // after closing: a second press on the covered trigger lands on the
+    // underlay on the modal carriers, and the trigger's own toggle takes the
+    // same close on the hosts that hit-test the logical tree — either way
+    // `ctx-channels` reports the post-press state.
+    await app.press("id:select-trigger");
+    await app.waitFor("role:listbox", { state: "gone" });
     await app.press("id:ctx-sample");
     await app.waitUntil(() => callsOf(app, "ctx-channels").length > 0);
     const channels = lastOf<CtxState>(app, "ctx-channels");
@@ -513,10 +532,12 @@ describe("select mobile", () => {
         params.input = input;
         params.width = "compact";
       }
+      const injected = input === "touch";
 
       // Dynamic path (`items` on ListBox → data-driven collection).
       const items = await openSelect("states-items", params);
       await items.press("id:select-trigger");
+      await items.waitFor("role:option[California]");
       await items.press("role:option[California]");
       expect(callsOf(items, "selectionChange")).toEqual([["california"]]);
       expect(select.triggerShows(items, "California")).toBe(true);
@@ -525,11 +546,30 @@ describe("select mobile", () => {
       // the unmounted-key `textValue` read-back through `Select.Value`.
       const statics = await openSelect("states", params);
       await statics.press("id:select-trigger");
+      await statics.waitFor("role:option[Florida]");
       await statics.press("role:option[Florida]");
       expect(callsOf(statics, "selectionChange")).toEqual([["florida"]]);
       await statics.clock!.runFor(120);
       await statics.press("id:select-trigger");
-      await statics.press("role:option[Texas]");
+      // The re-presentation race, plus the Android overlay-registry gap: the
+      // modal unit measures the overlay's native views registering after its
+      // container, so wait for the press target — on Android the re-shown
+      // carrier's option rows may never re-register at all (run's M-017:
+      // `role:option[Texas]` had no native view while its row text was on
+      // screen, the popover unit's registered gap). The Android half presses
+      // the option's own row text — scoped to the resolved carrier so a
+      // hidden retained copy cannot win the query — which bubbles to the
+      // item's press chain; every other host presses the option by role.
+      // The asserted channel — `selectionChange` + the `Select.Value`
+      // read-back — is identical.
+      if (hostOs(statics) === "android") {
+        const carrier = injected ? "id:sel-pop-sheet" : "id:sel-pop-panel";
+        await statics.waitFor(`${carrier} >> text:Texas`);
+        await statics.press(`${carrier} >> text:Texas`);
+      } else {
+        await statics.waitFor("role:option[Texas]");
+        await statics.press("role:option[Texas]");
+      }
       expect(callsOf(statics, "selectionChange")).toEqual([
         ["florida"],
         ["texas"],
@@ -644,6 +684,16 @@ describe("select mobile", () => {
       const app = await openSelect("states-clear", { ...params, ctx2: "1" });
       expect(app.shows("id:select-trigger")).toBe(true);
 
+      // The on-demand samplers answer while the field is closed — the
+      // sampled contexts live on the trigger seam, not the popover, and a
+      // press while open can never reach a flow element (the modal underlay
+      // swallows it; on Android the in-popover copy had no native view at
+      // all — the registered overlay-registry gap that timed this row out).
+      await app.press("id:ctx-sample");
+      await app.waitUntil(() => callsOf(app, "ctx-channels").length > 0);
+      await app.press("id:ctx2-sample");
+      await app.waitUntil(() => callsOf(app, "ctx2-channels").length > 0);
+
       await app.press("id:select-trigger");
       expect(eventArgs(app)).toEqual(["down", "up", "press"]);
       expect(callsOf(app, "layout").length).toBeGreaterThan(0);
@@ -658,11 +708,6 @@ describe("select mobile", () => {
       } else {
         expect(panFor(app, "panel").panKeys).toBe(-1);
       }
-
-      await app.press("id:ctx-sample");
-      await app.waitUntil(() => callsOf(app, "ctx-channels").length > 0);
-      await app.press("id:ctx2-sample");
-      await app.waitUntil(() => callsOf(app, "ctx2-channels").length > 0);
     }
 
     // The carrier probes discriminate under injection and pins.

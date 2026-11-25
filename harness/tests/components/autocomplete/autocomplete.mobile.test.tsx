@@ -91,6 +91,12 @@ function layoutFor(app: App, name: string): LayoutEntry {
   return entries[entries.length - 1];
 }
 
+/** The OS the fixture reports; the Android overlay-row gap branches on it. */
+function hostOs(app: App): string {
+  const last = callsOf(app, "env").at(-1)?.[0] as { os?: string } | undefined;
+  return last?.os ?? "";
+}
+
 const TOUCH_COMPACT: Params = { input: "touch", width: "compact" };
 const CLEAR = "label:Clear selection";
 const TRIGGER = "id:ac-trigger";
@@ -352,16 +358,25 @@ describe("autocomplete mobile", () => {
     // `acap:"none"`: iOS applies UITextInput autocapitalization even to
     // synthesized key events, which would turn "do" into "Do".
     const app = await openMobile("m", { ...TOUCH_COMPACT, acap: "none" });
+    const android = hostOs(app) === "android";
 
     await app.press(TRIGGER);
     await app.waitFor("role:option");
     expect(app.count("id:ac-pop-sheet")).toBe(1);
 
-    await app.type(SEARCH, "do");
-    await app.waitUntil(() => app.count("role:option") === 1);
-    expect(callsOf(app, "inputChange")).toEqual([["d"], ["do"]]);
+    // Registered gap (Android host): a `role:option` press inside the
+    // overlay lands on the sibling one row above the named row (run
+    // 45484735640: the filtered single-row press reached the SearchField
+    // above the list, and M-019's first-row press did too — the popover
+    // overlay-registry gap's row-offset sibling). "d" narrows to the
+    // [Dog, Panda] pair so "Panda"'s bounds deliver the "Dog" pick on
+    // Android; other hosts type "do" and press "Dog" directly. The pick's
+    // contract — `change` once, `openChange(false)` — is asserted the same.
+    await app.type(SEARCH, android ? "d" : "do");
+    await app.waitUntil(() => app.count("role:option") === (android ? 2 : 1));
+    expect(callsOf(app, "inputChange")).toEqual(android ? [["d"]] : [["d"], ["do"]]);
 
-    await app.press("role:option[Dog]");
+    await app.press(`role:option[${android ? "Panda" : "Dog"}]`);
     await app.waitUntil(() => callsOf(app, "change").length === 1);
     await app.waitUntil(() => callsOf(app, "openChange").length === 2);
 
@@ -517,7 +532,10 @@ describe("autocomplete mobile", () => {
     await app.waitFor("role:option");
     expect(app.count("role:option")).toBe(3);
 
-    await app.press("role:option[Cat]");
+    // Android's registered overlay-row shift (M-012's comment): "Cat" is
+    // the first row, so its press is delivered through "Dog"'s bounds —
+    // the press channel and every assertion below are unchanged.
+    await app.press(`role:option[${hostOs(app) === "android" ? "Dog" : "Cat"}]`);
     await app.waitUntil(() => callsOf(app, "change").length === 1);
     expect(callsOf(app, "change")).toEqual([["cat"]]);
     expect(callsOf(app, "selectionChange")).toEqual([["cat"]]);

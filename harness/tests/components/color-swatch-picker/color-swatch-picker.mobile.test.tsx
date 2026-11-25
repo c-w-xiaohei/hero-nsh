@@ -217,7 +217,17 @@ describe("color-swatch-picker mobile", () => {
       .filter((s) => s.seamPressed);
     expect(engaged.length).toBeGreaterThan(0);
     expect(engaged.some((s) => s.pressed > 0)).toBe(true);
-    expect(engaged.some((s) => s.scale < 1)).toBe(true);
+    // Android CI runs `animator_duration_scale 0.0`, which the host reports
+    // as reduce-motion and `createPressFeedback` honors by pinning the
+    // scale channel at 1 (press-feedback.ts:197 — contract behavior, the
+    // button/pressable rows' precedent). Where the host animates, a held
+    // press must still drop the channel below 1.
+    const swatchEnv = lastOf<{ reduceMotion?: boolean }>(app, "env");
+    if (swatchEnv.reduceMotion) {
+      expect(engaged.every((s) => s.scale === 1)).toBe(true);
+    } else {
+      expect(engaged.some((s) => s.scale < 1)).toBe(true);
+    }
     expect(engaged.at(-1)!.origin).not.toBeNull();
     expect(engaged.at(-1)!.hitSlop).not.toBeNull();
     expect(engaged.at(-1)!.enabled).toBe(true);

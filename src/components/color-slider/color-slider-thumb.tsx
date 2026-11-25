@@ -26,7 +26,9 @@ import {
 } from "./color-slider-context";
 import {
   claimSliderTouch,
+  markThumbTouch,
   releaseSliderTouch,
+  releaseThumbTouch,
   setThumbHitArea,
   sliderTouchClaimed,
 } from "./color-slider-pan-state";
@@ -377,6 +379,12 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
       width: size.width + (slop.left ?? 0) + (slop.right ?? 0),
       height: size.height + (slop.top ?? 0) + (slop.bottom ?? 0),
     });
+    // The identifier ledger is the space-free half of the track's deferral:
+    // a finger this handler answered is inside the thumb's hit test whatever
+    // space the host reports the frame above in (Android's touch-start
+    // `locationX` arrives surface-relative there — the geometric frame the
+    // line above computes sits in the wrong space).
+    markThumbTouch(event.identifier);
     releaseSliderTouch(event.identifier);
     local.onTouchStart?.(event);
   };
@@ -388,6 +396,7 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
   // cannot also commit the same finger.
   const handleTouchEnd = (event: GestureResponderEvent) => {
     setThumbHitArea(null);
+    releaseThumbTouch(event.identifier);
     // The caller's raw touch callback is always reported; the tap commit
     // below is the touch-only half.
     local.onTouchEnd?.(event);
@@ -413,6 +422,7 @@ export function ColorSliderThumb(props: ColorSliderThumbProps): JSX.Element {
 
   const handleTouchCancel = (event: GestureResponderEvent) => {
     setThumbHitArea(null);
+    releaseThumbTouch(event.identifier);
     releaseSliderTouch(event.identifier);
     local.onTouchCancel?.(event);
   };

@@ -73,7 +73,7 @@ describe("color-swatch-picker mobile (web)", () => {
     await pointer.waitFor("text:Idle");
     expect(callsOf(pointer, "onHoverEnd")).toHaveLength(1);
     expect(callsOf(pointer, "onHoverChange")).toEqual([[true], [false]]);
-    expect(callsOf(pointer, "onMouseLeave")).toBeGreaterThan(0);
+    expect(callsOf(pointer, "onMouseLeave").length).toBeGreaterThan(0);
   }, 120_000);
 
   // adapt-sheets/color-swatch-picker.md M-005 (A-004, 基线, keyboard half):

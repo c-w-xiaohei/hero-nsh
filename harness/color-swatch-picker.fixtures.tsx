@@ -1,4 +1,4 @@
-import { effect, host, mount, Text, View } from "nsh";
+import { effect, host, mount, platform, reduceMotion, Text, View } from "nsh";
 import type { JSX, MouseEvent as NshMouseEvent, PressEvent } from "nsh";
 import type { Color, PressableFeedbackContextValue } from "@heroui/react";
 import {
@@ -267,6 +267,12 @@ function CtxProbe() {
 
 function CtxProbeCase() {
   const reportChannels = probe("ctx-channels");
+
+  // The host's own environment report, the chip/button fixtures' `env`
+  // convention: Android CI runs `animator_duration_scale 0.0`, which the
+  // host reports as reduce-motion and `createPressFeedback` honors by
+  // pinning the scale channel at 1 — M-003's scale read branches on it.
+  probe("env")({ os: platform.os, reduceMotion: reduceMotion() });
 
   const sampleChannels = () => {
     const c = liveCtx;

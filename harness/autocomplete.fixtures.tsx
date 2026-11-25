@@ -1,4 +1,4 @@
-import { effect, host, mount, signal } from "nsh";
+import { effect, host, mount, platform, signal } from "nsh";
 import type { JSX } from "nsh";
 import {
   Autocomplete,
@@ -329,6 +329,11 @@ function MobileCase(props: MobileCaseProps) {
       filterText.set(value);
     }
   };
+
+  // The host's own report: the Android overlay-row press shift the mobile
+  // tests branch on is host-specific, and `platform.os` is the only fact
+  // the test can read (the popover fixture's `env` convention).
+  probe("env")({ os: platform.os });
 
   return (
     <Stage>

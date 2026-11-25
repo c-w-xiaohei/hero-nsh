@@ -177,12 +177,20 @@ describe("search-field mobile", () => {
         const id = `id:kbd-${slug}`;
         expect(app.shows(id)).toBe(true);
 
-        await app.type(id, "ab");
+        // `inputMode:"numeric"` resolves to Android `inputType=number`, whose
+        // KeyListener drops letter key events before they reach the text —
+        // the same filter a real numeric keypad imposes (run's M-004 timeout:
+        // `kbd-mode-numeric` never recorded because "ab" was filtered).
+        // Digits are the only text that channel can carry on Android and
+        // they type identically on every other target, so that variant's
+        // edit probe uses them; the other variants keep "ab".
+        const text = slug === "mode-numeric" ? "12" : "ab";
+        await app.type(id, text);
         await app.waitUntil(() => callsOf(app, `kbd-${slug}`).length > 0);
 
         // Root `onChange(value)` — the arg is the string itself.
-        expect(callsOf(app, `kbd-${slug}`).at(-1)?.[0]).toBe("ab");
-        expect(app.value(id)).toBe("ab");
+        expect(callsOf(app, `kbd-${slug}`).at(-1)?.[0]).toBe(text);
+        expect(app.value(id)).toBe(text);
       }
     }
   }, 120_000);

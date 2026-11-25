@@ -1,4 +1,4 @@
-import { effect, host, mount, signal, Text, View } from "nsh";
+import { effect, host, mount, platform, signal, Text, View } from "nsh";
 import type { JSX } from "nsh";
 import { Input } from "nsh/base";
 import {
@@ -96,9 +96,12 @@ import { probe } from "@scenario/probe";
  * trigger's down/up/press sequence; `ctx-env`/`ctx-pressed`/`ctx-state`/
  * `ctx-channels` sample the trigger's `PressableFeedbackContext` (the
  * accordion/list-box convention) with `ctx-sample` / `ctx2-sample` as the
- * on-demand samplers — mounted in the flow while the field is closed and
- * inside the popover while it is open, so the press reaches them on the
- * web host's coordinate hit-test either way (M-002/M-019);
+ * on-demand samplers — a single in-flow copy the tests press while the
+ * field is closed. An earlier revision pressed a second copy inside the
+ * open popover, but Android's overlay pressables never join the native
+ * registry (the popover unit's registered gap), so the query resolved to
+ * the hidden flow copy and its tap landed on the underlay, dismissing the
+ * popover and starving `ctx-channels` (M-002/M-019's 5s timeouts);
  * `pan` reports `SheetContentPanContext` key counts and
  * `keyboardDismissMode` inside the popover children (−1 outside a Dialog).
  */
@@ -388,58 +391,33 @@ function Case(props: CaseProps) {
   const ctx2 = param("ctx2") === "1";
   const kbd = param("kbd") === "1";
 
-  // Open tracking for the sampler mount below. Controlled-open props
-  // (`items-open`, `items-default-open`) never report a mount-time edge, so
-  // the seed reads them; every later edge comes through `onOpenChange`.
-  const popoverOpen = signal(props.open === true || props.defaultOpen === true);
   const reportOpenChange = (open: boolean) => {
-    popoverOpen.set(open);
     probe("openChange")(open);
   };
 
-  // The on-demand channel readers. While the popover is closed they sit in
-  // the flow beside the field (`ml-72` keeps them clear of the open overlay
-  // the way `outside` is); while it is open the outside world is unreachable
-  // anyway — on the web host `app.press` hit-tests by coordinates, and a
-  // modal carrier's underlay swallows every press below it into "dismiss",
-  // so the press can never reach a flow sibling (M-002/M-019 measured). The
-  // open copies therefore live inside the popover's children: a zero-height
-  // `relative` wrapper at the content's end with the sampler absolutely
-  // pinned to its bottom-right corner — in-flow rows would grow the carrier
-  // box and move its centre (M-010's dialog), while an overlay this size
-  // (20pt over the last row's far corner) never covers an option's centre,
-  // which is where `app.press` lands. `hidden` toggles the pair because the
-  // popover's children subtree is built once — a mount/unmount conditional
-  // never re-evaluates there.
-  const sampler = (inside: boolean, id: "ctx-sample" | "ctx2-sample") => {
-    const onPress = id === "ctx-sample" ? sampleChannels : sampleClearChannels;
-    return inside ? (
-      <View
-        class="relative h-0 overflow-visible"
-        classList={{ hidden: !popoverOpen() }}
-      >
-        <View
-          testID={id}
-          role="button"
-          class={`absolute bottom-0 w-5 h-5 ${id === "ctx2-sample" ? "right-5" : "right-0"}`}
-          onPress={onPress}
-        />
-      </View>
-    ) : (
-      <View
-        testID={id}
-        role="button"
-        class="ml-72 p-2"
-        classList={{ hidden: popoverOpen() }}
-        onPress={onPress}
-      >
-        <Text>{id}</Text>
-      </View>
-    );
-  };
-  const samplers = (inside: boolean) => [
-    sampler(inside, "ctx-sample"),
-    props.clear ? sampler(inside, "ctx2-sample") : null,
+  // The on-demand channel readers: a single in-flow pair the tests press
+  // while the field is closed (`ml-72` keeps them clear of the open overlay
+  // the way `outside` is). Pressing them while open is impossible by design —
+  // a modal carrier's underlay swallows every press below it into "dismiss" —
+  // and an earlier in-popover copy was unreachable on Android anyway (its
+  // pressables never join the native overlay registry, the popover unit's
+  // registered gap), so the pair mounts in the flow only. The samples run
+  // after the probe read has settled: `ctx.pressed.getValue()` resolves on
+  // the next frame, and the test's `waitUntil` covers the round trip
+  // (M-002/M-019).
+  const sampler = (id: "ctx-sample" | "ctx2-sample") => (
+    <View
+      testID={id}
+      role="button"
+      class="ml-72 p-2"
+      onPress={id === "ctx-sample" ? sampleChannels : sampleClearChannels}
+    >
+      <Text>{id}</Text>
+    </View>
+  );
+  const samplers = () => [
+    sampler("ctx-sample"),
+    props.clear ? sampler("ctx2-sample") : null,
   ];
 
   return (
@@ -536,7 +514,6 @@ function Case(props: CaseProps) {
               : props.data.map((item) => <Row item={item} />)}
           </ListBox>
           <PanProbe />
-          {samplers(true)}
         </Select.Popover>
         {props.description ? <Description>{props.description}</Description> : null}
         {props.error ? <FieldError>{props.error}</FieldError> : null}
@@ -553,7 +530,7 @@ function Case(props: CaseProps) {
           <Text>Outside</Text>
         </View>
       ) : null}
-      {samplers(false)}
+      {samplers()}
     </View>
   );
 }
@@ -585,6 +562,11 @@ const ITEMS_FOUR_CASE: CaseProps = { data: ITEMS_FOUR, placeholder: "Placeholder
 
 function Fixture() {
   const name = String(host.params.case ?? "states");
+
+  // The host's own platform report (the popover unit's `env` convention):
+  // the Android overlay-registry gap M-017 degrades on is host-specific,
+  // and `platform.os` is the only fact the test can read.
+  probe("env")({ os: platform.os });
 
   if (name === "states") {
     return <Case {...STATES_CASE} label="State" />;

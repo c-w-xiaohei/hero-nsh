@@ -8,7 +8,7 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, signal, split, View } from "nsh";
+import { cleanup, computed, platform, signal, split, View } from "nsh";
 
 import { createKeymapScope, isKeyboardPress } from "../../primitives";
 import { createInput } from "../../primitives/environment";
@@ -488,6 +488,37 @@ export function TableColumnResizer(props: TableColumnResizerProps) {
       }
       onPanEnd={input() === "touch" ? undefined : handlePanEnd}
       {...pan.panHandlers()}
+      // Android drag fix (CI run 2026-11-24, table M-004): an ungated
+      // `onPan*` recognizer starts only after the platform's own touch
+      // arbitration, and on Android the enclosing horizontal ScrollBox
+      // intercepts the MOVE first — the drag dies in the scroll view and
+      // no `onPan*` frame ever reports (`app.drag` resized nothing there).
+      // `panActivation` is the host's gate for exactly this: the root's
+      // `TouchTracker` decides it before view dispatch, and on activation
+      // `gateBlocked` disallows the ScrollBoxes around it (`elements.md`,
+      // "Pans that coexist with scroll views"). 6pt horizontal activates
+      // under the scroll slop, 8pt vertical fails so a vertical drag still
+      // scrolls — the gallery `pan-over-scroll` fixture's proven values.
+      //
+      // Scoped to Android only, twice over. Under touch the JS `createPan`
+      // owns the drag and a mounted gate would bypass its responder
+      // negotiation (an activated gate makes the view the responder
+      // without asking the `…ShouldSetResponder` predicates). And on the
+      // other hosts the ungated `onPan*` chain already works — iOS's pan
+      // recognizer beats the ScrollView's on its own, while the 0.6.0
+      // headless engine has a registered gap the other way (a gate's
+      // activation there ends the gesture without starting the pan), so
+      // the gate must stay off everywhere but the host it fixes.
+      //
+      // Declared after the `pan.panHandlers()` spread: the explicit prop
+      // must win even if `createPan` one day emits a `panActivation` of
+      // its own — this consumer's emits none today, so the order changes
+      // nothing now.
+      panActivation={
+        input() !== "touch" && platform.os === "android"
+          ? { activeOffsetX: 6, failOffsetY: 8 }
+          : undefined
+      }
       // A-004: the touch hit-area expansion — `undefined` under pointer, so
       // the desktop band keeps its exact 17 px contract.
       hitSlop={feedback.hitSlop()}

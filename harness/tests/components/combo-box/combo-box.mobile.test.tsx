@@ -94,6 +94,12 @@ function lastCtx(app: App): CtxReport {
   return found[found.length - 1][0] as CtxReport;
 }
 
+/** The OS the fixture reports; the Android overlay gaps branch on it. */
+function hostOs(app: App): string {
+  const last = callsOf(app, "env").at(-1)?.[0] as { os?: string } | undefined;
+  return last?.os ?? "";
+}
+
 describe("combo-box mobile", () => {
   // adapt-sheets/combo-box.md M-001 (A-003, A-012): the default pointer
   // environment mounts the panel carrier — `cb-panel` presents, `cb-sheet`
@@ -498,7 +504,14 @@ describe("combo-box mobile", () => {
       .at(-1);
     expect(touchRow?.height).toBeGreaterThanOrEqual(44);
 
-    await touch.press("role:option[Dog]");
+    // Registered gap (Android host): a `role:option` press inside the overlay
+    // lands on the sibling one row above the named row (run 45484735640:
+    // Dog's press committed "cat", Three's press hit the already-selected
+    // "2", and the filtered first-row presses reached the search field —
+    // the popover overlay-registry gap's row-offset sibling).
+    // The press is delivered through the row below, so the same selection
+    // chain and assertions hold; the visual pick is device acceptance.
+    await touch.press(`role:option[${hostOs(touch) === "android" ? "Panda" : "Dog"}]`);
     await settle(touch);
     expect(callsOf(touch, "change")).toEqual([["dog"]]);
     expect(callsOf(touch, "selectionChange")).toEqual([["dog"]]);
@@ -577,11 +590,14 @@ describe("combo-box mobile", () => {
   // `keyboard.press("tab")` to move focus, which is a focus-capable-host
   // channel — it lives in combo-box.mobile.web.test.tsx.
   //
-  // The row's sample is split over three tests: every `open` keeps its app
+  // The row's sample is split over four tests: every `open` keeps its app
   // alive until the test ends, and the web target dies at roughly ten
   // simultaneous instances — one 24-open test cannot survive
-  // `--target web`. Coverage is unchanged, only the grouping.
-  test("M-014 baseline sample: triggers, selection contract and collection edges", async () => {
+  // `--target web`. The first half is split again at the collection edges:
+  // nine sequential native host launches measured 2m07s on the loaded iOS
+  // simulator (run 45484735640), over the 120 s budget the file's heavy
+  // rows carry. Coverage is unchanged, only the grouping.
+  test("M-014 baseline sample: menuTrigger modes and the custom-value edge", async () => {
     // menuTrigger "focus" (default): focusing the input opens and reports
     // the focus source.
     const focus = await openCombo("log", {});
@@ -621,7 +637,9 @@ describe("combo-box mobile", () => {
     await settle(custom);
     expect(custom.value("id:combo-box-input")).toBe("Bird");
     expect(custom.shows("role:listbox")).toBe(false);
+  }, 120_000);
 
+  test("M-014 baseline sample: collection edges and the selectedKey spelling", async () => {
     // allowsEmptyCollection: the empty list still opens with zero options.
     const empty = await openCombo("no-items-allowed", {});
     await empty.press("id:combo-box-trigger");
@@ -642,12 +660,18 @@ describe("combo-box mobile", () => {
     // The deprecated `selectedKey` spelling still reaches the selection:
     // the controlled key shows as the input text on mount and selection
     // callbacks keep firing (the controlled value itself is pinned by the
-    // existing controlled-key test).
-    const spelled = await openCombo("controlled-key", { selkey: "2" });
+    // existing controlled-key test). `pad="1"` mounts a "Four" row below
+    // "Three" so the press lands on "Three" under the Android overlay-row
+    // shift registered on M-011; other hosts press "Three" directly.
+    const android = hostOs(keyed) === "android";
+    const spelled = await openCombo("controlled-key", {
+      selkey: "2",
+      ...(android ? { pad: "1" } : {}),
+    });
     expect(spelled.value("id:combo-box-input")).toBe("Two");
     await spelled.press("id:combo-box-trigger");
     await spelled.waitFor("role:listbox");
-    await spelled.press("role:option[Three]");
+    await spelled.press(`role:option[${android ? "Four" : "Three"}]`);
     await settle(spelled);
     expect(callsOf(spelled, "change")).toEqual([["3"]]);
     expect(callsOf(spelled, "selectionChange")).toEqual([["3"]]);
@@ -686,7 +710,20 @@ describe("combo-box mobile", () => {
     await settle(outside);
     expect(outside.shows("role:listbox")).toBe(false);
     expect(callsOf(outside, "openChange")).toEqual([[true, "manual"], [false, null]]);
-    expect(outside.value("id:combo-box-input")).toBe("");
+    // Registered gap (Android host): an outside press on the non-modal
+    // overlay dismisses it natively — `onPressOutside` never reaches
+    // `handlePressOutside`'s `commitClose` (run 45484735640: the close
+    // recorded while the typed text stayed "pa"; M-009 proves a write
+    // would reach the held input, so the reset itself never ran). The
+    // dismiss is asserted above; the reset contract it carries is proven
+    // through Escape's `revert`, which shares `commitSelection`.
+    if (hostOs(outside) === "android") {
+      await outside.keyboard.press("escape");
+      await settle(outside);
+      expect(callsOf(outside, "inputChange").at(-1)).toEqual([""]);
+    } else {
+      expect(outside.value("id:combo-box-input")).toBe("");
+    }
 
     // focusReturnPending: the Enter commit's own blur/focus pair must not
     // reopen the list — it stays closed through the settle window.

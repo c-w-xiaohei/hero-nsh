@@ -154,14 +154,15 @@ describe("tabs mobile (headless)", () => {
     expect(settled.scale).toBe(1);
   }, 120_000);
 
-  // adapt-sheets/tabs.md M-005 (A-003): the strict held-edge roundtrip the
-  // shared file's iOS arm cannot observe — `platform.os` reads "ios" on
-  // this headless engine too, but no `UIScrollView` sits under the app,
+  // adapt-sheets/tabs.md M-005 (A-003): the strict held-edge roundtrip
+  // lives here, not in the shared file — `platform.os` reads "ios" on
+  // this headless engine too, but no scroll host sits under the app,
   // so `longPress` records the full `ctx-pressed` edge sequence here
-  // while the device host's scroll PressIn arbitration drops it (the
-  // shared file's registered-gap degraded branch keeps the rest-state
-  // read there; Android keeps the edge in the same shared file). The
-  // assertions are the shared file's originals, verbatim.
+  // while the device hosts' scroll press-in arbitration drops it (iOS's
+  // `SCROLL_PRESS_DELAY` recognizer delay and Android's deferred
+  // `Pressable.pressIn` alike; the shared file's registered-gap branch
+  // keeps the rest-state read on both device hosts). The assertions are
+  // the shared file's originals, verbatim.
   test("M-005 held edge: the seam's isPressed roundtrips under longPress on a host that records it", async () => {
     const app = await openTabs("mobile", { input: "touch" });
 

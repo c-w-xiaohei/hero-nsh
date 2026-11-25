@@ -143,6 +143,9 @@ async function settle(app: App, ms = 80): Promise<void> {
 }
 
 describe("alert-dialog mobile", () => {
+  // iOS job timed out at the 30s default on this file's native host relaunch
+  // cost (run 45484735640) — same slowness as drawer/popover native rows;
+  // assertions are not the problem, so every test carries a 120s timeout.
   // adapt-sheets/alert-dialog.md M-001 (A-001, A-002, A-003): touch +
   // compact under `presentation="auto"` presents the bottom-docked sheet —
   // the card's bottom edge on the window's, full-bleed width, no centering.
@@ -158,7 +161,7 @@ describe("alert-dialog mobile", () => {
     ).toBeLessThanOrEqual(4);
     expect(dialog.width).toBeGreaterThan(stage.width * 0.9);
     expect(dialog.centerY).toBeGreaterThan(centerY(stage) + 100);
-  });
+  }, 120_000);
 
   // adapt-sheets/alert-dialog.md M-002 (A-001): a `"panel"` pin beats the
   // touch + compact auto rule — the card keeps the panel's `max-w-md` cap
@@ -180,7 +183,7 @@ describe("alert-dialog mobile", () => {
     // The `max-w-md` cap: far below the sheet's full-bleed width.
     expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
     expect(dialog.width).toBeGreaterThan(200);
-  });
+  }, 120_000);
 
   // adapt-sheets/alert-dialog.md M-003 (A-004, negative): under the default
   // pointer environment the swipe path is physically absent even with every
@@ -210,7 +213,7 @@ describe("alert-dialog mobile", () => {
     expect(lastLayout(app, "dialog")).toEqual(before);
     expect(app.shows("id:ad-card")).toBe(true);
     expect(falseOpenChanges(app)).toEqual([]);
-  });
+  }, 120_000);
 
   // adapt-sheets/alert-dialog.md M-004 (A-004, negative): the second gate —
   // touch + sheet + `isDismissable` but no explicit `isSwipeable` — still
@@ -234,7 +237,7 @@ describe("alert-dialog mobile", () => {
     );
     expect(app.shows("id:ad-card")).toBe(true);
     expect(falseOpenChanges(app)).toEqual([]);
-  });
+  }, 120_000);
 
   // adapt-sheets/alert-dialog.md M-005 (A-004): with all four gates open the
   // card follows the finger — the drag probe shows `panKeys > 0` (the gesture
@@ -325,7 +328,7 @@ describe("alert-dialog mobile", () => {
       expect(openChanges(far)).toContain(false);
       expect(far.shows("id:ad-card")).toBe(false);
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/alert-dialog.md M-006 (A-005): under an injected touch
   // environment the trigger's press chain is the desktop chain verbatim —
@@ -359,7 +362,7 @@ describe("alert-dialog mobile", () => {
     for (const record of bounds) {
       expect(record).toEqual(first);
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/alert-dialog.md M-007 (A-005, negative): the same press
   // under the default pointer environment produces the same chain and the
@@ -383,7 +386,7 @@ describe("alert-dialog mobile", () => {
 
     const after = layoutRecords(app, "trigger").at(-1);
     expect(after).toEqual(before);
-  });
+  }, 120_000);
 
   // adapt-sheets/alert-dialog.md M-008 (A-008): the fixture's observation
   // carrier itself — it mounts under the default and the injected
@@ -515,7 +518,7 @@ describe("alert-dialog mobile", () => {
     );
     expect(app.shows("id:ad-card")).toBe(true);
     expect(falseOpenChanges(app)).toEqual([]);
-  });
+  }, 120_000);
 
   // adapt-sheets/alert-dialog.md M-012 (A-007): `AlertDialogPresentation`
   // reaches the public surface — the top-level `import type` plus the
@@ -534,5 +537,5 @@ describe("alert-dialog mobile", () => {
     const stage = container(app);
     expectPanelDock(dialog, stage);
     expect(dialog.width).toBeLessThan(Math.min(600, stage.width));
-  });
+  }, 120_000);
 });

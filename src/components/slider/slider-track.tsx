@@ -18,7 +18,9 @@ import {
   claimSliderTouch,
   insideThumbHitArea,
   releaseSliderTouch,
+  releaseThumbTouch,
   sliderTouchClaimed,
+  thumbTouch,
 } from "./slider-pan-state";
 import type {
   SliderRenderProps,
@@ -124,6 +126,7 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
     "onHoverStart",
     "onHoverEnd",
     "onHoverChange",
+    "onTouchStartCapture",
     "onTouchEnd",
     "onTouchCancel",
     "dir",
@@ -349,9 +352,20 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
       // The move negotiation asks this ancestor's capture predicate before
       // the thumb's own, on every move frame — a touch that went down inside
       // the thumb's slop-expanded hit area is the thumb's drag (the delta
-      // path), so the track defers. `pageX - gesture.dx` is where the finger
-      // went down in surface coordinates (the claim event's `locationX` is
-      // target-local, useless to an ancestor).
+      // path), so the track defers. The identifier ledger is the first line:
+      // a finger the thumb's `onTouchStart` answered is inside its hit test
+      // by definition, in whatever coordinate space the host reports — the
+      // geometric frame below is only the fallback for touches that began
+      // before this ledger entry (and survives hosts whose touch-start
+      // `locationX` is not target-relative, the Android CI steal the
+      // color-slider run measured).
+      if (thumbTouch(event.identifier)) {
+        return false;
+      }
+
+      // `pageX - gesture.dx` is where the finger went down in surface
+      // coordinates (the claim event's `locationX` is target-local, useless
+      // to an ancestor).
       if (
         insideThumbHitArea(
           event.pageX - gesture.dx,
@@ -387,6 +401,20 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
       handleRelease();
     },
   });
+
+  // Reused-identifier cleanup: a finger that begins anywhere in the track
+  // subtree clears a stale thumb mark, so a later `shouldClaim` frame cannot
+  // defer on an entry an earlier thumb touch left behind (the claim ledger's
+  // own release-on-start convention, mirrored for the deferral ledger). The
+  // release MUST run on the capture phase: the thumb is this view's child
+  // and touches bubble deepest-first, so a bubble-phase handler here would
+  // run after the thumb's `onTouchStart` marked the finger and erase the
+  // mark before `shouldClaim` ever reads it — capture walks outside-in and
+  // lands before the thumb's bubble-phase mark.
+  const handleTouchStartCapture = (event: GestureResponderEvent) => {
+    releaseThumbTouch(event.identifier);
+    local.onTouchStartCapture?.(event);
+  };
 
   // A-004, tap-to-jump compensation: a bare tap produces no move frame, so the
   // pan never claims it and the bare chain (gated off under touch) cannot
@@ -520,8 +548,10 @@ export function SliderTrack(props: SliderTrackProps): JSX.Element {
       // color-slider shadowed-spread regression, re-measured here).
       {...pan.panHandlers()}
       // The part's own raw touch handlers stay bound after the spread: the
-      // pan emits none, and the tap-jump compensation below needs
-      // `onTouchEnd`.
+      // pan emits none, the reused-identifier cleanup needs
+      // `onTouchStartCapture` (capture — see the handler's ordering note),
+      // and the tap-jump compensation below needs `onTouchEnd`.
+      onTouchStartCapture={handleTouchStartCapture}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchCancel}
       onMouseEnter={handleMouseEnter}
