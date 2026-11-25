@@ -295,6 +295,17 @@ export function PopoverContent(props: PopoverContentProps) {
   const dialogFocused = signal(false);
   let focusedForOpen = false;
 
+  // The carrier that owns the native overlay window: the panel's content
+  // `Overlay` or the sheet's `SheetContent`. Focusing the Dialog alone leaves
+  // the window unfocused on Android, so its nested pressables never join the
+  // native registry (run 45565096745: `pop-close` had no native view even
+  // after the Dialog focus attempts).
+  let carrierNode: ViewRef | undefined;
+  const handleCarrierRef = (node: ViewRef) => {
+    carrierNode = node;
+    props.ref?.(node);
+  };
+
   effect(() => {
     const open = isOpen();
     const dialog = dialogRef();
@@ -319,6 +330,9 @@ export function PopoverContent(props: PopoverContentProps) {
     // close had no native view while the panel was up). A real Windows window
     // registers the dialog after the opening commit, so the same call is a
     // no-op there; the deferred retry below remains that host's path (T-014).
+    // The carrier goes first: it owns the native window, and the Dialog's
+    // focus cannot register the content until that window is key.
+    carrierNode?.focus();
     dialog.focus();
 
     let frame = requestAnimationFrame(() => {
@@ -326,10 +340,12 @@ export function PopoverContent(props: PopoverContentProps) {
         return;
       }
 
+      carrierNode?.focus();
       dialog.focus();
 
       frame = requestAnimationFrame(() => {
         if (!dialogFocused()) {
+          carrierNode?.focus();
           dialog.focus();
         }
       });
@@ -465,7 +481,7 @@ export function PopoverContent(props: PopoverContentProps) {
   // One read of `props.children`, at its placement inside the carrier.
   const contentOverlay = (
     <Overlay
-      ref={(node) => props.ref?.(node)}
+      ref={handleCarrierRef}
       anchor={anchor() ?? null}
       placement={resolved().side}
       align={resolved().align}
@@ -543,7 +559,7 @@ export function PopoverContent(props: PopoverContentProps) {
             isKeyboardDismissDisabled={isKeyboardDismissDisabled()}
           >
             <SheetContent
-              ref={(node) => props.ref?.(node)}
+              ref={handleCarrierRef}
               testID={sheetTestID()}
               nativeID={props.id ?? props.nativeID}
               accessibilityLabel={props["aria-label"] ?? props.accessibilityLabel}

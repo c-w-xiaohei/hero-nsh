@@ -169,7 +169,10 @@ describe("drawer-mobile", () => {
       expect(callsOf(app, "openChange")).toHaveLength(0);
       expect(app.shows("id:dr-dialog")).toBe(true);
     }
-  });
+    // Two native launches plus the swipe roundtrip on a loaded iOS simulator
+    // passed the 30 s default (run 45565096745); same contract, same budget
+    // as the other native drawer rows.
+  }, 120_000);
 
   // adapt-sheets/drawer.md M-006 (A-001): `isDismissable` is the stronger
   // gate — the swipe shares it with outside-press dismissal, so a locked

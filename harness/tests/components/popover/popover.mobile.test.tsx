@@ -75,7 +75,9 @@ describe("popover mobile", () => {
     expect(app.shows("text:Mobile content")).toBe(true);
     expect(callsOf(app, "openChange")).toEqual([[true]]);
     expect(callsOf(app, "triggerPress")).toEqual([["trigger"]]);
-  });
+    // The iOS simulator's native launch passed the 30 s default on the
+    // loaded runner (run 45565096745); one app, same contract.
+  }, 120_000);
 
   // adapt-sheets/popover.md M-002 (A-005, 负断言): under the default pointer
   // environment the press/open chain is verbatim and no touch-only artifact
