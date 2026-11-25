@@ -138,7 +138,7 @@ function openChanges(app: App): boolean[] {
 /**
  * The OS the app itself reports through the fixture's `platform` probe
  * (`probe("platform")(platform.os)` — the table/tabs convention). `""` when
- * the fixture records nothing. Only the iOS-degraded branches read it.
+ * the fixture records nothing. Only the native-degraded branches read it.
  */
 function hostOs(app: App): string {
   return String(callsOf(app, "platform").at(-1)?.[0] ?? "");
@@ -517,18 +517,24 @@ describe("modal mobile", () => {
       // fires Escape before the overlay is focused).
       await app.waitFor("id:mo-close");
       await app.keyboard.press("escape");
-      if (hostOs(app) === "ios") {
-        // iOS degraded acceptance (registered gap, native-overlay-root-cause
-        // E-3): `ModalHost.present` installs no first responder inside the
-        // presented controller, so a synthesized Escape dies at the surface
-        // root and never reaches the Dialog's `UIKeyCommand` on the UIKit
-        // host. `platform.os` cannot tell that host from headless (both
+      const os = hostOs(app);
+      if (os === "ios" || os === "android") {
+        // Native degraded acceptance (registered gap,
+        // native-overlay-root-cause E-3): on iOS `ModalHost.present`
+        // installs no first responder inside the presented controller, so
+        // a synthesized Escape dies at the surface root and never reaches
+        // the Dialog's `UIKeyCommand`; on Android the same external gap —
+        // the overlay window holds no focused view or key intercept, so
+        // the hardware-keyboard Escape never reaches the Dialog's
+        // `closeOnEscape` listener (CI runs 45557149467 / 45484735640:
+        // `id:mo-card` never gone after the added `waitFor("id:mo-close")`).
+        // `platform.os` cannot tell the UIKit host from headless (both
         // report "ios", and headless closes through JS key bubbling), so
         // the degraded contract is the close channel invariant either way:
         // a requested close (`openChange(false)`) takes the card out; no
         // request leaves it up — never a silent unmount and never a
-        // spurious close. Android and web keep the literal Escape-close;
-        // the strict copy lives in modal.mobile.headless.test.tsx.
+        // spurious close. Web keeps the literal Escape-close; the strict
+        // copy lives in modal.mobile.headless.test.tsx.
         await settle(app, 200);
         if (falseOpenChanges(app).length === 1) {
           await app.waitFor("id:mo-card", { state: "gone", timeout: 10_000 });

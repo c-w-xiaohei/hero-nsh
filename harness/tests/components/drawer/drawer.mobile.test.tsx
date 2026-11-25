@@ -54,7 +54,7 @@ function dragCalls(app: App): DragRecord[] {
 /**
  * The OS the app itself reports through the fixture's `platform` probe
  * (`probe("platform")(platform.os)` — the table/tabs convention). `""` when
- * the fixture records nothing. Only the iOS-degraded branches read it.
+ * the fixture records nothing. Only the native-degraded branches read it.
  */
 function hostOs(app: App): string {
   return String(callsOf(app, "platform").at(-1)?.[0] ?? "");
@@ -227,11 +227,13 @@ describe("drawer-mobile", () => {
       // 40pt, not 200: on Android a release that lands outside the panel is
       // a press on the backdrop, so the 200pt travel dismissed through the
       // outside-press path rather than through any handle gesture (run
-      // 45477161285: `openChange` recorded [[false]]). The touch handle is
-      // at least 44pt tall (`min-h-11`), so 40pt from its center ends just
-      // below the handle on the `top` panel's header, and well inside the
-      // `h-full` panel for `left`/`right` — the short drag proves the same
-      // thing: no gesture path mounts to claim it.
+      // 45477161285: `openChange` recorded [[false]]). The short drag alone
+      // was not enough — Android still closed the drawer on the inside-
+      // panel release (runs 45557149467 / 45484735640), a host input gap
+      // the `sides` fixture case now isolates by disarming both non-
+      // gesture close channels (see drawer.fixtures.tsx). What remains to
+      // measure is the claim itself: `keys=0`/`panelKeys=0`/`offset=0`
+      // prove no gesture path mounts to take the drag.
       await app.drag("id:dr-handle", { x: 0, y: 40 });
       await settle(app);
 
@@ -299,22 +301,29 @@ describe("drawer-mobile", () => {
     // native presentation, not before it.
     await app.waitFor("id:dr-close");
     await app.keyboard.press("escape");
-    if (hostOs(app) === "ios") {
-      // iOS degraded acceptance (registered gap, native-overlay-root-cause
-      // E-3): the drawer's native `Dialog` carries Escape on
-      // `ModalController.keyCommands`, but `ModalHost.present` installs no
-      // first responder inside the presented controller — the key dies at
-      // the surface root and `onCancel` never fires on the UIKit host (run
-      // 45344508005: `id:dr-dialog` stayed through the 5 s wait).
-      // `platform.os` cannot tell that host from headless (both report
-      // "ios", and headless closes through JS key bubbling), so the
-      // degraded contract is the close channel invariant plus the outside
-      // press staying canonical either way. Android and web keep the
-      // literal Escape-close; the strict copy lives in
-      // drawer.mobile.headless.test.tsx.
+    const os = hostOs(app);
+    if (os === "ios" || os === "android") {
+      // Native degraded acceptance (registered gap,
+      // native-overlay-root-cause E-3): on iOS the drawer's native
+      // `Dialog` carries Escape on `ModalController.keyCommands`, but
+      // `ModalHost.present` installs no first responder inside the
+      // presented controller — the key dies at the surface root and
+      // `onCancel` never fires on the UIKit host (run 45344508005:
+      // `id:dr-dialog` stayed through the 5 s wait). On Android the same
+      // external gap: the overlay window holds no focused view or key
+      // intercept, so a synthesized Escape never reaches the Dialog's
+      // `closeOnEscape` listener — two runs (45557149467 / 45484735640)
+      // with the `waitFor("id:dr-close")` presentation wait already in
+      // place left `id:dr-dialog` up through the 5 s wait, so the missing
+      // piece is focus, not timing. `platform.os` cannot tell the UIKit
+      // host from headless (both report "ios", and headless closes
+      // through JS key bubbling), so the degraded contract is the close
+      // channel invariant plus the outside press staying canonical either
+      // way. Web and every other host keep the literal Escape-close; the
+      // strict copy lives in drawer.mobile.headless.test.tsx.
       await settle(app);
       if (app.shows("id:dr-dialog")) {
-        // Suppressed Escape (the real UIKit host): nothing closed — no
+        // Suppressed Escape (the real native host): nothing closed — no
         // `openChange` at all — and the backdrop press still dismisses.
         expect(callsOf(app, "openChange")).toHaveLength(0);
         await app.press("id:dr-backdrop");

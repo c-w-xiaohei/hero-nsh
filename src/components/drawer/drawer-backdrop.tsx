@@ -24,6 +24,7 @@ export interface DrawerBackdropProps extends Omit<ViewProps, "children" | "class
   isExiting?: boolean;
   onEnter?: (element?: unknown) => void | Promise<void>;
   onExit?: (element?: unknown) => void | Promise<void>;
+  /** Return false to keep the drawer open for this outside interaction; true or undefined lets it close. */
   shouldCloseOnInteractOutside?: (element?: unknown) => boolean;
   UNSTABLE_portalContainer?: unknown;
   render?: unknown;
@@ -208,7 +209,15 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
   };
   const handleBackdropPress = (event: PressEvent) => {
     props.onPress?.(event);
-    if (isDismissable()) requestClose();
+    // `shouldCloseOnInteractOutside` is the per-press veto upstream's
+    // `useModalOverlay` gives the same request (react-aria's
+    // ModalOverlay): `isDismissable` arms the channel, the predicate
+    // decides each attempt. The prop was accepted but unconsumed here —
+    // wiring it is what lets a caller (and the fixture's gesture-only
+    // `sides` case) keep `isDismissable` armed while the outside-press
+    // channel stays shut.
+    const veto = props.shouldCloseOnInteractOutside?.(event) === false;
+    if (isDismissable() && !veto) requestClose();
   };
   const handleCancel = () => {
     if (!isKeyboardDismissDisabled()) requestClose();

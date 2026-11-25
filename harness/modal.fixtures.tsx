@@ -1,4 +1,4 @@
-import { effect, host, mount, platform, Text, View } from "nsh";
+import { effect, host, mount, platform, Text, View, windowSize } from "nsh";
 import type { Component, JSX } from "nsh";
 import { EnvironmentScope, Modal } from "@heroui/react";
 import type { ModalPresentation } from "@heroui/react";
@@ -137,8 +137,15 @@ function ModalTree() {
           // definite basis (measured: a 1719pt dialog in a 768pt window, body
           // scroll range ≈ 0). A fixture-side definite height restores the
           // upstream intent for this case only; the panel/sheet assertions
-          // never mount it.
-          style={scrollable ? { height: 700 } : undefined}
+          // never mount it. The height is bounded by the real window: under
+          // `touch-compact` the auto presentation is a bottom-docked sheet,
+          // so a pin taller than the window pushes the dialog's top — the
+          // close trigger and header — off the screen (`id:mo-close` never
+          // showing, Android run 45557149467). The scroll assertions keep
+          // their range either way: 40 × 40pt rows against a ~640pt body.
+          style={
+            scrollable ? { height: Math.min(700, windowSize().height) } : undefined
+          }
           onLayout={layoutProbe("container")}
         >
           <Modal.Dialog
