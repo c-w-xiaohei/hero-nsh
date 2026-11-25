@@ -80,7 +80,20 @@ jobs:
           fi
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git diff --name-only "${{ github.event.pull_request.base.sha }}...HEAD" > "$RUNNER_TEMP/changed"
+            # `synchronize` carries the previous head in `before`: diffing it
+            # against the new head routes this push only. Opened/reopened,
+            # the all-zero first push, and anything without a usable range
+            # fall back to the whole PR.
+            before="${{ github.event.before }}"
+            head="${{ github.event.pull_request.head.sha }}"
+            if [ "${{ github.event.action }}" = "synchronize" ] &&
+              [ -n "$before" ] &&
+              [ "$before" != "0000000000000000000000000000000000000000" ] &&
+              git diff --name-only "$before" "$head" > "$RUNNER_TEMP/changed"; then
+              :
+            else
+              git diff --name-only "${{ github.event.pull_request.base.sha }}...HEAD" > "$RUNNER_TEMP/changed"
+            fi
           else
             : > "$RUNNER_TEMP/changed"
           fi
