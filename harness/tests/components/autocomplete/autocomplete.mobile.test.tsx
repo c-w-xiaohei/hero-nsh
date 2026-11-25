@@ -364,6 +364,8 @@ describe("autocomplete mobile", () => {
     await app.waitFor("role:option");
     expect(app.count("id:ac-pop-sheet")).toBe(1);
 
+    // A slow host's input can register later than the option rows.
+    await app.waitFor(SEARCH);
     await app.type(SEARCH, "do");
     await app.waitUntil(() => app.count("role:option") === 1);
     expect(callsOf(app, "inputChange")).toEqual([["d"], ["do"]]);
@@ -461,6 +463,7 @@ describe("autocomplete mobile", () => {
       await app.waitFor("role:option");
       expect(app.count("role:option")).toBe(3);
 
+      await app.waitFor(SEARCH);
       await app.type(SEARCH, "do");
       await app.waitUntil(() => app.count("role:option") === 1);
       expect(callsOf(app, "inputChange")).toEqual([["d"], ["do"]]);
