@@ -94,6 +94,7 @@ type EnvReport = {
   os: string;
   desktop: boolean;
   idiom: string;
+  reduceMotion: boolean;
   w: number;
   h: number;
 };
@@ -238,18 +239,31 @@ describe("pressable-feedback", () => {
   test("M-004 injected touch: scale end follows the width coefficient — 0.97 at 150pt, 0.9925 at 600pt, 0.985 when ignored", async () => {
     // width 150 → coefficient 2 → 1 − 0.015·2 = 0.97
     let app = await openPressable("factory", { scope: "touch" });
+    const env = lastOf<EnvReport>(app, "env");
     await app.press("id:layout-mid");
     let s = await holdSample(app);
     expect(s.pressed).toBeGreaterThan(0.99);
-    expect(s.scale).toBeGreaterThan(0.965);
-    expect(s.scale).toBeLessThan(0.975);
+    // Android CI runs with `animator_duration_scale 0.0`, which the host
+    // reports as reduce-motion and `createPressFeedback` honors by pinning
+    // the channel at 1. The width coefficient stays asserted where the host
+    // animates; the pin itself is the contract on a reduce-motion host.
+    if (env.reduceMotion) {
+      expect(s.scale).toBe(1);
+    } else {
+      expect(s.scale).toBeGreaterThan(0.965);
+      expect(s.scale).toBeLessThan(0.975);
+    }
     await app.press("id:up");
 
     // width 600 → coefficient 0.5 → 1 − 0.015·0.5 = 0.9925
     await app.press("id:layout-huge");
     s = await holdSample(app);
-    expect(s.scale).toBeGreaterThan(0.991);
-    expect(s.scale).toBeLessThan(0.994);
+    if (env.reduceMotion) {
+      expect(s.scale).toBe(1);
+    } else {
+      expect(s.scale).toBeGreaterThan(0.991);
+      expect(s.scale).toBeLessThan(0.994);
+    }
     await app.press("id:up");
 
     // ignoreScaleCoefficient → coefficient 1 → the raw 0.985 value
@@ -257,10 +271,15 @@ describe("pressable-feedback", () => {
       scope: "touch",
       fanim: "ignore-scale",
     });
+    const ignoredEnv = lastOf<EnvReport>(app, "env");
     await app.press("id:layout-mid");
     s = await holdSample(app);
-    expect(s.scale).toBeGreaterThan(0.983);
-    expect(s.scale).toBeLessThan(0.987);
+    if (ignoredEnv.reduceMotion) {
+      expect(s.scale).toBe(1);
+    } else {
+      expect(s.scale).toBeGreaterThan(0.983);
+      expect(s.scale).toBeLessThan(0.987);
+    }
     await app.press("id:up");
   }, 120_000);
 

@@ -120,6 +120,11 @@ test("T-005 should stay mounted through its exit hold", async () => {
 
   await app.press(TRIGGER);
 
+  // `press` resolves once the app is quiet; on Windows the popover's mount
+  // can land a beat after that, so wait for the view the assertion names
+  // instead of reading `count` synchronously (run 45484735640: the calendar
+  // was on screen while `count` still read 0).
+  await app.waitFor("id:dp-popover");
   expect(app.count("id:dp-popover")).toBe(1);
 
   await app.keyboard.press("escape");

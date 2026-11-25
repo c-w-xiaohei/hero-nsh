@@ -1,4 +1,4 @@
-import { effect, host, mount, platform, Text, View, windowSize } from "nsh";
+import { effect, host, mount, platform, reduceMotion, Text, View, windowSize } from "nsh";
 import type { Component, JSX, PressEvent } from "nsh";
 import {
   createInput,
@@ -447,6 +447,7 @@ function Fixture() {
     os: platform.os,
     desktop: platform.desktop,
     idiom: platform.idiom,
+    reduceMotion: reduceMotion(),
     w: windowSize().width,
     h: windowSize().height,
   });

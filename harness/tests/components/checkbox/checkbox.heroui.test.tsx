@@ -231,6 +231,11 @@ test("X-001 reports an item's own change inside a group for a press and for a La
   const pressed = await openCase("group-log");
 
   await toggleCheckbox(pressed, "Coding");
+  // `press` resolves once the app is quiet; on Windows the item's change
+  // callback can land a beat after that (run 45484735640 recorded nothing
+  // yet while the box had already toggled). Wait for the channel the
+  // assertion reads, then keep the exact value check.
+  await pressed.waitUntil(() => callsOf(pressed, "codingChange").length > 0);
   expect(callsOf(pressed, "codingChange")).toEqual([[true]]);
   expect(callsOf(pressed, "designChange")).toHaveLength(0);
 
@@ -239,6 +244,9 @@ test("X-001 reports an item's own change inside a group for a press and for a La
   expect(labelled.shows("text:·")).toBe(true);
 
   await labelled.press("text:Weekly digest");
+  // Same Windows race on the Label-activation half: wait for the item's own
+  // channel before reading the pair of exact values.
+  await labelled.waitUntil(() => callsOf(labelled, "itemChange").length > 0);
   expect(callsOf(labelled, "groupChange")).toEqual([[["weekly"]]]);
   expect(callsOf(labelled, "itemChange")).toEqual([[true]]);
   expect(labelled.shows("text:✓")).toBe(true);
