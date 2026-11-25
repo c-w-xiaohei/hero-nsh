@@ -113,7 +113,9 @@ describe("drawer-mobile", () => {
     expect(callsOf(app, "openChange")).toHaveLength(0);
     expect(app.shows("id:dr-dialog")).toBe(true);
     expect(layoutFor(app, "dialog")).toEqual(panelBefore);
-  });
+    // The first native row pays the simulator's launch; the loaded runner
+    // passed the 30 s default (run 45567361335). Same contract.
+  }, 120_000);
 
   // adapt-sheets/drawer.md M-002 (A-001): under the injected touch
   // environment a pull on the Handle past the panel-height threshold

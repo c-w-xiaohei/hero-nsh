@@ -1,4 +1,4 @@
-import { host, mount, signal, Text, View } from "nsh";
+import { host, mount, platform, signal, Text, View } from "nsh";
 import type { JSX } from "nsh";
 import {
   Button,
@@ -135,6 +135,10 @@ function MobileCase() {
   const onChange = probe("openChange");
   const press = probe("triggerPress");
   const close = probe("dialogClose");
+
+  // The host's own report: the Android overlay-registry gap below is
+  // host-specific, and `platform.os` is the only fact the test can read.
+  probe("env")({ os: platform.os });
 
   // The same external state drivers the retained cases use (M-005's
   // close-reopen cycle).
