@@ -367,7 +367,7 @@ describe("autocomplete mobile", () => {
     // A slow host's input can register later than the option rows.
     await app.waitFor(SEARCH);
     await app.type(SEARCH, "do");
-    await app.waitUntil(() => app.count("role:option") === 1);
+    await app.waitFor("role:option[Dog]");
     expect(callsOf(app, "inputChange")).toEqual([["d"], ["do"]]);
 
     // Android: overlay rows lack native views — the pick goes through the
@@ -383,12 +383,12 @@ describe("autocomplete mobile", () => {
 
     expect(callsOf(app, "change")).toEqual([["dog"]]);
     expect(callsOf(app, "openChange")).toEqual([[true], [false]]);
-    await app.waitUntil(() => app.shows(`${TRIGGER} >> text:Dog`));
+    await app.waitFor(`${TRIGGER} >> text:Dog`);
 
     // The carrier leaves the shown tree — the Sheet backdrop drops it as the
     // panel's `hidden` does, while the subtree's retention is what the
     // trigger's `text:Dog` read above and the full reopen below prove.
-    await app.waitUntil(() => !app.shows("role:option"));
+    await app.waitFor("role:option", { state: "gone" });
 
     await app.press(TRIGGER);
     await app.waitFor("role:option");
@@ -465,7 +465,7 @@ describe("autocomplete mobile", () => {
 
       await app.waitFor(SEARCH);
       await app.type(SEARCH, "do");
-      await app.waitUntil(() => app.count("role:option") === 1);
+      await app.waitFor("role:option[Dog]");
       expect(callsOf(app, "inputChange")).toEqual([["d"], ["do"]]);
 
       // The first surviving option takes the virtual focus, then Return
@@ -476,7 +476,7 @@ describe("autocomplete mobile", () => {
 
       expect(callsOf(app, "change")).toEqual([["dog"]]);
       expect(callsOf(app, "openChange")).toEqual([[true], [false]]);
-      await app.waitUntil(() => app.shows(`${TRIGGER} >> text:Dog`));
+      await app.waitFor(`${TRIGGER} >> text:Dog`);
 
       await app.press(TRIGGER);
       await app.waitFor("role:option");
