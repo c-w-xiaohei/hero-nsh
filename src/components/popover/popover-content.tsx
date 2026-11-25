@@ -313,10 +313,14 @@ export function PopoverContent(props: PopoverContentProps) {
     focusedForOpen = true;
     dialogFocused.set(false);
 
-    // A real Windows window registers the dialog after the opening commit, so
-    // focusing it in the same frame is a no-op there (T-014 observes 0 focus
-    // events). Defer the first attempt one frame and retry once when the focus
-    // did not land; the dialog's own onFocus is what records the landing.
+    // Try the opening commit first: Android's manual-clock runs can go quiet
+    // before a deferred frame, leaving the dialog unfocused and its nested
+    // pressables out of the native registry (run 45562711636: M-008/M-009's
+    // close had no native view while the panel was up). A real Windows window
+    // registers the dialog after the opening commit, so the same call is a
+    // no-op there; the deferred retry below remains that host's path (T-014).
+    dialog.focus();
+
     let frame = requestAnimationFrame(() => {
       if (dialogFocused()) {
         return;

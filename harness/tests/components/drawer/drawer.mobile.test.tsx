@@ -187,7 +187,10 @@ describe("drawer-mobile", () => {
     expect(lastDrag(app).offset).toBe(0);
     expect(callsOf(app, "openChange")).toHaveLength(0);
     expect(app.shows("id:dr-dialog")).toBe(true);
-  });
+    // A native host launch plus the swipe roundtrip can pass the 30 s default
+    // on a loaded iOS simulator (run 45562711636); the row still asserts the
+    // same contract, it just gives the host the same budget as its siblings.
+  }, 120_000);
 
   // adapt-sheets/drawer.md M-010 (A-003): the Body's `onScroll` wrap reports
   // the offset to the context first, then forwards the event to the
@@ -212,7 +215,9 @@ describe("drawer-mobile", () => {
       expect(forwarded).toBe(reported);
       expect(lastDrag(app).atTop).toBe(false);
     }
-  });
+    // Two native app launches in one row; the iOS simulator passed the 30 s
+    // default on the loaded runner (run 45562711636).
+  }, 120_000);
 
   // adapt-sheets/drawer.md M-011 (A-008): the gesture is a bottom-edge
   // feature — top, left and right mount no path at all.
