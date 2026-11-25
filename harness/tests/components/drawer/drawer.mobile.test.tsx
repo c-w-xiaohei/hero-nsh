@@ -133,7 +133,10 @@ describe("drawer-mobile", () => {
 
     expect(callsOf(app, "openChange")).toEqual([[false]]);
     await app.waitFor("id:dr-dialog", { state: "gone" });
-  });
+    // The native iOS host launch plus the gesture roundtrip exceeds the
+    // 30 s default on the loaded simulator (run 45570051420 timed out on
+    // M-012 and M-014); same budget as the file's other native rows.
+  }, 120_000);
 
   // adapt-sheets/drawer.md M-003 (A-002, A-003): the panel is a drag surface
   // of its own — a pull from the Header, with the Body at its start edge,
@@ -151,7 +154,7 @@ describe("drawer-mobile", () => {
 
     expect(callsOf(app, "openChange")).toEqual([[false]]);
     await app.waitFor("id:dr-dialog", { state: "gone" });
-  });
+  }, 120_000);
 
   // adapt-sheets/drawer.md M-005 (A-001): `isSwipeable` is the master
   // switch — off at the Backdrop or overridden off at the Content, the
@@ -251,7 +254,7 @@ describe("drawer-mobile", () => {
       expect(callsOf(app, "openChange")).toHaveLength(0);
       expect(app.shows("id:dr-dialog")).toBe(true);
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/drawer.md M-012 (A-004): under touch the `input` axis's
   // `min-h-11` gives the Handle the 44 pt grab surface; the default
@@ -272,7 +275,7 @@ describe("drawer-mobile", () => {
       ),
     );
     expect(layoutFor(pointer, "handle").size.height).toBeLessThan(44);
-  });
+  }, 120_000);
 
   // adapt-sheets/drawer.md M-013 (A-005): the fixture's observation channel
   // itself — the DragProbe reports the mount state in both scopes.
@@ -291,7 +294,7 @@ describe("drawer-mobile", () => {
     expect(lastDrag(touch).keys).toBeGreaterThan(0);
     expect(lastDrag(touch).panelKeys).toBeGreaterThan(0);
     expect(touch.shows("id:dr-handle")).toBe(true);
-  });
+  }, 120_000);
 
   // adapt-sheets/drawer.md M-014 (baseline): the default pointer
   // environment is unchanged — Trigger toggles then fires `onPress`, an
@@ -387,5 +390,5 @@ describe("drawer-mobile", () => {
     const closerEvents = calls(closer).map((entry) => entry.name);
     expect(closerEvents.indexOf("openChange")).toBeGreaterThanOrEqual(0);
     expect(closerEvents.indexOf("closePress")).toBeGreaterThan(closerEvents.indexOf("openChange"));
-  });
+  }, 120_000);
 });
