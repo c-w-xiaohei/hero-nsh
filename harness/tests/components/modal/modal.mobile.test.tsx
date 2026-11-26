@@ -521,20 +521,17 @@ describe("modal mobile", () => {
       if (os === "ios" || os === "android") {
         // Native degraded acceptance (registered gap,
         // native-overlay-root-cause E-3): on iOS `ModalHost.present`
-        // installs no first responder inside the presented controller, so
-        // a synthesized Escape dies at the surface root and never reaches
-        // the Dialog's `UIKeyCommand`; on Android the same external gap —
-        // the overlay window holds no focused view or key intercept, so
-        // the hardware-keyboard Escape never reaches the Dialog's
-        // `closeOnEscape` listener (CI runs 45557149467 / 45484735640:
-        // `id:mo-card` never gone after the added `waitFor("id:mo-close")`).
+        // installs no first responder inside the presented controller,
+        // and on Android the overlay window holds no focused view or key
+        // intercept — on both hosts a synthesized Escape dies at the
+        // surface root and never reaches the Dialog's close channel.
         // `platform.os` cannot tell the UIKit host from headless (both
         // report "ios", and headless closes through JS key bubbling), so
-        // the degraded contract is the close channel invariant either way:
-        // a requested close (`openChange(false)`) takes the card out; no
-        // request leaves it up — never a silent unmount and never a
-        // spurious close. Web keeps the literal Escape-close; the strict
-        // copy lives in modal.mobile.headless.test.tsx.
+        // the degraded contract is the close channel invariant either
+        // way: a requested close (`openChange(false)`) takes the card
+        // out; no request leaves it up — never a silent unmount and never
+        // a spurious close. Web keeps the literal Escape-close; the
+        // strict copy lives in modal.mobile.headless.test.tsx.
         await settle(app, 200);
         if (falseOpenChanges(app).length === 1) {
           await app.waitFor("id:mo-card", { state: "gone", timeout: 10_000 });

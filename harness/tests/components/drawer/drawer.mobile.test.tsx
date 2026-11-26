@@ -113,8 +113,8 @@ describe("drawer-mobile", () => {
     expect(callsOf(app, "openChange")).toHaveLength(0);
     expect(app.shows("id:dr-dialog")).toBe(true);
     expect(layoutFor(app, "dialog")).toEqual(panelBefore);
-    // The first native row pays the simulator's launch; the loaded runner
-    // passed the 30 s default (run 45567361335). Same contract.
+    // The first native row pays the simulator's launch: the loaded runner
+    // exceeds the 30 s default.
   }, 120_000);
 
   // adapt-sheets/drawer.md M-002 (A-001): under the injected touch
@@ -134,8 +134,7 @@ describe("drawer-mobile", () => {
     expect(callsOf(app, "openChange")).toEqual([[false]]);
     await app.waitFor("id:dr-dialog", { state: "gone" });
     // The native iOS host launch plus the gesture roundtrip exceeds the
-    // 30 s default on the loaded simulator (run 45570051420 timed out on
-    // M-012 and M-014); same budget as the file's other native rows.
+    // 30 s default on the loaded simulator.
   }, 120_000);
 
   // adapt-sheets/drawer.md M-003 (A-002, A-003): the panel is a drag surface
@@ -174,9 +173,8 @@ describe("drawer-mobile", () => {
       expect(callsOf(app, "openChange")).toHaveLength(0);
       expect(app.shows("id:dr-dialog")).toBe(true);
     }
-    // Two native launches plus the swipe roundtrip on a loaded iOS simulator
-    // passed the 30 s default (run 45565096745); same contract, same budget
-    // as the other native drawer rows.
+    // Two native launches plus the swipe roundtrip exceed the 30 s
+    // default on a loaded iOS simulator.
   }, 120_000);
 
   // adapt-sheets/drawer.md M-006 (A-001): `isDismissable` is the stronger
@@ -195,9 +193,8 @@ describe("drawer-mobile", () => {
     expect(lastDrag(app).offset).toBe(0);
     expect(callsOf(app, "openChange")).toHaveLength(0);
     expect(app.shows("id:dr-dialog")).toBe(true);
-    // A native host launch plus the swipe roundtrip can pass the 30 s default
-    // on a loaded iOS simulator (run 45562711636); the row still asserts the
-    // same contract, it just gives the host the same budget as its siblings.
+    // A native host launch plus the swipe roundtrip can pass the 30 s
+    // default on a loaded iOS simulator.
   }, 120_000);
 
   // adapt-sheets/drawer.md M-010 (A-003): the Body's `onScroll` wrap reports
@@ -223,8 +220,8 @@ describe("drawer-mobile", () => {
       expect(forwarded).toBe(reported);
       expect(lastDrag(app).atTop).toBe(false);
     }
-    // Two native app launches in one row; the iOS simulator passed the 30 s
-    // default on the loaded runner (run 45562711636).
+    // Two native app launches in one row exceed the 30 s default on the
+    // loaded iOS simulator.
   }, 120_000);
 
   // adapt-sheets/drawer.md M-011 (A-008): the gesture is a bottom-edge
@@ -237,16 +234,11 @@ describe("drawer-mobile", () => {
       expect(lastDrag(app).keys).toBe(0);
       expect(lastDrag(app).panelKeys).toBe(0);
 
-      // 40pt, not 200: on Android a release that lands outside the panel is
-      // a press on the backdrop, so the 200pt travel dismissed through the
-      // outside-press path rather than through any handle gesture (run
-      // 45477161285: `openChange` recorded [[false]]). The short drag alone
-      // was not enough — Android still closed the drawer on the inside-
-      // panel release (runs 45557149467 / 45484735640), a host input gap
-      // the `sides` fixture case now isolates by disarming both non-
-      // gesture close channels (see drawer.fixtures.tsx). What remains to
-      // measure is the claim itself: `keys=0`/`panelKeys=0`/`offset=0`
-      // prove no gesture path mounts to take the drag.
+      // 40pt, not 200: an Android host input gap routes even a short
+      // drag to a close, so the `sides` fixture disarms both non-gesture
+      // close channels (see drawer.fixtures.tsx). What remains is the
+      // claim itself: `keys=0`/`panelKeys=0`/`offset=0` prove no gesture
+      // path mounts to take the drag.
       await app.drag("id:dr-handle", { x: 0, y: 40 });
       await settle(app);
 
@@ -308,32 +300,25 @@ describe("drawer-mobile", () => {
     await settle(app);
     // `settle` waits on the JS-side drag probe, which resolves before the
     // native host has finished presenting and focusing the overlay — on
-    // Android the Escape sent at that point dies at the surface root (run
-    // 45477161285: `id:dr-dialog` never went away in 5 s). Wait for the
-    // drawer's own interactive content instead, so the key lands after the
+    // Android an Escape sent that early dies at the surface root. Wait for
+    // the drawer's own interactive content so the key lands after the
     // native presentation, not before it.
     await app.waitFor("id:dr-close");
     await app.keyboard.press("escape");
     const os = hostOs(app);
     if (os === "ios" || os === "android") {
       // Native degraded acceptance (registered gap,
-      // native-overlay-root-cause E-3): on iOS the drawer's native
-      // `Dialog` carries Escape on `ModalController.keyCommands`, but
-      // `ModalHost.present` installs no first responder inside the
-      // presented controller — the key dies at the surface root and
-      // `onCancel` never fires on the UIKit host (run 45344508005:
-      // `id:dr-dialog` stayed through the 5 s wait). On Android the same
-      // external gap: the overlay window holds no focused view or key
-      // intercept, so a synthesized Escape never reaches the Dialog's
-      // `closeOnEscape` listener — two runs (45557149467 / 45484735640)
-      // with the `waitFor("id:dr-close")` presentation wait already in
-      // place left `id:dr-dialog` up through the 5 s wait, so the missing
-      // piece is focus, not timing. `platform.os` cannot tell the UIKit
-      // host from headless (both report "ios", and headless closes
-      // through JS key bubbling), so the degraded contract is the close
-      // channel invariant plus the outside press staying canonical either
-      // way. Web and every other host keep the literal Escape-close; the
-      // strict copy lives in drawer.mobile.headless.test.tsx.
+      // native-overlay-root-cause E-3): on iOS `ModalHost.present`
+      // installs no first responder inside the presented controller, and
+      // on Android the overlay window holds no focused view or key
+      // intercept — on both hosts a synthesized Escape dies at the
+      // surface root and never reaches the Dialog's close channel.
+      // `platform.os` cannot tell the UIKit host from headless (both
+      // report "ios", and headless closes through JS key bubbling), so
+      // the degraded contract is the close channel invariant plus the
+      // outside press staying canonical either way. Web and every other
+      // host keep the literal Escape-close; the strict copy lives in
+      // drawer.mobile.headless.test.tsx.
       await settle(app);
       if (app.shows("id:dr-dialog")) {
         // Suppressed Escape (the real native host): nothing closed — no

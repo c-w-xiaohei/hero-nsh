@@ -207,8 +207,7 @@ describe("color-field mobile", () => {
       if (hostOs(app) === "ios") {
         // Two ios reporters, two physical press outcomes — registered NSH
         // gap: the real iOS host's `app.press` resolves a selector through
-        // the ancestor hit test (CI 45344508005: all four presses resolved
-        // instead of rejecting), while the headless engine — which also
+        // the ancestor hit test, while the headless engine — which also
         // reports `platform.os` "ios" and runs this file under bare
         // `pnpm test` — keeps the strict resolver and rejects
         // ERR_NSH_TEST_NOT_FOUND. Neither outcome is pinned here: what

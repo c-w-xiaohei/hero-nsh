@@ -341,41 +341,24 @@ describe("tabs mobile", () => {
     // inside one model commit — the props all fire (selection works) but
     // the reactive `isPressed` edge collapses before any probe samples a
     // `true` (the same batching the web gap registers). A held touch is
-    // the gesture that keeps the true edge observable — proven on this
-    // iOS run by the swatch-picker M-003 `longPress` — so native uses it;
-    // every other host keeps the plain press. The assertions below are
-    // the original ones, unchanged.
+    // the gesture that keeps the true edge observable, so native uses
+    // `longPress`; every other host keeps the plain press. The assertions
+    // below are the original ones, unchanged.
     if (isNative(app)) {
       await app.longPress("id:tab-t1");
     } else {
       await app.press("id:tab-t1");
     }
     if (isIos(app) || isAndroid(app)) {
-      // Registered scroll-container press-in gaps, one per host:
-      //
-      // iOS (run 45344508005, press.rs): `PressRecognizer` defers
-      // `onPressDown` by `SCROLL_PRESS_DELAY` (130 ms) for a view inside
-      // a `UIScrollView` and fires it only while the recognizer is still
-      // `Possible`; inside the strip's Scroll it leaves `Possible`
-      // first, so PressIn never reaches JS.
-      //
-      // Android (this run's CI, Pressable.java): `Pressable` posts its
-      // `pressIn` deferred by `ViewConfiguration.getTapTimeout()` (100 ms)
-      // for any view inside a ScrollView/HorizontalScrollView, and the
-      // held `app.longPress` produced no `ctx-pressed` true edge in 5 s
-      // ("the condition never held") — the deferred press-in never
-      // surfaces inside the strip's Scroll on this host either, while
-      // every non-scroll fixture (pressable M-002, tooltip's own
-      // longPress) roundtripped the edge on the same run.
-      //
-      // No gesture produces the edge inside the Scroll on these hosts:
+      // Registered scroll-container press-in gap on both native hosts:
+      // the press-in deferral inside a scroll container (iOS
+      // `SCROLL_PRESS_DELAY`, Android `getTapTimeout`) never surfaces to
+      // JS inside the strip's Scroll, and no gesture produces the edge —
       // `press` collapses into one commit, `drag` is cancelled by the
       // scroll pan, `dragAndHold` is headless-only. Degraded acceptance:
       // the seam probe mounted and reports its rest state. The strict
-      // held-edge roundtrip this branch cannot observe lives verbatim in
-      // `tabs.mobile.headless.test.tsx` (the headless engine reports
-      // `platform.os` "ios" too but has no scroll host, so the edge
-      // records there) — web and headless keep it below.
+      // held-edge roundtrip lives verbatim in
+      // `tabs.mobile.headless.test.tsx`; web and headless keep it below.
       await app.waitUntil(() => callsOf(app, "ctx-pressed").length > 0);
       const rest = callsOf(app, "ctx-pressed").map((c) => c[0] as boolean);
       expect(rest[0]).toBe(false);
@@ -670,20 +653,12 @@ describe("tabs mobile", () => {
     await rtl.press("id:tabs-scroll-next");
     const after = offsetOf(await settledMeasure(rtl));
     if (isAndroid(rtl)) {
-      // Registered Android gap (this run's CI: |after − before| measured
-      // 0 where a 224 pt page was expected). The component's rtl model —
-      // mirrored scroll, rest at x = maxScroll, `scrollBy` flipping the
-      // delta — was verified against the iOS host, where M-006's rtl
-      // centering also lands. On this host the same press neither moved
-      // the strip nor reported a new offset; whether the `offset` signal
-      // never learned the initial rtl park or `scrollTo` no-ops there
-      // cannot be resolved from the log, and no local Android device is
-      // available to pin it. The press itself is still exercised: it
-      // resolved (the chevron was enabled) and the measurements above
-      // ran, so a regression that throws or breaks the strip still fails
-      // here; the strict page-delta assertion is what Android skips.
-      // Tracked for a device-side investigation; the same assertion runs
-      // unchanged on every other host below.
+      // Registered Android gap: the rtl `scrollBy` chevron press neither
+      // moves the strip nor reports a new offset on this host, so the
+      // strict 224 pt page-delta assertion is skipped. The press is still
+      // exercised — a regression that throws or breaks the strip fails
+      // here — and the strict assertion runs unchanged on every other
+      // host below.
       expect(after).toBe(before);
       return;
     }

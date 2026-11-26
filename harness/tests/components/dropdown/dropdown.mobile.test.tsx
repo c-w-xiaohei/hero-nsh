@@ -266,8 +266,8 @@ describe("dropdown mobile", () => {
     await kbSheet.clock!.runFor(150);
     expect(kbSheet.count("id:dd-pop-sheet")).toBe(1);
     expect(callsOf(kbSheet, "openChange")).toEqual([[true]]);
-    // 5 opens × the ~5s native host relaunch each — logged past the 30s
-    // default on iOS (run 45344508005).
+    // 5 opens × the ~5s native host relaunch each — exceeds the 30s
+    // default on iOS.
   }, 120_000);
 
   // adapt-sheets/dropdown.md M-009 (A-003, A-011): the submenu layer is

@@ -105,8 +105,8 @@ describe("tooltip mobile", () => {
     if (hostOs(app) === "ios") {
       // iOS degraded acceptance (registered gap, pass2 E-4): the
       // synthesized long-press dispatches a redundant open/close cycle
-      // before the final open — `openChanges` reads [true,false,true]
-      // (run 45344508005). The physical event stream is the driver's, not
+      // before the final open — `openChanges` can read [true,false,true].
+      // The physical event stream is the driver's, not
       // the component's, so the degraded contract asserts only the final
       // observable state: tip shown, last transition open, caller's
       // `onLongPress` fired exactly once. `platform.os` cannot tell the
@@ -173,9 +173,9 @@ describe("tooltip mobile", () => {
     await focusOnly.wait(200);
     if (hostOs(focusOnly) === "ios") {
       // Same E-4 extra-cycle gap, same degraded acceptance as above —
-      // run 45344508005 logged `[true,false]` here while the gate held
-      // (the tip closed and stayed closed). The strict stream copy lives
-      // in tooltip.mobile.headless.test.tsx.
+      // the stream can read `[true,false]` while the gate holds (the tip
+      // closes and stays closed). The strict stream copy lives in
+      // tooltip.mobile.headless.test.tsx.
       expect(focusOnly.shows(MOBILE_TIP)).toBe(false);
       expect(openChanges(focusOnly).at(-1) ?? false).not.toBe(true);
     } else {

@@ -188,7 +188,7 @@ describe("toast mobile", () => {
     // both top-anchored stacks as siblings, and on the iOS host the
     // later-mounted "top start" region's hit area occludes `Top-0`'s
     // center — the synthesized upward drag never reached its pan
-    // (`offset` stayed 0, `onClose-0` empty, run 45344508005). Separate
+    // (`offset` stayed 0, `onClose-0` empty). Separate
     // opens remove the occlusion so the real drag contract stays literal
     // on every host. If an iOS row still fails after the split it is the
     // same input-delivery gap family (native-overlay-root-cause E-2c),

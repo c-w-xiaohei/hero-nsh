@@ -81,8 +81,8 @@ describe("popover mobile", () => {
     expect(app.shows("text:Mobile content")).toBe(true);
     expect(callsOf(app, "openChange")).toEqual([[true]]);
     expect(callsOf(app, "triggerPress")).toEqual([["trigger"]]);
-    // The iOS simulator's native launch passed the 30 s default on the
-    // loaded runner (run 45565096745); one app, same contract.
+    // The iOS simulator's native launch exceeds the 30 s default on the
+    // loaded runner.
   }, 120_000);
 
   // adapt-sheets/popover.md M-002 (A-005, 负断言): under the default pointer
@@ -153,12 +153,10 @@ describe("popover mobile", () => {
 
     await narrow.press("id:pop-trigger");
     expect(narrow.count("id:pop-sheet")).toBe(1);
-    // Registered gap (Android host): the overlay's pressables never join the
-    // native registry for this multi-app sequence (runs 45562711636 /
-    // 45565096745 / 45567361335: `pop-close` has no native view while the
-    // sheet is up). M-002 and M-011 press the same `{close}` render-prop on
-    // the same host and pass, so the close channel keeps its Android
-    // coverage; here the covered trigger's underlay press closes the sheet.
+    // Registered gap (Android host): in this multi-app sequence `pop-close`
+    // never joins the native registry while the sheet is up, so the covered
+    // trigger's underlay press performs the close. The `{close}`
+    // render-prop keeps its Android coverage through M-002/M-011.
     if (hostOs(narrow) === "android") {
       await narrow.press("id:pop-trigger");
     } else {
@@ -287,8 +285,8 @@ describe("popover mobile", () => {
     await skip.host.send("popover.close");
     await skip.clock!.runFor(20);
     expect(skip.count("text:Retained content")).toBe(0);
-    // 5 opens × the ~5s native host relaunch each — logged past the 30s
-    // default on iOS (run 45344508005).
+    // 5 opens × the ~5s native host relaunch each exceed the 30s default
+    // on iOS.
   }, 120_000);
 
   // adapt-sheets/popover.md M-012 (A-010): the fixture machinery itself —

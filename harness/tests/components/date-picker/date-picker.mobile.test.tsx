@@ -150,11 +150,11 @@ describe("date-picker mobile", () => {
 
     await app.press(TRIGGER);
     /* Native carrier-mount lag: `press` resolves at app-quiet, before the
-     * carrier's testID-bearing view registers on screen — run 45344508005's
-     * dump had the calendar already mounted while `count(PANEL)` still read
-     * 0. `waitFor` bridges the lag (the select suite's convention); the
-     * discrimination between the two carriers stays unconditional — the
-     * wrong carrier mounts nothing the wait names. */
+     * carrier's testID-bearing view registers on screen — the calendar can
+     * be mounted while `count(PANEL)` still reads 0. `waitFor` bridges the
+     * lag (the select suite's convention); the discrimination between the
+     * two carriers stays unconditional — the wrong carrier mounts nothing
+     * the wait names. */
     await app.waitFor(PANEL);
 
     expect(app.count(PANEL)).toBe(1);

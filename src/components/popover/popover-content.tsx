@@ -298,8 +298,7 @@ export function PopoverContent(props: PopoverContentProps) {
   // The carrier that owns the native overlay window: the panel's content
   // `Overlay` or the sheet's `SheetContent`. Focusing the Dialog alone leaves
   // the window unfocused on Android, so its nested pressables never join the
-  // native registry (run 45565096745: `pop-close` had no native view even
-  // after the Dialog focus attempts).
+  // native registry.
   let carrierNode: ViewRef | undefined;
   const handleCarrierRef = (node: ViewRef) => {
     carrierNode = node;
@@ -326,10 +325,9 @@ export function PopoverContent(props: PopoverContentProps) {
 
     // Try the opening commit first: Android's manual-clock runs can go quiet
     // before a deferred frame, leaving the dialog unfocused and its nested
-    // pressables out of the native registry (run 45562711636: M-008/M-009's
-    // close had no native view while the panel was up). A real Windows window
-    // registers the dialog after the opening commit, so the same call is a
-    // no-op there; the deferred retry below remains that host's path (T-014).
+    // pressables out of the native registry. A real Windows window registers
+    // the dialog after the opening commit, so the same call is a no-op
+    // there; the deferred retry below remains that host's path (T-014).
     // The carrier goes first: it owns the native window, and the Dialog's
     // focus cannot register the content until that window is key.
     carrierNode?.focus();

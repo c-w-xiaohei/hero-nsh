@@ -129,20 +129,14 @@ function ModalTree() {
           scroll={scroll}
           size={size}
           placement={placement}
-          // The scrollable case needs a real inner Scroll: upstream's
-          // container carries `h-(--visual-viewport-height)`, which the NSH
-          // port replaces with `flex-1` — but the carrier row's
-          // `items-center` never stretches the container vertically, so its
-          // height stays content-driven and the dialog's `max-h-full` has no
-          // definite basis (measured: a 1719pt dialog in a 768pt window, body
-          // scroll range ≈ 0). A fixture-side definite height restores the
-          // upstream intent for this case only; the panel/sheet assertions
-          // never mount it. The height is bounded by the real window: under
-          // `touch-compact` the auto presentation is a bottom-docked sheet,
-          // so a pin taller than the window pushes the dialog's top — the
-          // close trigger and header — off the screen (`id:mo-close` never
-          // showing, Android run 45557149467). The scroll assertions keep
-          // their range either way: 40 × 40pt rows against a ~640pt body.
+          // The scrollable case needs a real inner Scroll: the NSH port's
+          // `flex-1` container stays content-driven (the carrier row never
+          // stretches it vertically), so the dialog's `max-h-full` has no
+          // definite basis — a fixture-side height restores the upstream
+          // `h-(--visual-viewport-height)` intent for this case only. It
+          // is bounded by the real window: under `touch-compact` the auto
+          // presentation is a bottom-docked sheet, so a taller pin would
+          // push the dialog's header and close trigger off screen.
           style={
             scrollable ? { height: Math.min(700, windowSize().height) } : undefined
           }

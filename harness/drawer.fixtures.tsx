@@ -111,17 +111,11 @@ function DrawerApp() {
         // channel, keeping `isDismissable` armed (it feeds `swipeEnabled`,
         // so `keys=0` still proves "no gesture because non-bottom", not
         // "no gesture because locked"). The need is an Android host input
-        // gap: `app.drag` on the handle reaches a native close attempt —
-        // the Dialog's `onCancel` fires for every close attempt
-        // (backdrop press, swipe, back, Escape) even with all `closeOn*`
-        // false, and a press-shaped event at the backdrop reaches our
-        // `onPress` too (CI runs 45557149467 / 45484735640: `openChange`
-        // [[false]] from a 40pt drag whose release stays inside the
-        // panel, the second run after shortening the drag). Whether the
-        // driver's coordinates or the cancel routing is off is a host
-        // question; the fixture disarms both paths so the row measures
-        // the gesture mount only. `basic` keeps the full contract — the
-        // outside-press close is asserted there (M-014).
+        // gap: a handle drag can reach the Dialog's `onCancel` and a
+        // press-shaped event can reach the backdrop `onPress`, so the
+        // fixture disarms both paths and the row measures the gesture
+        // mount only. The outside-press close is asserted in `basic`
+        // (M-014).
         isKeyboardDismissDisabled={
           name === "sides" || flag(host.params.keyboardDismissDisabled) === true
         }

@@ -185,14 +185,12 @@ describe("select mobile", () => {
     // (a gated press raises no `isPressed` edge to schedule another sample).
     // The sampler is unreachable while the popover is open — a modal
     // carrier's underlay swallows every flow press into "dismiss" on every
-    // host, and on Android the earlier in-popover copy had no native view at
-    // all (the popover unit's registered overlay-registry gap; the query
-    // resolved to the hidden flow copy, whose tap dismissed the popover and
-    // starved `ctx-channels`, run's 5s timeout). The read therefore runs
-    // after closing: a second press on the covered trigger lands on the
-    // underlay on the modal carriers, and the trigger's own toggle takes the
-    // same close on the hosts that hit-test the logical tree — either way
-    // `ctx-channels` reports the post-press state.
+    // host, and on Android an in-popover copy has no native view at all
+    // (the popover unit's registered overlay-registry gap). The read
+    // therefore runs after closing: a second press on the covered trigger
+    // lands on the underlay on the modal carriers, and the trigger's own
+    // toggle takes the same close on the hosts that hit-test the logical
+    // tree — either way `ctx-channels` reports the post-press state.
     await app.press("id:select-trigger");
     await app.waitFor("role:listbox", { state: "gone" });
     await app.press("id:ctx-sample");
@@ -213,8 +211,8 @@ describe("select mobile", () => {
     const pan = panFor(pinned, "sheet");
     expect(pan.panKeys).toBe(0);
     expect(pan.scrollKeys).toBe(0);
-    // Two opens exceed the 30 s default on a loaded host (a web run here
-    // timed out M-014); the drawer's native rows took the same budget.
+    // Two opens exceed the 30 s default on a loaded host; the drawer's
+    // native rows carry the same budget.
   }, 120_000);
 
   // adapt-sheets/select.md M-003 (A-003, A-005): injected `input:"touch"` +
@@ -526,9 +524,9 @@ describe("select mobile", () => {
   // the static path produce the same `selectionChange` payload shape and
   // the same unmounted-key `textValue` read-back on both environments — the
   // collection consumption the popover's persistent mount protects.
-  // Android: a second press inside one sheet presentation double-delivers
-  // (run 45702539205, sheet §6) — each path asserts its first press only.
-  // 5 opens × the ~5s native host relaunch each — over the 30s default.
+  // Android (sheet §6): a second press inside one sheet presentation
+  // double-delivers — each path asserts its first press only.
+  // 5 opens × the ~5s native host relaunch each exceed the 30s default.
   test("M-017 items and static paths select identically on both environments", async () => {
     // The env read needs an opened app and `keepopen` must be in the open's
     // params, so a probe app reads `hostOs` before the loop picks its flow.
@@ -741,7 +739,7 @@ describe("select mobile", () => {
     await keepopen.press("role:option[Two]");
     expect(keepopen.count("id:sel-pop-sheet")).toBe(1);
     expect(keepopen.count("role:listbox >> text:✓")).toBe(1);
-    // 5 opens × the ~5s native host relaunch each — logged past the 30s
-    // default on iOS (run 45344508005).
+    // 5 opens × the ~5s native host relaunch each exceed the 30s default
+    // on iOS.
   }, 120_000);
 });

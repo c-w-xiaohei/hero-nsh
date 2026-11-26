@@ -420,8 +420,8 @@ describe("combo-box mobile", () => {
     expect(callsOf(idle, "change")).toHaveLength(0);
     expect(idle.value("id:combo-box-input")).toBe("");
     expect(idle.shows("role:listbox")).toBe(true);
-    // 3 opens × the ~5s native host relaunch each — logged past the 30s
-    // default on iOS (run 45344508005).
+    // 3 opens × the ~5s native host relaunch each exceed the 30s default
+    // on iOS.
   }, 120_000);
 
   // adapt-sheets/combo-box.md M-010 (A-006): the caller `Input`'s keyboard
@@ -528,8 +528,8 @@ describe("combo-box mobile", () => {
     // cell, so the trigger text keeps the placeholder colour throughout.
     // `platform:"web"`/`app.hover`/`spanStyle` are web-only — that half lives
     // in combo-box.mobile.web.test.tsx.
-    // 2 opens × the ~5s native host relaunch each — logged past the 30s
-    // default on iOS (run 45344508005).
+    // 2 opens × the ~5s native host relaunch each exceed the 30s default
+    // on iOS.
   }, 120_000);
 
   // adapt-sheets/combo-box.md M-012 (A-007): the F(消费) contract — rows
@@ -581,8 +581,8 @@ describe("combo-box mobile", () => {
     expect(defaults.count("role:option")).toBe(1);
     expect(defaults.shows("role:option[Two]")).toBe(true);
     expect(defaults.shows("role:option[One]")).toBe(false);
-    // 3 opens × the ~5s native host relaunch each — logged past the 30s
-    // default on iOS (run 45344508005).
+    // 3 opens × the ~5s native host relaunch each exceed the 30s default
+    // on iOS.
   }, 120_000);
 
   // adapt-sheets/combo-box.md M-014 (基线): default-environment zero-drift
@@ -597,9 +597,8 @@ describe("combo-box mobile", () => {
   // alive until the test ends, and the web target dies at roughly ten
   // simultaneous instances — one 24-open test cannot survive
   // `--target web`. The first half is split again at the collection edges:
-  // nine sequential native host launches measured 2m07s on the loaded iOS
-  // simulator (run 45484735640), over the 120 s budget the file's heavy
-  // rows carry. Coverage is unchanged, only the grouping.
+  // nine sequential native host launches exceed the 120 s budget on the
+  // loaded iOS simulator. Coverage is unchanged, only the grouping.
   test("M-014 baseline sample: menuTrigger modes and the custom-value edge", async () => {
     // menuTrigger "focus" (default): focusing the input opens and reports
     // the focus source.
@@ -718,11 +717,9 @@ describe("combo-box mobile", () => {
     expect(callsOf(outside, "openChange")).toEqual([[true, "manual"], [false, null]]);
     // Registered gap (Android host): an outside press on the non-modal
     // overlay dismisses it natively — `onPressOutside` never reaches
-    // `handlePressOutside`'s `commitClose` (run 45484735640: the close
-    // recorded while the typed text stayed "pa"; M-009 proves a write
-    // would reach the held input, so the reset itself never ran). The
-    // dismiss is asserted above; the reset contract it carries is proven
-    // through Escape's `revert`, which shares `commitSelection`.
+    // `handlePressOutside`'s `commitClose`, so the input reset never runs.
+    // The dismiss is asserted above; the reset contract it carries is
+    // proven through Escape's `revert`, which shares `commitSelection`.
     if (hostOs(outside) === "android") {
       await outside.keyboard.press("escape");
       await settle(outside);
@@ -885,7 +882,7 @@ describe("combo-box mobile", () => {
       .at(-1)!;
     expect(field.autoComplete).toBe("email");
     expect(fields.shows("role:option[Cat]")).toBe(true);
-    // 6 opens × the ~5s native host relaunch each — logged past the 30s
-    // default on iOS (run 45344508005).
+    // 6 opens × the ~5s native host relaunch each exceed the 30s default
+    // on iOS.
   }, 120_000);
 });

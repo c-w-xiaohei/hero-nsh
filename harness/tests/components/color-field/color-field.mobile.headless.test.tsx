@@ -62,9 +62,8 @@ describe("color-field mobile (headless)", () => {
 
   // adapt-sheets/color-field.md M-006's strict half (A-005, A-007): the
   // shared file degrades on `platform.os === "ios"` because the real iOS
-  // host's `app.press` resolves a selector through the ancestor hit test
-  // (CI 45344508005: all four presses resolved instead of rejecting) — and
-  // the headless engine reports `platform.os` "ios" too, so the os gate
+  // host's `app.press` resolves a selector through the ancestor hit test —
+  // and the headless engine reports `platform.os` "ios" too, so the os gate
   // alone would drop the rejection on the only host class where it is
   // provable. The `platform:"windows"` pin makes this run strictly
   // headless: the bare affixes and both containers keep no press channel,

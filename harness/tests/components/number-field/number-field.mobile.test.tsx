@@ -159,7 +159,7 @@ function holdSamples(app: App): HoldSample[] {
  * behavior and a synthesized `app.press` holds the touch for a
  * host-dependent duration — iOS's lands past the 400 ms pointer first
  * delay, so its stream shows extra `["onChange"]` entries between
- * `changeT` and `up` (run 45344508005: value "6" from one press). The
+ * `changeT` and `up` — a single press can step the value to "6" there. The
  * phase chain itself is asserted verbatim below. */
 const INC_PRESS_SEQUENCE = [
   ["onChange"],

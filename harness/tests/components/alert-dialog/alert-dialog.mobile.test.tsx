@@ -143,9 +143,9 @@ async function settle(app: App, ms = 80): Promise<void> {
 }
 
 describe("alert-dialog mobile", () => {
-  // iOS job timed out at the 30s default on this file's native host relaunch
-  // cost (run 45484735640) — same slowness as drawer/popover native rows;
-  // assertions are not the problem, so every test carries a 120s timeout.
+  // This file's native host relaunch cost exceeds the 30s default — the
+  // same slowness as the drawer/popover native rows — so every test
+  // carries a 120s timeout.
   // adapt-sheets/alert-dialog.md M-001 (A-001, A-002, A-003): touch +
   // compact under `presentation="auto"` presents the bottom-docked sheet —
   // the card's bottom edge on the window's, full-bleed width, no centering.
@@ -406,7 +406,7 @@ describe("alert-dialog mobile", () => {
       expect(app.shows("id:ad-card")).toBe(true);
     }
     // 2 opens × the ~5s native host relaunch each plus a 300ms settle per
-    // open — logged past the 30s default on iOS (run 45344508005).
+    // open exceed the 30s default on iOS.
   }, 120_000);
 
   // adapt-sheets/alert-dialog.md M-009 (baseline): the desktop defaults are
@@ -483,8 +483,8 @@ describe("alert-dialog mobile", () => {
     expect(top.dialog).toBeLessThan(middle.dialog - 60);
     expect(bottom.dialog).toBeGreaterThan(middle.dialog + 60);
     expect(Math.abs(middle.dialog - middle.stage)).toBeLessThanOrEqual(40);
-    // 5 opens × the ~5s native host relaunch each plus settles — logged
-    // past the 30s default on iOS (run 45344508005).
+    // 5 opens × the ~5s native host relaunch each plus settles exceed the
+    // 30s default on iOS.
   }, 120_000);
 
   // adapt-sheets/alert-dialog.md M-010 (baseline + A-004's fourth gate):
