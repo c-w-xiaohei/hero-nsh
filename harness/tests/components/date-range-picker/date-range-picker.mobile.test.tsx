@@ -321,6 +321,11 @@ describe("date-range-picker mobile", () => {
     await app.waitUntil(() => lastRange(app)?.start.month === 11);
     expect(segmentText(app, "start", "month")).toBe("11");
 
+    // The full "11" buffer auto-advances to the day channel; while that focus
+    // is still in flight a month tap hits `handleChannelPress`'s stale
+    // `focused()` gate and requests nothing. Order the back-press behind the
+    // advance, as the date-picker M-009 chain does.
+    await waitSegmentFocused(app, "start", "day");
     await app.press(START_MONTH);
     await waitSegmentFocused(app, "start", "month");
     await app.keyboard.press("backspace");
