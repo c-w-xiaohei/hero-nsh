@@ -359,6 +359,25 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
   // and the ring all see the same segment as before.
 
   /**
+   * The channel's controlled value. It cannot be the static string `""`:
+   * the host only rewrites the field when the `value` prop changes, so the
+   * characters a keypress feeds into it would stay there and the native
+   * input would paint its echo over the segment text (the mobile demo's
+   * doubled digits). `resetChannel` is the input-otp root's `correctHost`
+   * shape — a distinct scratch write first, then the empty string — which
+   * forces the re-write after every edit. During an input method's
+   * composition the platform holds the write and applies it when the
+   * composition ends, so nothing here breaks pinyin or kana in a lettered
+   * segment.
+   */
+  const channelDisplay = signal("");
+
+  const resetChannel = () => {
+    channelDisplay.set("\u200B");
+    channelDisplay.set("");
+  };
+
+  /**
    * The channel's `keyboardType`: the Input's prop, or `"auto"` resolved per
    * segment as React Aria's `useDateSegment` resolves `inputMode` — numeric
    * segments get `"numeric"`, the lettered ones (`dayPeriod`, `era`,
@@ -694,7 +713,8 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
             channelNode = value;
           }}
           testID={`dig-seg-${props.segment.type}`}
-          value=""
+          value={channelDisplay()}
+          onChange={resetChannel}
           caret={false}
           keyboardType={channelKeyboardType()}
           submitBehavior="blurAndSubmit"
@@ -702,8 +722,9 @@ export function DateInputGroupSegment(props: DateInputGroupSegmentProps): JSX.El
           // walkers) skip a view with alpha < 0.01, which `opacity-0`
           // made — a touch could never land in the channel and the
           // soft-keyboard editing path was dead on iOS. It still paints
-          // nothing: controlled empty value, no caret, the platform input
-          // draws no background or border on its own.
+          // nothing: controlled empty value (re-asserted in `onChange`,
+          // `resetChannel`), no caret, the platform input draws no
+          // background or border on its own.
           class="absolute inset-0"
           onPress={handleChannelPress}
           onKeyPress={handleChannelKeyPress}

@@ -147,4 +147,27 @@ describe("date-input-group mobile (web)", () => {
     expect(fieldChanges(app)).toEqual(["2026-2-28"]);
     expect(lastSegmentProps(app, "year").isFocused).toBe(false);
   }, 120_000);
+
+  // adapt-sheets/date-input-group.md M-005 (A-005), echo half: the channel's
+  // controlled empty value must hold while the user types. The characters a
+  // keypress feeds into the host input would otherwise stay in it — the host
+  // only rewrites a `value` prop that changed, and a static `""` never does —
+  // so the native field paints its own text over the segment's (the mobile
+  // demo's doubled digits). Only a real input shows it; the headless driver
+  // reports the app's value.
+  test("M-005 injected touch: typing leaves the channel inputs empty", async () => {
+    const app = await openDig("default", { testInput: "touch" });
+
+    await app.type("id:dig-seg-month", "12");
+    await app.waitUntil(() => lastSegment(app, "month").text === "12");
+
+    expect(app.value("id:dig-seg-month")).toBe("");
+    expect(app.value("id:dig-seg-day")).toBe("");
+
+    await app.type("id:dig-seg-day", "30");
+    await app.waitUntil(() => lastSegment(app, "day").text === "30");
+
+    expect(app.value("id:dig-seg-day")).toBe("");
+    expect(app.value("id:dig-seg-year")).toBe("");
+  }, 120_000);
 });

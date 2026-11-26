@@ -235,6 +235,12 @@ describe("date-input-group mobile", () => {
 
     await app.type("id:dig-seg-month", "12");
     await app.waitUntil(() => lastSegment(app, "month").text === "12");
+    // The controlled empty value holds while the user types: the host only
+    // rewrites a `value` prop that changed, so without the channel's reset
+    // the typed characters stay in its input and the native field paints
+    // them over the segment text (the web echo; on a native host the same
+    // residue). `app.value` reads the host's own text, not the app's prop.
+    expect(app.value("id:dig-seg-month")).toBe("");
     // The buffer filled the segment: the focus advanced to the day channel.
     await waitFocused(app, "day");
     expect(lastSegment(app, "month").isPlaceholder).toBe(false);
