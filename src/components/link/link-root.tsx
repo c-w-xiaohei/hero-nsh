@@ -17,6 +17,8 @@ import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { FieldsetContext } from "../fieldset/context";
 import { renderChildren } from "./children";
 import { joinClassNames } from "./class-names";
@@ -45,7 +47,7 @@ export interface LinkRenderProps {
  * compiling; port sheet §1.1 and §8 list what each can and cannot do here.
  */
 export interface LinkRootProps
-  extends LinkVariants,
+  extends Omit<LinkVariants, "input" | "density">,
     AriaProps,
     DataProps,
     GlobalDomProps,
@@ -188,6 +190,7 @@ export function LinkRoot(props: LinkRootProps): JSX.Element {
   const isPressed = signal(false);
   const isFocused = signal(false);
   const modality = createInteractionModality();
+  const input = createInput();
 
   const isFocusVisible = computed(() => isFocused() && modality.isKeyboard());
 
@@ -217,7 +220,18 @@ export function LinkRoot(props: LinkRootProps): JSX.Element {
     isDisabled,
   };
 
-  const slots = linkVariants();
+  // A-002: the `input` variant axis reads the environment, never a prop
+  // (sheet §3 — `LinkRootProps` inherits it as a compile field only).
+  const slots = linkVariants({ input: input() });
+
+  // A-003: the touch-only press-feedback seam. `hitSlop` is the invisible
+  // hit-area path (an inline text link keeps its `h-fit w-fit` box; sheet §2);
+  // no `scale`/`highlight`/`ripple` is bound — the upstream LinkButton maps
+  // `highlight: false` and the press look stays the base's `active:underline`.
+  // `enabled` folds `isDisabled` in so a disabled link expands nothing.
+  const feedback = createPressFeedback({
+    enabled: () => input() === "touch" && !isDisabled(),
+  });
 
   const resolvedClassName = () => {
     const className = props.className;
@@ -280,9 +294,15 @@ export function LinkRoot(props: LinkRootProps): JSX.Element {
     isPressed.set(true);
     props.onPressStart?.(event);
     props.onPressChange?.(true);
+    // A-003: last in the chain — a no-op while the seam is gated off.
+    feedback.pressDown(event);
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-003: cleared unconditionally (release and cancel share this path,
+    // and the seam clears `pressOrigin` even for a gated press).
+    feedback.pressUp(event);
+
     if (isPressed()) {
       isPressed.set(false);
       props.onPressChange?.(false);
@@ -401,7 +421,18 @@ export function LinkRoot(props: LinkRootProps): JSX.Element {
     };
   });
 
-  const contextValue: LinkContextValue = { slots, isFocusVisible };
+  // A-003: the seam's `bounds` feed `hitSlop`; the caller's `onLayout`
+  // stays last in the chain.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    feedback.layout(event);
+    props.onLayout?.(event);
+  };
+
+  const contextValue: LinkContextValue = {
+    slots,
+    isFocusVisible,
+    hitSlop: feedback.hitSlop,
+  };
 
   // Read `props.children` once, in the provider and at the placement (research
   // 4.1, 4.6 and the provider exception in the common rules): a computed made
@@ -450,6 +481,7 @@ export function LinkRoot(props: LinkRootProps): JSX.Element {
             isFocusVisible(),
         }}
         style={[{ transitionProperty: transitionProperty() }, resolvedStyle()]}
+        hitSlop={feedback.hitSlop()}
         onPress={handlePress}
         onPressDown={handlePressDown}
         onPressUp={handlePressUp}
@@ -460,7 +492,7 @@ export function LinkRoot(props: LinkRootProps): JSX.Element {
         onContextMenu={props.onContextMenu}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        onLayout={props.onLayout}
+        onLayout={handleLayout}
       >
         {renderContent(props.children)}
       </View>

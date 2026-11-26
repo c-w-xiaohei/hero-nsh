@@ -9,15 +9,22 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, effect, signal, split, View } from "nsh";
+import { cleanup, computed, createAnimatedValue, effect, signal, split, View } from "nsh";
 
 import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+} from "../../primitives/pressable";
+import type { PressableFeedbackContextValue } from "../../primitives/pressable";
 import { toAccessibilityRole } from "../button/roles";
 import { DisclosureContext, FALLBACK_DISCLOSURE_CONTEXT } from "./disclosure-context";
 import { disclosureVariants } from "./disclosure.styles";
+import type { AriaProps, DataProps } from "./dom-props";
 import { renderChildren } from "./render-children";
 
 /**
@@ -54,7 +61,7 @@ export interface DisclosureTriggerRenderProps {
  * relations) are accepted so HeroUI code keeps compiling; port sheet §1.1 and
  * §8 say what each can and cannot do here.
  */
-export interface DisclosureTriggerProps {
+export interface DisclosureTriggerProps extends AriaProps, DataProps {
   /** The trigger's content: a node, or a render prop called with the trigger state. */
   children?: JSX.Element | ((values: DisclosureTriggerRenderProps) => JSX.Element);
 
@@ -177,11 +184,8 @@ export interface DisclosureTriggerProps {
   /** Accepted, no effect: NSH has no slot collection. */
   slot?: string;
 
-  /** Every other `aria-*` attribute, accepted for API parity. */
-  [key: `aria-${string}`]: unknown;
-
-  /** Every `data-*` attribute: NSH projects none of them (D18). */
-  [key: `data-${string}`]: unknown;
+  // Every other `aria-*` / `data-*` attribute stays accepted through the
+  // `AriaProps` / `DataProps` parents (dom-props.ts), for API parity.
 }
 
 /**
@@ -251,7 +255,8 @@ export function DisclosureTrigger(props: DisclosureTriggerProps): JSX.Element {
   ] as const);
 
   const ctx = DisclosureContext() ?? FALLBACK_DISCLOSURE_CONTEXT;
-  const slots = disclosureVariants();
+  const input = createInput();
+  const slots = disclosureVariants({ input: input() });
 
   const isHovered = signal(false);
   const isPressed = signal(false);
@@ -266,6 +271,36 @@ export function DisclosureTrigger(props: DisclosureTriggerProps): JSX.Element {
   const isDisabled = computed(() => ctx.isDisabled() || local.isDisabled === true);
   const isPending = computed(() => local.isPending === true);
   const isBlocked = () => isDisabled() || isPending();
+
+  // A-002: the press-feedback seam, gated on `input() === "touch"` and the
+  // blocked flags — under a pointer environment it is a physical no-op, so
+  // the desktop event chain below is untouched. `feedback.isPressed` is its
+  // own canonical channel and never merges into the render-prop `isPressed`.
+  const enabled = () => input() === "touch" && !isBlocked();
+  const feedback = createPressFeedback({ enabled });
+
+  // A-004: the seam's read half for consumers. `DisclosureTriggerRenderProps.
+  // isPressed` is a bare boolean accessor, so a part or a probe that needs
+  // the animated channels reads this context (the e-parts ControlField /
+  // ListGroup split). No Highlight/Ripple/Scale overlay mounts by default —
+  // a caller that wants a press visual composes
+  // `<PressableFeedback.Highlight/>` into the trigger's children.
+  // A-009: this context and `feedback` are sampled by the `Scoped`/`mobile`
+  // cases in `harness/disclosure.fixtures.tsx` (the dual-environment carrier).
+  // A-010: asserted by `disclosure.mobile.headless.test.tsx` /
+  // `disclosure.mobile.web.test.tsx` (M-001..M-010).
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
 
   // `isFocusVisibleWithin` travels up to the root from here (port sheet §2).
   cleanup(ctx.registerFocusVisible(isFocusVisible));
@@ -324,6 +359,9 @@ export function DisclosureTrigger(props: DisclosureTriggerProps): JSX.Element {
       return;
     }
 
+    // A-002: after the blocked early-out, before the channel's own notes —
+    // a gated (pointer) call is a no-op inside.
+    feedback.pressDown(event);
     notePress(event);
     isPressed.set(true);
     local.onPressStart?.(event);
@@ -336,6 +374,11 @@ export function DisclosureTrigger(props: DisclosureTriggerProps): JSX.Element {
       isPressed.set(false);
       local.onPressChange?.(false);
     }
+
+    // A-002: end and cancel share `onPressUp`; the seam resets here, before
+    // the blocked early-out, so a press a disable flip stranded still
+    // completes its round-trip.
+    feedback.pressUp(event);
 
     if (isBlocked()) {
       return;
@@ -459,9 +502,20 @@ export function DisclosureTrigger(props: DisclosureTriggerProps): JSX.Element {
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
       onBlur={handleBlur}
-      onLayout={local.onLayout}
+      // A-003: the view-prop half of the hit area — the seam's computed
+      // slop, undefined while gated off or the view is already at target.
+      hitSlop={feedback.hitSlop()}
+      onLayout={(event) => {
+        // A-002: `bounds` feeds `hitSlop` and `scale`, so the seam reads
+        // the layout first.
+        feedback.layout(event);
+        local.onLayout?.(event);
+      }}
     >
-      {resolveChildren(local.children)}
+      {/* A-004: children resolve exactly once, inside the provider. */}
+      <PressableFeedbackContext.Provider value={feedbackValue}>
+        {resolveChildren(local.children)}
+      </PressableFeedbackContext.Provider>
     </View>
   );
 }

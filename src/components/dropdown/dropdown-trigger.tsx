@@ -9,12 +9,18 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, effect, reduceMotion, signal, View } from "nsh";
+import { cleanup, computed, createAnimatedValue, effect, reduceMotion, signal, View } from "nsh";
 
 import {
   createInteractionModality,
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { renderChildren } from "./children";
@@ -154,7 +160,9 @@ export function DropdownTrigger(props: DropdownTriggerProps) {
   const dropdown = DropdownContext();
   const overlay = OverlayTriggerContext();
 
-  const slots = dropdown?.slots ?? dropdownVariants();
+  // The root feeds one accessor the environment's axes can re-resolve; a
+  // standalone part falls back to the table's own defaults (A-001).
+  const slots = () => dropdown?.slots() ?? dropdownVariants();
 
   const modality = createInteractionModality();
   const focused = signal(false);
@@ -167,6 +175,35 @@ export function DropdownTrigger(props: DropdownTriggerProps) {
   const triggerMode = () => dropdown?.triggerMode() ?? "press";
 
   const isFocusVisible = computed(() => focused() && modality.isKeyboard());
+
+  // A-006: the press-feedback seam, gated on `input() === "touch"` and the
+  // trigger's own blocked flag — under a pointer environment it is a
+  // physical no-op, so the desktop event chain below is untouched. The seam
+  // carries `hitSlop` on the root view (the invisible half of the hit-area
+  // path: this `inline-block w-fit` shrink-wrap box is as small as whatever
+  // child it holds, and no `hitSlop` prop exists); the press visual stays
+  // the existing `scale-[0.97]` on `pressed`, so `scale`/`highlightOpacity`/
+  // `rippleProgress` are not bound.
+  const input = createInput();
+  const feedbackEnabled = () => input() === "touch" && !isBlocked();
+  const feedback = createPressFeedback({ enabled: feedbackEnabled });
+
+  // A-006: the seam's read half for consumers — a part or a fixture probe
+  // inside the trigger's children reads these canonical channels (the
+  // menu-item / list-box convention). No Scale/Highlight/Ripple part mounts
+  // by default, so the unused channels report the resting constants.
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: feedbackEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
 
   // React Aria's `useMenuTrigger` binds the trigger's arrows and the Alt forms
   // of Return, Space and the arrows (`useMenuTrigger.ts:88-100`): ArrowDown
@@ -206,7 +243,7 @@ export function DropdownTrigger(props: DropdownTriggerProps) {
   };
 
   const classes = computed(() =>
-    [slots.trigger(), resolvedClassName()]
+    [slots().trigger(), resolvedClassName()]
       .filter((part): part is string => typeof part === "string" && part.length > 0)
       .join(" "),
   );
@@ -267,6 +304,13 @@ export function DropdownTrigger(props: DropdownTriggerProps) {
       props.onPressChange?.(false);
     }
 
+    // A-006: the host can drop the release edge after a cancelled press, so
+    // a non-keyboard activation completes the seam's round-trip itself —
+    // the same fallback select's trigger takes, before the open runs.
+    if (!isKeyboardPress(event)) {
+      feedback.pressUp(event);
+    }
+
     // The trigger's own open runs before the caller's `onPress`, as
     // `PressResponder`'s injected handler runs before the element's.
     openFromPress(event);
@@ -278,6 +322,10 @@ export function DropdownTrigger(props: DropdownTriggerProps) {
       return;
     }
 
+    // A-006: after the blocked early-out, before the channel's own notes —
+    // a gated (pointer) call is a no-op inside.
+    feedback.pressDown(event);
+
     notePress(event);
     pressed.set(true);
     props.onPressStart?.(event);
@@ -286,6 +334,11 @@ export function DropdownTrigger(props: DropdownTriggerProps) {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-006: end and cancel share `onPressUp`; the seam resets first, before
+    // the `pressed` flag clears — a press the host released or cancelled
+    // completes the same round-trip (select A-007).
+    feedback.pressUp(event);
+
     if (pressed()) {
       pressed.set(false);
       props.onPressChange?.(false);
@@ -326,7 +379,11 @@ export function DropdownTrigger(props: DropdownTriggerProps) {
   const handleMouseEnter = (event: NshMouseEvent) => {
     props.onMouseEnter?.(event);
 
-    if (isDisabled() || hovered()) {
+    // A-007: a touch environment has no hover semantics — the JS `hovered`
+    // flag and the hover event chain stay silent so `isHovered` (a render
+    // prop value) can never stick after a press; the raw mouse callbacks
+    // above still forward on every input (menu-item A-002 precedent).
+    if (input() === "touch" || isDisabled() || hovered()) {
       return;
     }
 
@@ -433,9 +490,20 @@ export function DropdownTrigger(props: DropdownTriggerProps) {
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
       onBlur={handleBlur}
-      onLayout={props.onLayout}
+      // A-006: the seam's `bounds` feeds `hitSlop`; it reads the layout
+      // first, then the caller's handler gets the same event.
+      onLayout={(event) => {
+        feedback.layout(event);
+        props.onLayout?.(event);
+      }}
+      // A-006: the invisible half of the hit-area path — computed by the
+      // seam from `Environment` + the density table, never a prop;
+      // `undefined` while the pointer gate holds, so desktop binds nothing.
+      hitSlop={feedback.hitSlop()}
     >
-      {content()}
+      <PressableFeedbackContext.Provider value={feedbackValue}>
+        {content()}
+      </PressableFeedbackContext.Provider>
     </View>
   );
 }

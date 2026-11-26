@@ -12,7 +12,12 @@ import { computed, effect, Overlay, Scroll, signal, split } from "nsh";
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { createPresentation } from "../../primitives/presentation";
 import { renderChildren } from "../list-box/children";
+import { SheetBackdrop } from "../sheet/sheet-backdrop";
+import { SheetBody } from "../sheet/sheet-body";
+import { SheetContent } from "../sheet/sheet-content";
+import { SheetRoot } from "../sheet/sheet-root";
 import {
   ListBoxContainerContext,
   type ListBoxContainerContextValue,
@@ -89,6 +94,17 @@ export interface AutocompletePopoverProps {
 
   /** Skips the enter and exit phases entirely. */
   shouldSkipAnimation?: boolean;
+
+  /**
+   * The container the popover presents as (A-005). `"auto"` runs the shared
+   * `createPresentation` rule — touch plus a compact short side picks
+   * `"sheet"`, everything else `"panel"`. `"panel"` is the anchored overlay
+   * upstream's `Popover` is; `"sheet"` carries the same content in the
+   * `Sheet` parts, upstream's bottom-sheet state (action-list §4). The domain
+   * is narrowed to these two states — `"fullscreen"` is not a member
+   * (create-presentation sheet §3, the same narrowing select took).
+   */
+  presentation?: "auto" | "panel" | "sheet";
 
   /** The name of the trigger, for render values (default `"Autocomplete"`). */
   trigger?: string;
@@ -169,6 +185,7 @@ export function AutocompletePopover(
     "isEntering",
     "isExiting",
     "shouldSkipAnimation",
+    "presentation",
     "trigger",
     "triggerRef",
     "UNSTABLE_portalContainer",
@@ -228,6 +245,29 @@ export function AutocompletePopover(
   const isNonModal = () => local.isNonModal ?? false;
   const isKeyboardDismissDisabled = () =>
     local.isKeyboardDismissDisabled ?? false;
+
+  /* -------------------------------------------------------------------------------------------
+   * A-006: the presentation seam — the carrier the open popover takes. The
+   * value is evaluated once on `isOpen`'s false→true edge (the field's
+   * synthesized `isOpen`, so a standalone popover's own channel latches too)
+   * and held until close: a rotation or an environment change can never swap
+   * the container mid-open.
+   *
+   * `isNonModal` folds into the pin (popover A-002's conservative ruling): a
+   * non-modal overlay has no sheet semantics — upstream's bottom-sheet is
+   * always modal — so under `"auto"` it resolves `"panel"`, while an
+   * explicit `presentation="sheet"` still pins, the caller's stated intent
+   * winning over the derived rule (§8).
+   * ----------------------------------------------------------------------------------------- */
+  const presentation = createPresentation<"panel" | "sheet">({
+    pin: () =>
+      isNonModal() &&
+      (local.presentation === undefined || local.presentation === "auto")
+        ? "panel"
+        : local.presentation,
+    isOpen,
+    allowed: () => ["panel", "sheet"],
+  });
 
   /* -------------------------------------------------------------------------------------------
    * Presence, placement and geometry
@@ -428,6 +468,13 @@ export function AutocompletePopover(
     }
   };
 
+  // A-008: the carrier probe. The panel keeps `testID` verbatim (desktop zero
+  // drift); the sheet carrier derives `<id>-sheet`, the `arrow` part's
+  // `-default` convention's sibling, so `shows`/`count` discriminate the
+  // mounted presentation (`id:ac-pop` / `id:ac-pop-sheet`).
+  const sheetTestID = () =>
+    local.testID !== undefined ? `${local.testID}-sheet` : undefined;
+
   // One read of `props.children`, at the placement inside the scroll viewport
   // and the contexts the Filter's SearchField and ListBox read.
   const content = (
@@ -467,13 +514,39 @@ export function AutocompletePopover(
     </Overlay>
   );
 
-  // The modal underlay: the second overlay that absorbs presses outside the
-  // field, as RAC's `usePopover` underlay. It has to be the outer overlay with
-  // the content nested inside it (two sibling overlays both claim the press on
-  // the web target). It exists only while something is shown: a closed field
-  // keeps the content in the tree, but hidden, so the Filter and the list
-  // survive (port sheet §5, third change).
-  //
+  // A-007: the panel branch is the pre-existing render chain, verbatim — the
+  // modal underlay plus the anchored content overlay. `"panel"` *is* the
+  // upstream popover, so nothing about its structure changes: the `testID`
+  // binding stays `local.testID` itself, and `placement` / `offset` /
+  // `measureAnchor` / `transformOrigin` / `PopoverPositionContext` keep their
+  // anchored semantics.
+  const panelBranch = (
+    <If when={!isNonModal()} else={contentOverlay}>
+      {/* The modal underlay: the second overlay that absorbs presses outside
+          the field, as RAC's `usePopover` underlay. It has to be the outer
+          overlay with the content nested inside it (two sibling overlays
+          both claim the press on the web target). It exists only while
+          something is shown: a closed field keeps the content in the tree,
+          but hidden, so the Filter and the list survive (port sheet §5,
+          third change). */}
+      <Overlay
+        class="inset-0"
+        classList={{
+          hidden: !presence.isPresent(),
+          "pointer-events-none": !isOpen(),
+        }}
+        focusable={false}
+        onPress={() => {
+          if (isOpen()) {
+            close();
+          }
+        }}
+      >
+        {contentOverlay}
+      </Overlay>
+    </If>
+  );
+
   // Before the first open the whole subtree stays out of the tree, as RAC's
   // `Popover` does: a `SearchField` inside a closed field autofocuses at mount,
   // and NSH would hand it the keyboard focus while it is hidden, taking the
@@ -484,22 +557,72 @@ export function AutocompletePopover(
   return (
     <SurfaceContext.Provider value={SURFACE_VALUE}>
       <If when={autocomplete.shouldMountPopover()}>
-        <If when={!isNonModal()} else={contentOverlay}>
-          <Overlay
-            class="inset-0"
-            classList={{
-              hidden: !presence.isPresent(),
-              "pointer-events-none": !isOpen(),
-            }}
-            focusable={false}
-            onPress={() => {
-              if (isOpen()) {
+        {/* A-008: the sheet carrier composes the existing Sheet parts
+            (popover A-004 the same shape). The field keeps owning the open
+            state — `SheetRoot` is a controlled shell fed `isOpen`, and its
+            `onOpenChange` closes through the same `close()` the underlay and
+            Escape take. `SheetBackdrop`'s dismissable paint layer replaces
+            the underlay (`isDismissable` takes its default, the same
+            press-outside / Escape semantics the panel chain has);
+            `isExiting` reaches the backdrop so the subtree-retained contract
+            the field's `shouldMountPopover` needs holds on this carrier too
+            — `isExiting` unset means "the field's own rule", which is `!isOpen()`
+            after the first open — and `isKeyboardDismissDisabled` goes with
+            it so the contract prop gates Escape on the sheet carrier exactly
+            as `handleCancel` gates it on the panel chain (§1 parity). */}
+        <If when={presentation() === "sheet"} else={panelBranch}>
+          <SheetRoot
+            isOpen={isOpen()}
+            onOpenChange={(next) => {
+              if (!next) {
                 close();
               }
             }}
           >
-            {contentOverlay}
-          </Overlay>
+            <SheetBackdrop
+              isExiting={
+                local.isExiting === undefined ? !isOpen() : local.isExiting
+              }
+              isKeyboardDismissDisabled={isKeyboardDismissDisabled()}
+            >
+              <SheetContent
+                ref={(node) => local.ref?.(node)}
+                testID={sheetTestID()}
+                nativeID={local.id ?? local.nativeID}
+                accessibilityLabel={
+                  local["aria-label"] ?? local.accessibilityLabel
+                }
+                className={classes()}
+                style={resolvedStyle()}
+              >
+                {/* `SheetRoot` provides its own `OverlayTriggerContext`,
+                    which would shadow this field's: a nested part's
+                    `toggle`/`isOpen`/`expanded` reads would then point at the
+                    sheet's channel instead of the autocomplete's. Re-supplying
+                    the field's own `overlayTrigger` value keeps the contract
+                    the panel branch gives its children (a standalone popover
+                    supplies `undefined`, the absent-context value itself).
+                    `ListBoxContainerContext` re-provides the R-029…R-032
+                    container contract the caller's ListBox reads, identical
+                    on this carrier. `PopoverPositionContext` is deliberately
+                    not re-provided: a sheet has no anchor geometry, so an
+                    `Arrow` written inside falls back to its
+                    `DEFAULT_POSITION` (popover A-007). */}
+                <OverlayTriggerContext.Provider value={overlayTrigger}>
+                  <ListBoxContainerContext.Provider value={containerValue}>
+                    {/* `SheetBody` is the scroll container the children land
+                        in — the panel's `Scroll` and its `maxHeight` cap are
+                        anchored-overlay concerns; the body's detent keeps it
+                        `scrollable`. `onLayout` forwards so the popover's
+                        content-box probe survives the carrier swap. */}
+                    <SheetBody onLayout={local.onLayout}>
+                      {renderChildren(local.children)}
+                    </SheetBody>
+                  </ListBoxContainerContext.Provider>
+                </OverlayTriggerContext.Provider>
+              </SheetContent>
+            </SheetBackdrop>
+          </SheetRoot>
         </If>
       </If>
     </SurfaceContext.Provider>

@@ -1,5 +1,7 @@
 tmp/
 .nsh/
+result
+result-*
 node_modules/
 .out/
 target/

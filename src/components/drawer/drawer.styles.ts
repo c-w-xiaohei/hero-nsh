@@ -1,13 +1,20 @@
 import type { VariantProps } from "tailwind-variants";
 import { tv } from "tailwind-variants";
 
-import { ease, shadow } from "../../tokens/geometry";
+// `ease.outQuart` and `shadow.overlay.both` of `src/tokens/geometry.ts` are
+// written out below: the M2 class walker loads this file with plain
+// `node --input-type=module`, which cannot resolve an extensionless
+// `../../tokens/geometry` specifier. `.styles.ts` files import only
+// `tailwind-variants`, so the values are inlined here.
+const EASE_OUT_QUART = "ease-[cubic-bezier(0.165,0.84,0.44,1)]";
+const SHADOW_OVERLAY_BOTH =
+  "shadow-[0_2px_8px_0_rgba(0,0,0,0.06),0_-6px_12px_0_rgba(0,0,0,0.03),0_14px_28px_0_rgba(0,0,0,0.08)] dark:shadow-[0_0_1px_0_rgba(255,255,255,0.3)_inset]";
 
 // HeroUI 3.2.7 drawer slots and the two public variant axes.
 export const drawerVariants = tv({
   slots: {
     // R-001, R-002, R-035, R-004, R-005
-    trigger: `inline-block w-fit cursor-pointer duration-[250ms] ${ease.outQuart} motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]`,
+    trigger: `inline-block w-fit cursor-pointer duration-[250ms] ${EASE_OUT_QUART} motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]`,
     // R-006, R-036, R-007, R-037, R-038, R-008, R-009, R-010
     backdrop: "absolute inset-0",
     // R-011, R-039, R-040, R-012, R-013, R-014
@@ -17,7 +24,7 @@ export const drawerVariants = tv({
     // basis inside the overlay and collapse to the panel's own height.
     content: "flex flex-row h-full w-full min-w-0 pointer-events-none",
     // R-015, R-041, R-016, R-017, R-042, R-018, R-019, R-020, R-021, R-022
-    dialog: `relative flex flex-col bg-overlay text-overlay-foreground ${shadow.overlay.both} outline-none p-6 pointer-events-auto`,
+    dialog: `relative flex flex-col bg-overlay text-overlay-foreground ${SHADOW_OVERLAY_BOTH} outline-none p-6 pointer-events-auto`,
     // R-023
     header: "flex flex-col gap-3 mb-0",
     // R-024
@@ -32,6 +39,17 @@ export const drawerVariants = tv({
     closeTrigger: "absolute z-10 end-4 top-4",
   },
   variants: {
+    // A-004: the `input` axis of the encapsulation model — `input` owns
+    // interaction usability. `touch` gives the handle its 44 pt visible hit
+    // minimum (the same `min-h-11` switch's `content` slot takes) because the
+    // handle becomes the bottom drawer's drag surface on touch; `pointer`
+    // keeps the content-sized handle, so the default environment sees no
+    // change. There is no `density` axis: the handle is a hit-area question,
+    // not a spacing preset.
+    input: {
+      pointer: {},
+      touch: { handle: "min-h-11" },
+    },
     placement: {
       bottom: { dialog: "w-full max-h-[85%] rounded-t-2xl" },
       top: { dialog: "w-full max-h-[85%] rounded-b-2xl pb-2", handle: "pb-0" },
@@ -44,7 +62,7 @@ export const drawerVariants = tv({
       blur: { backdrop: "bg-backdrop backdrop-blur-md" },
     },
   },
-  defaultVariants: { placement: "bottom", variant: "opaque" },
+  defaultVariants: { input: "pointer", placement: "bottom", variant: "opaque" },
 });
 
 /**

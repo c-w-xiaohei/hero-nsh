@@ -1,5 +1,7 @@
 import type { Accessor, PressEvent, ViewRef } from "nsh";
-import { context } from "nsh";
+import { context, createAnimatedValue } from "nsh";
+
+import type { PressFeedback } from "../../primitives/pressable";
 
 // The two dimensions belong to the group; only their types come down here, and
 // `import type` is erased, so the group's runtime import of this module is not
@@ -148,6 +150,21 @@ export const RadioGroupContext = context<RadioGroupContextValue | undefined>(und
  * -----------------------------------------------------------------------------------------------*/
 
 /**
+ * A-003: the touch-gated `createPressFeedback` seam, seen from inside the
+ * item — the read half of the press-feedback channels, shaped after
+ * `ControlFieldContext.feedback`. The press driver functions are left out:
+ * the Content's `View` owns the writers (handed to it through
+ * `feedbackDriver`), consumers only observe. `nsh/test` can reach neither a
+ * view's `hitSlop` prop nor an `AnimatedValue`-bound style, so these channels
+ * are the seam's only observable surface (sheet §4 M-001/M-002).
+ */
+export interface RadioItemFeedbackChannels
+  extends Omit<PressFeedback, "pressDown" | "pressUp" | "layout"> {
+  /** The seam's effective gate (`input() === "touch"` and not `isDisabled`). */
+  enabled: Accessor<boolean>;
+}
+
+/**
  * The live state one `Radio.Root` hands to its parts.
  *
  * HeroUI reaches the same information two ways: React context
@@ -185,6 +202,12 @@ export interface RadioItemContextValue {
 
   /** The clickable face's `focusable`; only the group's tab stop sets it. */
   focusable: Accessor<boolean>;
+
+  /** A-003: the seam's channels (read-only); the face's `View` holds the writers. */
+  feedback: RadioItemFeedbackChannels;
+
+  /** A-002: the seam's three attachment points, owned by the Content's `View`. */
+  feedbackDriver: Pick<PressFeedback, "pressDown" | "pressUp" | "layout">;
 
   /** `aria-label` of the field root, which names the clickable face first. */
   ariaLabel: Accessor<string | undefined>;
@@ -279,6 +302,22 @@ export const FALLBACK_RADIO_ITEM_CONTEXT: RadioItemContextValue = {
   isFocused: () => false,
   isFocusVisible: () => false,
   focusable: () => false,
+  // A-003: the resting seam — every channel at its gated-off value.
+  feedback: {
+    isPressed: () => false,
+    pressed: createAnimatedValue(0),
+    scale: createAnimatedValue(1),
+    highlightOpacity: createAnimatedValue(0),
+    hitSlop: () => undefined,
+    pressOrigin: () => null,
+    bounds: () => ({ width: 0, height: 0 }),
+    enabled: () => false,
+  },
+  feedbackDriver: {
+    pressDown: () => {},
+    pressUp: () => {},
+    layout: () => {},
+  },
   ariaLabel: () => undefined,
   labelText: () => undefined,
   descriptionText: () => undefined,

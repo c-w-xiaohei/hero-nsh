@@ -1,10 +1,31 @@
-/**
- * `disclosureGroupVariants` is defined next to the rest of the Disclosure unit in
- * `src/components/disclosure/disclosure-group.styles.ts` (DisclosureGroup is part
- * of that unit and owns one style rule, R-020). Re-exported here so the public
- * path this file's name promises keeps resolving for the group's entry and the
- * packed barrel.
- */
-export { disclosureGroupVariants } from "../disclosure/disclosure-group.styles";
+import type { VariantProps } from "tailwind-variants";
 
-export type { DisclosureGroupVariants } from "../disclosure/disclosure-group.styles";
+import { tv } from "tailwind-variants";
+
+/**
+ * DisclosureGroup's variant table, mirroring `@heroui/styles` 3.2.7
+ * `packages/styles/src/components/disclosure-group/disclosure-group.styles.ts`
+ * plus the 2 declarations of `packages/styles/components/disclosure-group.css`.
+ *
+ * HeroUI's table has one slot and no dimension at all. R-021 (`contain: layout
+ * style`) has no NSH counterpart and is dropped; R-022 keeps the slot key with
+ * a real class string (port sheet §4).
+ *
+ * The table is defined locally rather than re-exported from
+ * `src/components/disclosure/disclosure-group.styles.ts`: an adapt unit's write
+ * scope is `src/components/disclosure-group/` only, and a cross-directory
+ * relative specifier here cannot be resolved by Node's ESM loader (which reads
+ * this file directly for class collection) while TS `moduleResolution:
+ * Bundler` forbids a `.ts` suffix. The sibling copy under `disclosure/` is a
+ * base-branch file outside this unit's write scope.
+ */
+export const disclosureGroupVariants = tv({
+  slots: {
+    // R-020: `.disclosure-group` → `@apply w-full`.
+    base: "w-full",
+  },
+  variants: {},
+  defaultVariants: {},
+});
+
+export type DisclosureGroupVariants = VariantProps<typeof disclosureGroupVariants>;

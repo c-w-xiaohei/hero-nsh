@@ -40,6 +40,18 @@ export type { RadioControlProps } from "./radio-control";
 export type { RadioIndicatorProps } from "./radio-indicator";
 
 /* -------------------------------------------------------------------------------------------------
+ * Context
+ * -----------------------------------------------------------------------------------------------*/
+// A-006: the item context and its value/channel types — internal accessors
+// (not a public prop), exported so NSH fixtures can probe the feedback seam.
+export { RadioItemContext } from "./radio-context";
+
+export type {
+  RadioItemContextValue,
+  RadioItemFeedbackChannels,
+} from "./radio-context";
+
+/* -------------------------------------------------------------------------------------------------
  * Variants
  * -----------------------------------------------------------------------------------------------*/
 export { radioVariants } from "./radio.styles";

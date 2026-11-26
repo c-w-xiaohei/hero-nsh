@@ -74,6 +74,12 @@ export function ErrorMessageRoot(props: ErrorMessageRootProps): JSX.Element {
   // still updates; a plain capture would freeze it.
   const children = computed(() => local.children);
 
+  // A-006 / A-007: the fixture's `in-container`/`gated`/`bare` cases
+  // (`harness/error-message.fixtures.tsx`) and `error-message.mobile.test.tsx`
+  // probe exactly these two context channels — `registerErrorMessage` and
+  // `partClass` — under the default and injected-touch environments; both are
+  // environment-invariant (adapt sheet §2 A-003).
+  //
   // Registration side effect (port sheet §2): while mounted, report the
   // visible text to the field, which puts it on its control's accessible
   // description. Kobalte registers the element id for the same purpose; NSH

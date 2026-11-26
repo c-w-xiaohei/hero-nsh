@@ -14,6 +14,18 @@ import type {
   ProgressCircleRootProps,
 } from "./progress-circle-root";
 
+// A-007 / A-008: the two harness-side 接轴 spots of adapt sheet
+// progress-circle.md are realized outside this directory —
+// `harness/progress-circle.fixtures.tsx` (`ScopedMobile` feeds
+// `host.params.input`/`density` into `EnvironmentScope`, `host.params.case`
+// dispatches `paint`/`sizes`/`indeterminate`/`disabled`, stroke recording and
+// `onLayout` bounds probes write `app.storage()`) and
+// `harness/tests/components/progress-circle/progress-circle.mobile.test.tsx`
+// (the desktop-pinned, dual-environment M-001…M-007 assertions). The gate's
+// marker scan only sees this directory, so the markers live here like the
+// separator/meter precedent. No component-side edit exists to mark: every
+// component seam in §2 is 保留 (A-001…A-006).
+
 /* -------------------------------------------------------------------------------------------------
  * Compound Component
  * -----------------------------------------------------------------------------------------------*/

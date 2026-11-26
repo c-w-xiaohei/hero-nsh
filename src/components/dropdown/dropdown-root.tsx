@@ -1,6 +1,10 @@
 import type { JSX, Point } from "nsh";
-import { signal, split } from "nsh";
+import { computed, signal, split } from "nsh";
 
+import {
+  createDensity,
+  createInput,
+} from "../../primitives/environment";
 import { createOverlayTrigger } from "../../primitives/create-overlay-trigger";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import type {
@@ -9,6 +13,7 @@ import type {
 } from "./dropdown-context";
 import { DropdownContext } from "./dropdown-context";
 import { dropdownVariants } from "./dropdown.styles";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * Root
@@ -145,8 +150,20 @@ export function DropdownRoot(props: DropdownRootProps) {
     trigger.setIsOpen(true);
   };
 
+  // A-001: the environment's two variant axes, resolved once under this
+  // root's owner scope and fed next to the existing call — the default
+  // environment resolves `pointer`/`default`, which keeps the desktop
+  // output verbatim. The accessor stays live so an `EnvironmentScope`
+  // remount re-resolves the slots (table/tabs the same convention).
+  const input = createInput();
+  const density = createDensity();
+
+  const slots = computed(() =>
+    dropdownVariants({ input: input(), density: densityKey(density()) }),
+  );
+
   const contextValue: DropdownContextValue = {
-    slots: dropdownVariants(),
+    slots,
     isOpen: trigger.isOpen,
     setIsOpen: trigger.setIsOpen,
     toggle: trigger.toggle,

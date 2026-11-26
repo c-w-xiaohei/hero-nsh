@@ -133,6 +133,15 @@ export interface ToastProviderProps<T extends object = ToastContentValue>
 
   /** Forwarded to the region `View` as a callback, never as a ref store. */
   ref?: (node: ViewRef) => void;
+
+  /**
+   * The stack-level default for swiping a toast closed, handed down
+   * through `ToastContextValue.isSwipeable`; a toast's own `isSwipeable`
+   * overrides it. The gesture only exists where `input === "touch"`, so
+   * this prop changes nothing under a pointer environment.
+   * @default true
+   */
+  isSwipeable?: boolean;
 }
 
 /** `event.code` values the code path cannot derive from a letter or a digit. */
@@ -283,6 +292,7 @@ export function ToastProvider<T extends object = ToastContentValue>(
     "hotkey",
     "scaleFactor",
     "placement",
+    "isSwipeable",
     "queue",
     "width",
     "id",
@@ -507,6 +517,12 @@ export function ToastProvider<T extends object = ToastContentValue>(
   });
 
   cleanup(() => queue().resumeTimers("visibility"));
+
+  // A swipe in progress suspends the timers under `"drag"` (A-002); if the
+  // region unmounts before the release lands, the suspension must not leak —
+  // `suspendTimers`/`resumeTimers` is a keyed set, so this only clears a key
+  // this region's own drags could have left behind.
+  cleanup(() => queue().resumeTimers("drag"));
 
   /* -------------------------------------------------------------------------------------------
    * Hotkey and Escape
@@ -797,11 +813,16 @@ export function ToastProvider<T extends object = ToastContentValue>(
 
   const contextValue: ToastContextValue = {
     close: (key: string) => queue().close(key),
+    // A-002: a claimed swipe pauses the whole stack's countdowns through the
+    // same keyed-suspension channel `"interaction"` and `"visibility"` use.
+    dragEnter: () => queue().suspendTimers("drag"),
+    dragLeave: () => queue().resumeTimers("drag"),
     exitingKeys,
     focusedKey,
     gap,
     heightsByKey: toastHeights,
     isExpanded,
+    isSwipeable: () => local.isSwipeable ?? true,
     maxVisibleToasts,
     moveFocusFrom,
     placement,

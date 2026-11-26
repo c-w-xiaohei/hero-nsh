@@ -1,5 +1,6 @@
 import { host, mount, Text, View } from "nsh";
-import { Breadcrumbs } from "@heroui/react";
+import type { JSX } from "nsh";
+import { Breadcrumbs, EnvironmentScope } from "@heroui/react";
 import { probe } from "@scenario/probe";
 
 /*
@@ -121,10 +122,104 @@ function SeparatorRtlCase() {
   );
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * Mobile-environment cases (adapt-sheets/breadcrumbs.md §4 M-001…M-006)
+ * -----------------------------------------------------------------------------------------------*/
+
+/** A full bounds box; the paint cases' `layoutProbe` keeps only y/height. */
+function boxProbe(name: string) {
+  return (event: LayoutEvent) =>
+    probe("layout")({
+      name,
+      x: event.bounds.origin.x,
+      y: event.bounds.origin.y,
+      width: event.bounds.size.width,
+      height: event.bounds.size.height,
+    });
+}
+
+/**
+ * The row the mobile assertions drive: two links (Home, Products) carrying
+ * the caller's `onPress` probe and a current last item (Laptop). The custom
+ * separator is a View that fills its slot wrapper — the density axis sizes
+ * the wrapper (`size-3`/`size-2.5`), so the child's box reports the
+ * separator's. Root `onAction` and item `onPress` share the probe channel,
+ * so storage order is the press-chain order M-003 asserts. An item's
+ * `onLayout` lands on its outer View (link + separator); the label Text's
+ * own `onLayout` reports the text box inside the link for M-006.
+ */
+function MobileCase(props: { disabled?: boolean }) {
+  return (
+    <View class="p-6">
+      <Breadcrumbs
+        isDisabled={props.disabled}
+        onAction={probe("onAction")}
+        onLayout={boxProbe("root")}
+        separator={
+          <View class="h-full w-full" onLayout={boxProbe("separator")} />
+        }
+      >
+        <Breadcrumbs.Item
+          id="home"
+          href="#home"
+          testID="item-home"
+          onPress={probe("onPress")}
+          onLayout={boxProbe("item-home")}
+        >
+          <Text onLayout={boxProbe("link-home")}>Home</Text>
+        </Breadcrumbs.Item>
+        <Breadcrumbs.Item
+          id="products"
+          href="#products"
+          testID="item-products"
+          onPress={probe("onPress")}
+          onLayout={boxProbe("item-products")}
+        >
+          <Text onLayout={boxProbe("link-products")}>Products</Text>
+        </Breadcrumbs.Item>
+        <Breadcrumbs.Item
+          id="current"
+          testID="item-current"
+          onLayout={boxProbe("item-current")}
+        >
+          <Text onLayout={boxProbe("link-current")}>Laptop</Text>
+        </Breadcrumbs.Item>
+      </Breadcrumbs>
+    </View>
+  );
+}
+
+/**
+ * `host.params.input` / `host.params.density` feed `EnvironmentScope`; an
+ * absent param keeps the host-derived value, so a case opened without them
+ * is the desktop-parity baseline.
+ */
+function ScopedMobile(props: { children?: JSX.Element }) {
+  const input = String(host.params.input ?? "");
+  const density = String(host.params.density ?? "");
+
+  return (
+    <EnvironmentScope
+      input={input === "touch" || input === "pointer" ? input : undefined}
+      density={density === "compact" || density === "default" ? density : undefined}
+    >
+      {props.children}
+    </EnvironmentScope>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "paint");
 
   if (name === "separator-rtl") return <SeparatorRtlCase />;
+
+  if (name === "links" || name === "disabled") {
+    return (
+      <ScopedMobile>
+        <MobileCase disabled={name === "disabled"} />
+      </ScopedMobile>
+    );
+  }
 
   return <PaintCase />;
 }

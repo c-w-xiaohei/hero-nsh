@@ -17,10 +17,15 @@ import {
   type BreadcrumbsKey,
 } from "./breadcrumbs-context";
 import {
+  createDensity,
+  createInput,
+} from "../../primitives/environment";
+import {
   breadcrumbsVariants,
   type BreadcrumbsVariants,
 } from "./breadcrumbs.styles";
 import type { AriaProps, DataProps, GlobalDomProps } from "./dom-props";
+import { densityKey } from "../../tokens/density";
 
 /**
  * The props of `Breadcrumbs.Root` (= `Breadcrumbs`): HeroUI 3.2.7's
@@ -33,7 +38,7 @@ import type { AriaProps, DataProps, GlobalDomProps } from "./dom-props";
  * registers itself instead (port sheet section 2).
  */
 export interface BreadcrumbsRootProps<T = unknown>
-  extends BreadcrumbsVariants,
+  extends Omit<BreadcrumbsVariants, "input" | "density">,
     AriaProps,
     DataProps,
     GlobalDomProps {
@@ -135,7 +140,14 @@ export function BreadcrumbsRoot<T = unknown>(
     "onLayout",
   ] as const);
 
-  const slots = breadcrumbsVariants();
+  // The environment's two variant axes (encapsulation.md §1, 样式管线):
+  // `input` removes the link's hover dependency under touch (sheet A-001)
+  // and `density` resolves the gap / separator literals (sheet A-002). Both
+  // accessors return the environment's own accessors, so the single read
+  // here stays consistent with whatever scope the Root mounted under.
+  const input = createInput();
+  const density = createDensity();
+  const slots = breadcrumbsVariants({ input: input(), density: densityKey(density()) });
 
   /**
    * One registered item: its key and, for a dynamic `items` collection, the

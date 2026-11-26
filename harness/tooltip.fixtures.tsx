@@ -1,5 +1,6 @@
-import { host, mount, View } from "nsh";
-import { Button, Tooltip } from "@heroui/react";
+import { host, mount, platform, signal, Text, View } from "nsh";
+import type { JSX } from "nsh";
+import { Button, createInput, EnvironmentScope, Tooltip } from "@heroui/react";
 import { probe } from "./probe";
 
 /*
@@ -22,6 +23,20 @@ import { probe } from "./probe";
  *                open and a target swap both show without delay;
  *   content-hover delay 0, closeDelay 300, with the `away` Button: the open
  *                tip is itself the hover target that keeps it open.
+ *   mobile        the adapt-unit seam case (M-001 … M-009): a
+ *                `Tooltip.Trigger` (the only trigger form wired to the
+ *                root's `longPress` channel — `<Tooltip><Button>` is the
+ *                §5 cross-unit gap) with `onLongPress`/`onPress` probes, a
+ *                `Mobile tip` content, the `away` Button, and an
+ *                `env-input=` Text reporting `createInput()`. host.params:
+ *                `scope` ("" / "touch" through `EnvironmentScope`, read by
+ *                every case), `focusOnly`="1" (`trigger="focus"`),
+ *                `disabled`="1" (Root `isDisabled`).
+ *   mobile-owns   the ownsState half of M-005: same shape, but the Content
+ *                takes a controlled `isOpen` (a signal its own
+ *                `onOpenChange` writes back) — separate case because a
+ *                conditional child inside the providers loses context on
+ *                `--target web`.
  *
  * They sit next to harness/nsh.json on purpose: NSH takes the entry's own
  * directory as the app's root, so an entry under harness/tests/... finds no
@@ -74,8 +89,85 @@ function ContentHover() {
   );
 }
 
+/* The adapt-unit seam case: `Tooltip.Trigger` is the trigger form that reads
+ * `TooltipContext.longPress` (the Button form's channel is the sheet §5
+ * cross-unit request, not wired). `env-input=` makes the resolved `input`
+ * axis observable for the ios-derivation row (M-009). */
+function MobileCase() {
+  const input = createInput();
+  const focusOnly = String(host.params.focusOnly ?? "") === "1";
+  const disabled = String(host.params.disabled ?? "") === "1";
+
+  return (
+    <View class="flex-1 items-start gap-4 bg-background p-6">
+      <Tooltip
+        delay={0}
+        closeDelay={300}
+        trigger={focusOnly ? "focus" : "hover"}
+        isDisabled={disabled}
+        onOpenChange={probe("openChange")}
+      >
+        <Tooltip.Trigger
+          testID="trigger"
+          onLongPress={() => probe("longPress")("trigger")}
+          onPress={() => probe("press")("trigger")}
+        >
+          Hold me
+        </Tooltip.Trigger>
+        <Tooltip.Content testID="tip">Mobile tip</Tooltip.Content>
+      </Tooltip>
+      <Text>{`env-input=${input()}`}</Text>
+      <Away />
+    </View>
+  );
+}
+
+/* The ownsState half of M-005 is its own case: a conditional expression as a
+ * Provider's child loses the context on `--target web` (measured — the
+ * Content inside `{owns ? … : …}` read null TooltipContext/HoverTriggerContext
+ * and took the ownsState branch), so the two Content shapes never share one
+ * children position. `isOpen` is controlled: a signal the Content's own
+ * `onOpenChange` writes back, so the outside-press close path
+ * (`setOpen` → `setOwnIsOpen` → `onOpenChange`) is what the test observes.
+ * The uncontrolled `defaultOpen` variant is not used: a closed ownsState
+ * Content remounts and reopens (pre-existing on feat/mobile-encapsulation,
+ * recorded in the unit report). */
+function MobileOwnsCase() {
+  const ownsOpen = signal(true);
+
+  return (
+    <View class="flex-1 items-start gap-4 bg-background p-6">
+      <Tooltip delay={0} closeDelay={300} onOpenChange={probe("openChange")}>
+        <Tooltip.Trigger
+          testID="trigger"
+          onLongPress={() => probe("longPress")("trigger")}
+          onPress={() => probe("press")("trigger")}
+        >
+          Hold me
+        </Tooltip.Trigger>
+        <Tooltip.Content
+          isOpen={ownsOpen()}
+          onOpenChange={(next) => {
+            ownsOpen.set(next);
+            probe("contentOpenChange")(next);
+          }}
+        >
+          Mobile tip
+        </Tooltip.Content>
+      </Tooltip>
+      <Away />
+    </View>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "close-delay");
+
+  // The host OS the app itself reports (the table/tabs convention): mobile
+  // tests branch on it to register degraded acceptance where a native host
+  // gap (the synthesized long-press's extra open/close cycle) makes the
+  // event stream unobservable — final-state assertions stay literal.
+  probe("platform")(platform.os);
 
   if (name === "position-props") {
     const variant = String(host.params.variant ?? "default");
@@ -100,6 +192,8 @@ function Fixture() {
 
   if (name === "warm-swap") return <WarmSwap />;
   if (name === "content-hover") return <ContentHover />;
+  if (name === "mobile") return <MobileCase />;
+  if (name === "mobile-owns") return <MobileOwnsCase />;
 
   return (
     <View class="flex-1 items-start gap-4 bg-background p-6">
@@ -109,7 +203,7 @@ function Fixture() {
           <Tooltip.Content>Closable tip</Tooltip.Content>
         </Tooltip>
       ) : (
-        <Tooltip defaultOpen delay={0}>
+        <Tooltip defaultOpen delay={0} onOpenChange={probe("openChange")}>
           <Button>Hover me</Button>
           <Tooltip.Content>Hover tip</Tooltip.Content>
         </Tooltip>
@@ -126,4 +220,29 @@ function Fixture() {
   );
 }
 
-mount(Fixture);
+/* `host.params.scope` picks the environment wrapper — "" is the host
+ * default (pointer on the pinned desktop hosts, the desktop-parity half),
+ * "touch" is `EnvironmentScope input="touch"` — the same convention
+ * `disclosure.fixtures.tsx` / `control-field.fixtures.tsx` use; every case
+ * mounts inside it so both environment halves run the same scenario. */
+function Scoped(props: { children?: JSX.Element }) {
+  const scope = String(host.params.scope ?? "");
+
+  if (scope === "touch") {
+    return <EnvironmentScope input="touch">{props.children}</EnvironmentScope>;
+  }
+  if (scope === "pointer") {
+    return <EnvironmentScope input="pointer">{props.children}</EnvironmentScope>;
+  }
+  return <>{props.children}</>;
+}
+
+function Root() {
+  return (
+    <Scoped>
+      <Fixture />
+    </Scoped>
+  );
+}
+
+mount(Root);

@@ -1,7 +1,8 @@
-import type { InputRef, JSX, PressEvent } from "nsh";
+import type { InputRef, JSX, MouseEvent as NshMouseEvent, PressEvent } from "nsh";
 import { cleanup, signal } from "nsh";
 
 import { isKeyboardPress } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
 import type { TextControlProps } from "../textfield/text-control";
 import { renderTextControl } from "../textfield/text-control";
 import { joinClassNames } from "./class-names";
@@ -21,10 +22,16 @@ import { InputGroupContext } from "./input-group-context";
  * `type` / `masked` stay available (upstream's `Input` is an `<input>` with a
  * `type`), while the textarea-only members of the shared control are removed.
  */
-export type InputGroupInputProps = Omit<
-  TextControlProps,
-  "variant" | "fullWidth" | "rows" | "cols" | "wrap"
->;
+export interface InputGroupInputProps
+  extends Omit<TextControlProps, "variant" | "fullWidth" | "rows" | "cols" | "wrap"> {
+  /**
+   * A-005: Return submitted the input (`{ text }` is its current text). The
+   * channel already existed — the value rides `rest` to the host `Input` —
+   * this only declares it; the event order does not change and
+   * `submitBehavior="submit"` keeps the focus, as React Aria's Enter does.
+   */
+  onSubmit?: (event: { text: string }) => void;
+}
 
 /* -------------------------------------------------------------------------------------------------
  * Input
@@ -43,6 +50,9 @@ export type InputGroupInputProps = Omit<
 export function InputGroupInput(props: InputGroupInputProps): JSX.Element {
   const group = InputGroupContext();
   const focused = signal(false);
+  // A-004: the hover callbacks read the environment's input axis at call
+  // time, so a touch press's sticky hover (real on web) never reaches them.
+  const input = createInput();
 
   let node: InputRef | undefined;
 
@@ -80,10 +90,34 @@ export function InputGroupInput(props: InputGroupInputProps): JSX.Element {
 
         props.onPress?.(event);
       },
+      // A-004: under `input === "touch"` the hover callbacks stay silent —
+      // a touch press's sticky hover must not reach them. The host's
+      // `onMouseEnter` / `onMouseLeave` still pass through.
+      onHoverStart: () => (event: NshMouseEvent) => {
+        if (input() !== "touch") {
+          props.onHoverStart?.(event);
+        }
+      },
+      onHoverEnd: () => (event: NshMouseEvent) => {
+        if (input() !== "touch") {
+          props.onHoverEnd?.(event);
+        }
+      },
+      onHoverChange: () => (value: boolean) => {
+        if (input() !== "touch") {
+          props.onHoverChange?.(value);
+        }
+      },
     }),
     {
       multiline: false,
       usesRows: false,
+      // A-004 (residual, sheet §8): the shared control reads the same
+      // environment input axis as the group's hover gates above — passing it
+      // through `config.input` keeps the control's own `hovered` signal, and
+      // therefore the `isHovered` render-prop, honest under touch (textfield
+      // input.tsx precedent).
+      input,
       // The group owns every state class (R-011 … R-014, R-033 … R-036).
       stateClasses: false,
       // R-015 plus the two `:has()` rules the affixes report: R-016 drops the

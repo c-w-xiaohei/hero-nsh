@@ -2,6 +2,8 @@ import type { Bounds, JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh
 import { cleanup, computed, effect, reduceMotion, signal, split, untracked, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { DateInputGroupContext } from "../date-input-group/date-input-group-context";
 import { DateRangePickerContext } from "./date-range-picker-context";
 import { renderChildren } from "./render-children";
@@ -188,6 +190,17 @@ export function DateRangePickerTrigger(props: DateRangePickerTriggerProps): JSX.
   // `isDisabled` is the union of the two (port sheet §1.3).
   const isDisabled = computed(() => local.isDisabled === true || picker.isDisabled());
 
+  // A-005: the touch-gated press-feedback seam — the icon box (~24pt) is far
+  // under the 44pt touch minimum, so only the invisible `hitSlop` half is
+  // bound; `enabled` folds `isDisabled` in and under the default pointer
+  // environment every channel rests (`hitSlop()` answers `undefined`), which
+  // is the desktop-zero-change half. No scale / highlight / ripple: the
+  // trigger's pressed chain already owns its visual contract.
+  const input = createInput();
+  const feedback = createPressFeedback({
+    enabled: () => input() === "touch" && !isDisabled(),
+  });
+
   // The group suppresses its ring while a trigger holds the focus; the picker
   // counts the trigger's focus as its own `isFocusWithin` (port sheet §2).
   cleanup(group.registerTriggerFocus(focused));
@@ -275,7 +288,16 @@ export function DateRangePickerTrigger(props: DateRangePickerTriggerProps): JSX.
       // `useOverlayTrigger`'s triggerProps report them. `aria-haspopup` is
       // always `"dialog"` upstream and has no NSH channel.
       accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel ?? "Calendar"}
-      onLayout={local.onLayout}
+      // A-005: `hitSlop` is the only writer of this view prop — computed by
+      // the seam from `Environment` + the density table, never a prop;
+      // `undefined` while the pointer gate holds, so the desktop box is
+      // byte-identical.
+      hitSlop={feedback.hitSlop()}
+      onLayout={(event) => {
+        // A-005: the measured size feeds the seam's `hitSlop`.
+        feedback.layout(event);
+        local.onLayout?.(event);
+      }}
       accessibilityState={{ expanded: picker.isOpen(), disabled: isDisabled() }}
       class={classes()}
       classList={classList()}
@@ -296,6 +318,8 @@ export function DateRangePickerTrigger(props: DateRangePickerTriggerProps): JSX.
         }
 
         notePress(event);
+        // A-005: gated off under pointer this does nothing at all.
+        feedback.pressDown(event);
 
         if (!pressed()) {
           pressed.set(true);
@@ -308,6 +332,10 @@ export function DateRangePickerTrigger(props: DateRangePickerTriggerProps): JSX.
         if (isDisabled()) {
           return;
         }
+
+        // A-005: release and cancel share this path; a gated pressUp only
+        // clears the seam's own state.
+        feedback.pressUp(event);
 
         if (pressed()) {
           pressed.set(false);

@@ -1,4 +1,4 @@
-import type { JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
+import type { Bounds, JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
 import { computed, split, View } from "nsh";
 
 import type { SurfaceContextValue } from "../surface";
@@ -71,6 +71,7 @@ export function ModalDialog(props: ModalDialogProps): JSX.Element {
     "aria-label",
     "render",
     "slot",
+    "onLayout",
   ]);
 
   const context = ModalContext();
@@ -79,6 +80,18 @@ export function ModalDialog(props: ModalDialogProps): JSX.Element {
   // `auto` placement, as upstream's empty context default does.
   const slots = (): ModalSlots => context?.slots() ?? modalVariants();
   const placement = (): ModalPlacement => context?.placement() ?? "auto";
+
+  // A-004: the swipe channel the Backdrop installs. `swipe.panHandlers()`
+  // resolves to an empty object whenever any of the four gates is off — the
+  // spread mounts no listener at all, so the desktop never sees the path.
+  const swipe = context?.swipe ?? null;
+
+  // The card's height is the release threshold's unit (`dy ≥ card/2`); it is
+  // reported through the same `onLayout` the caller's handler still gets.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    swipe?.reportCardHeight(event.bounds.size.height);
+    local.onLayout?.(event);
+  };
 
   const close = () => context?.close();
 
@@ -97,6 +110,14 @@ export function ModalDialog(props: ModalDialogProps): JSX.Element {
   // R-038 `bottom` → `mt-auto`;
   // R-039 `top` → `mt-0`.
   const classList = computed(() => ({ [modalPlacementClasses[placement()]]: true }));
+
+  // A-004: the claimed drag tracks the finger — the card follows it down
+  // (`translate:[0, offset]`); at rest the offset is 0 and the transform is
+  // the identity, so the desktop output changes in nothing but a property
+  // that reads as no-op.
+  const dragStyle = computed<ViewStyle | undefined>(() =>
+    swipe !== null ? { translate: [0, swipe.offset()] } : undefined,
+  );
 
   // R-058 `.modal__header + .modal__body` → `mt-2`;
   // R-059 `.modal__header + .modal__footer` → `mt-5`;
@@ -123,6 +144,10 @@ export function ModalDialog(props: ModalDialogProps): JSX.Element {
           // DOM-only names. `role` and `aria-label` are mapped above and are
           // therefore not in `rest`.
           {...viewProps(rest)}
+          // A-004: the gesture seam lands after the caller's own props, the
+          // same ordering Sheet.Dialog uses — `createPan` owns the responder
+          // props on this card, and under every gate-off the spread is empty.
+          {...(swipe?.panHandlers() ?? {})}
           ref={(node) => local.ref?.(node)}
           nativeID={local.id ?? local.nativeID}
           // NSH's `AccessibilityRole` has no `dialog`; an `alertdialog` still
@@ -131,7 +156,8 @@ export function ModalDialog(props: ModalDialogProps): JSX.Element {
           accessibilityLabel={local["aria-label"]}
           class={classes()}
           classList={classList()}
-          style={local.style}
+          style={[dragStyle(), local.style]}
+          onLayout={handleLayout}
         >
           {/*
             The provider exception in the common rules: the three spacing parts

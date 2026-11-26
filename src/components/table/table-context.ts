@@ -2,6 +2,8 @@ import type { Accessor, PressEvent } from "nsh";
 import { context } from "nsh";
 
 import type { InteractionModalityState } from "../../primitives";
+import type { Pan } from "../../primitives/pan";
+import type { PressFeedback } from "../../primitives/pressable";
 import type { TableColumnLayoutState, TableResizeCallbacks } from "./create-table-column-layout";
 import type { TableRegistry } from "./create-table-collection";
 import type { TableState } from "./create-table-state";
@@ -96,6 +98,28 @@ export const TableColumnContext = context<TableColumnContextValue | undefined>(
   undefined,
 );
 
+/**
+ * What `Table.ColumnResizer` provides to its own children: the seam handles
+ * the mobile layer wires in — the touch-gated `createPressFeedback` (whose
+ * `hitSlop` half-channel widens the 17 px band's hit area) and the touch
+ * `createPan` whose `panHandlers()` spread mounts the horizontal-claim
+ * gesture. Exposing them lets an element inside the hit area observe the
+ * same channels the adapt sheet's ctx probes assert (`enabled`, computed
+ * `hitSlop`, `panHandlers()` key count, `pan.active()`); under the default
+ * pointer environment both report their resting values, so nothing leaks
+ * into the desktop contract.
+ */
+export interface TableResizerContextValue {
+  /** The gate both seams share: `input() === "touch"`. */
+  enabled: Accessor<boolean>;
+  feedback: PressFeedback;
+  pan: Pan;
+}
+
+export const TableResizerContext = context<TableResizerContextValue | undefined>(
+  undefined,
+);
+
 /** What `Table.Row` provides to its cells and to the rows nested inside it. */
 export interface TableRowContextValue {
   rowKey: string;
@@ -103,6 +127,23 @@ export interface TableRowContextValue {
 
   /** The next cell's column index, in the row's own cell order. */
   nextCellIndex: () => number;
+
+  /**
+   * The row's own press handlers, callable by the parts inside it. A press
+   * a cell claims is the row's press too: upstream's bubble hands the row's
+   * `onPress*`/`onAction`/`href` and feedback seam a second sighting of the
+   * event (`claimPress`'s `!claimPress` branch). The engine delivers a press
+   * to the hit view only, so the cell invokes these after its own work —
+   * child first, then ancestor, the order a bubble runs. Per-row, per-phase
+   * dedupe inside the handlers keeps a dispatch that also lands on the row
+   * view from running twice, and only the nearest row is invoked (a nested
+   * row's cells see their own row's context).
+   */
+  pressEdge: {
+    down: (event: PressEvent) => void;
+    up: (event: PressEvent) => void;
+    press: (event: PressEvent) => void;
+  };
 }
 
 export const TableRowContext = context<TableRowContextValue | undefined>(undefined);

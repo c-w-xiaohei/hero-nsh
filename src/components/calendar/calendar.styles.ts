@@ -9,15 +9,18 @@ import { tv } from "tailwind-variants";
  * the state rules live in the parts that own the state.
  */
 export const calendarVariants = tv({
-  defaultVariants: {},
+  defaultVariants: {
+    input: "pointer",
+  },
   slots: {
-    // R-001: root `w-63 max-w-63` (252px); R-042: the year panel's
-    // positioning context is always `relative`.
+    // R-001: root width (`w-63 max-w-63`, 252px) lives in the `input` axis
+    // (A-001); R-042: the year panel's positioning context is always
+    // `relative`.
     // The root carries the inherited `foreground` the CSS gets from the page;
     // NSH has no CSS-variable cascade, so every child Text would otherwise fall
     // back to its default grey. R-002's `container-type: inline-size` has no NSH
     // equivalent (there are no container queries here).
-    base: "relative w-63 max-w-63 text-foreground",
+    base: "relative text-foreground",
     // R-008: header layout.
     header: "flex flex-row items-center justify-between px-0.5 pb-4",
     // R-010: heading takes the free width, on the inherited foreground.
@@ -26,8 +29,11 @@ export const calendarVariants = tv({
     // R-012: transform 250ms, background/box-shadow 100ms, opacity 150ms.
     // NSH takes one property set, duration and curve, so the four become one
     // 250ms `ease-out` transition; `will-change: scale` has no NSH equivalent.
+    // The 24pt size and the two hover paints live in the `input` axis (A-001):
+    // a touch host needs the 44pt target and cannot keep a sticky `hover:`
+    // class on the button after a press.
     navButton:
-      "flex size-6 items-center justify-center rounded-2xl text-accent-soft-foreground cursor-pointer transition duration-[250ms] ease-out motion-reduce:transition-none",
+      "flex items-center justify-center rounded-2xl text-accent-soft-foreground cursor-pointer transition duration-[250ms] ease-out motion-reduce:transition-none",
     // R-018: chevron size; mirrored on the right-to-left layout.
     navButtonIcon: "size-4 rtl:rotate-180",
     // R-005/R-019: the upstream table becomes a column container whose
@@ -56,7 +62,28 @@ export const calendarVariants = tv({
     // R-039: today/selected dot.
     cellIndicator: "absolute bottom-1 left-1/2 size-[3px] -translate-x-1/2 rounded-xs bg-muted",
   },
-  variants: {},
+  variants: {
+    // A-001: the `input` axis of the encapsulation model — interaction
+    // usability only. `pointer` keeps the desktop table byte-for-byte (the
+    // root's 252px width and the nav button's 24pt box with its two hover
+    // paints, moved out of the slots so touch never resolves them); `touch`
+    // widens the root to 7 × 44pt columns — the date cell's minimum hit width
+    // goes through the visible-size path, its `aspect-square w-full` track
+    // sharing the root's 308px — and grows the nav button to the 44pt target
+    // so its `hitSlop` expansion never reaches into the heading row. No
+    // `density` axis: the table carries no spacing/type content a density
+    // preset resolves, and 44pt is the hit minimum, not a spacing preset.
+    input: {
+      pointer: {
+        base: "w-63 max-w-63",
+        navButton: "size-6 hover:bg-default hover:text-accent-soft-foreground",
+      },
+      touch: {
+        base: "w-77 max-w-77",
+        navButton: "size-11",
+      },
+    },
+  },
 });
 
 export type CalendarVariants = VariantProps<typeof calendarVariants>;

@@ -1,6 +1,7 @@
 import type { Accessor, Bounds, JSX, Size, StyleProp, ViewRef, ViewStyle } from "nsh";
 import { cleanup, computed, effect, signal, split, untracked, View } from "nsh";
 
+import { createDensity, createInput } from "../../primitives/environment";
 import { createSingleSelectListState } from "../../primitives/list";
 import { renderChildren } from "./children";
 import {
@@ -15,6 +16,7 @@ import {
 } from "./tabs-context";
 import { type TabsKey, decodeTabKey, encodeTabKey } from "./tabs-key";
 import { tabsVariants } from "./tabs.styles";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * Props
@@ -207,11 +209,20 @@ export function TabsRoot(props: TabsRootProps): JSX.Element {
   // R-042: upstream scopes alignment with `.tabs--align-* > :is(…)`; here the
   // variant table is resolved per instance and handed to every part through
   // the context, so a Tabs nested in a panel keeps its own slots.
+  // A-001: `input` and `density` are the environment's two variant axes,
+  // fed by the factory accessors — callers never set them, and the default
+  // environment resolves `pointer`/`default`, which keeps the desktop output
+  // verbatim.
+  const input = createInput();
+  const density = createDensity();
+
   const slots = computed<TabsSlots>(() =>
     tabsVariants({
       align: align(),
       variant: variant(),
       orientation: orientation(),
+      input: input(),
+      density: densityKey(density()),
     }),
   );
 
@@ -440,6 +451,22 @@ export function TabsRoot(props: TabsRootProps): JSX.Element {
 
   const bounds = (key: string) => frames().get(key);
 
+  // The tabs' `ViewRef`s, registered from each tab's `ref` callback. They are
+  // a plain map, not a signal: the consumers (`reveal` calls inside scroll
+  // effects) read a node when they already fire for another reason, so
+  // tracking the map would only re-run those effects on every mount.
+  const tabNodes = new Map<string, ViewRef>();
+
+  const registerTabRef = (key: string, node: ViewRef | undefined) => {
+    if (node == null) {
+      tabNodes.delete(key);
+    } else {
+      tabNodes.set(key, node);
+    }
+  };
+
+  const tabRef = (key: string) => tabNodes.get(key);
+
   /* -------------------------------------------------------------------------------------------
    * R-055: HeroUI waits one frame before letting the indicator animate, so a
    * first render (or a replayed layout effect) cannot keep an initial offset.
@@ -486,6 +513,8 @@ export function TabsRoot(props: TabsRootProps): JSX.Element {
     bounds,
     registerBounds,
     unregisterBounds,
+    tabRef,
+    registerTabRef,
     transitionSource,
     isIndicatorReady,
     contentSize,

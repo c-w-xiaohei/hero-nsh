@@ -2,8 +2,6 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { shadow } from "../../tokens/geometry";
-
 /**
  * Sheet's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/sheet/sheet.styles.ts` and the CSS block
@@ -79,10 +77,14 @@ export const sheetVariants = tv({
     // pointer-transparent while open.
     content: "z-1 box-content overflow-clip outline-none pointer-events-auto",
     // R-023 `.sheet__dialog` → `relative flex min-h-0 flex-col overflow-hidden
-    // bg-overlay text-overlay-foreground shadow-overlay outline-none`, the
-    // shadow written as the light / dark pair the theme needs.
+    // bg-overlay text-overlay-foreground shadow-overlay outline-none`. The
+    // shadow is `shadow.overlay.both` of `src/tokens/geometry.ts` written out
+    // — the light and the dark layer — instead of imported, because the class
+    // check loads this file with plain Node, which resolves neither an
+    // extensionless relative import nor a `.ts` one (the same ruling
+    // list-box.styles.ts and date-picker.styles.ts follow).
     dialog:
-      `relative flex min-h-0 flex-col overflow-hidden bg-overlay text-overlay-foreground ${shadow.overlay.both} outline-none`,
+      "relative flex min-h-0 flex-col overflow-hidden bg-overlay text-overlay-foreground shadow-[0_2px_8px_0_rgba(0,0,0,0.06),0_-6px_12px_0_rgba(0,0,0,0.03),0_14px_28px_0_rgba(0,0,0,0.08)] dark:shadow-[0_0_1px_0_rgba(255,255,255,0.3)_inset] outline-none",
     // R-029 `.sheet__header` → `flex shrink-0 flex-col gap-1 px-5 pt-4 pb-2`.
     header: "flex shrink-0 flex-col gap-1 px-5 pt-4 pb-2",
     // R-030 `.sheet__heading` → `text-lg font-semibold`.

@@ -1,6 +1,7 @@
 import { host, mount, View } from "nsh";
+import type { JSX } from "nsh";
 import { Input } from "nsh/base";
-import { Button, FieldError, Form } from "@heroui/react";
+import { Button, EnvironmentScope, FieldError, Form } from "@heroui/react";
 import { probe } from "@scenario/probe";
 import { FormContext } from "../src/components/form/context";
 import { FieldErrorContext } from "../src/components/field-error/context";
@@ -21,9 +22,61 @@ import { FieldErrorContext } from "../src/components/field-error/context";
  *
  * host.params.case picks the shape:
  *   basic    Form aria-label="Profile" + Input accessibilityLabel="Your name" (T-001)
- *   submit   Form onSubmit writes probe + Button type="submit" (T-002)
+ *   submit   Form onSubmit writes probe + Button type="submit" (T-002) plus
+ *            the mobile layer's additions: a bridged Input ("Your name",
+ *            submitBehavior="submit", its onSubmit → FormContext.submit)
+ *            and an `away` pressable for the blank-area assertion
  *   errors   Form validationErrors + the field consumer rendering FieldError (T-003)
+ *
+ * Mobile-layer params (adapt sheet A-008):
+ *   scope    "" = the host's default environment (pointer — the desktop-parity
+ *            side); "touch" wraps the case in EnvironmentScope(input="touch"),
+ *            the injected environment the assertions drive.
+ *   testInput "pointer"/"touch" — an outer EnvironmentScope input so the
+ *            pointer baseline is host-independent. Absent params keep the
+ *            host default.
  */
+
+function Scoped(props: { children?: JSX.Element }) {
+  // Test-harness environment params (only the mobile tests set them —
+  // absent keeps the host-derived default): `scope="touch"` is the inner
+  // override, `testInput` ("pointer"/"touch") injects the scope so the
+  // pointer baseline is host-independent (the inner `scope` still wins).
+  // One provider only: `props.children` is placed inside it directly —
+  // pre-building a fragment first would mount the children under this
+  // component's own creation scope instead of the provider.
+  const input =
+    String(host.params.scope ?? "") === "touch"
+      ? "touch"
+      : ((v) => (v === "pointer" || v === "touch" ? v : undefined))(
+          String(host.params.testInput ?? ""),
+        );
+
+  return input !== undefined ? (
+    <EnvironmentScope input={input}>{props.children}</EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
+/*
+ * The mobile layer's keyboard-submit consumer (adapt sheet A-005/A-008): a
+ * single-line `nsh/base` Input whose Return is bridged into
+ * `FormContext.submit()` the way a field root will do it once the field
+ * units land — the minimal equivalent consumer, reading the context by the
+ * same path FieldProbe does. It must mount inside the Form to see the
+ * provider.
+ */
+function SubmitField() {
+  const form = FormContext();
+
+  return (
+    <Input
+      accessibilityLabel="Your name"
+      submitBehavior="submit"
+      onSubmit={() => form?.submit()}
+    />
+  );
+}
 
 function FieldProbe() {
   const form = FormContext();
@@ -47,25 +100,33 @@ function Fixture() {
 
   return (
     <View class="flex-col gap-2 p-4">
+      <Scoped>
       {name === "basic" ? (
         <Form aria-label="Profile">
           <Input accessibilityLabel="Your name" />
         </Form>
       ) : name === "submit" ? (
-        <Form
-          aria-label="Profile"
-          onSubmit={(event) => {
-            event.preventDefault();
-            submitted(event);
-          }}
-        >
-          <Button type="submit">Save</Button>
-        </Form>
+        <>
+          <Form
+            aria-label="Profile"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitted(event);
+            }}
+          >
+            <SubmitField />
+            <Button type="submit">Save</Button>
+          </Form>
+          {/* A pressable sibling outside the Form: M-003 presses it to prove
+              a pointer near the container adds no submit path. */}
+          <View testID="away" role="button" class="p-2" onPress={probe("away")} />
+        </>
       ) : (
         <Form aria-label="Profile" validationErrors={{ name: "Name is required" }}>
           <FieldProbe />
         </Form>
       )}
+      </Scoped>
     </View>
   );
 }

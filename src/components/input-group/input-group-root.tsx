@@ -13,6 +13,7 @@ import {
   createInteractionModality,
   type InteractionModalityState,
 } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
 import { TextFieldContext } from "../textfield/textfield-context";
 import {
   type AriaProps,
@@ -212,7 +213,13 @@ export function InputGroupRoot(props: InputGroupRootProps): JSX.Element {
   const variant = computed<InputGroupVariant>(() => local.variant ?? field?.variant() ?? "primary");
   const fullWidth = computed(() => local.fullWidth ?? false);
 
-  const slots = computed(() => inputGroupVariants({ variant: variant(), fullWidth: fullWidth() }));
+  // A-002: the `input` variant axis reads the environment here, in the root's
+  // owner scope — never a prop, never `platform`.
+  const input = createInput();
+
+  const slots = computed(() =>
+    inputGroupVariants({ variant: variant(), fullWidth: fullWidth(), input: input() }),
+  );
 
   const isDisabled = computed(
     () => local.isDisabled ?? field?.isDisabled() ?? local["aria-disabled"] === true,
@@ -232,7 +239,10 @@ export function InputGroupRoot(props: InputGroupRootProps): JSX.Element {
   });
 
   const handleMouseEnter = () => {
-    if (isDisabled() || hovered()) {
+    // A-003: the input axis owns hover dependence — a touch press's sticky
+    // hover (real on web) must not light the group's hover fill, so under
+    // `input === "touch"` the signal and the hover callbacks stay silent.
+    if (input() === "touch" || isDisabled() || hovered()) {
       return;
     }
 

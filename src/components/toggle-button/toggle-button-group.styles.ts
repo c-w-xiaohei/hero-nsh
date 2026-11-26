@@ -2,7 +2,12 @@ import type { VariantProps } from "tailwind-variants/lite";
 
 import { tv } from "tailwind-variants/lite";
 
-import { ease } from "../../tokens/geometry";
+// `ease.smooth` of `src/tokens/geometry.ts` written out: the M2 class walker
+// imports this file through Node ESM, which does not resolve extensionless
+// relative specifiers, so the geometry module cannot be imported from a
+// `.styles.ts`. Same pattern as `switch.styles.ts`; keep in sync with
+// `EASE_VALUES.smooth`.
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
 
 /*
  * ToggleButtonGroup variant table (HeroUI 3.2.7,
@@ -22,7 +27,7 @@ export const toggleButtonGroupVariants = tv({
     // orientation rules below: a border without a color is drawn in the
     // element's text color, which is what currentColor asked for.
     separator:
-      `absolute rounded-sm opacity-15 pointer-events-none transition-opacity duration-150 ${ease.smooth} motion-reduce:transition-none`,
+      `absolute rounded-sm opacity-15 pointer-events-none transition-opacity duration-150 ${EASE_SMOOTH} motion-reduce:transition-none`,
   },
   variants: {
     // R-030, after `w-fit` in the class string.

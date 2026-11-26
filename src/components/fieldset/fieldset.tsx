@@ -9,10 +9,12 @@ import type {
 } from "nsh";
 import { computed, split, View } from "nsh";
 
+import { createDensity } from "../../primitives/environment";
 import { renderChildren } from "./children";
 import { FieldsetContext, type FieldsetContextValue } from "./context";
 import type { FieldsetDomProps } from "./fieldset-dom-props";
 import { fieldsetVariants } from "./fieldset.styles";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * Fieldset Root
@@ -86,10 +88,22 @@ export function FieldsetRoot(props: FieldsetRootProps): JSX.Element {
   // `createControllableSignal` here; the accessor itself is the shared value.
   const isDisabled = computed(() => local.disabled === true);
 
+  // A-004: the environment's density variant axis, resolved at the Root so
+  // the base slot and — through the context — every part resolve under the
+  // same value. The accessor is the environment's own, so it stays
+  // consistent with whatever scope the Root mounted under.
+  const density = createDensity();
+
   // The whole context value, handed to the subtree. A stable accessor, so a
   // change from `true` back to `false` reaches every consumer without the
   // subtree remounting (upstream instead re-wraps or drops its `Provider`).
-  const contextValue: FieldsetContextValue = { isDisabled };
+  // `density` is additive (adapt sheet A-004): the disabled contract above
+  // is untouched (A-008).
+  // A-011: the dual-environment carrier and assertions for this tree are
+  // realized by the `mobile`/`mobile-disabled` cases in
+  // `harness/fieldset.fixtures.tsx` and `fieldset.mobile.test.tsx`
+  // (M-001..M-006).
+  const contextValue: FieldsetContextValue = { isDisabled, density };
 
   // §2 derived: `<fieldset>`'s implicit role is `group`; an explicit `role`
   // overrides it, and `"presentation"` is NSH's spelling of `"none"`.
@@ -105,8 +119,13 @@ export function FieldsetRoot(props: FieldsetRootProps): JSX.Element {
     disabled: isDisabled() || props.accessibilityState?.disabled === true,
   }));
 
+  // A-001/A-004: the stack gap lives in the `density` variant cell, fed by
+  // the environment accessor — `compact` tightens it, `default` and the
+  // desktop host keep the upstream 24.
   const classes = computed(() =>
-    fieldsetVariants().base({ className: local.className }),
+    fieldsetVariants({ density: densityKey(density()) }).base({
+      className: local.className,
+    }),
   );
 
   // The one read of `props.children`, inside the provider and at the placement

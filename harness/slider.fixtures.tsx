@@ -1,5 +1,7 @@
-import { host, mount, signal, Text, View } from "nsh";
-import { Label, Slider } from "@heroui/react";
+import { effect, host, mount, Scroll, signal, Text, View } from "nsh";
+import type { JSX } from "nsh";
+import { EnvironmentScope, Label, Slider } from "@heroui/react";
+import { SliderSeamContext } from "../src/components/slider/slider-context";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 
@@ -46,6 +48,27 @@ import { probe } from "@scenario/probe";
  *                     host.params (X-001)
  *   mark-children     a Mark whose child probes its own build, so a second read
  *                     of the children shows up as an extra probe (X-002)
+ *   mobile            the mobile layer's default shape: Label + Output + Track
+ *                     + Fill + one Thumb with the probe surface and the state /
+ *                     hover markers; `orientation` / `disabled` / `defaultValue`
+ *                     / `step` / `minValue` / `maxValue` from host.params
+ *   scroll            the same slider nested inside a `Scroll` whose axis is
+ *                     perpendicular to the slider's (vertical slider →
+ *                     horizontal Scroll), for the arbitration assertions
+ *
+ * Mobile-layer params (adapt sheet §4):
+ *   scope    "" = the host's default environment (on a native phone that is
+ *            touch, so the desktop-parity side injects "pointer"
+ *            explicitly); "touch"/"pointer" wrap the case in
+ *            EnvironmentScope(input=scope), the injected environment the
+ *            assertions drive.
+ *   probe    "1" mounts the seam surface: a `CtxProbe` inside the Track's and
+ *            the Thumb's own `SliderSeamContext` (reachable only inside the
+ *            provider, so the fixture imports the context file directly the
+ *            way switch.fixtures does). Reports `ctx-env` records tagged by
+ *            `part`: enabled / hitSlop / bounds / isPressed / scale /
+ *            pressOrigin / panKeys / panActive. Off by default so the
+ *            desktop-port tests' text surface is unchanged.
  *
  * It sits next to harness/nsh.json on purpose. NSH takes the entry's own
  * directory as the app root, so an entry under harness/tests/... finds no
@@ -224,26 +247,34 @@ function RangeKeyboardCase() {
 function ControlledCase() {
   const value = signal(40);
 
+  // The 400 pt slider pushes `id:output` past the right edge of a
+  // phone-shaped viewport, and nsh/test only reports what is on screen
+  // (the M-005/M-008 "expected false to be true" failures, Android CI run
+  // 2026-11-24). `ScrollCase`'s answer: content inside a `Scroll` stays
+  // queryable past the clip, so the case mounts inside a vertical one —
+  // the same perpendicular axis the arbitration rows rely on.
   return (
     <Stage>
-      <View class="w-[400px]">
-        <Slider onChange={probe("onChange")} value={value()}>
-          <Label>Volume</Label>
-          <Slider.Output testID="output" />
-          <Slider.Track>
-            <Slider.Fill />
-            <Slider.Thumb />
-          </Slider.Track>
-        </Slider>
-      </View>
-      <View
-        class="bg-default px-3 py-1"
-        onPress={() => value.set(60)}
-        role="button"
-        testID="force-60"
-      >
-        <Text>force 60</Text>
-      </View>
+      <Scroll class="h-[600px] w-[400px]">
+        <View class="w-[400px]">
+          <Slider onChange={probe("onChange")} value={value()}>
+            <Label>Volume</Label>
+            <Slider.Output testID="output" />
+            <Slider.Track>
+              <Slider.Fill />
+              <Slider.Thumb />
+            </Slider.Track>
+          </Slider>
+        </View>
+        <View
+          class="bg-default px-3 py-1"
+          onPress={() => value.set(60)}
+          role="button"
+          testID="force-60"
+        >
+          <Text>force 60</Text>
+        </View>
+      </Scroll>
     </Stage>
   );
 }
@@ -546,6 +577,233 @@ function MarkChildrenCase() {
   );
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * Environment injection + seam probe (the mobile layer's observation surface)
+ * -----------------------------------------------------------------------------------------------*/
+
+function Scoped(props: { children?: JSX.Element }) {
+  const scope = String(host.params.scope ?? "");
+
+  // "touch"/"pointer" inject that input axis; anything else leaves the
+  // host-derived environment (on native phones touch — the pointer
+  // baseline's assertions inject "pointer" explicitly instead of a desktop
+  // platform pin).
+  return scope === "touch" || scope === "pointer" ? (
+    <EnvironmentScope input={scope}>{props.children}</EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
+
+function probeOn() {
+  return String(host.params.probe ?? "") === "1";
+}
+
+/**
+ * Reads the part's `SliderSeam` — the `createPressFeedback` channels plus the
+ * `createPan` surface — and reports them as `ctx-env` records tagged by
+ * `part`. `scale` is an `AnimatedValue`, so it joins the report through
+ * `getValue()`; every other field is synchronous. `panHandlers()` re-reads
+ * `enabled()` on every call, which is what makes `panKeys: 0` the
+ * pointer-environment negative assertion (adapt sheet M-012).
+ */
+function CtxProbe(props: { part: "track" | "thumb" }) {
+  const seam = SliderSeamContext();
+  const report = probe("ctx-env");
+
+  effect(() => {
+    const feedback = seam?.feedback;
+
+    const sync = {
+      part: props.part,
+      enabled: seam?.enabled() ?? null,
+      hitSlop: feedback?.hitSlop() ?? null,
+      bounds: feedback?.bounds() ?? null,
+      isPressed: feedback?.isPressed() ?? null,
+      pressOrigin: feedback?.pressOrigin() ?? null,
+      panKeys: seam ? Object.keys(seam.pan.panHandlers()).length : null,
+      panActive: seam?.pan.active() ?? null,
+    };
+
+    if (feedback === undefined) {
+      report({ ...sync, scale: null });
+    } else {
+      void feedback.scale.getValue().then((scale) => {
+        report({ ...sync, scale });
+      });
+    }
+  });
+
+  return <Text>{seam?.pan.active() ? "pan-active" : "pan-idle"}</Text>;
+}
+
+/** Mounts `CtxProbe` for the part only when `probe=1` asks for it. */
+function SeamProbe(props: { part: "track" | "thumb" }) {
+  return probeOn() ? <CtxProbe part={props.part} /> : null;
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Mobile (adapt sheet §4: the `mobile` and `scroll` shapes)
+ * -----------------------------------------------------------------------------------------------*/
+
+/**
+ * The mobile layer's default slider: one thumb, the seam probes inside each
+ * part's own provider, and the render-prop state printed as text — `Dragging`
+ * while `isDragging` holds, `Hovered` while each part's hover accessor does
+ * (both `pointer-events-none`, so the markers never join the hit surface).
+ */
+function MobileCase() {
+  const vertical = host.params.orientation === "vertical";
+
+  // The 400 pt horizontal slider pushes `id:output` past the right edge of
+  // a phone-shaped viewport, and nsh/test only reports what is on screen
+  // (the M-005/M-008 "expected false to be true" failures, Android CI run
+  // 2026-11-24). `ScrollCase` proves a `Scroll` keeps its content queryable
+  // past the clip and leaves the pan's gestures working on the
+  // perpendicular axis, so the case mounts inside one: vertical for the
+  // horizontal slider, horizontal for the vertical one.
+  return (
+    <Stage>
+      <Scroll
+        class={vertical ? "h-[400px] w-[600px]" : "h-[600px] w-[400px]"}
+        horizontal={vertical}
+      >
+        <View class={vertical ? "h-[300px] w-[160px]" : "w-[400px]"}>
+          <Slider
+            aria-label="Volume"
+            defaultValue={sliderValue("defaultValue") ?? 30}
+            isDisabled={host.params.disabled === true || host.params.disabled === "1"}
+            maxValue={num("maxValue")}
+            minValue={num("minValue")}
+            onChange={probe("onChange")}
+            onChangeEnd={probe("onChangeEnd")}
+            orientation={vertical ? "vertical" : "horizontal"}
+            step={num("step")}
+          >
+            <Label>Volume</Label>
+            <Slider.Output testID="output" />
+            <Slider.Track
+              onHoverChange={probe("trackHoverChange")}
+              onHoverEnd={probe("trackHoverEnd")}
+              onHoverStart={probe("trackHoverStart")}
+              onLayout={layoutProbe("track")}
+              testID="track"
+            >
+              {({ isHovered }) => (
+                <>
+                  <Slider.Fill />
+                  <Slider.Thumb
+                    index={0}
+                    onBlur={probe("onBlur")}
+                    onFocus={probe("onFocus")}
+                    onHoverChange={probe("thumbHoverChange")}
+                    onHoverEnd={probe("thumbHoverEnd")}
+                    onHoverStart={probe("thumbHoverStart")}
+                    onLayout={layoutProbe("thumb")}
+                    testID="thumb"
+                  >
+                    {({ isDragging, isHovered: thumbHovered }) => (
+                      <>
+                        <Text class="pointer-events-none" testID="dragging">
+                          {isDragging() ? "Dragging" : "Idle"}
+                        </Text>
+                        <Text class="pointer-events-none" testID="thumb-hover">
+                          {thumbHovered() ? "Hovered" : "Idle"}
+                        </Text>
+                        <SeamProbe part="thumb" />
+                      </>
+                    )}
+                  </Slider.Thumb>
+                  <Text class="pointer-events-none" testID="track-hover">
+                    {isHovered() ? "Hovered" : "Idle"}
+                  </Text>
+                  <SeamProbe part="track" />
+                </>
+              )}
+            </Slider.Track>
+          </Slider>
+        </View>
+      </Scroll>
+    </Stage>
+  );
+}
+
+/**
+ * The arbitration shape: the `mobile` slider inside a `Scroll` whose axis is
+ * perpendicular to the slider's travel axis (a horizontal slider scrolls
+ * vertically; a vertical slider scrolls sideways), so a cross-axis drag must
+ * go to the Scroll and an along-axis drag must be claimed by the pan. The
+ * Scroll's own `onScroll` records whether the offset moved.
+ */
+function ScrollCase() {
+  const vertical = host.params.orientation === "vertical";
+  const rows = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  const slider = (
+    <View class={vertical ? "h-[300px] w-[160px]" : "w-[400px]"}>
+      <Slider
+        aria-label="Volume"
+        defaultValue={sliderValue("defaultValue") ?? 30}
+        isDisabled={host.params.disabled === true || host.params.disabled === "1"}
+        onChange={probe("onChange")}
+        onChangeEnd={probe("onChangeEnd")}
+        orientation={vertical ? "vertical" : "horizontal"}
+        step={num("step")}
+      >
+        <Label>Volume</Label>
+        {/* M-004's "thumb position marker": the Output's text is the value
+            the thumb's anchor derives from, so it staying put is the
+            cross-axis "gesture went to the Scroll" evidence. */}
+        <Slider.Output testID="output" />
+        <Slider.Track
+          onLayout={layoutProbe("track")}
+          testID="track"
+        >
+          <Slider.Fill />
+          <Slider.Thumb
+            index={0}
+            onLayout={layoutProbe("thumb")}
+            testID="thumb"
+          >
+            {({ isDragging }) => (
+              <>
+                <Text class="pointer-events-none" testID="dragging">
+                  {isDragging() ? "Dragging" : "Idle"}
+                </Text>
+                <SeamProbe part="thumb" />
+              </>
+            )}
+          </Slider.Thumb>
+          <SeamProbe part="track" />
+        </Slider.Track>
+      </Slider>
+    </View>
+  );
+
+  const row = (index: number) => (
+    <View class={vertical ? "w-[160px] p-2" : "h-[160px] p-2"}>
+      <Text>{`row ${index}`}</Text>
+    </View>
+  );
+
+  return (
+    <Stage>
+      <Scroll
+        class={vertical ? "h-[400px] w-[600px]" : "h-[600px] w-[400px]"}
+        horizontal={vertical}
+        onScroll={probe("scroll")}
+        testID="scroll"
+      >
+        <View class={vertical ? "flex-row" : undefined}>
+          {rows.slice(0, 3).map(row)}
+          {slider}
+          {rows.slice(3).map(row)}
+        </View>
+      </Scroll>
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "geometry");
 
@@ -560,8 +818,18 @@ function Fixture() {
   if (name === "refs") return <RefsCase />;
   if (name === "state-defaults") return <StateDefaultsCase />;
   if (name === "mark-children") return <MarkChildrenCase />;
+  if (name === "mobile") return <MobileCase />;
+  if (name === "scroll") return <ScrollCase />;
 
   return <GeometryCase />;
 }
 
-mount(Fixture);
+function App() {
+  return (
+    <Scoped>
+      <Fixture />
+    </Scoped>
+  );
+}
+
+mount(App);

@@ -6,6 +6,8 @@ import type { AriaProps, DataProps, GlobalDomProps } from "./card-dom-props";
 import { viewProps } from "./card-dom-props";
 import { cardVariants, type CardVariants } from "./card.styles";
 import { CardContext, type CardContextValue } from "./context";
+import { createDensity } from "../../primitives/environment";
+import { densityKey } from "../../tokens/density";
 import { SurfaceContext, type SurfaceContextValue } from "../surface";
 
 /* -------------------------------------------------------------------------------------------------
@@ -98,13 +100,18 @@ export function CardRoot(props: CardRootProps): JSX.Element {
     "translate",
   ] as const);
 
-  // The only variant input, kept live as a derived value; `defaultVariants`
-  // fills it when the caller passes nothing.
+  // The caller's variant input, kept live as a derived value;
+  // `defaultVariants` fills it when the caller passes nothing.
   const variant = computed<CardVariants["variant"]>(() => local.variant ?? "default");
 
-  // R-020: the five parts read the dimension, not upstream's slot functions
+  // A-001 / A-002: the environment's `density` axis, normalized through
+  // `densityKey` so an unmounted preset name can never miss the lookup.
+  const envDensity = createDensity();
+  const density = computed(() => densityKey(envDensity()));
+
+  // R-020: the five parts read the dimensions, not upstream's slot functions
   // (D17; the upstream context is not exported, so its shape is unobservable).
-  const contextValue: CardContextValue = { variant };
+  const contextValue: CardContextValue = { variant, density };
 
   // R-019: upstream does not provide `SurfaceContext` at all for `transparent`,
   // so its subtree reads the context default `{}`. Here one provider stays
@@ -115,10 +122,13 @@ export function CardRoot(props: CardRootProps): JSX.Element {
     variant: () => (variant() === "transparent" ? undefined : variant()),
   };
 
-  // The root class string: the variant table's `base` slot, then the caller's
-  // `className`; `tv`'s tailwind-merge lets the later class win.
+  // The root class string: the variant table's `base` slot keyed on `variant`
+  // and `density` (A-001), then the caller's `className`; `tv`'s
+  // tailwind-merge lets the later class win.
   const classes = computed(() =>
-    cardVariants({ variant: variant() }).base({ className: local.className }),
+    cardVariants({ variant: variant(), density: density() }).base({
+      className: local.className,
+    }),
   );
 
   // Upstream `title` is the `div`'s native hover hint; NSH has no `title`, so
@@ -137,6 +147,9 @@ export function CardRoot(props: CardRootProps): JSX.Element {
     <CardContext.Provider value={contextValue}>
       <SurfaceContext.Provider value={surfaceValue}>
         <View
+          // A-005: the passthrough surface is unchanged — caller host events
+          // (`onPress`, `onMouseEnter`, `onFocus`, …) still reach the root
+          // View verbatim, in every environment.
           {...viewProps(rest)}
           // A callback only: NSH writes into a ref store, and an undefined one
           // would throw at mount on the web target (common rules, real hosts).

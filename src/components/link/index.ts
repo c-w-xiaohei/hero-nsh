@@ -30,6 +30,9 @@ export { LinkRoot, LinkIcon };
 export type { LinkRootProps, LinkRenderProps, LinkRootProps as LinkProps } from "./link-root";
 export type { LinkIconProps } from "./link-icon";
 
+export { LinkContext } from "./context";
+export type { LinkContextValue } from "./context";
+
 /* -------------------------------------------------------------------------------------------------
  * Variants
  * -----------------------------------------------------------------------------------------------*/

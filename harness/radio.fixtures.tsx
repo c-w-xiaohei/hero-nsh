@@ -1,6 +1,16 @@
-import { host, mount, signal, Text, View } from "nsh";
-import type { JSX } from "nsh";
-import { Description, FieldError, Label, Radio, RadioGroup } from "@heroui/react";
+import { effect, host, mount, signal, Text, View } from "nsh";
+import type { JSX, PressEvent } from "nsh";
+import {
+  ControlField,
+  Description,
+  EnvironmentScope,
+  FieldError,
+  Label,
+  Radio,
+  RadioGroup,
+  RadioItemContext,
+} from "@heroui/react";
+import type { RadioItemContextValue } from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 
@@ -47,6 +57,25 @@ import { probe } from "@scenario/probe";
  *                   bits
  *   control-children       Radio.Control given a bare string and a bare number
  *   validate-array  a group whose validate() returns two messages (X-005)
+ *
+ * Mobile cases (adapt-sheets/radio.md §4 M-001…M-010):
+ *   mobile        one PETS group whose "cats" Content carries the whole
+ *                 assertion surface: `onChange`, `events` (down/up/press/
+ *                 change), `hover` (start/end/change), `layout` (Content
+ *                 bounds — M-003), `ctx-pressed`/`ctx-state`/`ctx-env` (the
+ *                 seam's gated flag vs the unconditional `isPressed` mirror —
+ *                 M-001/M-002/M-004). A `ctx-sample` sibling button reads the
+ *                 context channels on demand for presses that raise no seam
+ *                 edge. `short=1` overrides the row's min-h-11 so a real
+ *                 hitSlop expansion can be observed; `label=0` drops the
+ *                 inner `Label` (its press is the M-006 focusField path).
+ *   control-field a `ControlField` with `variant="radio"` — M-007's
+ *                 idempotent commit (`onSelectedChange` → `change` probe).
+ *
+ * `host.params.scope` picks the `EnvironmentScope` wrapper ("" = host
+ * default, "touch" = `input="touch"`), same convention as
+ * `control-field.fixtures.tsx`. The test-only params `testInput`
+ * ("pointer"/"touch") inject an outer EnvironmentScope input.
  */
 
 type Option = { value: string; label: string };
@@ -398,6 +427,209 @@ function ValidateArrayCase() {
 }
 
 /* -------------------------------------------------------------------------------------------------
+ * Mobile cases (sheet §4)
+ * -----------------------------------------------------------------------------------------------*/
+
+type Scope = "" | "touch";
+
+function Scoped(props: { children?: JSX.Element }) {
+  // Test-harness environment params (only the mobile tests set them —
+  // absent keeps the host-derived default): `scope="touch"` is the inner
+  // override, `testInput` ("pointer"/"touch") injects the scope so the
+  // pointer baseline is host-independent (the inner `scope` still wins).
+  // One provider only: `props.children` is placed inside it directly —
+  // pre-building a fragment first would mount the children under this
+  // component's own creation scope instead of the provider.
+  const input =
+    String(host.params.scope ?? "") === "touch"
+      ? "touch"
+      : ((v) => (v === "pointer" || v === "touch" ? v : undefined))(
+          String(host.params.testInput ?? ""),
+        );
+
+  return input !== undefined ? (
+    <EnvironmentScope input={input}>{props.children}</EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
+/**
+ * A-006: reads `RadioItemContext` inside the item and reports what a part
+ * sees. `ctx-pressed` carries BOTH press flags — `mirror` is the item's
+ * unconditional `isPressed` (fires in every environment, upstream semantics)
+ * and `seam` is the feedback factory's gated `isPressed`, which only rises
+ * under touch. `ctx-state` samples on every `ctx-pressed` edge at +600 ms and
+ * +1500 ms, so a held press lands mid-run samples of the settled channels.
+ * `ctx-env` is the mount-time environment read (M-001's gate, M-004's
+ * `hovered` trace).
+ */
+function ItemCtxProbe() {
+  const ctx = RadioItemContext();
+  const reportPressed = probe("ctx-pressed");
+  const reportState = probe("ctx-state");
+  const reportEnv = probe("ctx-env");
+
+  effect(() => {
+    itemCtx = ctx;
+  });
+
+  effect(() => {
+    reportEnv({
+      enabled: ctx?.feedback.enabled() ?? false,
+      hitSlop: ctx?.feedback.hitSlop() ?? null,
+      hovered: ctx?.isHovered() ?? false,
+      selected: ctx?.isSelected() ?? false,
+      disabled: ctx?.isDisabled() ?? false,
+      readonly: ctx?.isReadOnly() ?? false,
+    });
+  });
+
+  const sample = () => {
+    void ctx?.feedback.pressed.getValue().then((pressed) => {
+      void ctx?.feedback.scale.getValue().then((scale) => {
+        reportState({
+          pressed,
+          scale,
+          seamPressed: ctx?.feedback.isPressed() ?? false,
+          mirror: ctx?.isPressed() ?? false,
+          hitSlop: ctx?.feedback.hitSlop() ?? null,
+          origin: ctx?.feedback.pressOrigin() ?? null,
+          bounds: ctx?.feedback.bounds() ?? { width: 0, height: 0 },
+          enabled: ctx?.feedback.enabled() ?? false,
+        });
+      });
+    });
+  };
+
+  effect(() => {
+    const mirror = ctx?.isPressed() ?? false;
+    const seam = ctx?.feedback.isPressed() ?? false;
+    reportPressed({ mirror, seam });
+    setTimeout(sample, 600);
+    setTimeout(sample, 1500);
+  });
+
+  return null;
+}
+
+/* The live item context, for the sibling `ctx-sample` button. */
+let itemCtx: RadioItemContextValue | undefined;
+
+function MobileRowCase() {
+  const reportEvent = probe("events");
+  const reportChange = probe("onChange");
+  const reportHover = probe("hover");
+  const reportLayout = probe("layout");
+  const reportChannels = probe("ctx-channels");
+
+  const short = String(host.params.short ?? "") === "1";
+  const withLabel = String(host.params.label ?? "1") !== "0";
+
+  const onEvent =
+    (kind: string) =>
+    (e: PressEvent): void => {
+      reportEvent({ kind, x: e.position.x, y: e.position.y });
+    };
+
+  // The post-press half of the negative assertions: reads the context's
+  // channels on demand (a press that raised no seam edge still needs a
+  // sampled read — sheet M-001's `ctx-state`/`ctx-channels`).
+  const sampleChannels = () => {
+    const c = itemCtx;
+    if (c === undefined) {
+      return;
+    }
+    void c.feedback.pressed.getValue().then((pressed) => {
+      void c.feedback.scale.getValue().then((scale) => {
+        reportChannels({
+          pressed,
+          scale,
+          seamPressed: c.feedback.isPressed(),
+          mirror: c.isPressed(),
+          hitSlop: c.feedback.hitSlop() ?? null,
+          origin: c.feedback.pressOrigin(),
+          bounds: c.feedback.bounds(),
+          enabled: c.feedback.enabled(),
+        });
+      });
+    });
+  };
+
+  return (
+    <Stage>
+      <RadioGroup aria-label="Favorite Pet" defaultValue="dogs" onChange={reportChange}>
+        <Radio aria-label="Dogs" value="dogs">
+          <Radio.Content>
+            <View class="flex-row items-center gap-3">
+              <Radio.Control>
+                <Radio.Indicator />
+              </Radio.Control>
+              <Text>Dogs</Text>
+            </View>
+          </Radio.Content>
+        </Radio>
+        <Radio aria-label="Cats" value="cats">
+          <Radio.Content
+            testID="row"
+            // `short=1` pins the row under the 44 pt target and overrides
+            // the touch `min-h-11`, so a real hitSlop expansion is observable
+            // (style wins over the variant class; sheet M-002).
+            style={short ? { width: 200, minHeight: 0 } : { width: 200 }}
+            onHoverStart={() => reportHover({ kind: "start" })}
+            onHoverEnd={() => reportHover({ kind: "end" })}
+            onHoverChange={(v) => reportHover({ kind: "change", v })}
+            onPress={onEvent("press")}
+            onPressDown={onEvent("down")}
+            onPressUp={onEvent("up")}
+            onLayout={(e) =>
+              reportLayout({
+                name: "row",
+                width: e.bounds.size.width,
+                height: e.bounds.size.height,
+              })
+            }
+          >
+            <View class="flex-row items-center gap-3">
+              <Radio.Control>
+                <Radio.Indicator />
+              </Radio.Control>
+              {withLabel ? <Label testID="row-label">Cats</Label> : <Text>Cats</Text>}
+            </View>
+          </Radio.Content>
+          <ItemCtxProbe />
+        </Radio>
+      </RadioGroup>
+      <View class="px-3 py-1 bg-default" onPress={sampleChannels} role="button" testID="ctx-sample">
+        <Text>ctx-sample</Text>
+      </View>
+    </Stage>
+  );
+}
+
+function ControlFieldRadioCase() {
+  const reportChange = probe("change");
+  // Controlled: upstream's row commits through `onSelectedChange` only when
+  // `isSelected` is driven (the controlled contract), so bind it to a signal.
+  const selected = signal(false);
+
+  return (
+    <Stage>
+      <ControlField
+        testID="cf-row"
+        isSelected={selected()}
+        onSelectedChange={(v) => {
+          reportChange(v);
+          selected.set(v);
+        }}
+      >
+        <Label testID="cf-label">Notifications</Label>
+        <ControlField.Indicator variant="radio" />
+      </ControlField>
+    </Stage>
+  );
+}
+
+/* -------------------------------------------------------------------------------------------------
  * Field cases
  * -----------------------------------------------------------------------------------------------*/
 
@@ -504,6 +736,8 @@ function Fixture() {
   if (name === "indicator") return <IndicatorCase />;
   if (name === "state") return <StateCase />;
   if (name === "control-children") return <ControlChildrenCase />;
+  if (name === "mobile") return <Scoped><MobileRowCase /></Scoped>;
+  if (name === "control-field") return <Scoped><ControlFieldRadioCase /></Scoped>;
 
   return <LogCase />;
 }

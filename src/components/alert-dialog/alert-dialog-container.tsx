@@ -8,7 +8,11 @@ import type { AlertDialogPartDomProps } from "./alert-dialog-dom-props";
 import { viewProps } from "./alert-dialog-dom-props";
 import type { AlertDialogRenderValues } from "./alert-dialog-render-values";
 import type { AlertDialogPlacement, AlertDialogSize } from "./alert-dialog.styles";
-import { alertDialogEnteringClasses } from "./alert-dialog.styles";
+import {
+  alertDialogEnteringClasses,
+  alertDialogSheetContainerClasses,
+  alertDialogSheetEnteringClasses,
+} from "./alert-dialog.styles";
 
 /**
  * The props of `AlertDialog.Container`: HeroUI's `AlertDialogContainerProps`,
@@ -60,8 +64,18 @@ export function AlertDialogContainer(props: AlertDialogContainerProps): JSX.Elem
     parent ??
     createAlertDialogContextValue({ isOpen: () => true, setOpen: () => {} });
 
+  // A-003: the Backdrop's resolved presentation. `"panel"` outside a
+  // Backdrop (or before its override lands), where every output below is the
+  // byte-identical desktop table.
+  const presentation = () => base.presentation();
+
   const contextValue = base.withOverrides({
-    placement: () => local.placement,
+    // A-003: a sheet presentation docks at the bottom, so the placement axis
+    // is clamped there — a caller-supplied `top`/`center` has no docked
+    // meaning (§8 registers the clamp for review). Under `"panel"` the
+    // four-value axis is untouched.
+    placement: () =>
+      presentation() === "sheet" ? "bottom" : local.placement,
     size: () => local.size,
   });
 
@@ -82,9 +96,16 @@ export function AlertDialogContainer(props: AlertDialogContainerProps): JSX.Elem
     },
   };
 
-  // R-017 … R-020 live in the table's `container` slot.
+  // R-017 … R-020 live in the table's `container` slot. A-003: under a sheet
+  // presentation the padding/w-fit half of R-019 has no docked meaning, so the
+  // sheet set is appended between the slot and the caller's classes — the
+  // later member wins, and the caller still wins last.
   const classes = computed(() =>
-    [contextValue.slots().container(), local.className]
+    [
+      contextValue.slots().container(),
+      presentation() === "sheet" ? alertDialogSheetContainerClasses : undefined,
+      local.className,
+    ]
       .filter((part) => part !== undefined && part !== "")
       .join(" "),
   );
@@ -97,7 +118,12 @@ export function AlertDialogContainer(props: AlertDialogContainerProps): JSX.Elem
   // The classes come off one frame after they are laid out, which is what turns
   // them into the transition the `container` slot declares.
   const classList = computed(() => {
-    const entering = alertDialogEnteringClasses(contextValue.placement() ?? "auto");
+    // A-003: a sheet enters by sliding up from below; the panel keeps the
+    // placement-aware scale pop R-021 … R-025 describe.
+    const entering =
+      presentation() === "sheet"
+        ? alertDialogSheetEnteringClasses
+        : alertDialogEnteringClasses(contextValue.placement() ?? "auto");
 
     return entering === "" ? {} : { [entering]: presence.isEntering() };
   });

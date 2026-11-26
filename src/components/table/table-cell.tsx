@@ -2,6 +2,7 @@ import type { JSX, PressEvent, StyleProp, ViewRef, ViewStyle } from "nsh";
 import { cleanup, computed, signal, split, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives";
+import { createInput } from "../../primitives/environment";
 import { renderPartChildren, textOf } from "./table-children";
 import {
   TableRowContext,
@@ -110,6 +111,10 @@ export function TableCell(props: TableCellProps) {
 
   const isHovered = signal(false);
   const isPressed = signal(false);
+
+  // A-006: the `input` axis gates the hover writes — a cell has no press
+  // surface of its own (the press belongs to its row, see the claim chain).
+  const input = createInput();
 
   const isSelected = computed(() => state.isSelected(rowKey));
   // The selection manager covers `disabledKeys` and `disabledBehavior` (§1);
@@ -228,11 +233,22 @@ export function TableCell(props: TableCellProps) {
     }
 
     local.onPressDown?.(event);
+
+    // A press the cell claims is the row's press too (§1 events): the
+    // cell's own work is done, so the row's continuation follows — the
+    // order a bubble runs. A disabled row is inert and forwards nothing.
+    if (!isDisabled()) {
+      row.pressEdge.down(event);
+    }
   };
 
   const handlePressUp = (event: PressEvent) => {
     isPressed.set(false);
     local.onPressUp?.(event);
+
+    if (!isDisabled()) {
+      row.pressEdge.up(event);
+    }
   };
 
   const handlePress = (event: PressEvent) => {
@@ -246,6 +262,12 @@ export function TableCell(props: TableCellProps) {
     // time; the first handler claims it.
     if (!claimPress(event)) {
       local.onPress?.(event);
+      // A deeper part claimed first — the press is still the row's (the
+      // `!claimPress` continuation does not select again), so it forwards
+      // like any other claimed press. A disabled row is inert.
+      if (!isDisabled()) {
+        row.pressEdge.press(event);
+      }
       return;
     }
 
@@ -258,7 +280,9 @@ export function TableCell(props: TableCellProps) {
 
     // §1 events: the press selects the row, and reports the row action when
     // the row cannot be selected or the table replaces its selection on each
-    // press. The row's own `onAction` follows from the bubbling press.
+    // press. The row's own `onAction` follows from the bubbling press — on
+    // hosts that deliver a press to the hit view only, `pressEdge` below is
+    // the ownership path that carries it there (§1 events / A-009).
     const selectable = state.selectionMode() !== "none";
 
     if (selectable) {
@@ -270,6 +294,7 @@ export function TableCell(props: TableCellProps) {
     }
 
     local.onPress?.(event);
+    row.pressEdge.press(event);
   };
 
   return (
@@ -294,11 +319,17 @@ export function TableCell(props: TableCellProps) {
         local.onBlur?.();
       }}
       onMouseEnter={(event) => {
-        isHovered.set(true);
+        // A-006: under touch the hover state stays off; the raw host
+        // callbacks still forward.
+        if (input() !== "touch") {
+          isHovered.set(true);
+        }
         local.onMouseEnter?.(event);
       }}
       onMouseLeave={(event) => {
-        isHovered.set(false);
+        if (input() !== "touch") {
+          isHovered.set(false);
+        }
         local.onMouseLeave?.(event);
       }}
       onPressDown={handlePressDown}

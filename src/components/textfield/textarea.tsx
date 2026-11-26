@@ -1,5 +1,6 @@
 import type { JSX, StyleProp } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import type { TextControlCommonProps, TextControlStyle, TextControlStyleRenderProps } from "./text-control";
 import { renderTextControl } from "./text-control";
 import { textAreaVariants } from "./textarea.styles";
@@ -46,11 +47,16 @@ export interface TextAreaRootProps
  * counterpart (§8).
  */
 export function TextAreaRoot(props: TextAreaRootProps): JSX.Element {
+  // A-002: the `input` variant axis reads the environment, as Input's does.
+  const input = createInput();
+
   return renderTextControl(props, {
     multiline: true,
     usesRows: true,
+    input,
     // R-036 / R-037 / R-041 live in `textarea.styles.ts`; the state classes are
     // computed in `text-control.tsx` (R-031 … R-034, R-038 … R-040).
-    baseClass: ({ fullWidth, variant }) => textAreaVariants({ fullWidth, variant }),
+    baseClass: ({ fullWidth, variant, input: axis }) =>
+      textAreaVariants({ fullWidth, variant, input: axis }),
   });
 }

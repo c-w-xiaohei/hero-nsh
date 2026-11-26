@@ -26,6 +26,8 @@
 
 import { type Accessor, computed, type PressEvent, signal } from "nsh";
 
+import { Environment } from "../environment/environment";
+
 /** How the user last interacted: `null` until the first interaction this owner saw. */
 export type InteractionModality = "keyboard" | "pointer" | null;
 
@@ -64,7 +66,9 @@ export interface InteractionModalityState {
 
   /**
    * Records a pointer interaction (`onPressDown`, `onPress`, `onMouseEnter`).
-   * `pointerType` defaults to `"mouse"`; a touch surface passes `"touch"`.
+   * `pointerType` defaults to the environment's `input` axis — `"touch"` on
+   * a touch device, `"mouse"` under the default `"pointer"` environment;
+   * an explicit argument always wins.
    */
   setPointerModality: (pointerType?: InteractionPointerType) => void;
 
@@ -115,6 +119,11 @@ export function createInteractionModality(
   const isKeyboard = computed(() => modality() === "keyboard");
   const isPointer = computed(() => modality() === "pointer");
 
+  // Resolved at factory time — a context read has no component to look up
+  // from inside an event handler. The accessor itself still follows an
+  // `EnvironmentScope` remount.
+  const environmentInput = Environment().input;
+
   const change = (next: InteractionModality, nextPointerType: InteractionPointerType) => {
     pointerType.set(nextPointerType);
 
@@ -129,8 +138,16 @@ export function createInteractionModality(
     }
   };
 
-  const setPointerModality = (nextPointerType: InteractionPointerType = "mouse") => {
-    change("pointer", nextPointerType ?? "mouse");
+  const setPointerModality = (
+    nextPointerType?: InteractionPointerType,
+  ) => {
+    // Unset means "the device the session runs on": the environment's input
+    // axis, still `"mouse"` under the default pointer environment. An
+    // explicit `"pen"`, `"touch"` or `"mouse"` is the override.
+    change(
+      "pointer",
+      nextPointerType ?? (environmentInput() === "touch" ? "touch" : "mouse"),
+    );
   };
 
   const setKeyboardModality = () => {

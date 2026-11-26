@@ -1,5 +1,6 @@
 import type {
   Accessor,
+  Bounds,
   JSX,
   MouseEvent as NshMouseEvent,
   PressEvent,
@@ -8,8 +9,22 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, reduceMotion, signal, split, View } from "nsh";
+import {
+  cleanup,
+  computed,
+  createAnimatedValue,
+  reduceMotion,
+  signal,
+  split,
+  View,
+} from "nsh";
 
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { IconMinus, IconPlus } from "../icons";
 import { joinClassNames } from "./class-names";
 import { NumberFieldContext } from "./context";
@@ -159,10 +174,18 @@ export interface NumberFieldStepButtonProps
  * Hold-to-repeat timings (React Aria's `useSpinButton`)
  * -----------------------------------------------------------------------------------------------*/
 
-/** How long a press must be held before the value starts repeating. */
-const HOLD_DELAY = 400;
+/**
+ * How long a press must be held before the value starts repeating, per
+ * `Environment.input` (A-006): RAC's `useSpinButton` keeps 400 ms on the
+ * pointer half and widens the first repeat to 600 ms on the touch half.
+ * `PressEvent` carries no `pointerType`, so the axis picks the delay for the
+ * whole environment — a touch screen that also has a trackpad mounts
+ * `EnvironmentScope` to split them.
+ */
+const HOLD_DELAY_POINTER = 400;
+const HOLD_DELAY_TOUCH = 600;
 
-/** The gap between repeats once the hold started. */
+/** The gap between repeats once the hold started; the same on both inputs. */
 const HOLD_REPEAT = 60;
 
 /* -------------------------------------------------------------------------------------------------
@@ -222,11 +245,18 @@ function createStepButton(direction: StepDirection) {
       "onMouseEnter",
       "onMouseLeave",
       "onPressDown",
+      "onLayout",
       "ref",
     ] as const);
 
     // Read once in the body; every handler closes over this value.
     const field = NumberFieldContext();
+
+    // A-002 / A-006: the `input` axis — the field's accessor inside a root,
+    // the environment's own for a standalone button. It gates the seam below,
+    // the hover writes and the hold's first-repeat delay.
+    const envInput = createInput();
+    const input = () => field?.input() ?? envInput();
 
     // --- Registration (R-009 / R-010) --------------------------------------
     // Stands in for `:has([slot="increment"])` / `:has([slot="decrement"])`:
@@ -247,6 +277,38 @@ function createStepButton(direction: StepDirection) {
 
     const hovered = signal(false);
     const pressed = signal(false);
+
+    // --- Touch press feedback (A-004) ---------------------------------------
+    // The seam's gate: `input() === "touch"` and not disabled. Under the
+    // default pointer environment `enabled` rests — `pressDown`/`pressUp` only
+    // forward, `hitSlop()` answers `undefined` and `scale` stays 1, so the
+    // desktop chain is byte-for-byte the old one. `ignoreScaleCoefficient`
+    // keeps the 0.97 press flat rather than narrowing it by the button's
+    // 44 px width, matching upstream's `active:scale-[0.97]` (sheet §8
+    // registers the literal-vs-coefficient choice).
+    const feedbackGate = () => input() === "touch" && !isDisabled();
+    const feedback = createPressFeedback({
+      enabled: feedbackGate,
+      animation: { value: 0.97, ignoreScaleCoefficient: true },
+    });
+
+    // The seam's read half for probes and overlay parts (the A-012 fixture
+    // probes mount `StepButtonProbe` here): the provider wraps the button's
+    // children so a probe mounted there sees the live channels
+    // instead of `RESTING_PRESS_FEEDBACK` (pagination's carrier). No
+    // Highlight / Ripple mounts by default.
+    const feedbackValue: PressableFeedbackContextValue = {
+      isPressed: feedback.isPressed,
+      pressed: feedback.pressed,
+      bounds: feedback.bounds,
+      pressOrigin: feedback.pressOrigin,
+      scale: feedback.scale,
+      highlightOpacity: createAnimatedValue(0),
+      rippleProgress: createAnimatedValue(0),
+      enabled: feedbackGate,
+      hitSlop: feedback.hitSlop,
+      isAllAnimationsDisabled: () => false,
+    };
 
     // --- Hold repeat -------------------------------------------------------
     let holdTimer: ReturnType<typeof setTimeout> | undefined;
@@ -285,23 +347,32 @@ function createStepButton(direction: StepDirection) {
 
     const startHold = () => {
       clearHold();
-      schedule(HOLD_DELAY);
+      // A-006: the first repeat's delay follows the axis — touch widens the
+      // window so a scroll intent or a fat-finger hold does not step
+      // immediately; the cadence afterwards is one `HOLD_REPEAT` on both.
+      schedule(input() === "touch" ? HOLD_DELAY_TOUCH : HOLD_DELAY_POINTER);
     };
 
     // The timer belongs to the component: unmounting a held button must not
-    // leave it stepping a field that no longer exists.
+    // leave it stepping a field that no longer exists. Web pages also die
+    // between `open()` calls without an unmount, so a timer bound here can
+    // never outlive its page.
     cleanup(clearHold);
 
     // --- Events ------------------------------------------------------------
     const handlePressDown = (event: PressEvent) => {
       // RAC's `onButtonPressStart`: the press steps first, then moves the focus
       // to the input, so the keyboard keeps working after a click. `PressEvent`
-      // has no `pointerType`, so the touch half (600 ms, no immediate step) is
-      // not reachable (port sheet §8).
+      // has no `pointerType`, so RAC's per-event touch half is picked by the
+      // environment instead: the first-repeat delay widens on touch while the
+      // press-down step stays (sheet §8 / A-006).
       step();
       startHold();
       pressed.set(true);
       field?.focusInput();
+      // A-004: the seam hears the press after the button's own state settled,
+      // before the caller's callbacks — gated, it records nothing.
+      feedback.pressDown(event);
       local.onPressDown?.(event);
       local.onPressStart?.(event);
       local.onPressChange?.(true);
@@ -309,6 +380,9 @@ function createStepButton(direction: StepDirection) {
 
     const handlePressUp = (event: PressEvent) => {
       clearHold();
+      // A-004: release and cancel share `onPressUp`; the seam unwinds before
+      // the callers hear the end (sheet §2 A-004's chain-head placement).
+      feedback.pressUp(event);
       pressed.set(false);
       local.onPressUp?.(event);
       local.onPressEnd?.(event);
@@ -320,8 +394,21 @@ function createStepButton(direction: StepDirection) {
       local.onPress?.(event);
     };
 
+    // A-004: `bounds` feeds `hitSlop` and `scale`, so the seam reads the
+    // layout before the caller's `onLayout`, which stays last.
+    const handleLayout = (event: { bounds: Bounds }) => {
+      feedback.layout(event);
+      local.onLayout?.(event);
+    };
+
     const handleMouseEnter = (event: NshMouseEvent) => {
       local.onMouseEnter?.(event);
+
+      // A-005: under touch the hover state and the `onHover*` callbacks stay
+      // off entirely; the host's own `onMouseEnter` still forwards.
+      if (input() === "touch") {
+        return;
+      }
 
       if (isDisabled() || hovered()) {
         return;
@@ -334,6 +421,10 @@ function createStepButton(direction: StepDirection) {
 
     const handleMouseLeave = (event: NshMouseEvent) => {
       local.onMouseLeave?.(event);
+
+      if (input() === "touch") {
+        return;
+      }
 
       if (!hovered()) {
         return;
@@ -371,7 +462,11 @@ function createStepButton(direction: StepDirection) {
     // R-025 / R-026: the transitioned properties upstream
     // (`background-color 150ms, border-color 150ms`), as an inline list; the
     // class carries the duration and curve, reduced motion turns the list off.
+    // A-004: `scale` owns the transform channel under touch and rests at 1
+    // under pointer — the `input` axis keeps `active:scale-*` out of the
+    // touch class output, so nothing else writes the same property.
     const style = computed<StyleProp<ViewStyle>>(() => [
+      { scale: feedback.scale },
       {
         transitionProperty: reduceMotion() ? "none" : "background-color, border-color",
       },
@@ -392,22 +487,6 @@ function createStepButton(direction: StepDirection) {
         (isIncrement ? field?.incrementAriaLabel() : field?.decrementAriaLabel()),
     );
 
-    // --- Content -----------------------------------------------------------
-    const children = computed(() => local.children);
-
-    const content = computed(() => {
-      const child = children();
-
-      if (child != null) {
-        return renderChildren(child);
-      }
-
-      // R-030: `.number-field__*-button [data-slot="…-button-icon"] { size-4 }`.
-      // The descendant selector becomes the default icon's construction; the
-      // icons already carry `h-4 w-4`, and a caller's custom icon is untouched.
-      return isIncrement ? <IconPlus /> : <IconMinus />;
-    });
-
     return (
       <View
         {...hostProps(rest)}
@@ -427,16 +506,61 @@ function createStepButton(direction: StepDirection) {
         // Upstream forces `excludeFromTabOrder`: a step button is reachable by
         // the pointer and by assistive technologies, never by Tab.
         focusable={local.focusable ?? false}
+        // A-004: the view-prop half of the hit area — the seam's computed
+        // slop, `undefined` while gated off or while the 44 pt column already
+        // fills the target. The button never sets a literal and never grows
+        // one as a prop.
+        hitSlop={feedback.hitSlop()}
         onPressDown={handlePressDown}
         onPressUp={handlePressUp}
         onPress={handlePress}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        onLayout={handleLayout}
       >
-        {content()}
+        {/* A-004: a `PressableFeedbackContext` probe inside the button reads
+            the live channels. The content half renders as its own component
+            under the provider — resolving `props.children` in this body would
+            bind the children to this scope, above the provider (pagination's
+            carrier pattern). */}
+        <PressableFeedbackContext.Provider value={feedbackValue}>
+          <StepButtonContent isIncrement={isIncrement}>
+            {local.children}
+          </StepButtonContent>
+        </PressableFeedbackContext.Provider>
       </View>
     );
   };
+}
+
+/**
+ * The children half of a step button, mounted inside
+ * `PressableFeedbackContext.Provider`. `props.children` is a lazy accessor:
+ * whichever component invokes it owns the scope its descendants are created
+ * in. Resolving it here — under the provider — is what lets a child reading
+ * `PressableFeedbackContext` (a seam probe, a `PressableFeedback.Scale` /
+ * `Highlight` / `Ripple` overlay part) see the live seam value instead of
+ * `RESTING_PRESS_FEEDBACK`; resolving it in the button's own scope, above the
+ * provider, binds every child to the default (A-004).
+ */
+function StepButtonContent(props: {
+  children?: JSX.Element;
+  isIncrement: boolean;
+}): JSX.Element {
+  // The single read of the part's `props.children`, through a computed,
+  // rendered at the placement so a signal inside a child keeps updating.
+  const children = computed(() => props.children);
+
+  const child = children();
+
+  if (child != null) {
+    return renderChildren(child);
+  }
+
+  // R-030: `.number-field__*-button [data-slot="…-button-icon"] { size-4 }`.
+  // The descendant selector becomes the default icon's construction; the
+  // icons already carry `h-4 w-4`, and a caller's custom icon is untouched.
+  return props.isIncrement ? <IconPlus /> : <IconMinus />;
 }
 
 /* -------------------------------------------------------------------------------------------------

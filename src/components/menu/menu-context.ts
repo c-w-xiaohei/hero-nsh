@@ -3,6 +3,7 @@ import { context } from "nsh";
 
 import type {
   ListState,
+  RowRegistry,
   SelectionBehavior,
   SelectionManager,
   SelectionMode,
@@ -11,10 +12,16 @@ import type {
 import type { MenuItemRenderProps } from "./menu-item";
 
 /**
- * One registered menu entry, as the Item hands it to the nearest owner. The
- * root turns this registry into the `dataSource` of `createListState` (port
- * sheet section 2): the algorithm is the primitive's, only the collection
- * source is ours, since HeroUI's entries are caller-written parts.
+ * The static-path collection entry, as the Item hands it to the nearest owner.
+ * With no `items` the registry of these descriptors is still the `dataSource`
+ * of `createListState` (port sheet section 2): the algorithm is the
+ * primitive's, only the collection source is ours, since HeroUI's entries are
+ * caller-written parts.
+ *
+ * f-collection split (A-004): an entry descriptor now holds only what the
+ * static collection needs. Everything that exists because a row is mounted —
+ * activation, the view ref, the submenu channels and the override fields —
+ * moved to `MenuRowHandle`, which lives in the `rowRegistry`.
  */
 export interface MenuItemDescriptor {
   type: "item";
@@ -36,9 +43,47 @@ export interface MenuItemDescriptor {
 
   /** Whether the entry is disabled (its own `isDisabled` or the root's `disabledKeys`). */
   disabled: () => boolean;
+}
+
+/**
+ * What a mounted Item registers in the `rowRegistry`: the fields only a
+ * mounted row can answer. The collection never reads it — mounted presence
+ * only merges `textValue` / `disabled` into a datum — while activation, the
+ * screen-reader ref and the submenu channels do (f-collection, mounted side;
+ * the `ListBoxRowHandle` contract over menu keys).
+ */
+export interface MenuRowHandle {
+  /** "item" handles carry activation and merge overrides; "section" is layout only. */
+  type: "item" | "section";
+
+  /** The collection key; the same domain `toListItemData` produces. */
+  key: string;
+
+  /**
+   * The raw datum this row renders (its `<Each>` value accessor, or the
+   * `value` prop). The merge uses it to follow a keyless datum whose
+   * positional key moved on a reorder.
+   */
+  value?: () => unknown;
+
+  /**
+   * Typeahead text the mounted row overrides its datum with; empty falls back
+   * to the datum's own `textValue`/`name`/`label`.
+   */
+  textValue?: () => string;
+
+  /** Whether the row disables its entry (`isDisabled` or `disabledKeys`). */
+  disabled?: () => boolean;
 
   /** The row view, for the screen reader focus that follows `focusedKey`. */
-  ref: () => ViewRef | undefined;
+  ref?: () => ViewRef | undefined;
+
+  /**
+   * The row's rendered children, for a carrier that re-places a row's content
+   * outside the menu (list-box `RowHandle.children` parity). Reading it never
+   * reads `props.children` again.
+   */
+  children?: () => JSX.Element | undefined;
 
   /**
    * Present when the row opens a submenu (port sheet dropdown §5, first
@@ -62,9 +107,10 @@ export interface MenuItemDescriptor {
    * root, and the keymap bindings all arrive here. It runs the selection
    * half, then the action half, then the close decision (port sheet section 5).
    * `keyName` names the activating key: the keymap bindings know it, and an
-   * unnamed host press is Space.
+   * unnamed host press is Space. Optional so a section's layout-only handle
+   * (`{ type: "section", key }`) type-checks.
    */
-  activate: (
+  activate?: (
     source: "pointer" | "keyboard",
     event?: PressEvent,
     modifiers?: SelectionModifiers,
@@ -124,8 +170,24 @@ export interface MenuContextValue {
   /** Read directly by the item primitive (focus and the root selection). */
   selectionManager: Accessor<SelectionManager>;
 
-  /** Registers one entry or group; the returned function unregisters it. */
+  /**
+   * Registers one static-path entry or group into the collection source; the
+   * returned function unregisters it. `items`-driven rows never call it —
+   * their collection comes from the data (f-collection).
+   */
   register: (descriptor: MenuDescriptor) => () => void;
+
+  /**
+   * The mounted-row registry (f-collection, mounted side, A-004). Every Item
+   * and Section registers a `MenuRowHandle` here in both paths; keyboard
+   * activation, the submenu channels and screen-reader focus read mounted
+   * presence from it, and the `items` data source reads `keys()` to merge
+   * row overrides.
+   */
+  rowRegistry: RowRegistry<MenuRowHandle>;
+
+  /** `rowRegistry.register`, named for the part's point of view. */
+  registerRow: (handle: MenuRowHandle) => () => void;
 
   selectionMode: Accessor<SelectionMode>;
 
@@ -183,6 +245,22 @@ export interface MenuContextValue {
   registerSectionLayout: (key: string, bounds: Bounds) => void;
 
   unregisterSectionLayout: (key: string) => void;
+
+  /**
+   * The keyboard-navigation entry the keymap bindings call
+   * (`selectableList.onKeyDown`, modality noted by the caller). Internal
+   * seam: the f-collection assertions drive typeahead / arrows through it on
+   * hosts where the root cannot hold view focus (the headless-Windows gap).
+   */
+  sendKey: (key: string, modifiers?: SelectionModifiers) => void;
+
+  /**
+   * Activates the entry the collection's `focusedKey` names — the same entry
+   * the keymap bindings and the focused root's host press reach. A key with
+   * no mounted row runs the activation fallback (A-005). Internal seam, for
+   * the same headless-focus reason as `sendKey`.
+   */
+  activateFocused: (modifiers?: SelectionModifiers, keyName?: MenuActivationKey) => void;
 }
 
 export const MenuContext = context<MenuContextValue | undefined>(undefined);

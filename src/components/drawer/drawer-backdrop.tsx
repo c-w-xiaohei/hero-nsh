@@ -1,7 +1,8 @@
-import type { Accessor, JSX, PressEvent, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
+import type { Accessor, JSX, Point, PressEvent, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
 import { computed, reduceMotion, signal, View } from "nsh";
 import { Dialog } from "nsh/base";
 
+import { createInput } from "../../primitives/environment";
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
 import { createDrawerState } from "./create-drawer-state";
@@ -23,11 +24,21 @@ export interface DrawerBackdropProps extends Omit<ViewProps, "children" | "class
   isExiting?: boolean;
   onEnter?: (element?: unknown) => void | Promise<void>;
   onExit?: (element?: unknown) => void | Promise<void>;
+  /** Return false to keep the drawer open for this outside interaction; true or undefined lets it close. */
   shouldCloseOnInteractOutside?: (element?: unknown) => boolean;
   UNSTABLE_portalContainer?: unknown;
   render?: unknown;
   slot?: string;
   ref?: (node: import("nsh").ViewRef) => void;
+  /**
+   * The touch-only swipe-to-dismiss master switch (adapt sheet §3): under
+   * `input === "touch"` a bottom, dismissable drawer's handle and panel take
+   * a drag that pulls the panel down and releases it closed. `false` turns
+   * that gesture off without touching outside-press or Escape dismissal —
+   * and under a pointer environment the gesture never mounts either way.
+   * @default true
+   */
+  isSwipeable?: boolean;
 }
 
 /** What the layer below reads; kept as accessors so a signalled value stays live. */
@@ -121,7 +132,9 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
   };
   // R-008, R-009: variant is resolved through the backdrop slot table.
   const variant = () => props.variant ?? parent?.variant() ?? "opaque";
-  const slots = computed(() => drawerVariants({ placement: parent?.placement(), variant: variant() }));
+  // A-004: the `input` axis is read at the slots production line.
+  const input = createInput();
+  const slots = computed(() => drawerVariants({ input: input(), placement: parent?.placement(), variant: variant() }));
   // Upstream fades the backdrop and slides the panel; the host's own slide
   // moves the whole layer, backdrop included, and has one direction. So the
   // layer holds no animation of its own and the two halves animate here.
@@ -136,12 +149,23 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
   // The host's `onOpen`: the dialog is presented and painted. Both halves of
   // the animation start here, so they cannot run behind a hidden subtree.
   const presented = signal(false);
+  // A-003: the Body's scroll-offset channel. `scrollAtTop` feeds the panel
+  // drag's claim predicate — "the content is at its start edge" — and
+  // `reportScrollOffset` is what `Drawer.Body`'s wrapped `onScroll` calls.
+  // Always mounted: both environments run the same path (one extra signal
+  // write per scroll frame, no observable difference under pointer).
+  const scrollOffset = signal<Point>({ x: 0, y: 0 });
+  const scrollAtTop = () => scrollOffset().y <= 0.5;
+  const isSwipeable = () => props.isSwipeable;
   const contextValue: DrawerContextValue = {
     ...(parent ?? createDrawerContextValue({ isOpen, setOpen })),
     slots,
     variant,
     isDismissable,
     isOpen,
+    isSwipeable,
+    scrollAtTop,
+    reportScrollOffset: (offset: Point) => scrollOffset.set(offset),
     isEntering: presence.isEntering,
     isExiting: presence.isExiting,
     isPresented: presented,
@@ -185,7 +209,15 @@ export function DrawerBackdrop(props: DrawerBackdropProps): JSX.Element {
   };
   const handleBackdropPress = (event: PressEvent) => {
     props.onPress?.(event);
-    if (isDismissable()) requestClose();
+    // `shouldCloseOnInteractOutside` is the per-press veto upstream's
+    // `useModalOverlay` gives the same request (react-aria's
+    // ModalOverlay): `isDismissable` arms the channel, the predicate
+    // decides each attempt. The prop was accepted but unconsumed here —
+    // wiring it is what lets a caller (and the fixture's gesture-only
+    // `sides` case) keep `isDismissable` armed while the outside-press
+    // channel stays shut.
+    const veto = props.shouldCloseOnInteractOutside?.(event) === false;
+    if (isDismissable() && !veto) requestClose();
   };
   const handleCancel = () => {
     if (!isKeyboardDismissDisabled()) requestClose();

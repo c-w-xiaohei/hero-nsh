@@ -1,5 +1,6 @@
 import type {
   AccessibilityState,
+  Bounds,
   JSX,
   MouseEvent as NshMouseEvent,
   PressEvent,
@@ -11,6 +12,7 @@ import type {
 import { cleanup, computed, split, untracked, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
 import { renderChildren } from "./render-children";
 import {
   FALLBACK_SWITCH_CONTEXT,
@@ -119,6 +121,7 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
     "onHoverStart",
     "onHoverEnd",
     "onHoverChange",
+    "onLayout",
     "accessibilityLabel",
     "accessibilityHint",
     "accessibilityState",
@@ -134,6 +137,11 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
   ] as const);
 
   const ctx = SwitchContext() ?? FALLBACK_SWITCH_CONTEXT;
+
+  // A-001 / A-003: the `input` axis — it feeds the variant table's visible hit
+  // minimum and gates the hover writes (touch has no hover semantics; a web
+  // sticky hover would otherwise keep the hover state after a press).
+  const input = createInput();
 
   // The Content is the pressable face, so a caller may put HeroUI's press
   // callbacks here instead of on the root. They are reported back through the
@@ -259,7 +267,7 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
 
   const classes = computed(() =>
     [
-      switchVariants({ size: ctx.size() }).content(),
+      switchVariants({ size: ctx.size(), input: input() }).content(),
       // R-032 / R-048: `cursor-[inherit]` in the stylesheet has no NSH
       // equivalent; the part names the cursor itself, and the disabled state
       // keeps the root's `not-allowed`.
@@ -283,6 +291,11 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
   };
 
   const handlePressDown = (event: PressEvent) => {
+    // A-002: the seam sees every press first; it gates itself on
+    // `input()==="touch" && !isDisabled` (a read-only press still runs the
+    // feedback round trip, matching `isActive`'s held paint — sheet M-006).
+    ctx.feedback.pressDown(event);
+
     // A read-only press dispatches no press callback upstream
     // (`react-aria/src/toggle/useToggle.ts:186`: the press is disabled for
     // `isDisabled || isReadOnly`). The held raw signal still starts, so the
@@ -301,6 +314,8 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    // A-002: the seam's end edge (release and cancel share `onPressUp`).
+    ctx.feedback.pressUp(event);
     ctx.pressUp(event);
     // `onPressUp` fires before `onPress`; the press is over even when the
     // release does not become a press (a release outside).
@@ -344,9 +359,13 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
 
+    // A-003: the `input` axis owns hover independence — under touch the hover
+    // state and hover callbacks stay off entirely, so a web sticky hover
+    // cannot pin the face after a press. `onMouseEnter` still reported above:
+    // it is a host event, not a `useHover` callback.
     // React Aria's `useHover({ isDisabled: isDisabled || isReadOnly })`:
     // read-only fields do not hover either (R-027).
-    if (ctx.isDisabled() || ctx.isReadOnly() || ctx.isHovered()) {
+    if (input() === "touch" || ctx.isDisabled() || ctx.isReadOnly() || ctx.isHovered()) {
       return;
     }
 
@@ -362,6 +381,14 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
     // Upstream cancels it on pointer leave too (`usePress`'s `onPointerLeave`
     // ends the press without calling `onPress`), so the root's `onPressEnd` and
     // `onPressChange(false)` still fire with the pointer's last position.
+    // A-002: the seam's `pressUp` shares this path — the host reports release
+    // and cancel alike, and `pressUp` clears an in-flight touch press.
+    ctx.feedback.pressUp({
+      position: event.position,
+      pagePosition: event.pagePosition,
+      modifiers: event.modifiers,
+      clickCount: 1,
+    });
     ctx.pressEnd({
       position: event.position,
       pagePosition: event.pagePosition,
@@ -403,6 +430,12 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
     local.ref?.(node);
   };
 
+  // A-002: the face's measured size feeds the seam's `hitSlop` computation.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    ctx.feedback.layout(event);
+    local.onLayout?.(event);
+  };
+
   cleanup(() => ctx.setContentRef(undefined));
 
   return (
@@ -419,6 +452,10 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
       accessibilityElementsHidden={local.accessibilityElementsHidden}
       class={classes()}
       style={resolvedStyle()}
+      // A-002: the invisible half of the hit-area path — computed by the seam,
+      // never a prop. `undefined` under the pointer gate, so desktop pays
+      // nothing; under touch it expands a face that laid out below 44 pt.
+      hitSlop={ctx.feedback.hitSlop()}
       onPressDown={handlePressDown}
       onPressUp={handlePressUp}
       onPress={handlePress}
@@ -426,6 +463,7 @@ export function SwitchContent(props: SwitchContentProps): JSX.Element {
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
       onBlur={handleBlur}
+      onLayout={handleLayout}
     >
       {renderChildren(content() as JSX.Element)}
     </View>

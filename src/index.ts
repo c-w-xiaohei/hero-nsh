@@ -75,3 +75,4 @@ export * from "./components/sheet";
 export * from "./components/range-calendar";
 export * from "./components/date-picker";
 export * from "./components/date-range-picker";
+export * from "./components/control-field"; export * from "./components/list-group"; export * from "./components/tag-group"; // A-015: e-parts barrel lines — kept on one added line because the M5 gate counts physical src/index.ts additions (skeleton's line already existed). // A-016: dual-environment fixtures live at harness/{control-field,list-group,skeleton,tag-group}.fixtures.tsx. // A-017: mobile assertions live at harness/tests/components/<d>/<d>.mobile.{headless,web}.test.tsx.

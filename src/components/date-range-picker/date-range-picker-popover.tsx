@@ -12,8 +12,17 @@ import { cleanup, computed, effect, reduceMotion, signal, split, Overlay } from 
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
 import { createKeymapScope } from "../../primitives/create-keymap-scope";
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
+import {
+    OverlayTriggerContext,
+    type OverlayTriggerContextValue,
+} from "../../primitives/create-overlay-trigger";
+import { createPresentation, type Presentation } from "../../primitives/presentation";
 import type { PopoverPlacement, PopoverSide } from "../popover/popover-placement";
 import { resolvePopoverPlacement } from "../popover/popover-placement";
+import { SheetBackdrop } from "../sheet/sheet-backdrop";
+import { SheetBody } from "../sheet/sheet-body";
+import { SheetContent } from "../sheet/sheet-content";
+import { SheetRoot } from "../sheet/sheet-root";
 import { SurfaceContext, type SurfaceContextValue } from "../surface/surface-context";
 import { DateRangePickerContext } from "./date-range-picker-context";
 import { renderChildren } from "./render-children";
@@ -93,6 +102,15 @@ export interface DateRangePickerPopoverProps {
 
   /** When `true`, Escape does not close (the `onCancel` channel still fires). */
   isKeyboardDismissDisabled?: boolean;
+
+  /**
+   * The container the layer presents as (A-001, mobile encapsulation §1 ③):
+   * `"auto"` runs the `createPresentation` rule (touch + compact short
+   * side → sheet, otherwise panel), `"panel"` forces the anchored
+   * floating layer, `"sheet"` forces the Sheet composition.
+   * @default "auto"
+   */
+  presentation?: "auto" | "panel" | "sheet";
 
   /** Accepted, no effect: NSH has no element object to hand to the predicate. */
   shouldCloseOnInteractOutside?: (element: unknown) => boolean;
@@ -216,6 +234,7 @@ export function DateRangePickerPopover(props: DateRangePickerPopoverProps): JSX.
     "onOpenChange",
     "isNonModal",
     "isKeyboardDismissDisabled",
+    "presentation",
     "shouldCloseOnInteractOutside",
     "isEntering",
     "isExiting",
@@ -289,6 +308,24 @@ export function DateRangePickerPopover(props: DateRangePickerPopoverProps): JSX.
     isExiting: () => local.isExiting,
   });
 
+  // A-002: the presentation seam (mobile encapsulation §1 ③). The value is
+  // evaluated on the false→true edge of `isOpen` and latched until close.
+  // `isNonModal` folds into the pin: a non-modal layer has no sheet
+  // semantics (upstream bottom-sheet is always modal), so auto resolves to
+  // "panel" — an explicit `"sheet"` pin is never overridden.
+  const presentation = createPresentation<"panel" | "sheet">({
+    pin: () => {
+      const pin = local.presentation;
+
+      if ((pin === undefined || pin === "auto") && isNonModal()) {
+        return "panel";
+      }
+      return pin;
+    },
+    isOpen,
+    allowed: () => ["panel", "sheet"],
+  });
+
   const resolved = computed(() => resolvePopoverPlacement(local.placement));
   const positionedSide = signal<PopoverSide | undefined>(undefined);
 
@@ -316,8 +353,10 @@ export function DateRangePickerPopover(props: DateRangePickerPopoverProps): JSX.
     });
   };
 
+  // A-003: anchor geometry is a panel-only read; the sheet carrier never
+  // positions against the field group.
   effect(() => {
-    if (!isOpen()) {
+    if (!isOpen() || presentation() !== "panel") {
       return;
     }
 
@@ -505,7 +544,51 @@ export function DateRangePickerPopover(props: DateRangePickerPopoverProps): JSX.
   // the interface faithful (port sheet §3).
   const surfaceValue: SurfaceContextValue = { variant: () => "default" };
 
-  // The one read of `props.children`, at the placement inside the layer.
+  /* A-004: inside a Sheet the actionable parts must not register as the
+   * sheet's trigger — `SheetRoot` re-provides `OverlayTriggerContext`, so the
+   * neutral scope is handed to the children instead (Popover.Content's
+   * ruling): the sheet still closes through `close`. */
+  const scopedTrigger: OverlayTriggerContextValue = {
+    isOpen: () => undefined,
+    setIsOpen: () => {},
+    toggle: () => {},
+    close: () => setOpen(false),
+    registerTrigger: () => () => {},
+    triggerRef: () => undefined,
+  };
+
+  // A-004: the sheet carrier — the picker's open state still owns the layer
+  // (`SheetRoot` runs fully controlled here), the backdrop replaces the
+  // modal underlay, and the popover's own look rides `SheetContent`. It is a
+  // builder, not an element: the host may not place a rendered node into two
+  // conditional parents, so each branch reads `props.children` at its own
+  // mount, inside a function child (`ModalLayer`'s `{() => props.carrier()}`
+  // pattern).
+  const sheetOverlay = () => (
+    <SheetRoot isOpen={isOpen()} onOpenChange={setOpen}>
+      <SheetBackdrop isKeyboardDismissDisabled={local.isKeyboardDismissDisabled}>
+        <SheetContent
+          className={classes()}
+          style={resolvedStyle()}
+          testID={local.testID ? local.testID + "-sheet" : undefined}
+          nativeID={local.id ?? local.nativeID}
+          accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel ?? picker.labelText()}
+          onLayout={local.onLayout}
+          ref={(node) => local.ref?.(node)}
+        >
+          <SheetBody>
+            <OverlayTriggerContext.Provider value={scopedTrigger}>
+              {renderChildren(local.children)}
+            </OverlayTriggerContext.Provider>
+          </SheetBody>
+        </SheetContent>
+      </SheetBackdrop>
+    </SheetRoot>
+  );
+
+  // The one read of `props.children`, at the placement inside the layer. Kept
+  // as an eager element like every sibling popover: the panel branch mounts
+  // synchronously on open, which the exit-hold mount timing relies on (T-005).
   const contentOverlay = (
     <Overlay
       ref={(node) => {
@@ -518,7 +601,7 @@ export function DateRangePickerPopover(props: DateRangePickerPopoverProps): JSX.
       offset={local.offset ?? 8}
       margin={local.containerPadding ?? 12}
       focusable={true}
-      testID={local.testID}
+      testID={local.testID ? local.testID + "-panel" : undefined}
       nativeID={local.id ?? local.nativeID}
       accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel ?? picker.labelText()}
       class={classes()}
@@ -542,12 +625,21 @@ export function DateRangePickerPopover(props: DateRangePickerPopoverProps): JSX.
 
   return (
     <SurfaceContext.Provider value={surfaceValue}>
-      <If when={presence.isPresent()}>
+      {/* A-004: the carrier switch — "sheet" mounts the Sheet composition,
+          "panel" keeps the anchored Overlay chain untouched (A-003). */}
+      <If when={presentation() === "sheet" && presence.isPresent()}>
+        {sheetOverlay()}
+      </If>
+      <If when={presentation() !== "sheet" && presence.isPresent()}>
         <If when={!isNonModal()} else={contentOverlay}>
           <Overlay
             class="inset-0"
             classList={underlayClassList()}
             focusable={false}
+            // A-003: the underlay keeps the caller's `testID` verbatim —
+            // `id:drp-popover` continues to mean "the layer is up" while the
+            // carriers derive `-panel`/`-sheet` on the content box itself.
+            testID={local.testID}
             onPress={() => {
               if (isOpen()) {
                 setOpen(false);

@@ -1,6 +1,15 @@
 import { tv } from "tailwind-variants";
 
-import { ease, shadow } from "../../tokens/geometry";
+// `ease.outQuad`, `ease.smooth` and `shadow.overlay.both` of
+// `src/tokens/geometry.ts` written out: the M2 class walker imports this file
+// through Node ESM, which does not resolve extensionless relative specifiers,
+// so the geometry module cannot be imported from a `.styles.ts`. Same pattern
+// as `switch.styles.ts` / `button.styles.ts`; keep in sync with
+// `SHADOW_VALUES.overlay` and `EASE_VALUES`.
+const EASE_OUT_QUAD = "ease-[cubic-bezier(0.25,0.46,0.45,0.94)]";
+const EASE_SMOOTH = "ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+const SHADOW_OVERLAY_BOTH =
+  "shadow-[0_2px_8px_0_rgba(0,0,0,0.06),0_-6px_12px_0_rgba(0,0,0,0.03),0_14px_28px_0_rgba(0,0,0,0.08)] dark:shadow-[0_0_1px_0_rgba(255,255,255,0.3)_inset]";
 
 /**
  * AlertDialog's variant table, mirroring `@heroui/styles` 3.2.7
@@ -63,7 +72,7 @@ export const alertDialogVariants = tv({
     // classes move; NSH has one property list per view, and the transform and
     // opacity are its members (R-027 clears it under reduced motion).
     container:
-      `flex flex-col items-center h-full w-full min-w-0 flex-1 p-4 sm:w-fit sm:p-10 pointer-events-none transition duration-[250ms] ${ease.outQuad} motion-reduce:transition-none`,
+      `flex flex-col items-center h-full w-full min-w-0 flex-1 p-4 sm:w-fit sm:p-10 pointer-events-none transition duration-[250ms] ${EASE_OUT_QUAD} motion-reduce:transition-none`,
     // R-028 `.alert-dialog__dialog` → `relative`;
     // R-029 → `flex min-h-0 w-full flex-col max-h-full`;
     // R-030 → `bg-overlay shadow-overlay outline-none` (the dark half of the
@@ -71,7 +80,7 @@ export const alertDialogVariants = tv({
     // --radius-3xl)` → `rounded-3xl` (24 in this theme); R-032 → `p-6`;
     // R-033 → `overflow-hidden`; R-034 → `pointer-events-auto`.
     dialog:
-      `relative flex min-h-0 w-full flex-col max-h-full bg-overlay text-overlay-foreground ${shadow.overlay.both} outline-none rounded-3xl p-6 overflow-hidden pointer-events-auto`,
+      `relative flex min-h-0 w-full flex-col max-h-full bg-overlay text-overlay-foreground ${SHADOW_OVERLAY_BOTH} outline-none rounded-3xl p-6 overflow-hidden pointer-events-auto`,
     // R-061 `.alert-dialog__footer` → `flex flex-row items-center justify-end
     // gap-2`; R-062 → `mt-0`. R-065 / R-066 (the margin a preceding part adds)
     // are read from the Dialog's part order, see `alert-dialog-footer.tsx`.
@@ -99,7 +108,7 @@ export const alertDialogVariants = tv({
     // R-005 disabled → `opacity-50 cursor-not-allowed pointer-events-none`
     // under `disabled:`; R-006 pressed → `scale-[0.97]` under `active:`.
     trigger:
-      `inline-block w-fit cursor-pointer duration-150 ${ease.smooth} motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]`,
+      `inline-block w-fit cursor-pointer duration-150 ${EASE_SMOOTH} motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97]`,
   },
   variants: {
     size: {
@@ -175,6 +184,15 @@ export type AlertDialogSize = "xs" | "sm" | "md" | "lg" | "cover";
 /** HeroUI's `AlertDialogPlacement`, the Dialog's `data-placement`. */
 export type AlertDialogPlacement = "auto" | "top" | "center" | "bottom";
 
+/**
+ * The container the alert dialog presents as (A-001): the centered panel, or
+ * the bottom-docked sheet the touch + compact environment picks under
+ * `presentation="auto"`. `"auto"` is the prop's default and never reaches the
+ * resolved value — `createPresentation` always answers a member of this
+ * domain.
+ */
+export type AlertDialogPresentation = "panel" | "sheet";
+
 /** HeroUI's `AlertDialogStatus`, the Icon's semantic status. */
 export type AlertDialogStatus = "default" | "accent" | "success" | "warning" | "danger";
 
@@ -186,9 +204,45 @@ export type AlertDialogStatus = "default" | "accent" | "success" | "warning" | "
  * `flex-1 w-full` (the height is the hosting layer's). `pointer-events-none`
  * keeps the empty area falling through to the paint layer, while the Dialog's
  * `pointer-events-auto` (R-034) keeps the card itself a target.
+ *
+ * A-002: under `presentation === "sheet"` the same box docks the card at the
+ * bottom edge (`items-end`) while keeping it horizontally centered; the
+ * vertical breathing room the Container's `p-4`/`sm:p-10` used to give comes
+ * off there instead. The `"panel"` output is byte-identical to the constant
+ * this function replaces.
  */
-export const alertDialogBackdropCarrierClasses =
-  "flex flex-row items-center justify-center flex-1 w-full pointer-events-none";
+export function alertDialogBackdropCarrierClasses(
+  presentation: AlertDialogPresentation,
+): string {
+  return presentation === "sheet"
+    ? "flex flex-row items-end justify-center flex-1 w-full pointer-events-none"
+    : "flex flex-row items-center justify-center flex-1 w-full pointer-events-none";
+}
+
+/**
+ * A-003: the classes the Container slot gains under
+ * `presentation === "sheet"` — appended after the slot, so the later member
+ * wins over `p-4`/`sm:p-10`/`sm:w-fit` exactly as the cascade resolved them.
+ * The padding between card and window edge is gone (the card already sits
+ * against the bottom edge), and the width stays full rather than shrinking
+ * to the card at `sm`.
+ */
+export const alertDialogSheetContainerClasses = "p-0 sm:p-0 w-full sm:w-full";
+
+/**
+ * A-003: the Container's first-frame classes under a sheet presentation: the
+ * card slides up from below (`translate-y-full`) instead of the panel's
+ * scale pop, as the native bottom-anchored dialog enters.
+ */
+export const alertDialogSheetEnteringClasses = "opacity-0 translate-y-full";
+
+/**
+ * A-003: the Dialog classes under a sheet presentation — full width with the
+ * `size` axis's `max-w-*` cap released (`max-w-none` beats `max-w-md` as the
+ * later member), the `rounded-3xl` the slot already carries kept as the
+ * bottom-line shape of a native alert.
+ */
+export const alertDialogSheetDialogClasses = "w-full max-w-none";
 
 /**
  * The Dialog's placement classes, HeroUI's `[data-placement=…]` rules:

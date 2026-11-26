@@ -1,7 +1,18 @@
-import { host, mount, signal, Text, View } from "nsh";
-import { Checkbox, CheckboxGroup, Description, FieldError, Label } from "@heroui/react";
+import { effect, host, mount, signal, Text, View } from "nsh";
+import type { JSX, PressEvent } from "nsh";
+import {
+  Checkbox,
+  CheckboxGroup,
+  ControlField,
+  Description,
+  EnvironmentScope,
+  FieldError,
+  Label,
+} from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
+import { CheckboxContext } from "../src/components/checkbox/checkbox-context";
+import { createInput } from "../src/primitives/environment";
 
 /*
  * NSH-only Checkbox / CheckboxGroup fixtures (port sheet 4b), not shared
@@ -50,6 +61,26 @@ import { probe } from "@scenario/probe";
  *   group-validation-aria  a group with validate() and validationBehavior="aria"
  *   group-disabled         a disabled group
  *   group-invalid          an invalid group with a FieldError
+ *   row                    mobile probe surface (sheet A-005): a bare-string
+ *                          Content row with `cb-row` testID, press-event and
+ *                          layout probes, and an `EnvProbe` inside that
+ *                          reports `input`, the seam's `hitSlop`/`isPressed`,
+ *                          and the gated hover effect the Control paints
+ *   cf-checkbox            a `ControlField` row (checkbox variant default
+ *                          piece, sheet A-004): the row probes
+ *                          `onSelectedChange`/`onChange`/`onPress` and mounts
+ *                          `CheckboxControl`/`CheckboxIndicator` under the
+ *                          adapted context
+ *
+ * `host.params.scope` picks the `EnvironmentScope` wrapper ("" = host
+ * default, "touch" = `input="touch"`), the same convention as
+ * `control-field.fixtures.tsx`. The test-only params `testInput`
+ * ("pointer"/"touch") inject an outer EnvironmentScope input; `box`="tiny"
+ * gives the row a 24 pt width so
+ * the seam's `hitSlop` has an axis left to expand — under touch the row's
+ * height already sits at the 44 pt minimum `min-h-11` gives it. `tall`="1"
+ * stacks extra text lines inside the same Content so the row's natural
+ * height clears 44 pt (M-001's not-forced half).
  */
 
 const NAME = "Accept terms";
@@ -586,6 +617,166 @@ function GroupInvalidCase() {
   );
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * Mobile cases (sheet A-005)
+ * -----------------------------------------------------------------------------------------------*/
+
+type Scope = "" | "touch";
+
+function Scoped(props: { children?: JSX.Element }) {
+  // Test-harness environment params (only the mobile tests set them —
+  // absent keeps the host-derived default): `scope="touch"` is the inner
+  // override, `testInput` ("pointer"/"touch") injects the scope so the
+  // pointer baseline is host-independent (the inner `scope` still wins).
+  // One provider only: `props.children` is placed inside it directly —
+  // pre-building a fragment first would mount the children under this
+  // component's own creation scope instead of the provider.
+  const input =
+    String(host.params.scope ?? "") === "touch"
+      ? "touch"
+      : ((v) => (v === "pointer" || v === "touch" ? v : undefined))(
+          String(host.params.testInput ?? ""),
+        );
+
+  return input !== undefined ? (
+    <EnvironmentScope input={input}>{props.children}</EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
+/**
+ * Reads the seam's read channels the Content registers on its context plus
+ * the gated hover effect the Control paints, and reports them as `env`
+ * probes: on mount, and on every `isPressed` / `seam` edge so a press leaves
+ * a fresh sample behind. `effectHover` is the Control's `isHovered` read
+ * (`input() !== "touch"` suppresses the sticky web hover, A-002); `rawHover`
+ * is the context's untouched hover signal.
+ */
+function EnvProbe() {
+  const ctx = CheckboxContext();
+  const input = createInput();
+  const report = probe("env");
+
+  const sample = () => {
+    if (ctx === undefined) {
+      report({ input: input() });
+      return;
+    }
+
+    const fb = ctx.feedback();
+    report({
+      input: input(),
+      hitSlop: fb.hitSlop() ?? null,
+      seamPressed: fb.isPressed(),
+      enabled: fb.enabled(),
+      effectHover: input() !== "touch" && (ctx.rootHovered() || ctx.isHovered()),
+      rawHover: ctx.rootHovered() || ctx.isHovered(),
+      selected: ctx.isSelected(),
+    });
+  };
+
+  effect(() => {
+    // Subscribe to the edge signals — presses, the layout that feeds
+    // `hitSlop`, the hover pair `effectHover`/`rawHover` read, and the
+    // selection the `selected` field reports — so the probe re-reports on
+    // each (M-004's hover half needs the hover edges, not just press ones).
+    void ctx?.isPressed();
+    void ctx?.feedback().isPressed();
+    void ctx?.feedback().bounds();
+    void ctx?.isHovered();
+    void ctx?.rootHovered();
+    void ctx?.isSelected();
+    sample();
+  });
+
+  return null;
+}
+
+function RowCase() {
+  const reportEvent = probe("events");
+  const reportChange = probe("onChange");
+  const reportLayout = probe("layout");
+
+  const onEvent =
+    (kind: string) =>
+    (e: PressEvent): void => {
+      reportEvent({ kind });
+      void e;
+    };
+
+  const tiny = String(host.params.box ?? "") === "tiny";
+  // `tall=1` stacks extra text lines inside the same Content so the row's
+  // natural height clears the 44 pt minimum — M-001's "taller content is not
+  // forced" half: `min-h-11` is a floor, it must not shrink or clamp it.
+  const tall = String(host.params.tall ?? "") === "1";
+
+  return (
+    <Stage>
+      <Checkbox
+        aria-label={NAME}
+        onChange={(isSelected) => {
+          reportChange(isSelected);
+          reportEvent({ kind: "toggle" });
+        }}
+      >
+        <Checkbox.Content
+          testID="cb-row"
+          style={tiny ? { width: 24 } : undefined}
+          onPressStart={onEvent("start")}
+          onPressChange={(isPressed) => reportEvent({ kind: `change:${isPressed}` })}
+          onPressUp={onEvent("up")}
+          onPressEnd={onEvent("end")}
+          onPress={onEvent("press")}
+          onClick={onEvent("click")}
+          onLayout={(e) =>
+            reportLayout({ width: e.bounds.size.width, height: e.bounds.size.height })
+          }
+        >
+          <Checkbox.Control>
+            <Checkbox.Indicator />
+          </Checkbox.Control>
+          {NAME}
+          {tall ? (
+            <View class="flex-col">
+              <Text>First line of a taller row</Text>
+              <Text>Second line of a taller row</Text>
+              <Text>Third line of a taller row</Text>
+              <Text>Fourth line of a taller row</Text>
+            </View>
+          ) : null}
+          <EnvProbe />
+        </Checkbox.Content>
+      </Checkbox>
+    </Stage>
+  );
+}
+
+function CfCheckboxCase() {
+  const reportSelected = probe("onSelectedChange");
+  const reportChange = probe("onChange");
+  const reportPress = probe("onPress");
+
+  return (
+    <Stage>
+      <ControlField
+        testID="cf-checkbox"
+        isSelected={String(host.params.selected ?? "") === "1"}
+        onSelectedChange={(isSelected) => reportSelected(isSelected)}
+        onPress={(e) => reportPress({ x: e.position.x, y: e.position.y })}
+        style={{ width: 288 }}
+      >
+        {/* A plain Text, not a Label: the row's Label is its own pressable
+            and would consume the press on web hit-testing; this press bubbles
+            to the row's own handlers either way. */}
+        <View class="flex-1 flex-col gap-0.5">
+          <Text testID="cf-checkbox-text">Notifications</Text>
+        </View>
+        <ControlField.Indicator variant="checkbox" />
+      </ControlField>
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "log");
 
@@ -612,8 +803,18 @@ function Fixture() {
   if (name === "group-validation-aria") return <GroupValidationAriaCase />;
   if (name === "group-disabled") return <GroupDisabledCase />;
   if (name === "group-invalid") return <GroupInvalidCase />;
+  if (name === "row") return <RowCase />;
+  if (name === "cf-checkbox") return <CfCheckboxCase />;
 
   return <LogCase />;
 }
 
-mount(Fixture);
+function App() {
+  return (
+    <Scoped>
+      <Fixture />
+    </Scoped>
+  );
+}
+
+mount(App);

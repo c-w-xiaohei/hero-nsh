@@ -24,11 +24,17 @@ import {
 } from "nsh";
 
 import {
+  createDensity,
+  createInput,
   createInteractionModality,
   createKeymapScope,
   createListState,
+  createRowRegistry,
   createSelectableList,
+  isCtrlKeyPressed,
   isKeyboardPress,
+  isNonContiguousSelectionModifier,
+  toListItemData,
   type ListState,
   type SelectionBehavior,
   type SelectionMode,
@@ -43,17 +49,19 @@ import {
   type MenuActivationKey,
   type MenuContextValue,
   type MenuDescriptor,
-  type MenuItemDescriptor,
+  type MenuRowHandle,
   sortByRenderedOrder,
 } from "./menu-context";
 import { menuVariants, type MenuVariants } from "./menu.styles";
+import { densityKey } from "../../tokens/density";
 
 /** The live state HeroUI hands to `className`, `style` and the empty state. */
 export interface MenuRenderProps {
   isEmpty: Accessor<boolean>;
 }
 
-export interface MenuRootProps<T = unknown> extends MenuVariants {
+export interface MenuRootProps<T = unknown>
+  extends Omit<MenuVariants, "input" | "density"> {
   /**
    * Static entries and sections, or with `items`, the render function called
    * once per entry. Read once, inside the context provider (research 4.1).
@@ -212,26 +220,115 @@ function descriptorToData(descriptor: MenuDescriptor): any {
   };
 }
 
-/** The entry with `key`, at the top level or inside a section. */
-function findItemDescriptor(
-  descriptors: readonly MenuDescriptor[],
-  key: string,
-): MenuItemDescriptor | undefined {
-  for (const descriptor of descriptors) {
-    if (descriptor.type === "item") {
-      if (descriptor.key === key) {
-        return descriptor;
-      }
-    } else {
-      const found = findItemDescriptor(descriptor.children(), key);
+/**
+ * f-collection, mounted side (A-005): the registry of the rows that exist. A
+ * mounted entry/section registers a `MenuRowHandle` on mount and drops it on
+ * unmount; the `items` data source subscribes to `keys()` so a row's own
+ * `textValue`/`isDisabled` overrides merge into its datum while it is mounted
+ * and fall back when it is not — without the row ever feeding the collection.
+ */
+interface MergedEntry {
+  key: string;
+  textValue: string;
+  disabled: boolean;
+  children?: any[];
 
-      if (found) {
-        return found;
-      }
-    }
+  /**
+   * The raw datum behind this entry. `buildNodes` copies it to
+   * `CollectionNode.rawValue`, which lets a mounted section find the node its
+   * keyless datum produced (`__nsh:section:` key) by identity — the merged
+   * entry itself is a fresh object, so it could never be matched.
+   */
+  datum?: unknown;
+}
+
+/**
+ * Finds the item handle whose row renders `datum`. A named datum
+ * (`namedKey !== ""`) is claimed by key only: a row whose `id` renames a
+ * real data key does not claim it — it stays an orphan and is appended,
+ * which is the sheet's "孤儿行追加" contract. A keyless datum (`namedKey`
+ * `""`) claims by identity first — `value` equality is the association that
+ * survives a reorder moving the positional key, since the row's own key is
+ * a mount-time constant — and by the positional key as the fallback.
+ */
+function handleForDatum(
+  registry: readonly MenuRowHandle[],
+  namedKey: string,
+  positionalKey: string,
+  datum: unknown,
+): MenuRowHandle | undefined {
+  if (namedKey !== "") {
+    return registry.find(
+      (handle) => handle.type === "item" && handle.key === namedKey,
+    );
   }
 
-  return undefined;
+  return (
+    registry.find(
+      (handle) => handle.type === "item" && handle.value?.() === datum,
+    ) ??
+    registry.find(
+      (handle) => handle.type === "item" && handle.key === positionalKey,
+    )
+  );
+}
+
+/**
+ * `items` data → collection entries, mounted-row overrides merged in (A-005).
+ * A row that claims a datum renames it to the row's key (the association
+ * key), wins `textValue` only when it reports one, and overrides `disabled`
+ * when it reports one (an explicit `isDisabled={false}` clears the datum's
+ * flag); the datum's key itself is never overridden — a row whose key
+ * matches nothing is an orphan and is appended at the data-source tail,
+ * which keeps the RAC contract where a row's `id` adds its entry to a
+ * data-driven menu.
+ *
+ * A keyless section datum keeps `""` (not the positional index): only then
+ * does `buildNodes` mint the `__nsh:section:{level}:{index}` key the sheet's
+ * key-convergence rule names, and the mounted section reads it back by
+ * matching `datum` through `rawValue`.
+ */
+function mergeRows(
+  data: readonly unknown[],
+  registry: readonly MenuRowHandle[],
+  seen: Set<MenuRowHandle>,
+): MergedEntry[] {
+  const merged = data.map((datum, index) => {
+    const normalized = toListItemData(datum, index);
+    const isSection = normalized.children !== undefined;
+    // A section datum never takes the positional key (buildNodes mints
+    // `__nsh:section:` for ""); an item datum keeps it.
+    const namedKey = toListItemData(datum).key;
+    const ownKey = isSection ? namedKey : normalized.key;
+    const handle = isSection
+      ? undefined
+      : handleForDatum(registry, namedKey, ownKey, datum);
+
+    if (handle) {
+      seen.add(handle);
+    }
+
+    return {
+      key: handle?.key ?? ownKey,
+      textValue:
+        normalized.children === undefined
+          ? handle?.textValue?.() || normalized.textValue
+          : normalized.textValue,
+      // The mounted row's disabled is an override, not a union: its
+      // `isDisabled === false` clears a datum's `disabled: true` exactly the
+      // way the static descriptor path decided it (the row's own disabled
+      // already unions `disabledKeys` through `isDisabledKey`). An absent row
+      // falls back to the datum's own flag.
+      disabled: handle?.disabled?.() ?? normalized.disabled,
+      children:
+        normalized.children === undefined
+          ? undefined
+          : mergeRows(normalized.children, registry, seen),
+      datum,
+    };
+  });
+
+  return merged;
 }
 
 /** `"all"` stays the sentinel; an iterable becomes the string-keyed set. */
@@ -316,6 +413,8 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
   // Research 4.2: parts register themselves with the nearest owner, and the
   // registry becomes the primitive's data source. A section descriptor carries
   // its entries so `buildNodes` expands the hierarchy.
+  // f-collection: only the static-children path feeds this registry; with
+  // `items` the data itself is the collection and rows only mount handles.
   const descriptors = signal<readonly MenuDescriptor[]>([]);
 
   const register = (descriptor: MenuDescriptor) => {
@@ -326,9 +425,64 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     };
   };
 
-  const dataSource = computed(() =>
-    sortByRenderedOrder(descriptors()).map(descriptorToData),
-  );
+  // f-collection, mounted side: the one store that knows which rows exist.
+  const rowRegistry = createRowRegistry<MenuRowHandle>();
+
+  const dataSource = computed(() => {
+    const data = local.items;
+
+    if (data == null) {
+      return sortByRenderedOrder(descriptors()).map(descriptorToData);
+    }
+
+    // The data side holds the complete collection. Mounted rows only merge
+    // their overrides; a row whose key claims no datum is appended as an
+    // orphan (registration order), as RAC's row-id override contract keeps.
+    const rows = rowRegistry
+      .keys()
+      .map((key) => rowRegistry.get(key))
+      .filter((handle): handle is MenuRowHandle => handle != null);
+    const seen = new Set<MenuRowHandle>();
+    const merged = mergeRows(data, rows, seen);
+
+    const used = new Set<string>();
+    const collectKeys = (entries: readonly MergedEntry[]) => {
+      for (const entry of entries) {
+        used.add(entry.key);
+        if (entry.children) {
+          collectKeys(entry.children);
+        }
+      }
+    };
+    collectKeys(merged);
+
+    const orphans: MergedEntry[] = [];
+
+    for (const handle of rows) {
+      if (seen.has(handle) || handle.type !== "item") {
+        continue;
+      }
+
+      // Two orphans under one key cannot both own it: the later entry loses
+      // the collision in `ListCollection` anyway, so give it a printable
+      // suffix instead of silently dropping the row's entry.
+      let orphanKey = handle.key;
+      let suffix = 2;
+
+      while (used.has(orphanKey)) {
+        orphanKey = `${handle.key}#${suffix++}`;
+      }
+      used.add(orphanKey);
+
+      orphans.push({
+        key: orphanKey,
+        textValue: handle.textValue?.() ?? "",
+        disabled: handle.disabled?.() === true,
+      });
+    }
+
+    return [...merged, ...orphans];
+  });
 
   // A static Section without `id` still needs a key: React Aria derives one
   // from the section's position. The root hands out one per Section, prefixed
@@ -448,8 +602,12 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
       : className;
   };
 
+  // A-001: the environment's `density` axis, read once under this root's
+  // context; `input` has no cell on the container table.
+  const density = createDensity();
+
   const classes = computed(() =>
-    [menuVariants(), resolvedClassName()]
+    [menuVariants({ density: densityKey(density()) }), resolvedClassName()]
       .filter((part): part is string => typeof part === "string" && part.length > 0)
       .join(" "),
   );
@@ -461,6 +619,70 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     const style = local.style;
 
     return typeof style === "function" ? style(renderProps) : style;
+  };
+
+  // Environment.input, read once under this root's context: the unmounted
+  // activation fallback below needs the same touch rule `createSelectableItem`
+  // applies to a mounted row (touch toggles instead of replacing).
+  const input = createInput();
+
+  /**
+   * f-collection 激活兜底 (A-005): activation of a focused key whose row is
+   * not mounted. It replays `createSelectableItem`'s keyboard selection
+   * against the manager — a truly disabled node is inert, `mode "none"` only
+   * acts, and the modifier rules match `selectWithEvent` — then fires the
+   * root's `onAction` and applies the root-level close rule, so Return on an
+   * unmounted entry is never silently dropped. A row-only override
+   * (`shouldCloseOnSelect`, submenu, href) is unreachable for a row that is
+   * not mounted — the sheet registers that degradation in §8.
+   */
+  const activateUnmounted = (
+    key: string,
+    node: { disabled: boolean },
+    modifiers?: SelectionModifiers,
+    keyName?: MenuActivationKey,
+  ) => {
+    const m = manager();
+    const inert = node.disabled || isDisabledKey(key);
+
+    if (!inert) {
+      if (m.canSelectItem(key)) {
+        if (modifiers && isNonContiguousSelectionModifier(modifiers)) {
+          m.toggleSelection(key);
+        } else if (m.selectionMode() === "single") {
+          if (m.isSelected(key) && !m.disallowEmptySelection()) {
+            m.toggleSelection(key);
+          } else {
+            m.replaceSelection(key);
+          }
+        } else if (modifiers?.shift) {
+          m.extendSelection(key);
+        } else if (
+          m.selectionBehavior() === "toggle" ||
+          isCtrlKeyPressed(modifiers) ||
+          input() === "touch"
+        ) {
+          m.toggleSelection(key);
+        } else {
+          m.replaceSelection(key);
+        }
+      }
+
+      local.onAction?.(key);
+
+      // React Aria's keyboard close rule at the root level: Enter always
+      // closes, Space only when the mode has no selection state
+      // (`useMenuItem.js:114`). `shouldCloseOnSelect` is the root-level
+      // override — item/section overrides belong to rows that are mounted.
+      const explicit = local.shouldCloseOnSelect;
+
+      if (
+        explicit === true ||
+        (explicit == null && (keyName === "Enter" || m.selectionMode() === "none"))
+      ) {
+        local.onClose?.();
+      }
+    }
   };
 
   const activateFocused = (
@@ -475,12 +697,18 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
       return;
     }
 
-    findItemDescriptor(descriptors(), key)?.activate(
-      source,
-      event,
-      modifiers,
-      keyName,
-    );
+    const handle = rowRegistry.get(key);
+
+    if (handle?.type === "item" && handle.activate) {
+      handle.activate(source, event, modifiers, keyName);
+      return;
+    }
+
+    const node = list.collection().getItem(key);
+
+    if (node?.type === "item") {
+      activateUnmounted(key, node, modifiers, keyName);
+    }
   };
 
   const runKey = (key: string, modifiers?: SelectionModifiers) => {
@@ -595,12 +823,12 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
   // focus; every other row falls through to the collection unchanged.
   const openFocusedSubmenu = (): boolean => {
     const key = manager().focusedKey();
-    const descriptor = key == null ? undefined : findItemDescriptor(descriptors(), key);
+    const handle = key == null ? undefined : rowRegistry.get(key);
 
-    if (descriptor?.openSubmenu) {
+    if (handle?.openSubmenu) {
       modality.setKeyboardModality();
       // The keyboard entry takes the submenu's focus (`openSubmenu('first')`).
-      descriptor.openSubmenu(true);
+      handle.openSubmenu(true);
 
       return true;
     }
@@ -613,9 +841,9 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     // and keeps the focus on that row (`useSubmenuTrigger.ts:188-210`). Only
     // then does the menu's own `onArrowLeft` (a submenu closing itself) run.
     const key = manager().focusedKey();
-    const descriptor = key == null ? undefined : findItemDescriptor(descriptors(), key);
+    const handle = key == null ? undefined : rowRegistry.get(key);
 
-    if (descriptor?.closeSubmenu?.() === true) {
+    if (handle?.closeSubmenu?.() === true) {
       modality.setKeyboardModality();
 
       return true;
@@ -782,24 +1010,42 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
       return;
     }
 
-    const descriptor = findItemDescriptor(descriptors(), key);
+    const handle = rowRegistry.get(key);
+    const node =
+      handle == null || handle.type !== "item"
+        ? list.collection().getItem(key)
+        : undefined;
 
-    if (!descriptor) {
-      return;
-    }
+    // The announce fallback covers unmounted keys too: the collection still
+    // knows the entry's text (f-collection §5, host gap register).
+    const text = () => handle?.textValue?.() ?? node?.textValue;
 
     if (platform.os === "web") {
       if (screenReaderEnabled()) {
-        announce(descriptor.textValue());
+        const value = text();
+
+        if (value != null) {
+          announce(value);
+        }
       }
 
       return;
     }
 
-    const node = descriptor.ref();
+    const view = handle?.ref?.();
 
-    if (node) {
-      setAccessibilityFocus(node);
+    if (view) {
+      setAccessibilityFocus(view);
+      return;
+    }
+
+    // An unmounted entry (or one whose view is not yet bound) has no view to
+    // take accessibility focus; the announce fallback is its degradation on
+    // every host (A-005; the same announce the web branch above performs).
+    const value = text();
+
+    if (value != null) {
+      announce(value);
     }
   });
 
@@ -818,6 +1064,8 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     list,
     selectionManager: () => manager(),
     register,
+    rowRegistry,
+    registerRow: rowRegistry.register,
     selectionMode,
     selectionBehavior,
     isFocused: rootFocused,
@@ -837,6 +1085,9 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
     unregisterItemLayout: selectableList.unregisterItemLayout,
     registerSectionLayout: selectableList.registerSectionLayout,
     unregisterSectionLayout: selectableList.unregisterSectionLayout,
+    sendKey: (key, modifiers) => runKey(key, modifiers),
+    activateFocused: (modifiers, keyName) =>
+      activateWithKey(keyName ?? "Enter", modifiers),
   };
 
   // Root provides a context, so `props.children` is read at the placement

@@ -53,7 +53,22 @@ export const disclosureVariants = tv({
     indicator:
       "ms-auto size-4 shrink-0 transition duration-250 motion-reduce:transition-none",
   },
-  variants: {},
+  variants: {
+    // A-001: the `input` axis is the visible half of the hit-area path — under
+    // touch the trigger row (the whole hit surface, indicator included)
+    // reaches the 44 pt minimum the `list-group`/`control-field` rows already
+    // hold; the invisible half (`hitSlop`, a view prop tv() cannot produce)
+    // lives in the trigger's `createPressFeedback` seam. `pointer` stays
+    // empty so the desktop table is byte-identical. No `density` axis: the
+    // hit floor is `MIN_HIT_TARGET_BY_DENSITY`'s and the trigger carries no
+    // density-matter type/padding.
+    input: {
+      pointer: {},
+      touch: {
+        trigger: "min-h-11",
+      },
+    },
+  },
   defaultVariants: {},
 });
 

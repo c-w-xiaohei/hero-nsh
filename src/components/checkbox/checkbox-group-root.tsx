@@ -1,6 +1,7 @@
 import type { Bounds, JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
 import { computed, signal, split, untracked, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { DescriptionContext } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
 import { FieldsetContext } from "../fieldset/context";
@@ -199,6 +200,10 @@ export function CheckboxGroupRoot(props: CheckboxGroupRootProps): JSX.Element {
   // Control), so the table is consulted for the base slot only.
   const variant = computed<CheckboxGroupVariant | undefined>(() => local.variant);
 
+  // A-001: the `input` axis is fed like at the item's call sites; the group's
+  // own cells stay empty — the hit target is each item's Content row.
+  const input = createInput();
+
   const state = createCheckboxGroupState({
     value: () => local.value,
     defaultValue: () => local.defaultValue,
@@ -360,7 +365,7 @@ export function CheckboxGroupRoot(props: CheckboxGroupRootProps): JSX.Element {
   };
 
   const classes = computed(() =>
-    [checkboxGroupVariants({ variant: variant() }), resolvedClassName() ?? ""]
+    [checkboxGroupVariants({ variant: variant(), input: input() }), resolvedClassName() ?? ""]
       .filter((part) => part.length > 0)
       .join(" "),
   );

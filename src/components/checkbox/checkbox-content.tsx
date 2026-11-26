@@ -1,5 +1,6 @@
 import type {
   AccessibilityState,
+  Bounds,
   JSX,
   MouseEvent as NshMouseEvent,
   PressEvent,
@@ -11,6 +12,8 @@ import type {
 import { cleanup, computed, split, untracked, View } from "nsh";
 
 import { isKeyboardPress } from "../../primitives/create-interaction-modality";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { DescriptionContext } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
 import {
@@ -123,6 +126,7 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
     "onHoverStart",
     "onHoverEnd",
     "onHoverChange",
+    "onLayout",
     "accessibilityLabel",
     "accessibilityHint",
     "accessibilityState",
@@ -138,6 +142,28 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
   ] as const);
 
   const ctx = CheckboxContext() ?? FALLBACK_CHECKBOX_CONTEXT;
+
+  const input = createInput();
+
+  // A-003: the touch-gated press-feedback seam. Under the default pointer
+  // environment it is a physical no-op — `isPressed` stays down, `hitSlop()`
+  // answers `undefined`; under touch it owns the invisible hit expansion the
+  // stylesheet cannot produce (Native's `hitSlop=6` counterpart) and the
+  // canonical pressed channels. The toggle still commits in `handlePress`,
+  // the one place the value changes.
+  const feedback = createPressFeedback({
+    enabled: () => input() === "touch" && !ctx.isDisabled(),
+  });
+
+  // The seam's read channels travel through the context so tests can observe
+  // what a view prop (`hitSlop`) hides; the View below owns the writers.
+  ctx.setContentFeedback({
+    isPressed: feedback.isPressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    hitSlop: feedback.hitSlop,
+    enabled: () => input() === "touch" && !ctx.isDisabled(),
+  });
 
   // `checkbox.css:9-14` gives the indented help-text classes to the field
   // root's *direct* Description / FieldError children only (`& > …`); the
@@ -281,7 +307,7 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
 
   const classes = computed(() =>
     [
-      checkboxVariants({ variant: ctx.variant() }).content(),
+      checkboxVariants({ variant: ctx.variant(), input: input() }).content(),
       // R-037: `cursor-[inherit]` in the stylesheet has no NSH equivalent; the
       // part names the cursor itself, and the disabled state keeps the root's
       // `not-allowed`.
@@ -305,6 +331,10 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
   };
 
   const handlePressDown = (event: PressEvent) => {
+    // A-003: the seam records the press first, transparent to the existing
+    // order — gated off under pointer it does nothing at all.
+    feedback.pressDown(event);
+
     // A read-only press dispatches no press callback upstream. The held raw
     // signal still starts, so the Control's `:active` paint is unchanged; the
     // callbacks are gated in the root.
@@ -320,6 +350,7 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
   };
 
   const handlePressUp = (event: PressEvent) => {
+    feedback.pressUp(event);
     ctx.pressUp(event);
     // `onPressUp` fires before `onPress`; the press is over even when the
     // release does not become a press (a release outside).
@@ -380,12 +411,16 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
     // Upstream cancels it on pointer leave too (`usePress`'s `onPointerLeave`
     // ends the press without calling `onPress`), so the root's `onPressEnd` and
     // `onPressChange(false)` still fire with the pointer's last position.
-    ctx.pressEnd({
+    const cancel = {
       position: event.position,
       pagePosition: event.pagePosition,
       modifiers: event.modifiers,
       clickCount: 1,
-    });
+    };
+
+    // A-003: the seam hears the cancel the same way the root does.
+    feedback.pressUp(cancel);
+    ctx.pressEnd(cancel);
 
     if (!ctx.isHovered()) {
       return;
@@ -434,6 +469,12 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
     local.ref?.(node);
   };
 
+  // A-003: the seam's third attachment point — `bounds` feeds `hitSlop()`.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    feedback.layout(event);
+    local.onLayout?.(event);
+  };
+
   // A Content unmounting while focused must leave the group's focus-within set
   // and the root's focus state, or the group would stay "focused" for ever.
   cleanup(() => {
@@ -443,6 +484,7 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
     }
 
     ctx.setContentRef(undefined);
+    ctx.setContentFeedback(undefined);
   });
 
   return (
@@ -457,6 +499,9 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
       accessibilityHint={accessibilityHint()}
       accessibilityState={accessibilityState()}
       accessibilityElementsHidden={local.accessibilityElementsHidden}
+      // A-003: `hitSlop` is a view prop tv() cannot produce; the seam alone
+      // owns this channel and answers `undefined` under pointer.
+      hitSlop={feedback.hitSlop()}
       class={classes()}
       style={resolvedStyle()}
       onPressDown={handlePressDown}
@@ -466,6 +511,7 @@ export function CheckboxContent(props: CheckboxContentProps): JSX.Element {
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
       onBlur={handleBlur}
+      onLayout={handleLayout}
     >
       <DescriptionContext.Provider value={nestedDescriptionState}>
         <FieldErrorContext.Provider value={nestedFieldErrorState}>

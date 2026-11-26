@@ -1,7 +1,11 @@
 import type { Accessor, JSX } from "nsh";
 import { context } from "nsh";
 
-import type { SelectionMode, SelectionValue } from "../selection";
+import type {
+  SelectionMode,
+  SelectionModifiers,
+  SelectionValue,
+} from "../selection";
 import type { ListState } from "./create-list-state";
 
 /**
@@ -43,6 +47,15 @@ export interface ListOwnerListControls {
 
   /** Looks one registered option up (the owner's value renders its children). */
   findItem: (key: string) => ListOwnerItem | undefined;
+
+  /**
+   * Activates the focused option, as Return / Space on the list does. A row
+   * that is mounted runs its own activation; a key whose row is not mounted
+   * (an `items` collection longer than the visible rows) falls back to the
+   * selection manager's equivalent so the activation is never dropped
+   * (adapt-sheet f-collection §1, 激活兜底).
+   */
+  activateFocused?: (modifiers?: SelectionModifiers) => void;
 
   /**
    * Forgets the list's typeahead prefix. A field whose list stays mounted

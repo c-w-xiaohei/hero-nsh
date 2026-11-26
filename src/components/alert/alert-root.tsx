@@ -8,7 +8,9 @@ import { titleText, titleTooltip } from "./alert-hint";
 import { alertVariants, type AlertVariants } from "./alert.styles";
 import { joinClassNames } from "./class-names";
 import { AlertContext, type AlertContextValue, type AlertStatus } from "./context";
+import { createDensity } from "../../primitives/environment";
 import { SurfaceContext, type SurfaceContextValue } from "../surface";
+import { densityKey } from "../../tokens/density";
 
 /* -------------------------------------------------------------------------------------------------
  * Alert Root
@@ -106,13 +108,21 @@ export function AlertRoot(props: AlertRootProps): JSX.Element {
     "translate",
   ] as const);
 
-  // The only variant input, kept live as a derived value; `defaultVariants`
-  // fills it when the caller passes nothing, and the accessor is also what the
-  // Indicator reads to pick its icon.
+  // The only caller-set variant input, kept live as a derived value;
+  // `defaultVariants` fills it when the caller passes nothing, and the
+  // accessor is also what the Indicator reads to pick its icon.
   const status = computed<AlertStatus>(() => local.status ?? "default");
 
-  // R-001 … R-020 resolve through the same table for the root and every part.
-  const slots = computed(() => alertVariants({ status: status() }));
+  // The environment's `density` axis (encapsulation.md §1, 样式管线; sheet
+  // A-001): the base and indicator spacing literals resolve through it. The
+  // accessor returns the environment's own, so the single read here stays
+  // consistent with whatever scope the Root mounted under. There is no
+  // `input` axis — no part is pressable (A-003).
+  const density = createDensity();
+
+  // R-001 … R-020 and A-001 resolve through the same table for the root and
+  // every part.
+  const slots = computed(() => alertVariants({ status: status(), density: densityKey(density()) }));
 
   const contextValue: AlertContextValue = { slots, status };
 

@@ -6,6 +6,8 @@ import {
   isKeyboardPress,
 } from "../../primitives/create-interaction-modality";
 import { createToggleState } from "../../primitives/create-toggle-state";
+import { createInput } from "../../primitives/environment";
+import { createPressFeedback } from "../../primitives/pressable";
 import { DescriptionContext } from "../description/context";
 import { FieldErrorContext } from "../field-error/context";
 import { FieldsetContext } from "../fieldset/context";
@@ -345,6 +347,22 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
     () => local.isInvalid === true || validationErrors().length > 0,
   );
 
+  // --- The touch-gated press-feedback seam (A-002) ---------------------------
+  // Upstream's switch presses the whole component down to 0.96
+  // (`N/components/switch/switch.types.ts:66-100`): `ignoreScaleCoefficient`
+  // keeps that value flat instead of narrowing it by the face's width. The
+  // gate is `input` — under the default pointer environment `enabled` stays
+  // false and every channel rests — and `isDisabled`, since a disabled field
+  // shows no press feedback. The Content part is the writer (the face is the
+  // press target); the Control binds `scale` so the track, not the label
+  // text, shrinks on press (sheet §8).
+  const input = createInput();
+  const feedbackEnabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({
+    enabled: feedbackEnabled,
+    animation: { value: 0.96, ignoreScaleCoefficient: true },
+  });
+
   // --- Interaction state (R-026 … R-031) -------------------------------------
   const hovered = signal(false);
   const pressed = signal(false);
@@ -610,6 +628,9 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
 
   const contextValue: SwitchContextValue = {
     size,
+    // A-002: the seam rides the context — the Content drives it, the Control
+    // reads `scale`, and `enabled` exposes the effective gate.
+    feedback: { ...feedback, enabled: feedbackEnabled },
     isSelected: toggleState.isSelected,
     isDisabled,
     isReadOnly,

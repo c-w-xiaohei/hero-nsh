@@ -1,5 +1,6 @@
 import type { JSX, ViewProps } from "nsh";
-import { computed, View } from "nsh";
+import { computed, split, View } from "nsh";
+import { createInput } from "../../primitives/environment";
 import type { DrawerContextValue } from "./drawer-context";
 import { DrawerContext } from "./drawer-context";
 import type { DrawerPlacement } from "./drawer.styles";
@@ -23,16 +24,51 @@ export interface DrawerContentProps extends Omit<ViewProps, "children" | "class"
   render?: unknown;
   slot?: string;
   ref?: (node: import("nsh").ViewRef) => void;
+  /**
+   * Panel-side override of `Drawer.Backdrop`'s `isSwipeable` (adapt sheet
+   * §3): the same slot the upstream `isDismissable` pair uses, so a Content
+   * value wins over the Backdrop's, and unset passes the context value
+   * through.
+   * @default undefined (falls back to the Backdrop's value)
+   */
+  isSwipeable?: boolean;
 }
 
 export function DrawerContent(props: DrawerContentProps): JSX.Element {
+  // `split`, not a destructure: destructuring `props` reads `children` now,
+  // which creates the parts under this component's owner — they would
+  // resolve `DrawerContext` one provider up (the Backdrop's) and never see
+  // the placement/slots this Content re-provides. The lazy read happens
+  // inside the Provider below.
+  const [local, rest] = split(props, [
+    "children",
+    "className",
+    "placement",
+    "isDismissable",
+    "isSwipeable",
+    "isKeyboardDismissDisabled",
+    "isOpen",
+    "defaultOpen",
+    "onOpenChange",
+    "render",
+    "slot",
+    "ref",
+    "style",
+    "onLayout",
+  ] as const);
   const parent = DrawerContext();
   const base = parent ?? fallbackContext;
-  const placement = () => props.placement ?? base.placement();
+  const placement = () => local.placement ?? base.placement();
+  // A-004: the `input` axis is read at the slots production line.
+  const input = createInput();
   const contextValue: DrawerContextValue = {
     ...base,
     placement,
-    slots: computed(() => drawerVariants({ placement: placement(), variant: base.variant() })),
+    slots: computed(() => drawerVariants({ input: input(), placement: placement(), variant: base.variant() })),
+    // A-003: the Backdrop's channel is the real one; without it the panel is
+    // always claimable because nothing scrolls to compete (adapt sheet §2).
+    scrollAtTop: base.scrollAtTop ?? (() => true),
+    isSwipeable: () => local.isSwipeable ?? base.isSwipeable?.(),
   };
   const renderValues: DrawerRenderValues = {
     isEntering: base.isEntering,
@@ -45,7 +81,7 @@ export function DrawerContent(props: DrawerContentProps): JSX.Element {
     },
   };
   const className = () => {
-    const value = props.className;
+    const value = local.className;
     const custom = typeof value === "function" ? value(renderValues) : value;
     // R-012: placement aligns the panel to the requested viewport edge. The
     // content is a row, as upstream's is, so top and bottom align on the cross
@@ -62,20 +98,26 @@ export function DrawerContent(props: DrawerContentProps): JSX.Element {
       .filter(Boolean)
       .join(" ");
   };
-  const { children, className: _className, placement: _placement, isDismissable: _isDismissable,
-    isKeyboardDismissDisabled: _keyboardDisabled, isOpen: _isOpen, defaultOpen: _defaultOpen,
-    onOpenChange: _onOpenChange, render: _render, slot: _slot, ref, ...viewProps } = props;
+
+  // The open/dismiss props (`isDismissable`, `isSwipeable`, `isOpen`, …) are
+  // the accepted-but-unconsumed forward layer upstream's `ModalOverlay`
+  // carries; `split` keeps them off the view while `local.placement` and the
+  // `isSwipeable` override above do consume theirs.
+  const content = () => {
+    const node = local.children;
+    return typeof node === "function" ? node(renderValues) : node;
+  };
 
   return (
     <View
-      {...viewProps}
-      ref={(node) => ref?.(node)}
+      {...rest}
+      ref={(node) => local.ref?.(node)}
       class={className()}
-      style={props.style}
-      onLayout={props.onLayout}
+      style={local.style}
+      onLayout={local.onLayout}
     >
       <DrawerContext.Provider value={contextValue}>
-        {typeof children === "function" ? children(renderValues) : children}
+        {content()}
       </DrawerContext.Provider>
     </View>
   );
@@ -90,6 +132,7 @@ const fallbackContext: DrawerContextValue = {
   isEntering: () => false,
   isExiting: () => false,
   isPresented: () => false,
+  scrollAtTop: () => true,
   open: () => {},
   close: () => {},
   toggle: () => {},

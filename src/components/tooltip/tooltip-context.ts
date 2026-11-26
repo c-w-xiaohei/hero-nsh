@@ -49,6 +49,15 @@ export interface TooltipContextValue {
   /** The registered trigger, the fallback anchor for a standalone-looking Content. */
   triggerRef: Accessor<ViewRef | undefined>;
 
+  /**
+   * A-001: the long-press show channel. `Tooltip.Trigger` reports a held press
+   * into it before the caller's `onLongPress`, the same ordering the hover /
+   * press channels keep. It lives on the tooltip's own context, not on
+   * `HoverTriggerContextValue` — that one belongs to primitives and is the
+   * §5 跨单元需求 a Button would need.
+   */
+  longPress: () => void;
+
   /** The pointer entered the content (`useTooltip`'s `onHoverStart`): open at once. */
   contentHoverStart: () => void;
 

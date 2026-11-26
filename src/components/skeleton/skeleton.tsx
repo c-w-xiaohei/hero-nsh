@@ -2,6 +2,7 @@ import { computed, createAnimatedValue, effect, signal, split, View } from "nsh"
 import type {
   AccessibilityState,
   Bounds,
+  Easing,
   JSX,
   StyleProp,
   ViewProps,
@@ -9,8 +10,54 @@ import type {
   ViewStyle,
 } from "nsh";
 
+import {
+  getAnimationState,
+  getRootAnimationState,
+  type Animation,
+  type AnimationRoot,
+} from "../../primitives/pressable";
 import { type AriaProps, type GlobalDomProps } from "./dom-props";
 import { skeletonVariants, type SkeletonVariants } from "./skeleton.styles";
+
+/* -------------------------------------------------------------------------------------------------
+ * Animation prop (E: the shimmer channel's configuration subset)
+ * -----------------------------------------------------------------------------------------------*/
+
+/**
+ * The shimmer channel's configuration, the subset of upstream's
+ * `SkeletonShimmerAnimation` (`skeleton.types.ts:13-30`) NSH can host: `duration`
+ * and `speed` parameterize the `keyframes` timing, `highlightColor` repaints the
+ * gradient's middle stop, `easing` is NSH's `Easing` (not a Reanimated
+ * `EasingFunction`). Upstream's `pulse`/`entering`/`exiting` channels are not
+ * implemented (sheet §7).
+ */
+export type SkeletonShimmerAnimation = Animation<{
+  /** One sweep's duration in milliseconds. @default 2000 (this port's sweep; upstream's own default is 1500) */
+  duration?: number;
+
+  /** Speed multiplier; the effective duration is `duration / speed`. @default 1 */
+  speed?: number;
+
+  /** The gradient's middle stop; any CSS color. @default `via-surface-tertiary` */
+  highlightColor?: string;
+
+  /** The sweep's easing. @default "linear" */
+  easing?: Easing;
+}>;
+
+/**
+ * The root `animation` prop: `AnimationRoot` over `{ shimmer }`. `false` /
+ * `"disabled"` / `"disable-all"` turn every animated channel off (the pulse
+ * class is dropped and the shimmer never mounts); a config's own `state`
+ * behaves the same. Only the shimmer channel is configurable.
+ */
+export type SkeletonRootAnimation = AnimationRoot<{
+  shimmer?: SkeletonShimmerAnimation;
+}>;
+
+/* -------------------------------------------------------------------------------------------------
+ * Skeleton Root
+ * -----------------------------------------------------------------------------------------------*/
 
 /* -------------------------------------------------------------------------------------------------
  * Skeleton Root
@@ -29,11 +76,31 @@ export interface SkeletonRootProps
   extends Omit<ViewProps, "children" | "class">,
     AriaProps,
     GlobalDomProps {
-  /** The placeholder's content; usually empty, as upstream. */
+  /**
+   * The placeholder's content; usually empty, as upstream. Rendered only while
+   * `isLoading` is false — a loading skeleton paints the placeholder, not the
+   * content (`skeleton.tsx:132`, upstream).
+   */
   children?: JSX.Element;
 
   /** The animation; `shimmer` by default. */
   animationType?: SkeletonVariants["animationType"];
+
+  /**
+   * Whether the placeholder is loading. `true` (the default, upstream's own)
+   * keeps the existing always-placeholder behavior; `false` swaps it for the
+   * children in a bare `View`.
+   */
+  isLoading?: boolean;
+
+  /**
+   * Upstream's name for `animationType` (`skeleton.types.ts:118`). An alias:
+   * an explicit `animationType` wins over it.
+   */
+  variant?: SkeletonVariants["animationType"];
+
+  /** The shimmer channel's configuration (`SkeletonRootAnimation`). */
+  animation?: SkeletonRootAnimation;
 
   /** Appended after the variant classes; later classes win. */
   className?: string;
@@ -89,6 +156,9 @@ export function SkeletonRoot(props: SkeletonRootProps): JSX.Element {
   const [local] = split(props, [
     "children",
     "animationType",
+    "isLoading",
+    "variant",
+    "animation",
     "className",
     "style",
     "id",
@@ -119,7 +189,48 @@ export function SkeletonRoot(props: SkeletonRootProps): JSX.Element {
 
   // Prop first, then the default of the variant table; the theme variable
   // `--skeleton-animation` has no readable counterpart (port sheet §8).
-  const animationType = () => local.animationType ?? "shimmer";
+  // `variant` is upstream's name for the same dimension and loses to an
+  // explicit `animationType` (sheet A-010).
+  const animationType = () => local.animationType ?? local.variant ?? "shimmer";
+
+  // `isLoading` defaults to upstream's `true`: existing always-placeholder
+  // usage is untouched.
+  const isLoading = () => local.isLoading ?? true;
+
+  // The `animation` prop's three-tier flow. A root-level off (false /
+  // "disabled" / "disable-all", or a config's own `state`) silences every
+  // animated channel — the shimmer never mounts and the pulse class drops —
+  // while a `shimmer: "disabled"` config silences only the overlay (sheet
+  // §5/A-010; `getIsAnimationDisabledValue` would overfire on the channel's
+  // own flag).
+  const { animationConfig, isAllAnimationsDisabled, isAnimationDisabled } =
+    getRootAnimationState(local.animation);
+  const rootDisabled = isAllAnimationsDisabled || isAnimationDisabled;
+  const { isAnimationDisabled: shimmerDisabled } = getAnimationState(
+    animationConfig?.shimmer,
+  );
+
+  // `shimmer` resolves to its config object only (a boolean / "disabled"
+  // tier configures nothing and is already consumed by the flags above).
+  const shimmerConfig =
+    typeof animationConfig?.shimmer === "object"
+      ? (animationConfig.shimmer as {
+          duration?: number;
+          speed?: number;
+          highlightColor?: string;
+          easing?: Easing;
+        })
+      : undefined;
+
+  const shimmerDuration = shimmerConfig?.duration ?? 2000;
+  const shimmerSpeed = shimmerConfig?.speed ?? 1;
+  const shimmerEasing = shimmerConfig?.easing ?? "linear";
+  const shimmerHighlight = shimmerConfig?.highlightColor ?? "";
+
+  // What the variant table sees: the resolved type, except that a root-level
+  // animation off drops the animated `pulse` class as well.
+  const effectiveType = () =>
+    rootDisabled ? ("none" as const) : animationType();
 
   // The sweep is expressed in CSS percentages upstream; a native animation
   // works in points, so the root reports its laid-out width first.
@@ -128,21 +239,23 @@ export function SkeletonRoot(props: SkeletonRootProps): JSX.Element {
   const progress = createAnimatedValue(0);
 
   // R-009: the theme's `skeleton` keyframes are `100% { transform:
-  // translateX(200%) }` over 2 s, linear, forever. R-008's start offset is the
-  // same `-translate-x-full`: `translate: -100%`. The two properties add up,
-  // so the net trip is from `-w` to `+w` (2w), not `-w` to `2w`. The effect
-  // restarts the sweep whenever the measured width changes.
+  // translateX(200%) }` over 2 s, linear, forever — configurable through
+  // `animation.shimmer` (`duration`, divided by `speed`, and `easing`).
+  // R-008's start offset is the same `-translate-x-full`: `translate: -100%`.
+  // The two properties add up, so the net trip is from `-w` to `+w` (2w),
+  // not `-w` to `2w`. The effect restarts the sweep whenever the measured
+  // width or the gating changes.
   effect(() => {
     const measured = width();
 
-    if (animationType() !== "shimmer" || measured <= 0) {
+    if (!isLoading() || effectiveType() !== "shimmer" || shimmerDisabled || measured <= 0) {
       return;
     }
 
     progress.set(-measured);
     void progress.keyframes([-measured, measured], {
-      duration: 2000,
-      easing: "linear",
+      duration: shimmerDuration / Math.max(shimmerSpeed, 0.0001),
+      easing: shimmerEasing,
       iterations: "infinite",
     });
 
@@ -155,10 +268,12 @@ export function SkeletonRoot(props: SkeletonRootProps): JSX.Element {
   // width is known and only for `shimmer`; the condition lives in `when`
   // because an `<If>` function child runs untracked. Until then the overlay
   // would sit at its starting frame in the middle of an unmeasured box.
-  const showShimmer = computed(() => animationType() === "shimmer" && width() > 0);
+  const showShimmer = computed(
+    () => isLoading() && effectiveType() === "shimmer" && !shimmerDisabled && width() > 0,
+  );
 
   const classes = computed(() =>
-    skeletonVariants({ animationType: animationType() }).base({
+    skeletonVariants({ animationType: effectiveType() }).base({
       className: local.className,
     }),
   );
@@ -188,12 +303,13 @@ export function SkeletonRoot(props: SkeletonRootProps): JSX.Element {
     local.onLayout?.(event);
   };
 
-  // Only NSH host props go to the root. HeroUI forwards every `div` attribute;
-  // the ones without an NSH counterpart (`title`, `tabIndex`, `onClick`,
-  // `dir`, `lang`, `hidden`, `inert`, `translate`, the unmapped `aria-*`) are
-  // accepted above and never read, instead of reaching the `View` as unknown
-  // props.
-  return (
+  // The placeholder half of the `isLoading` gate: `isLoading={false}` mounts
+  // upstream's `!isLoading` branch instead (`skeleton.tsx:132-138`) — a bare
+  // container holding only the children, no placeholder classes, no shimmer,
+  // no measurement (upstream's `style`, `className` and `restProps` stay on
+  // the skeleton element, which that branch does not mount). `testID` is
+  // forwarded there so the content root can still be addressed.
+  const placeholder = (
     <View
       ref={(node) => (typeof props.ref === "function" ? props.ref(node) : undefined)}
       testID={props.testID}
@@ -257,21 +373,42 @@ export function SkeletonRoot(props: SkeletonRootProps): JSX.Element {
       web={props.web}
       onLayout={handleLayout}
     >
-      {local.children}
+      {/* While loading, the placeholder replaces the children entirely —
+          upstream renders `{children}` only under `!isLoading`
+          (`skeleton.tsx:155`). */}
       <If when={showShimmer()}>
         <View
           testID="skeleton-shimmer"
           // R-007: `absolute inset-0`, the last child so it draws over the
           // content exactly as `::after` did.
           // R-010: `bg-linear-to-r from-transparent via-surface-tertiary
-          // to-transparent`, the upstream gradient (its middle stop is 50%).
-          class="absolute inset-0 bg-linear-to-r from-transparent via-surface-tertiary to-transparent"
+          // to-transparent`, the upstream gradient (its middle stop is 50%);
+          // `animation.shimmer.highlightColor` repaints that stop inline.
+          class={shimmerHighlight
+            ? "absolute inset-0"
+            : "absolute inset-0 bg-linear-to-r from-transparent via-surface-tertiary to-transparent"}
           // R-008: `-translate-x-full` in points. The value is an animated
           // node, so the sweep runs on the UI thread without a signal write
           // per frame.
-          style={{ translate: [progress, 0] }}
+          style={[
+            { translate: [progress, 0] },
+            shimmerHighlight
+              ? {
+                  backgroundImage: `linear-gradient(to right, transparent, ${shimmerHighlight}, transparent)`,
+                }
+              : undefined,
+          ]}
         />
       </If>
     </View>
+  );
+
+  return (
+    <>
+      <If when={isLoading()}>{placeholder}</If>
+      <If when={!isLoading()}>
+        <View testID={props.testID}>{local.children}</View>
+      </If>
+    </>
   );
 }

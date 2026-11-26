@@ -150,6 +150,13 @@ export function LabelRoot(props: LabelRootProps): JSX.Element {
     );
   }
 
+  // A-007 / A-008: the adapt sheet's two 接轴 spots are harness-side —
+  // `harness/label.fixtures.tsx` (scope/case dispatch around this mount) and
+  // `label.mobile.test.tsx`. Both probe exactly the FieldContext channels and
+  // the press forwarding below; the component itself keeps no mobile seam —
+  // A-001…A-006 are 保留, and A-004's "shared B" is realized by forwarding to
+  // `pressField*`/`focusField` instead of growing a feedback seam here.
+  //
   // A press on a `<label for>` focuses its control and, when the field treats
   // the label's press as its own, is the field's press. NSH's label is its own
   // pressable Text and its press does not reach the field root, so the field is

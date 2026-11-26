@@ -9,6 +9,7 @@ import type {
 } from "@internationalized/date";
 
 import { createControllableBooleanSignal } from "../../primitives/create-controllable-signal";
+import { createInput } from "../../primitives/environment";
 import { renderChildren } from "../calendar/children";
 import {
   CalendarDefaultsContext,
@@ -23,6 +24,8 @@ import { createRangeCalendarState } from "./create-range-calendar-state";
 import type { RangeCalendarValue } from "./create-range-calendar-state";
 import {
   RangeCalendarContext,
+  type RangeCalendarFeedbackChannels,
+  type RangeCalendarNavSlot,
   type RangeCalendarRenderProps,
 } from "./range-calendar-context";
 import { rangeCalendarVariants } from "./range-calendar.styles";
@@ -259,7 +262,44 @@ export function RangeCalendarRoot(props: RangeCalendarRootProps): JSX.Element {
 
   // The year panel covers the grid with the bounds the grid reports (§2.3).
   const gridBounds = signal<Bounds | undefined>(undefined);
-  const slots = rangeCalendarVariants();
+
+  // A-002: the `input` variant axis reads the environment, never a prop —
+  // `RangeCalendarRootProps` does not inherit `RangeCalendarVariants`
+  // (sheet §3), so `input` is resolved here once, like the siblings that call
+  // the factory with a single argument.
+  const input = createInput();
+  const slots = rangeCalendarVariants({ input: input() });
+
+  // A-003/A-004: the seam channels Cell and NavButton register on mount.
+  // `hitSlop` is a view prop `nsh/test` cannot reach, so these signals are
+  // the seam's only observable surface (sheet §6): both rest empty under the
+  // pointer default because a gated seam registers resting channels.
+  const navButtonFeedback = signal<
+    Partial<Record<RangeCalendarNavSlot, RangeCalendarFeedbackChannels>>
+  >({});
+  const cellFeedback = signal<ReadonlyMap<string, RangeCalendarFeedbackChannels>>(
+    new Map(),
+  );
+
+  const setNavButtonFeedback = (
+    slot: RangeCalendarNavSlot,
+    channels: RangeCalendarFeedbackChannels | undefined,
+  ) => {
+    const next = { ...navButtonFeedback() };
+    if (channels === undefined) delete next[slot];
+    else next[slot] = channels;
+    navButtonFeedback.set(next);
+  };
+
+  const setCellFeedback = (
+    dateKey: string,
+    channels: RangeCalendarFeedbackChannels | undefined,
+  ) => {
+    const next = new Map(cellFeedback());
+    if (channels === undefined) next.delete(dateKey);
+    else next.set(dateKey, channels);
+    cellFeedback.set(next);
+  };
 
   const calendarRef = (next: ViewRef) => {
     local.ref?.(next);
@@ -298,7 +338,17 @@ export function RangeCalendarRoot(props: RangeCalendarRootProps): JSX.Element {
 
   return (
     <RangeCalendarContext.Provider
-      value={{ state, slots, ariaLabel, direction, isYearPickerOpen }}
+      value={{
+        state,
+        slots,
+        ariaLabel,
+        direction,
+        isYearPickerOpen,
+        navButtonFeedback,
+        cellFeedback,
+        setNavButtonFeedback,
+        setCellFeedback,
+      }}
     >
       <YearPickerContext.Provider value={yearPicker}>
         <CalendarGridLayoutContext.Provider

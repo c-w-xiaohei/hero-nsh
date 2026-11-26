@@ -1,6 +1,18 @@
-import { host, mount, signal, Text, View } from "nsh";
-import { Button, ColorSlider, Label, parseColor } from "@heroui/react";
-import type { ColorChannel } from "@heroui/react";
+import { effect, host, mount, Scroll, signal, Text, View } from "nsh";
+import type { JSX } from "nsh";
+import {
+  Button,
+  ColorSlider,
+  EnvironmentScope,
+  Label,
+  parseColor,
+  PressableFeedbackContext,
+} from "@heroui/react";
+import type { ColorChannel, PressableFeedbackContextValue } from "@heroui/react";
+import {
+  ColorSliderContext,
+  ColorSliderPanContext,
+} from "../src/components/color-slider/color-slider-context";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 
@@ -25,6 +37,35 @@ import { probe } from "@scenario/probe";
  *   grid       host.params withLabel / withOutput / orientation decide the four
  *              presence combinations; Output, Track and Thumb all report onLayout
  *   alpha      alpha channel hsla(0, 100%, 50%, 0.5), the checkerboard case
+ *   mobile     adapt-sheet M-001…M-012 surface: full probes (onChange /
+ *              onChangeEnd / hover / focus / layout / drag-state edges),
+ *              a `dragging` marker, `track-hover` / `thumb-hover` markers
+ *              floating outside the hit surfaces (`pointer-events-none`),
+ *              and — with `probe=1` — a `SeamProbe` inside Track and Thumb
+ *              reporting `ctx-env` (enabled / hitSlop / bounds / isPressed /
+ *              pressOrigin / panKeys / panActive) plus a `sample-seams`
+ *              button that resolves the animated channels into `ctx-seams`.
+ *              `disabled=1` arms isDisabled.
+ *   scroll     the same slider inside a real `Scroll` for M-004 / M-010: the
+ *              scroll axis is perpendicular to the slider's (`horizontal`
+ *              for a vertical slider, vertical otherwise), `onScroll` probes
+ *              the offset, and a plain `pad` view proves the scroller moves
+ *              when the gesture is not the slider's.
+ *
+ * host.params.scope picks the EnvironmentScope wrapper: "touch"/"pointer"
+ * inject that input axis, anything else leaves the default environment —
+ * the desktop-parity half of the same case (the switch fixtures'
+ * convention). `scope` wraps every case (the slider fixture's `App`
+ * convention), so the parity cases — `controlled`/`disabled`/`alpha` —
+ * honor it too.
+ *
+ * The positive pan observation the headless assertions read is the
+ * `ctx-env` channel's `panActive`/`panKeys` pair (review M-013 complement to
+ * M-012's `panKeys === 0` negative): `pan.active()` only sets inside the
+ * pan's `onPanResponderGrant`, so a `ctx-env` record with `panActive ===
+ * true` mid-hold is the proof the pan's lifecycle ran — `drag-state` alone
+ * cannot distinguish the pan's grant-driven `isDragging` from the bare
+ * chain's or a commit-by-luck sequence (the shadowed-spread regression).
  */
 
 const CHANNELS = [
@@ -64,6 +105,123 @@ function channelParam(): ColorChannel {
 
 function orientationParam(): "horizontal" | "vertical" {
   return host.params.orientation === "vertical" ? "vertical" : "horizontal";
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Environment + probes (adapt sheet §4)
+ * -----------------------------------------------------------------------------------------------*/
+
+/**
+ * `scope` picks the `EnvironmentScope` wrapper: "touch"/"pointer" inject that
+ * input axis, anything else leaves the default environment (the host-derived
+ * half — on native phones that is touch, so the pointer-baseline assertions
+ * inject "pointer" explicitly instead of a desktop platform pin).
+ */
+function Scoped(props: { children?: JSX.Element }) {
+  const scope = String(host.params.scope ?? "");
+
+  return scope === "touch" || scope === "pointer" ? (
+    <EnvironmentScope input={scope}>{props.children}</EnvironmentScope>
+  ) : (
+    props.children
+  );
+}
+
+function probeOn() {
+  return String(host.params.probe ?? "") === "1";
+}
+
+/**
+ * The seam contexts the mounted `SeamProbe`s resolved, kept for the
+ * on-demand channel read: the `AnimatedValue` channels only answer through
+ * `getValue()` promises, so `sampleSeamChannels` (the `sample-seams`
+ * button) resolves them into `ctx-seams` records after the gesture under
+ * test — the rest reads M-001 / M-011 make.
+ */
+const liveSeams: Record<string, PressableFeedbackContextValue> = {};
+
+/**
+ * The seam's only observable surface (sheet §6: `hitSlop` is a view prop
+ * nsh/test cannot read). `PressableFeedbackContext` carries the part's
+ * `hitSlop`/`bounds`/gate and the sync press flag; `ColorSliderPanContext`
+ * carries the pan's resolved handler object — `panKeys` 0 under the default
+ * environment is the negative assertion that no gesture path mounted.
+ * Mounted only when `probe=1` asks for it.
+ */
+function SeamProbe(props: { id: string }) {
+  const ctx = PressableFeedbackContext();
+  const pan = ColorSliderPanContext();
+  const report = probe("ctx-env");
+
+  effect(() => {
+    liveSeams[props.id] = ctx;
+  });
+
+  effect(() => {
+    report({
+      id: props.id,
+      enabled: ctx.enabled(),
+      hitSlop: ctx.hitSlop() ?? null,
+      bounds: ctx.bounds(),
+      isPressed: ctx.isPressed(),
+      pressOrigin: ctx.pressOrigin(),
+      panKeys: pan ? Object.keys(pan.panHandlers()).length : -1,
+      panActive: pan ? pan.active() : false,
+    });
+  });
+
+  return null;
+}
+
+/** Resolves both seams' animated channels into `ctx-seams` records. */
+function sampleSeamChannels() {
+  const report = probe("ctx-seams");
+
+  for (const id of ["thumb", "track"] as const) {
+    const ctx = liveSeams[id];
+
+    if (!ctx) {
+      continue;
+    }
+
+    void ctx.pressed.getValue().then((pressed) => {
+      void ctx.scale.getValue().then((scale) => {
+        void ctx.highlightOpacity.getValue().then((highlight) => {
+          void ctx.rippleProgress.getValue().then((ripple) => {
+            report({ id, pressed, scale, highlight, ripple });
+          });
+        });
+      });
+    });
+  }
+}
+
+/** `dragging`/`idle` marker text the tests sample mid-gesture (M-003, M-010). */
+function StateMarker() {
+  const slider = ColorSliderContext();
+
+  return (
+    <Text testID="dragging">
+      {slider?.state.isDragging() ? "dragging" : "idle"}
+    </Text>
+  );
+}
+
+/**
+ * The `isDragging` edge record: the effect re-fires on every transition, so
+ * `callsOf(app, "drag-state")` reads the whole true→false roundtrip after
+ * the gesture ends — the mid-drag sample `app.drag` cannot give a
+ * dual-target file (commands serialize; `dragAndHold` is headless-only).
+ */
+function DragStateProbe() {
+  const slider = ColorSliderContext();
+  const report = probe("drag-state");
+
+  effect(() => {
+    report(slider?.state.isDragging() ?? false);
+  });
+
+  return null;
 }
 
 function valueParam(fallback: string): string {
@@ -204,7 +362,16 @@ function AlphaCase() {
   return (
     <Stage>
       <View class="w-[320px]">
-        <ColorSlider channel="alpha" defaultValue="hsla(0, 100%, 50%, 0.5)">
+        <ColorSlider
+          channel="alpha"
+          defaultValue="hsla(0, 100%, 50%, 0.5)"
+          onChange={(color) =>
+            probe("onChange")(color.getChannelValue("alpha"), color.toString("css"))
+          }
+          onChangeEnd={(color) =>
+            probe("onChangeEnd")(color.getChannelValue("alpha"))
+          }
+        >
           <Label>Alpha</Label>
           <ColorSlider.Output testID="output" />
           <ColorSlider.Track testID="track" onLayout={layoutProbe("track")}>
@@ -216,9 +383,133 @@ function AlphaCase() {
   );
 }
 
+/**
+ * The slider the `mobile` and `scroll` cases share: every callback the
+ * assertions count (`onChange` per frame, one `onChangeEnd` per interaction,
+ * the hover trio, focus) is probed, the markers report the drag and hover
+ * flags, and `probe=1` mounts a `SeamProbe` inside each part.
+ */
+function ProbedSlider() {
+  const channel = channelParam();
+  const orientation = orientationParam();
+  const isDisabled = String(host.params.disabled ?? "") === "1";
+
+  return (
+    <ColorSlider
+      channel={channel}
+      defaultValue={valueParam("hsl(0, 100%, 50%)")}
+      orientation={orientation}
+      isDisabled={isDisabled}
+      onChange={(color) =>
+        probe("onChange")(color.getChannelValue(channel), color.toString("css"))
+      }
+      onChangeEnd={(color) =>
+        probe("onChangeEnd")(color.getChannelValue(channel))
+      }
+    >
+      <Label>Hue</Label>
+      <ColorSlider.Output testID="output" />
+      <StateMarker />
+      <DragStateProbe />
+      <ColorSlider.Track
+        testID="track"
+        onLayout={layoutProbe("track")}
+        onHoverStart={probe("trackHoverStart")}
+        onHoverEnd={probe("trackHoverEnd")}
+        onHoverChange={probe("trackHoverChange")}
+      >
+        {(values) => [
+          /*
+           * The marker floats above the track, `pointer-events-none`, so it
+           * reports the flag without covering the hit surface (the text under
+           * a finger would be `app.press`'s ERR_NSH_TEST_COVERED).
+           */
+          <Text testID="track-hover" class="absolute -top-7 pointer-events-none">
+            {values.isHovered() ? "TrackHovered" : "TrackIdle"}
+          </Text>,
+          <ColorSlider.Thumb
+            testID="thumb"
+            onFocus={probe("onFocus")}
+            onBlur={probe("onBlur")}
+            onLayout={layoutProbe("thumb")}
+            onHoverStart={probe("thumbHoverStart")}
+            onHoverEnd={probe("thumbHoverEnd")}
+            onHoverChange={probe("thumbHoverChange")}
+          >
+            {(thumbValues) => [
+              <Text
+                testID="thumb-hover"
+                class="absolute -top-7 pointer-events-none"
+              >
+                {thumbValues.isHovered() ? "ThumbHovered" : "ThumbIdle"}
+              </Text>,
+              probeOn() ? <SeamProbe id="thumb" /> : null,
+            ]}
+          </ColorSlider.Thumb>,
+          probeOn() ? <SeamProbe id="track" /> : null,
+        ]}
+      </ColorSlider.Track>
+    </ColorSlider>
+  );
+}
+
+function MobileCase() {
+  return (
+    <Stage>
+      <View class={orientationParam() === "vertical" ? "h-64 w-24" : "w-[320px]"}>
+        <ProbedSlider />
+      </View>
+      {probeOn() ? (
+        <Button testID="sample-seams" onPress={sampleSeamChannels}>
+          Sample seams
+        </Button>
+      ) : null}
+    </Stage>
+  );
+}
+
+/**
+ * M-004 / M-010: the slider inside a real `Scroll`, so the native recognizer
+ * competes for the gesture. The scroll axis is perpendicular to the slider's
+ * — a cross-axis drag is the scroll's, an along-axis one the pan's claim —
+ * and the content overfills the viewport so the Scroll can actually move.
+ */
+function ScrollCase() {
+  const verticalSlider = orientationParam() === "vertical";
+
+  return (
+    <Stage>
+      <View class="h-56 w-56">
+        <Scroll
+          testID="scroller"
+          class="h-56 w-56"
+          horizontal={verticalSlider}
+          onScroll={(event) => probe("scroller")(event.offset)}
+        >
+          {verticalSlider ? (
+            <View class="h-64 w-[640px] flex-row gap-8">
+              <ProbedSlider />
+              {/* The control area: a plain view proving the Scroll itself
+                  moves when the gesture is not the slider's. */}
+              <View testID="pad" class="h-64 w-48" />
+            </View>
+          ) : (
+            <View class="h-[640px] w-[320px]">
+              <ProbedSlider />
+              <View testID="pad" class="h-24 w-full" />
+            </View>
+          )}
+        </Scroll>
+      </View>
+    </Stage>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "parts");
 
+  if (name === "mobile") return <MobileCase />;
+  if (name === "scroll") return <ScrollCase />;
   if (name === "keyboard") return <KeyboardCase />;
   if (name === "controlled") return <ControlledCase />;
   if (name === "disabled") return <DisabledCase />;
@@ -228,4 +519,19 @@ function Fixture() {
   return <PartsCase />;
 }
 
-mount(Fixture);
+/*
+ * `Scoped` wraps the whole case tree (the slider fixture's convention): an
+ * absent `scope` leaves the tree untouched — a bare passthrough, so the
+ * existing desktop tests' default behavior is unchanged — and the case
+ * elements are built inside `Fixture`'s body so the injected context
+ * actually reaches them.
+ */
+function App() {
+  return (
+    <Scoped>
+      <Fixture />
+    </Scoped>
+  );
+}
+
+mount(App);

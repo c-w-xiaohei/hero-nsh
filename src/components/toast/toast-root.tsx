@@ -1,12 +1,15 @@
-import { computed, cleanup, effect, reduceMotion, signal, split, View } from "nsh";
+import { computed, cleanup, effect, reduceMotion, signal, split, View, windowSize } from "nsh";
 import type { Bounds, JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
 
+import { createInput } from "../../primitives/environment";
+import { createPan } from "../../primitives/pan";
 import { renderChildren, type ToastRenderValues } from "./children";
 import { resolveClassName, resolveStyle } from "./class-names";
 import type { AriaProps, DataProps, GlobalDomProps } from "./toast-dom-props";
 import { viewProps } from "./toast-dom-props";
 import { ToastContext, ToastItemContext, type ToastItemContextValue, type ToastSlots } from "./toast-context";
 import { toastVariants, type ToastVariants } from "./toast.styles";
+import { toastDismissTarget, toastRubberOffset, toastSwipeSign } from "./toast.utils";
 import {
   DEFAULT_GAP,
   DEFAULT_MAX_VISIBLE_TOAST,
@@ -72,6 +75,15 @@ export interface ToastProps<T extends object = ToastContentValue>
 
   /** Forwarded to the root `View` as a callback, never as a ref store. */
   ref?: (node: ViewRef) => void;
+
+  /**
+   * Whether this toast can be swiped closed; overrides the provider's
+   * stack-level default (`ToastProviderProps.isSwipeable`). The gesture
+   * only exists where `input === "touch"` — under a pointer environment
+   * no listener is mounted, whatever the prop says.
+   * @default true
+   */
+  isSwipeable?: boolean;
 }
 
 /** No exiting keys, shared so the fallback set is not rebuilt on every read. */
@@ -102,6 +114,7 @@ export function ToastRoot<T extends object = ToastContentValue>(
     "ref",
     "variant",
     "placement",
+    "isSwipeable",
     "scaleFactor",
     "id",
     "nativeID",
@@ -317,15 +330,25 @@ export function ToastRoot<T extends object = ToastContentValue>(
   /** R-020: `--toast-enter`, expressed as a height instead of `-100%`. */
   const enterOffset = computed(() => (entering() ? -measuredHeight() : 0));
 
-  /** R-015: `transform: translateY(dir * (y + enter)) scale(scale)`. */
+  /*
+   * A-001: the swipe's two signals are declared here — before `translateY`
+   * and `transitionStyle` below read them — because NSH evaluates a
+   * `computed`'s function eagerly at creation, so a `const` declared further
+   * down would still be uninitialized ("dragY is not initialized" at mount).
+   * The gesture that writes them is set up in the swipe section further down.
+   */
+  const dragY = signal(0);
+  const swiping = signal(false);
+
+  /** R-015: `transform: translateY(dir * (y + enter)) scale(scale)`; A-001's `dragY` rides the same transform. */
   const translateY = computed(() => {
     // R-029: the frontmost exiting toast leaves the way it arrived, one height
-    // away, at full scale.
+    // away, at full scale — plus the offset a dismissed swipe froze at.
     if (isExiting() && isFrontmost()) {
-      return direction() * -measuredHeight();
+      return direction() * -measuredHeight() + dragY();
     }
 
-    return direction() * (offset() + enterOffset());
+    return direction() * (offset() + enterOffset()) + dragY();
   });
 
   /** R-015 / R-027 / R-029 … R-031. */
@@ -375,7 +398,10 @@ export function ToastRoot<T extends object = ToastContentValue>(
 
     return {
       transitionDuration: duration,
-      transitionProperty: "transform, height, opacity",
+      // A-001: while a swipe owns the transform it leaves the transition list,
+      // so every drag frame lands at once; restoring the list is what animates
+      // the spring back to `dragY === 0`.
+      transitionProperty: swiping() ? "height, opacity" : "transform, height, opacity",
     };
   });
 
@@ -508,6 +534,84 @@ export function ToastRoot<T extends object = ToastContentValue>(
     "sm:grid-cols-[minmax(0,1fr)_auto]": !hasIndicator(),
   }));
 
+  /* -------------------------------------------------------------------------------------------
+   * Swipe to dismiss (A-001 … A-003): a touch-only `createPan` path
+   * ----------------------------------------------------------------------------------------- */
+
+  const input = createInput();
+
+  /**
+   * The toast's own prop wins, then the provider's stack default; both default
+   * to swipeable, as `heroui-native`'s `isSwipeable` does (adapt sheet §3).
+   */
+  const swipeable = computed(
+    () => local.isSwipeable ?? region.isSwipeable?.() ?? true,
+  );
+
+  /**
+   * A-001: the dismiss direction, normalized from the placement the stack
+   * actually renders against (`local.placement ?? region.placement`, read at
+   * :137 above — the same channel `slots()` uses, not a second source). The
+   * horizontal `start` / `end` alignment is dropped by `toastSwipeSign`.
+   */
+  const swipeSign = computed(() => toastSwipeSign(placement()));
+
+  /**
+   * The translateY the drag adds to `stackingStyle`'s transform — the only
+   * style channel the swipe writes (M-009's stacking owner stays this file's
+   * `translateY`). `swiping` gates the transform out of the transition's
+   * property list while the gesture owns it, so the toast follows the finger
+   * instead of trailing the 350ms transition. Both signals are declared
+   * above `translateY`, before the computeds that read them.
+   */
+  const pan = createPan({
+    enabled: () => input() === "touch" && swipeable(),
+    // Claim on the first vertically-dominant move and never lock the
+    // direction — a drag against the dismiss edge gets the rubber band from
+    // `onDrag` below rather than an unclaimed gesture.
+    shouldClaim: (_event, gesture) =>
+      gesture.dy !== 0 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+    onDragStart: () => {
+      swiping.set(true);
+      // A-002: the queue's countdowns suspend under the `"drag"` key for the
+      // gesture's life (a standalone toast has no region and suspends
+      // nothing).
+      region.dragEnter?.();
+    },
+    onDrag: (_event, gesture) => {
+      const travel = gesture.dy * swipeSign();
+
+      // Toward the dismiss edge the finger's travel lands one to one; the
+      // counter direction is the rubber band, linear over the screen height
+      // and capped at 40 points, as `toast.animation.ts` interpolates it.
+      dragY.set(
+        travel >= 0
+          ? gesture.dy
+          : -swipeSign() * toastRubberOffset(travel, windowSize().height),
+      );
+    },
+    onDragEnd: (_event, gesture, terminated) => {
+      // `createPan` has already cleared `active()` when this runs; the flag
+      // has to drop before `dragY` does, so the transform transition is back
+      // in the property list when the toast returns to rest.
+      swiping.set(false);
+      region.dragLeave?.();
+
+      if (!terminated && toastDismissTarget(gesture.dy * swipeSign(), gesture.vy)) {
+        // The existing exit transition plays the toast out; the release
+        // offset stays in `dragY` until unmount.
+        if (region.close) {
+          region.close(key);
+        } else {
+          dragY.set(0);
+        }
+        return;
+      }
+
+      dragY.set(0);
+    },
+  });
+
   const itemContext: ToastItemContextValue = {
     close: () => region.close?.(key),
     contentHidden,
@@ -519,6 +623,15 @@ export function ToastRoot<T extends object = ToastContentValue>(
     isHidden,
     registerIndicator,
     registerText,
+    // A-003: the fixture's `SwipeProbe` reads the gesture's resolution — the
+    // handler-object keys (0 under pointer, M-001/M-010), the claimed flag,
+    // the visual offset and the drag-in-flight flag.
+    swipe: {
+      handlers: pan.panHandlers,
+      active: pan.active,
+      offset: dragY,
+      dragging: swiping,
+    },
     toast: entry as unknown as ToastItemContextValue["toast"],
     variant,
   };
@@ -529,6 +642,10 @@ export function ToastRoot<T extends object = ToastContentValue>(
     <ToastItemContext.Provider value={itemContext}>
       <View
         {...viewProps(rest)}
+        // A-001: `createPan` owns the responder props on the toast; under a
+        // pointer environment this spread is the empty object and no listener
+        // mounts at all (M-001's negative assertion).
+        {...pan.panHandlers()}
         // A callback only: NSH writes into a ref store, and an undefined one
         // would throw at mount on the web target (common rules, real hosts).
         ref={(next) => {

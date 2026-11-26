@@ -1,6 +1,14 @@
 name: Setup
 description: pnpm, Node, the nsh command line and the dependencies
 
+inputs:
+  nix-nsh:
+    description: "Use the flake's nsh on Linux; set false on device lanes that install components"
+    default: "true"
+  save-nix-cache:
+    description: "Save the Nix store cache on main; enable on one host job only"
+    default: "false"
+
 runs:
   using: composite
   steps:
@@ -9,8 +17,36 @@ runs:
       with:
         node-version-file: .nvmrc
         cache: pnpm
-    - name: Install nsh
-      if: runner.os != 'Windows'
+    # Linux host lanes take nsh from the flake, so CI and the packaged
+    # release are the same pinned artifact. Device lanes keep the installer:
+    # they own a writable distribution that `nsh component add` can extend,
+    # while the Nix store is read-only.
+    - name: Install Nix
+      if: runner.os == 'Linux' && inputs.nix-nsh == 'true'
+      uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
+      with:
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+    - name: Cache Nix store
+      if: runner.os == 'Linux' && inputs.nix-nsh == 'true'
+      uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+      with:
+        primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix', 'nix/nsh.nix') }}
+        restore-prefixes-first-match: nix-${{ runner.os }}-
+        # GitHub scopes a PR cache to that PR's merge ref: saving here warms
+        # later pushes to the same PR, while main's cache still seeds every
+        # PR. The check job remains the only saver.
+        save: ${{ inputs.save-nix-cache == 'true' && (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') }}
+        gc-max-store-size-linux: 3G
+    - name: Install nsh (Linux, Nix)
+      if: runner.os == 'Linux' && inputs.nix-nsh == 'true'
+      shell: bash
+      run: |
+        nsh_link="$RUNNER_TEMP/nsh"
+        nix build .#nsh --out-link "$nsh_link" --no-write-lock-file
+        echo "$nsh_link/bin" >> "$GITHUB_PATH"
+    - name: Install nsh (installer)
+      if: runner.os == 'macOS' || (runner.os == 'Linux' && inputs.nix-nsh == 'false')
       shell: bash
       run: |
         curl -fsSL https://nsh.dev/install.sh | sh

@@ -1,4 +1,4 @@
-import type { Accessor } from "nsh";
+import type { Accessor, Edges, Point, Size } from "nsh";
 import { context } from "nsh";
 import type { PressEvent, ViewRef } from "nsh";
 
@@ -80,6 +80,30 @@ export interface CheckboxButtonRenderProps extends CheckboxFieldRenderProps {
   isPressed: Accessor<boolean>;
   isFocused: Accessor<boolean>;
   isFocusVisible: Accessor<boolean>;
+}
+
+/**
+ * The touch-gated `createPressFeedback` seam one `Checkbox.Content` runs
+ * (A-003), seen as read channels only — the Content's `View` owns the writers.
+ * `hitSlop` is a view prop `nsh/test` cannot read, so these accessors are the
+ * seam's only observable surface (sheet §6's hitSlop registration): they sit
+ * on the context exactly as `ControlFieldFeedbackChannels` does.
+ */
+export interface CheckboxFeedbackChannels {
+  /** The seam's press flag; rises only while `enabled` holds (touch, not disabled). */
+  isPressed: Accessor<boolean>;
+
+  /** The Content's measured size, from `onLayout`. */
+  bounds: Accessor<Size>;
+
+  /** Where the current press went down; null while the seam is gated off. */
+  pressOrigin: Accessor<Point | null>;
+
+  /** The slop the seam binds on the Content's `hitSlop`; `undefined` under pointer. */
+  hitSlop: Accessor<number | Partial<Edges> | undefined>;
+
+  /** The seam's effective gate: `input() === "touch"` and not `isDisabled`. */
+  enabled: Accessor<boolean>;
 }
 
 /**
@@ -186,6 +210,16 @@ export interface CheckboxContextValue {
   setContentRef: (node: ViewRef | undefined) => void;
 
   /**
+   * The Content's touch-gated press-feedback channels (A-003), read-only
+   * here; an accessor so a caller sees the channels the Content registers
+   * after the context value is built — resting until then.
+   */
+  feedback: Accessor<CheckboxFeedbackChannels>;
+
+  /** The Content registers its `createPressFeedback` channels on mount. */
+  setContentFeedback: (channels: CheckboxFeedbackChannels | undefined) => void;
+
+  /**
    * The Content registers the press callbacks a caller placed on it, so a Label
    * press (which never reaches the Content) reports into them too. The field
    * root's own props win when both are given.
@@ -256,6 +290,15 @@ export interface CheckboxContextValue {
  * tree rendering, so a lone part shows the resting state instead. It holds no
  * mutable value, so sharing it between instances cannot leak state.
  */
+/** The `feedback` answer where no Content has registered a seam. */
+const RESTING_FEEDBACK_CHANNELS: CheckboxFeedbackChannels = {
+  isPressed: () => false,
+  bounds: () => ({ width: 0, height: 0 }),
+  pressOrigin: () => null,
+  hitSlop: () => undefined,
+  enabled: () => false,
+};
+
 export const FALLBACK_CHECKBOX_CONTEXT: CheckboxContextValue = {
   variant: () => "primary",
   isSelected: () => false,
@@ -282,6 +325,8 @@ export const FALLBACK_CHECKBOX_CONTEXT: CheckboxContextValue = {
   errorText: () => undefined,
   itemClass: () => undefined,
   setContentRef: () => {},
+  feedback: () => RESTING_FEEDBACK_CHANNELS,
+  setContentFeedback: () => {},
   setContentPressHandlers: () => {},
   focusContentFromPointer: () => {},
   pressStart: () => {},

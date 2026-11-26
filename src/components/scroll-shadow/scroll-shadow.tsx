@@ -297,6 +297,10 @@ export function ScrollShadowRoot(props: ScrollShadowRootProps): JSX.Element {
     orientation() === "horizontal" ? "static flex-row" : "static",
   );
 
+  // A-003: the `Scroll` host is the unit's D-class 落点 and its处置 is 仲裁 —
+  // the existing scroll path is kept exactly as it is so the sheet-handoff
+  // unit's arbitration seam can reach it; this component registers no gesture
+  // path of its own (no `createPan`, no responder), on either end.
   return (
     <Scroll
       {...rest}

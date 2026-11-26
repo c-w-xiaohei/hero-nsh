@@ -3,7 +3,7 @@ import { DisclosureContent, type DisclosureContentProps } from "./disclosure-con
 import { DisclosureHeading, type DisclosureHeadingProps } from "./disclosure-heading";
 import { DisclosureIndicator, type DisclosureIndicatorProps } from "./disclosure-indicator";
 import { DisclosureRoot, type DisclosureRootProps } from "./disclosure-root";
-import { DisclosureTrigger, type DisclosureTriggerProps } from "./disclosure-trigger";
+import { DisclosureTrigger, type DisclosureTriggerProps } from "./disclosure-trigger-view";
 
 /* -------------------------------------------------------------------------------------------------
  * Compound Component
@@ -50,7 +50,7 @@ export type { DisclosureHeadingProps } from "./disclosure-heading";
 export type {
   DisclosureTriggerProps,
   DisclosureTriggerRenderProps,
-} from "./disclosure-trigger";
+} from "./disclosure-trigger-view";
 
 export type {
   DisclosureContentProps,

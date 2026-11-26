@@ -1,10 +1,17 @@
-import type { AccessibilityState, JSX } from "nsh";
-import { computed, reduceMotion, View } from "nsh";
+import type { AccessibilityState, Bounds, JSX } from "nsh";
+import { computed, createAnimatedValue, reduceMotion, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { renderChildren } from "./pagination-children";
 import { PaginationContext } from "./pagination-context";
 import type { PaginationButtonProps } from "./pagination-button-props";
 import { createPaginationPressable } from "./create-pagination-pressable";
+import type { PaginationRenderProps } from "./create-pagination-pressable";
 import { toAccessibilityRole } from "./pagination-roles";
 import { paginationNavClasses } from "./pagination.styles";
 
@@ -60,6 +67,33 @@ export function PaginationButtonRoot(props: PaginationButtonRootProps): JSX.Elem
   const ctx = PaginationContext();
   const pressable = createPaginationPressable(props);
   const renderProps = pressable.renderProps;
+
+  // A-002: the press-feedback seam, gated on `input() === "touch"` and the
+  // pressable's blocked flags — under a pointer environment `pressDown` /
+  // `pressUp` only forward `onPressChange` and `hitSlop()` stays `undefined`,
+  // so the desktop chain below is untouched. `createInput()` resolves in this
+  // owner scope (an `EnvironmentScope` remount re-creates the part).
+  const input = createInput();
+  const feedback = createPressFeedback({
+    enabled: () => input() === "touch" && !pressable.isBlocked(),
+  });
+
+  // The seam's read half for probes and overlay parts: `PaginationContext`'s
+  // `slots` shape is unchanged (sheet §2 A-003), so the channels travel in a
+  // `PressableFeedbackContext` provider around the part's children — the same
+  // carrier Disclosure's trigger uses. No Highlight/Ripple mounts by default.
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: () => input() === "touch" && !pressable.isBlocked(),
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
 
   const resolvedClassName = () => {
     const className = props.className;
@@ -120,23 +154,26 @@ export function PaginationButtonRoot(props: PaginationButtonRootProps): JSX.Elem
     };
   });
 
-  // The single read of `props.children`, through a computed, rendered at the
-  // placement so a signal inside a child keeps updating (research 4.1 / 4.6).
-  const children = computed(() => props.children);
+  // A-002: the seam hooks the host's press-down behind the pressable's chain
+  // (a blocked press early-returns inside `handlePressDown`, and the gated
+  // seam records nothing either way) and its press-up at the chain's head —
+  // release and cancel share the one `onPressUp`, so the seam must unwind
+  // before the callers hear the end.
+  const handlePressDown = (event: Parameters<typeof pressable.handlers.onPressDown>[0]) => {
+    pressable.handlers.onPressDown(event);
+    feedback.pressDown(event);
+  };
 
-  const renderContent = () => {
-    const content = children();
+  const handlePressUp = (event: Parameters<typeof pressable.handlers.onPressUp>[0]) => {
+    feedback.pressUp(event);
+    pressable.handlers.onPressUp(event);
+  };
 
-    // D17: a function that takes arguments is the HeroUI render prop; the
-    // parameter object holds accessors. A zero-argument function is NSH's
-    // reactive child and goes through `renderChildren`.
-    if (typeof content === "function" && content.length >= 1) {
-      return renderChildren(
-        (content as (values: typeof renderProps) => JSX.Element)(renderProps),
-      );
-    }
-
-    return renderChildren(content as JSX.Element);
+  // A-002: `bounds` feeds `hitSlop` and `scale`, so the seam reads the layout
+  // before the caller's `onLayout`, which stays last in the chain.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    feedback.layout(event);
+    props.onLayout?.(event);
   };
 
   return (
@@ -163,19 +200,66 @@ export function PaginationButtonRoot(props: PaginationButtonRootProps): JSX.Elem
         "ring-2 ring-focus ring-offset-2 ring-offset-background": renderProps.isFocusVisible(),
         "opacity-50 cursor-not-allowed pointer-events-none": pressable.isBlocked(),
       }}
-      style={[{ transitionProperty: transitionProperty() }, resolvedStyle()]}
+      // A-002: `scale` owns the transform channel under touch (1 under
+      // pointer); the `input` axis keeps every `active:scale-*` out of the
+      // touch class output, so nothing else writes the same property.
+      style={[
+        { scale: feedback.scale },
+        { transitionProperty: transitionProperty() },
+        resolvedStyle(),
+      ]}
       onPress={pressable.handlers.onPress}
-      onPressDown={pressable.handlers.onPressDown}
-      onPressUp={pressable.handlers.onPressUp}
+      onPressDown={handlePressDown}
+      onPressUp={handlePressUp}
       onMouseEnter={pressable.handlers.onMouseEnter}
       onMouseLeave={pressable.handlers.onMouseLeave}
       onMouseMove={props.onMouseMove}
       onContextMenu={props.onContextMenu}
       onFocus={pressable.handlers.onFocus}
       onBlur={pressable.handlers.onBlur}
-      onLayout={props.onLayout}
+      // A-002: the view-prop half of the hit area — the seam's computed slop,
+      // `undefined` while gated off or already at the 44 pt target. The part
+      // never sets a literal and never grows one as a prop.
+      hitSlop={feedback.hitSlop()}
+      onLayout={handleLayout}
     >
-      {renderContent()}
+      <PressableFeedbackContext.Provider value={feedbackValue}>
+        <PaginationButtonContent renderProps={renderProps}>
+          {props.children}
+        </PaginationButtonContent>
+      </PressableFeedbackContext.Provider>
     </View>
   );
+}
+
+/**
+ * The children half of `PaginationButtonRoot`, mounted inside
+ * `PressableFeedbackContext.Provider`. `props.children` is a lazy accessor:
+ * whichever component invokes it owns the scope its descendants are created
+ * in. Resolving it here — under the provider — is what lets a child reading
+ * `PressableFeedbackContext` (a seam probe, a `PressableFeedback.Scale` /
+ * `Highlight` / `Ripple` overlay part) see the live seam value instead of
+ * `RESTING_PRESS_FEEDBACK`; resolving it in `PaginationButtonRoot`'s own
+ * scope, above the provider, binds every child to the default.
+ */
+function PaginationButtonContent(props: {
+  children?: JSX.Element | ((values: PaginationRenderProps) => JSX.Element);
+  renderProps: PaginationRenderProps;
+}): JSX.Element {
+  // The single read of `props.children`, through a computed, rendered at the
+  // placement so a signal inside a child keeps updating (research 4.1 / 4.6).
+  const children = computed(() => props.children);
+
+  const content = children();
+
+  // D17: a function that takes arguments is the HeroUI render prop; the
+  // parameter object holds accessors. A zero-argument function is NSH's
+  // reactive child and goes through `renderChildren`.
+  if (typeof content === "function" && content.length >= 1) {
+    return renderChildren(
+      (content as (values: PaginationRenderProps) => JSX.Element)(props.renderProps),
+    );
+  }
+
+  return renderChildren(content as JSX.Element);
 }

@@ -1,5 +1,14 @@
-import { host, mount, signal, Text, View } from "nsh";
-import { Disclosure, DisclosureGroup, useDisclosureGroupNavigation } from "@heroui/react";
+import { effect, host, mount, signal, Text, View } from "nsh";
+import type { JSX } from "nsh";
+import {
+  Disclosure,
+  DisclosureGroup,
+  EnvironmentScope,
+  PressableFeedback,
+  PressableFeedbackContext,
+  useDisclosureGroupNavigation,
+} from "@heroui/react";
+import type { PressableFeedbackContextValue } from "@heroui/react";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
 
@@ -54,7 +63,32 @@ import { probe } from "@scenario/probe";
  *                    `items` ("default" or "none"), `expanded` (comma list),
  *                    `multiple` (boolean) (T-014 … T-017, T-019 … T-028)
  *   nav-missing-items the harness called without `itemIds` (T-018)
+ *   mobile           one disclosure wired for the seam assertions (M-001 …
+ *                    M-010): `events` sequence probe, `onExpandedChange`,
+ *                    `layout` trigger-bounds probe, `CtxProbe` reading
+ *                    `PressableFeedbackContext`, plus a `ctx-sample` sibling
+ *                    button for on-demand channel reads. host.params:
+ *                    `compact`="1" (24×24 trigger → non-empty hitSlop),
+ *                    `disabled`/`pending`="1", `overlay`="highlight" (compose
+ *                    `<PressableFeedback.Highlight/>` into the trigger).
+ *
+ * `host.params.scope` picks the environment wrapper — "" = the host default,
+ * "touch" = `EnvironmentScope input="touch"` — the same convention
+ * `control-field.fixtures.tsx` / `pressable.fixtures.tsx` use; every case
+ * mounts inside it so both environment halves run the same scenario.
  */
+
+/* Wraps every case: the default environment ("") is the desktop-parity half,
+ * `input="touch"` the injected mobile half (sheet A-009). */
+function Scoped(props: { children?: JSX.Element }) {
+  const scope = String(host.params.scope ?? "");
+
+  return scope === "touch" ? (
+    <EnvironmentScope input="touch">{props.children}</EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
 
 const BODY = "Hidden content revealed on expand.";
 
@@ -300,6 +334,131 @@ function MissingItemsCase() {
 }
 
 /* -------------------------------------------------------------------------------------------------
+ * mobile case — the press-feedback seam assertions (sheet §4 M-001…M-010)
+ * -----------------------------------------------------------------------------------------------*/
+
+/* The live `PressableFeedbackContext` the sibling `ctx-sample` button reads;
+ * a sibling because pressing the probe must not perturb the trigger's press. */
+let triggerCtx: PressableFeedbackContextValue | null = null;
+
+/* Reads the seam context inside the trigger. `ctx-pressed` carries the gated
+ * `isPressed` edge (silent under pointer — that silence IS the negative
+ * assertion); `ctx-state` samples every channel on each edge, at +600 ms and
+ * +1500 ms so a held press reports its settled end values; `ctx-env` reports
+ * the mount-time gate and computed hitSlop (control-field's convention). */
+function CtxProbe() {
+  const ctx = PressableFeedbackContext();
+  const reportPressed = probe("ctx-pressed");
+  const reportState = probe("ctx-state");
+  const reportEnv = probe("ctx-env");
+
+  effect(() => {
+    triggerCtx = ctx;
+  });
+
+  effect(() => {
+    reportEnv({
+      enabled: ctx.enabled(),
+      hitSlop: ctx.hitSlop() ?? null,
+    });
+  });
+
+  const sample = () => {
+    void ctx.pressed.getValue().then((pressed) => {
+      void ctx.scale.getValue().then((scale) => {
+        reportState({
+          seamPressed: ctx.isPressed(),
+          pressed,
+          scale,
+          origin: ctx.pressOrigin(),
+          hitSlop: ctx.hitSlop() ?? null,
+          bounds: ctx.bounds(),
+          enabled: ctx.enabled(),
+          allDisabled: ctx.isAllAnimationsDisabled(),
+        });
+      });
+    });
+  };
+
+  effect(() => {
+    const seam = ctx.isPressed();
+    reportPressed({ seam });
+    setTimeout(sample, 600);
+    setTimeout(sample, 1500);
+  });
+
+  return <Text>{ctx.isPressed() ? "seam-pressed" : "seam-idle"}</Text>;
+}
+
+/* On-demand channel read for the negative half: a pointer press never raises
+ * the seam's `isPressed` edge, so `ctx-state` alone cannot prove the channels
+ * stayed at rest — `ctx-sample` samples them after the press instead. */
+function sampleChannels() {
+  const reportChannels = probe("ctx-channels");
+  const c = triggerCtx;
+  if (c === null) {
+    return;
+  }
+  void c.pressed.getValue().then((pressed) => {
+    void c.scale.getValue().then((scale) => {
+      reportChannels({
+        seamPressed: c.isPressed(),
+        pressed,
+        scale,
+        origin: c.pressOrigin(),
+        hitSlop: c.hitSlop() ?? null,
+        enabled: c.enabled(),
+      });
+    });
+  });
+}
+
+function MobileCase() {
+  const compact = String(host.params.compact ?? "") === "1";
+  const disabled = String(host.params.disabled ?? "") === "1";
+  const pending = String(host.params.pending ?? "") === "1";
+  const overlay = String(host.params.overlay ?? "");
+
+  return (
+    <Stage>
+      <Disclosure testID="disclosure" onExpandedChange={probe("onExpandedChange")}>
+        <Disclosure.Heading>
+          <Disclosure.Trigger
+            testID="trigger"
+            isDisabled={disabled}
+            isPending={pending}
+            style={compact ? { width: 24, height: 24 } : undefined}
+            onPressDown={() => probe("events")("down")}
+            onPressUp={() => probe("events")("up")}
+            onPress={() => probe("events")("press")}
+            onLayout={(e) =>
+              probe("layout")({
+                name: "trigger",
+                width: e.bounds.size.width,
+                height: e.bounds.size.height,
+              })
+            }
+          >
+            Toggle content
+            <Disclosure.Indicator />
+            {overlay === "highlight" ? (
+              <PressableFeedback.Highlight testID="overlay" />
+            ) : null}
+            <CtxProbe />
+          </Disclosure.Trigger>
+        </Disclosure.Heading>
+        <Disclosure.Content>
+          <Disclosure.Body>{BODY}</Disclosure.Body>
+        </Disclosure.Content>
+      </Disclosure>
+      <View testID="ctx-sample" role="button" class="p-2" onPress={sampleChannels}>
+        <Text>ctx-sample</Text>
+      </View>
+    </Stage>
+  );
+}
+
+/* -------------------------------------------------------------------------------------------------
  * Entry
  * -----------------------------------------------------------------------------------------------*/
 
@@ -337,8 +496,17 @@ function Fixture() {
   if (name === "tab-order") return <GroupCase items={THREE_ITEMS} after />;
   if (name === "nav") return <NavCase />;
   if (name === "nav-missing-items") return <MissingItemsCase />;
+  if (name === "mobile") return <MobileCase />;
 
   return <Text>{`unknown case: ${name}`}</Text>;
 }
 
-mount(Fixture);
+function Root() {
+  return (
+    <Scoped>
+      <Fixture />
+    </Scoped>
+  );
+}
+
+mount(Root);

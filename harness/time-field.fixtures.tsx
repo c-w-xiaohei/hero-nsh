@@ -1,5 +1,14 @@
+import type { JSX } from "nsh";
 import { host, mount, signal, Text, View } from "nsh";
-import { Description, FieldError, Label, TimeField } from "@heroui/react";
+import {
+  Description,
+  type DateInputGroupInputKeyboardType,
+  EnvironmentScope,
+  FieldError,
+  Label,
+  TimeField,
+} from "@heroui/react";
+import { DateInputGroupKeyboardContext } from "../src/components/date-input-group/date-input-group-context";
 import { Time, parseTime } from "@internationalized/date";
 import { Stage } from "@scenario/stage";
 import { probe } from "@scenario/probe";
@@ -39,6 +48,26 @@ import { probe } from "@scenario/probe";
  *                     the submit-time validation hand check (§2)
  *   granularity       granularity="second" and hourCycle={24}: the segment set
  *                     and the 24-hour form (§2, hand check)
+ *   readonly          isReadOnly + defaultValue 9:30, onChange probe — the
+ *                     read-only half of the touch-channel assertions: the
+ *                     `dig-seg-*` channels stay focusable but `readonly`, so
+ *                     no `field.type` edit and no `onChange` may fire
+ *                     (adapt-sheet time-field A-007 / M-005)
+ *   keyboard-type     hourCycle=12 row (hour + minute + dayPeriod) with
+ *                     `TimeField.Input`'s `keyboardType` prop set to
+ *                     `host.params.kt` ("auto" when absent); a probe inside
+ *                     each segment records the `DateInputGroupKeyboardContext`
+ *                     value the Input hands it plus the documented per-segment
+ *                     resolution (A-007 / M-006 — `TimeField.Input` is the
+ *                     identity alias of `DateInputGroupInput`)
+ *
+ * `host.params.scope` picks the environment wrapper (A-007): "touch" wraps the
+ * case in `EnvironmentScope(input="touch")` — the injected half of the mobile
+ * assertions; anything else mounts the case on the host-derived default (the
+ * pointer half on a desktop-pinned open). The test-only params `testInput`
+ * ("pointer"/"touch") inject an outer EnvironmentScope input.
+ *
+ * `host.params.kt` feeds the `keyboard-type` case only (see above).
  *
  * `hourCycle={12}` on every case with segments is deliberate: the host locale
  * would otherwise decide whether a day period exists, and the cases count
@@ -74,35 +103,71 @@ function segmentTestID(type: string): string | undefined {
 /**
  * The group's input, one Segment per part. `record` is the Segment className
  * render prop: the only channel `nsh/test` can read a segment's focus state
- * through (port sheet 4b.3 `focus`).
+ * through (port sheet 4b.3 `focus`). `recordSegments` / `recordBounds` are the
+ * mobile layer's text and geometry probes (adapt sheet A-007): Segment takes
+ * no `onLayout`, so bounds come from a shrink-wrapping View.
  */
-function Segments(props: { record?: (values: unknown) => void }) {
+function Segments(props: {
+  record?: (values: unknown) => void;
+  recordSegments?: (entry: {
+    type: string;
+    text: string;
+    isPlaceholder: boolean;
+    isEditable: boolean;
+  }) => void;
+  recordBounds?: (entry: { type: string; bounds: unknown }) => void;
+}) {
   return (
     <TimeField.Input testID="tf-input">
-      {(segment) => (
-        <TimeField.Segment
-          segment={segment}
-          testID={segmentTestID(segment.type)}
-          className={
-            props.record
-              ? (values) => {
-                  props.record!({
-                    type: segment.type,
-                    isFocused: values.isFocused(),
-                    isFocusVisible: values.isFocusVisible(),
-                  });
+      {(segment) => {
+        const className =
+          props.record || props.recordSegments
+            ? (values: {
+                isFocused: () => boolean;
+                isFocusVisible: () => boolean;
+              }) => {
+                props.record?.({
+                  type: segment.type,
+                  isFocused: values.isFocused(),
+                  isFocusVisible: values.isFocusVisible(),
+                });
+                props.recordSegments?.({
+                  type: segment.type,
+                  text: segment.text,
+                  isPlaceholder: segment.isPlaceholder,
+                  isEditable: segment.isEditable,
+                });
 
-                  return "";
-                }
-              : undefined
-          }
-        />
-      )}
+                return "";
+              }
+            : undefined;
+        const rendered = (
+          <TimeField.Segment
+            segment={segment}
+            testID={segmentTestID(segment.type)}
+            className={className}
+          />
+        );
+
+        return props.recordBounds ? (
+          <View
+            onLayout={(event) =>
+              props.recordBounds!({ type: segment.type, bounds: event.bounds })
+            }
+          >
+            {rendered}
+          </View>
+        ) : (
+          rendered
+        );
+      }}
     </TimeField.Input>
   );
 }
 
 function DefaultCase() {
+  const groupBounds = probe("group-bounds");
+
   return (
     <Stage>
       <TimeField
@@ -113,8 +178,14 @@ function DefaultCase() {
         testID="tf-root"
       >
         <Label>Time</Label>
-        <TimeField.Group testID="tf-group">
-          <Segments />
+        <TimeField.Group
+          testID="tf-group"
+          onLayout={(event) => groupBounds(event.bounds)}
+        >
+          <Segments
+            recordSegments={probe("segments")}
+            recordBounds={probe("segment-bounds")}
+          />
         </TimeField.Group>
       </TimeField>
     </Stage>
@@ -325,28 +396,144 @@ function GranularityCase() {
       >
         <Label>Time</Label>
         <TimeField.Group testID="tf-group">
-          <Segments />
+          <Segments recordSegments={probe("segments")} />
         </TimeField.Group>
       </TimeField>
     </Stage>
   );
 }
 
+/*
+ * A-007 / M-005: the read-only half — `isReadOnly` keeps the segments and
+ * their touch channels focusable but `readonly`, so a touch `app.type` routes
+ * keys into the channel yet must not reach `field.type` and `onChange` stays
+ * silent. The `disabled` case above covers the no-channel half of M-005.
+ */
+function ReadOnlyCase() {
+  return (
+    <Stage>
+      <TimeField
+        defaultValue={startTime()}
+        hourCycle={12}
+        isReadOnly
+        name="time"
+        onChange={probe("onChange")}
+        testID="tf-root"
+      >
+        <Label>Time</Label>
+        <TimeField.Group testID="tf-group">
+          <Segments record={probe("segment-props")} recordSegments={probe("segments")} />
+        </TimeField.Group>
+      </TimeField>
+    </Stage>
+  );
+}
+
+/*
+ * A-007 / M-006: reads the `DateInputGroupKeyboardContext` the Input provides
+ * and records it per segment (`type`, the advertised `keyboardType`, and
+ * `resolved` — the value the segment's channel resolves per the documented
+ * rule: non-"auto" passes through, "auto" gives numeric segments `"numeric"`
+ * and lettered ones (`dayPeriod`/`era`/`timeZoneName`) `"default"`; the same
+ * rule `channelKeyboardType` implements in
+ * date-input-group-segment.tsx). The host keyboard itself is not observable
+ * (sheet §6), so the probe records the resolution where it lands. It sits as
+ * a segment child — inside the Input's provider tree.
+ */
+function KeyboardTypeProbe(props: { type: string }) {
+  const record = probe("keyboard-type");
+  const type = DateInputGroupKeyboardContext();
+  const advertised = type();
+  const resolved =
+    advertised !== "auto"
+      ? advertised
+      : props.type === "dayPeriod" || props.type === "era" || props.type === "timeZoneName"
+        ? "default"
+        : "numeric";
+
+  record({ type: props.type, keyboardType: advertised, resolved });
+
+  return <></>;
+}
+
+function KeyboardTypeCase() {
+  const kt = host.params.kt;
+
+  return (
+    <Stage>
+      <TimeField
+        defaultValue={startTime()}
+        hourCycle={12}
+        name="time"
+        onChange={probe("onChange")}
+        testID="tf-root"
+      >
+        <Label>Time</Label>
+        <TimeField.Group testID="tf-group">
+          <TimeField.Input
+            testID="tf-input"
+            keyboardType={
+              typeof kt === "string" && kt !== ""
+                ? (kt as DateInputGroupInputKeyboardType)
+                : undefined
+            }
+          >
+            {(segment) => (
+              <TimeField.Segment
+                segment={segment}
+                testID={segmentTestID(segment.type)}
+              >
+                {() => <KeyboardTypeProbe type={segment.type} />}
+              </TimeField.Segment>
+            )}
+          </TimeField.Input>
+        </TimeField.Group>
+      </TimeField>
+    </Stage>
+  );
+}
+
+/* A-007: the environment wrapper the mobile assertions drive — the same
+ * `Scoped` shape date-input-group's fixture uses
+ * (harness/date-input-group.fixtures.tsx:676). */
+function Scoped(props: { children?: JSX.Element }) {
+  // Test-harness environment params (only the mobile tests set them —
+  // absent keeps the host-derived default): `scope="touch"` is the inner
+  // override, `testInput` ("pointer"/"touch") injects the scope so the
+  // pointer baseline is host-independent (the inner `scope` still wins).
+  // One provider only: `props.children` is placed inside it directly —
+  // pre-building a fragment first would mount the children under this
+  // component's own creation scope instead of the provider.
+  const input =
+    String(host.params.scope ?? "") === "touch"
+      ? "touch"
+      : ((v) => (v === "pointer" || v === "touch" ? v : undefined))(
+          String(host.params.testInput ?? ""),
+        );
+
+  return input !== undefined ? (
+    <EnvironmentScope input={input}>{props.children}</EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
 function Fixture() {
   const name = String(host.params.case ?? "default");
 
-  if (name === "controlled") return <ControlledCase />;
-  if (name === "required-invalid") return <RequiredInvalidCase />;
-  if (name === "description") return <DescriptionCase />;
-  if (name === "disabled") return <DisabledCase />;
-  if (name === "prefix-suffix") return <PrefixSuffixCase />;
-  if (name === "focus") return <FocusCase />;
-  if (name === "render-children") return <RenderChildrenCase />;
-  if (name === "full-width") return <FullWidthCase />;
-  if (name === "validation") return <ValidationCase />;
-  if (name === "granularity") return <GranularityCase />;
+  if (name === "controlled") return <Scoped><ControlledCase /></Scoped>;
+  if (name === "required-invalid") return <Scoped><RequiredInvalidCase /></Scoped>;
+  if (name === "description") return <Scoped><DescriptionCase /></Scoped>;
+  if (name === "disabled") return <Scoped><DisabledCase /></Scoped>;
+  if (name === "prefix-suffix") return <Scoped><PrefixSuffixCase /></Scoped>;
+  if (name === "focus") return <Scoped><FocusCase /></Scoped>;
+  if (name === "render-children") return <Scoped><RenderChildrenCase /></Scoped>;
+  if (name === "full-width") return <Scoped><FullWidthCase /></Scoped>;
+  if (name === "validation") return <Scoped><ValidationCase /></Scoped>;
+  if (name === "granularity") return <Scoped><GranularityCase /></Scoped>;
+  if (name === "readonly") return <Scoped><ReadOnlyCase /></Scoped>;
+  if (name === "keyboard-type") return <Scoped><KeyboardTypeCase /></Scoped>;
 
-  return <DefaultCase />;
+  return <Scoped><DefaultCase /></Scoped>;
 }
 
 mount(Fixture);

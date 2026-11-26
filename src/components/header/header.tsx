@@ -41,6 +41,11 @@ export interface HeaderRootProps extends Omit<TextProps, "children" | "class"> {
  * no context and dispatches no events; the Section that would name its group
  * with this text upstream is another unit, and NSH has no cross-element ids
  * (port sheet §2, §5, §8).
+ *
+ * A-005 / A-006: the mobile unit's two `接轴` spots live on the harness side —
+ * `harness/header.fixtures.tsx` gains the `ScopedMobile` `EnvironmentScope`
+ * wrapper and `header.mobile.test.tsx` the pinned dual-environment assertions;
+ * this component body itself takes no seam (§7).
  */
 export function HeaderRoot(props: HeaderRootProps): JSX.Element {
   const [local, rest] = split(props, [

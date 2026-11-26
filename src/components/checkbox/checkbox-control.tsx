@@ -1,6 +1,7 @@
 import type { Bounds, JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
 import { computed, split, View } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import {
   FALLBACK_CHECKBOX_CONTEXT,
   CheckboxContext,
@@ -59,6 +60,8 @@ export function CheckboxControl(props: CheckboxControlProps): JSX.Element {
 
   const ctx = CheckboxContext() ?? FALLBACK_CHECKBOX_CONTEXT;
 
+  const input = createInput();
+
   // `variant === "secondary"` (R-035 / R-038 / R-039 / R-040) is read from the
   // context, so an item without its own variant follows its group.
   const isSecondary = () => ctx.variant() === "secondary";
@@ -68,7 +71,11 @@ export function CheckboxControl(props: CheckboxControlProps): JSX.Element {
   // hovering the description or the error, the Content's hover covers the face
   // and is off while read-only. With the theme's 0px field border this paints
   // nothing at rest, exactly as upstream.
-  const isHovered = () => ctx.rootHovered() || ctx.isHovered();
+  // A-002: under `input: "touch"` the hover effect cells stay off — a held
+  // touch leaves a sticky `hover:` paint on web, which this read suppresses
+  // (the pointer signal still records; only the appearance is gated).
+  const isHovered = () =>
+    input() !== "touch" && (ctx.rootHovered() || ctx.isHovered());
 
   // R-026 / R-027 / R-030 / R-031: one owner for the square's background.
   // Selected wins over the interactions, invalid wins over selected, and the
@@ -130,7 +137,7 @@ export function CheckboxControl(props: CheckboxControlProps): JSX.Element {
     ctx.isInvalid() && !ctx.isSelected() && !ctx.isIndeterminate();
 
   const classes = computed(() =>
-    [checkboxVariants({ variant: ctx.variant() }).control(), appearance(), local.className ?? ""]
+    [checkboxVariants({ variant: ctx.variant(), input: input() }).control(), appearance(), local.className ?? ""]
       .filter((part) => part.length > 0)
       .join(" "),
   );

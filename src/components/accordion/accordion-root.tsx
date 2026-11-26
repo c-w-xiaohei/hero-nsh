@@ -3,6 +3,7 @@ import { computed, signal, split, untracked } from "nsh";
 import { Accordion as BaseAccordion } from "nsh/base";
 
 import { SurfaceContext, type SurfaceContextValue } from "../surface/surface-context";
+import { createInput } from "../../primitives/environment";
 import { renderChildren } from "./children";
 import { AccordionContext, type AccordionContextValue, type AccordionSlots } from "./accordion-context";
 import { type AccordionKey, encodeAccordionKey } from "./accordion-key";
@@ -11,6 +12,7 @@ import type { AccordionVariants } from "./accordion.styles";
 import type { AccordionRenderProps } from "./accordion-types";
 import { createAccordionGroupState } from "./create-accordion-group-state";
 import { withTooltip } from "./tooltip";
+import type { DataProps } from "./dom-props";
 
 /* -------------------------------------------------------------------------------------------------
  * Props
@@ -26,7 +28,7 @@ import { withTooltip } from "./tooltip";
  * port sheet §1 and §8 say what each can and cannot do. `ref` is a callback
  * because NSH forwards refs that way (`_common` §46).
  */
-export interface AccordionRootProps {
+export interface AccordionRootProps extends DataProps {
   /**
    * The items, or a render prop called once with the group state (D17). A bare
    * string inside it becomes `Text` at the placement.
@@ -121,9 +123,6 @@ export interface AccordionRootProps {
   /** Accepted, no effect: NSH has no wheel event. */
   onWheel?: unknown;
 
-  /** Accepted, no effect (D18: no data attributes). */
-  [key: `data-${string}`]: unknown;
-
   /** The root view; a callback, as NSH forwards refs. */
   ref?: (node: ViewRef) => void;
 }
@@ -192,8 +191,14 @@ export function AccordionRoot(props: AccordionRootProps): JSX.Element {
   });
 
   // The variant table is derived, so a `variant` that changes at runtime
-  // re-renders every slot (research 4.1: the body runs once).
-  const slots = computed<AccordionSlots>(() => accordionVariants({ variant: variant() }));
+  // re-renders every slot (research 4.1: the body runs once). A-001: the
+  // environment's `input` accessor feeds the `input` axis next to `variant`;
+  // slots reach every part through the context, so the single read stays
+  // consistent with whatever scope the Root mounted under.
+  const input = createInput();
+  const slots = computed<AccordionSlots>(() =>
+    accordionVariants({ variant: variant(), input: input() }),
+  );
 
   // The base accordion's `value`: encoded keys, one per rendered open item
   // (port sheet §2). It never calls back into us; the Trigger drives the state.

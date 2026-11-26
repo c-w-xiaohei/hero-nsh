@@ -1,12 +1,15 @@
 import type { Accessor, JSX, StyleProp, ViewRef, ViewStyle } from "nsh";
 import { computed, split, View } from "nsh";
 
+import { createDensity } from "../../primitives/environment";
+import { createInput } from "../../primitives/environment";
 import { joinClassNames } from "../color-picker/class-names";
 import type { AriaProps, DataProps, DomEventProps, GlobalDomProps } from "../color-picker/dom-props";
 import type { Color } from "../color-swatch";
 import { parseColor } from "../color-swatch";
 import { ColorSwatchPickerContext, ColorSwatchPickerItemContext } from "./color-swatch-picker-context";
 import { colorSwatchPickerVariants } from "./color-swatch-picker.styles";
+import { densityKey } from "../../tokens/density";
 
 /** The value HeroUI's `ColorSwatch` render props carry. */
 export interface ColorSwatchPickerSwatchRenderProps {
@@ -99,11 +102,19 @@ export function ColorSwatchPickerSwatch(
   const item = ColorSwatchPickerItemContext();
   const root = ColorSwatchPickerContext();
 
+  // A-001 / A-002: the environment axes — `input` feeds the table's `input`
+  // argument and gates the `hover:scale-110` classList entry below;
+  // `density` feeds the `density` argument (the row gap).
+  const input = createInput();
+  const density = createDensity();
+
   const slots = computed(() =>
     colorSwatchPickerVariants({
       layout: root?.layout() ?? "grid",
       size: root?.size() ?? "md",
       variant: root?.variant() ?? "circle",
+      input: input(),
+      density: densityKey(density()),
     }),
   );
 
@@ -162,8 +173,10 @@ export function ColorSwatchPickerSwatch(
         // selected rule comes later in the stylesheet, NSH's `hover:` variant
         // beats a plain utility, so the two states are mutually exclusive
         // (port sheet §8).
+        // A-002: under touch the class never resolves — a sticky web hover
+        // must not keep the swatch scaled after a press.
         "scale-[0.77]": isSelected(),
-        "hover:scale-110": !isSelected(),
+        "hover:scale-110": input() !== "touch" && !isSelected(),
         // R-041: `.color-swatch-picker--square.color-swatch-picker--sm
         // .item[data-selected] .swatch` is the one size where selection really
         // shrinks the radius (8 → 6pt). The swatch reads the root's axes,

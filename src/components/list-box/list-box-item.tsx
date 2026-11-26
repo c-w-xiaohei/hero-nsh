@@ -9,16 +9,24 @@ import type {
   ViewRef,
   ViewStyle,
 } from "nsh";
-import { cleanup, computed, signal, split, View } from "nsh";
+import { cleanup, computed, createAnimatedValue, signal, split, View } from "nsh";
 
 import {
+  createDensity,
+  createInput,
   createSelectableItem,
   isKeyboardPress,
   modifiersFromPress,
+  toListItemData,
   type SelectionBehavior,
   type SelectionMode,
   type SelectionModifiers,
 } from "../../primitives";
+import {
+  createPressFeedback,
+  PressableFeedbackContext,
+  type PressableFeedbackContextValue,
+} from "../../primitives/pressable";
 import { DescriptionContext } from "../description/context";
 import type { DescriptionContextValue } from "../description/context";
 import { IconCheck } from "../icons";
@@ -32,9 +40,11 @@ import {
   ListBoxItemContext,
   type ListBoxItemContextValue,
   type ListBoxItemDescriptor,
+  type ListBoxRowHandle,
   ListBoxSectionContext,
 } from "./list-box-context";
 import { listboxItemVariants, type ListBoxItemVariants } from "./list-box.styles";
+import { densityKey } from "../../tokens/density";
 
 /** The live state HeroUI hands to item children, `className` and `style`. */
 export interface ListBoxItemRenderProps {
@@ -71,7 +81,8 @@ const NEUTRAL_RENDER_PROPS: ListBoxItemRenderProps = {
   isDropTarget: () => false,
 };
 
-export interface ListBoxItemRootProps<T = unknown> extends ListBoxItemVariants {
+export interface ListBoxItemRootProps<T = unknown>
+  extends Omit<ListBoxItemVariants, "input" | "density"> {
   children?: JSX.Element | ((values: ListBoxItemRenderProps) => JSX.Element);
 
   className?: string | ((values: ListBoxItemRenderProps) => string);
@@ -174,8 +185,12 @@ export interface ListBoxItemRootProps<T = unknown> extends ListBoxItemVariants {
 }
 
 /**
- * The key React Aria derives for an entry: `id` → the object's `id` → its
- * `key` → the item's index (`react-aria-components/src/ListBox.tsx:513`).
+ * The key React Aria derives for an entry: `id` → the datum's `id`/`key` → a
+ * primitive value itself → the item's index (`react-aria-components/
+ * ListBox.tsx:513`). f-collection converged the chain: `toListItemData` is
+ * the same normalization the `items` data source runs, so a mounted row and
+ * its datum resolve one key (`value` + positional `index`), with the row's
+ * own `textValue` left as the last resort it always was.
  */
 function resolveKey(
   id: string | number | undefined,
@@ -187,24 +202,9 @@ function resolveKey(
     return String(id);
   }
 
-  if (value != null) {
-    if (typeof value === "object") {
-      const record = value as { id?: unknown; key?: unknown };
-      const derived = record.id ?? record.key;
+  const derived = toListItemData(value, index).key;
 
-      if (derived != null) {
-        return String(derived);
-      }
-    } else {
-      return String(value);
-    }
-  }
-
-  if (index != null) {
-    return String(index);
-  }
-
-  return textValue ?? "";
+  return derived !== "" ? derived : textValue ?? "";
 }
 
 /**
@@ -335,6 +335,38 @@ export function ListBoxItemRoot<T>(
     () => pointerPressed() || list.keyboardPressedKey() === key,
   );
 
+  // A-002 / A-001: the environment's two variant axes — `input` feeds the
+  // seam's gate and the tv() `input` axis (min-h-11 / hover suppression),
+  // `density` feeds the tv() `density` axis. One read each, here.
+  const input = createInput();
+  const density = createDensity();
+
+  // A-002: the press-feedback seam, gated on `input() === "touch"` and the
+  // row's own disabled flag — under a pointer environment it is a physical
+  // no-op, so the desktop event chain below is untouched. `feedback.*` is
+  // its own canonical channel and never merges into the render-prop
+  // `isPressed`/`pointerPressed` (sheet §1).
+  const seamEnabled = () => input() === "touch" && !isDisabled();
+  const feedback = createPressFeedback({ enabled: seamEnabled });
+
+  // A-004: the seam's read half for consumers — a part or a probe that
+  // needs the animated channels reads this context instead of the render
+  // props. No Highlight/Ripple/Scale overlay mounts by default: the row's
+  // `scale-[0.98]` (R-013) already paints the press, and a caller that
+  // wants more composes a part into the row's children.
+  const feedbackValue: PressableFeedbackContextValue = {
+    isPressed: feedback.isPressed,
+    pressed: feedback.pressed,
+    bounds: feedback.bounds,
+    pressOrigin: feedback.pressOrigin,
+    scale: feedback.scale,
+    highlightOpacity: createAnimatedValue(0),
+    rippleProgress: createAnimatedValue(0),
+    enabled: seamEnabled,
+    hitSlop: feedback.hitSlop,
+    isAllAnimationsDisabled: () => false,
+  };
+
   const renderProps: ListBoxItemRenderProps = {
     isHovered,
     isPressed,
@@ -348,7 +380,13 @@ export function ListBoxItemRoot<T>(
     isDropTarget: () => false,
   };
 
-  const slots = computed(() => listboxItemVariants({ variant: variant() }));
+  const slots = computed(() =>
+    listboxItemVariants({
+      variant: variant(),
+      input: input(),
+      density: densityKey(density()),
+    }),
+  );
 
   const resolvedClassName = () => {
     const className = local.className;
@@ -471,6 +509,23 @@ export function ListBoxItemRoot<T>(
     // follows the data rather than the order rows were created in.
     order: collectionItem?.index,
     disabled: () => local.isDisabled === true || list.isDisabledKey(key),
+  };
+
+  // f-collection (A-006): the static-children path still feeds the collection
+  // through a descriptor; under `items` the data itself is the collection, so this row
+  // only mounts a handle — its `textValue`/`isDisabled`/`value` merge into its
+  // datum while mounted, and activation/Select.Value read the handle.
+  if (collectionItem == null) {
+    const register = section?.register ?? list.register;
+    cleanup(register(descriptor));
+  }
+
+  const handle: ListBoxRowHandle = {
+    type: "item",
+    key,
+    value: collectionItem ? collectionItem.value : () => local.value,
+    textValue: () => textValue(),
+    disabled: () => local.isDisabled === true || list.isDisabledKey(key),
     ref: () => node,
     activate,
     // A Select's value renders the selected option's children; the container
@@ -478,9 +533,7 @@ export function ListBoxItemRoot<T>(
     children: copyContent,
   };
 
-  const register = section?.register ?? list.register;
-
-  cleanup(register(descriptor));
+  cleanup(list.registerRow(handle));
   cleanup(() => list.unregisterItemLayout(key));
 
   // R-010: `:has(.list-box-item__indicator)` has no NSH form, so the Indicator
@@ -505,6 +558,13 @@ export function ListBoxItemRoot<T>(
   const handlePressDown = (event?: PressEvent) => {
     if (event && isKeyboardPress(event)) {
       return;
+    }
+
+    // A-002: after the keyboard early-out, before the channel's own notes —
+    // a gated (pointer) call is a no-op inside. The Label's forwarded press
+    // carries no payload, so the seam only sees real events.
+    if (event) {
+      feedback.pressDown(event);
     }
 
     // The pointer modality first: a press on an already focused row must drop
@@ -532,6 +592,13 @@ export function ListBoxItemRoot<T>(
       return;
     }
 
+    // A-002: release and cancel share `onPressUp`; the seam resets here,
+    // before `pointerPressed`'s own clear, so a press the disabled flip
+    // stranded still completes its round-trip.
+    if (event) {
+      feedback.pressUp(event);
+    }
+
     if (pointerPressed()) {
       pointerPressed.set(false);
       local.onPressChange?.(false);
@@ -545,6 +612,13 @@ export function ListBoxItemRoot<T>(
   };
 
   const handlePress = (event?: PressEvent) => {
+    // A-002: on this host a drag away from the row reports the release's
+    // `onPress` without an `onPressUp` first (measured: the row's press
+    // chain is down→press with no up), so a commit also ends the seam's
+    // press — the flag can never outlive the activation.
+    if (event && !isKeyboardPress(event)) {
+      feedback.pressUp(event);
+    }
     pointerPressed.set(false);
     activate(
       event && isKeyboardPress(event) ? "keyboard" : "pointer",
@@ -567,6 +641,14 @@ export function ListBoxItemRoot<T>(
 
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
+
+    // A-005: hover writes and their callbacks resolve only under a pointer
+    // — a touch environment has no hover semantics, and web's sticky hover
+    // would otherwise pin `isHovered` after a press (switch/tabs the same
+    // gating; the host mouse callbacks still pass through).
+    if (input() === "touch") {
+      return;
+    }
 
     if (selectable.isDisabled() || isHovered()) {
       return;
@@ -600,6 +682,9 @@ export function ListBoxItemRoot<T>(
   };
 
   const handleLayout = (event: { bounds: Bounds }) => {
+    // A-002: the seam's `bounds` feeds `hitSlop` and `scale`, so it reads the
+    // layout first, before the registry's and the caller's handlers.
+    feedback.layout(event);
     list.registerItemLayout(key, event.bounds, section?.key);
     local.onLayout?.(event);
   };
@@ -698,8 +783,17 @@ export function ListBoxItemRoot<T>(
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             onLayout={handleLayout}
+            // A-003: the view-prop half of the hit area — the seam's computed
+            // slop, undefined while gated off or the row already meets the
+            // 44 pt minimum. The component takes no `hitSlop` prop.
+            hitSlop={feedback.hitSlop()}
           >
-            {content()}
+            {/* A-004: children resolve exactly once, inside the provider —
+                the same read `content()` always made, now under the seam's
+                context so a part or a probe can read it. */}
+            <PressableFeedbackContext.Provider value={feedbackValue}>
+              {content()}
+            </PressableFeedbackContext.Provider>
           </View>
         </ListBoxItemContext.Provider>
       </DescriptionContext.Provider>

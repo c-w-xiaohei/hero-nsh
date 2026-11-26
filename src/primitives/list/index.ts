@@ -5,3 +5,4 @@ export * from "./create-single-select-list-state";
 export * from "./list-collection";
 export * from "./list-keyboard-delegate";
 export * from "./list-owner";
+export * from "./row-registry";

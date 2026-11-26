@@ -2,7 +2,13 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { shadow } from "../../tokens/geometry";
+// `shadow.field.both` of `src/tokens/geometry.ts` written out: the M2 class
+// walker imports this file through Node ESM, which does not resolve
+// extensionless relative specifiers, so the geometry module cannot be
+// imported from a `.styles.ts`. Same pattern as `sheet.styles.ts`'s comment;
+// keep in sync with `SHADOW_VALUES.field`.
+const SHADOW_FIELD_BOTH =
+  "shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset]";
 
 /**
  * Radio's variant table, mirroring `@heroui/styles` 3.2.7
@@ -52,10 +58,23 @@ export const radioVariants = tv({
     // §8).
     // R-012: `motion-reduce:transition-none`.
     control:
-      `relative inline-flex size-4 shrink-0 items-center justify-center rounded-lg border-0 border-field-border bg-field ${shadow.field.both} outline-none cursor-pointer transition duration-200 ease-out motion-reduce:transition-none`,
+      `relative inline-flex size-4 shrink-0 items-center justify-center rounded-lg border-0 border-field-border bg-field ${SHADOW_FIELD_BOTH} outline-none cursor-pointer transition duration-200 ease-out motion-reduce:transition-none`,
     // R-021: `.radio__indicator` → `absolute inset-0 flex items-center
     // justify-center; pointer-events: none`.
     indicator: "absolute inset-0 flex items-center justify-center pointer-events-none",
+  },
+  variants: {
+    // A-001: the `input` axis — the whole row is the press target, so `touch`
+    // gives the `content` slot the 44 pt minimum hit height (`min-h-11`; the
+    // hitSlop half of the path lives in `createPressFeedback`). The 16 pt
+    // `control`/`indicator` circle and dot are decorative pieces of that row:
+    // they are not grown into their own touch targets.
+    input: {
+      pointer: {},
+      touch: {
+        content: "min-h-11",
+      },
+    },
   },
 });
 

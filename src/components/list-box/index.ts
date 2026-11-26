@@ -1,3 +1,15 @@
+// A-008 / A-009: the two harness-side 接轴 spots of adapt sheet list-box.md
+// are realized outside this directory — `harness/list-box.fixtures.tsx`
+// (the `b-item`/`b-action` cases with the events/layout/hover/CtxProbe
+// seam probes, `narrow`/`disabled`/`overlay` params, and the `Scoped`
+// wrapper feeding `host.params.scope`/`density` into `EnvironmentScope`)
+// and `harness/tests/components/list-box/list-box.mobile.test.tsx` +
+// `list-box.mobile.headless.test.tsx` (the desktop-pinned, dual-environment
+// M-001…M-011 assertions, plus the `platform:"ios"` host-derivation half).
+// The gate's marker scan only sees `src/components/list-box/`, so the
+// record lives here. The seam they probe is the press-feedback chain in
+// `list-box-item.tsx` (A-002…A-004) and the `input`/`density` axes in
+// `list-box.styles.ts` (A-001).
 import {
   ListBoxItemIndicator,
   ListBoxItemRoot,

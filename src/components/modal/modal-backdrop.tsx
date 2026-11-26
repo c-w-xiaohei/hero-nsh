@@ -1,15 +1,27 @@
-import type { Accessor, JSX, PressEvent, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
+import type {
+  Accessor,
+  JSX,
+  Point,
+  PressEvent,
+  StyleProp,
+  ViewProps,
+  ViewRef,
+  ViewStyle,
+} from "nsh";
 import { computed, context, reduceMotion, Scroll, signal, View } from "nsh";
 import { Dialog } from "nsh/base";
 
+import { createInput } from "../../primitives/environment";
 import { createOverlayPresence } from "../../primitives/create-overlay-presence";
 import type { OverlayTriggerContextValue } from "../../primitives/create-overlay-trigger";
 import { OverlayTriggerContext } from "../../primitives/create-overlay-trigger";
+import { createPan } from "../../primitives/pan";
+import { createPresentation } from "../../primitives/presentation";
 import { createModalState } from "./create-modal-state";
-import type { ModalContextValue } from "./modal-context";
+import type { ModalContextValue, ModalSwipe } from "./modal-context";
 import { createModalContextValue, deriveModalState, ModalContext } from "./modal-context";
 import type { ModalRenderValues } from "./modal-render-values";
-import type { ModalVariants } from "./modal.styles";
+import type { ModalPresentation, ModalVariants } from "./modal.styles";
 import { modalBackdropLayoutClasses, modalBackdropScrollClasses } from "./modal.styles";
 
 /**
@@ -78,6 +90,23 @@ export interface ModalBackdropProps
   /** A DOM id upstream; maps to `nativeID`. */
   id?: string;
 
+  /**
+   * The container the modal presents as. `"auto"` takes the environment rule
+   * — touch on a compact window docks to the bottom as a `"sheet"`,
+   * everything else stays the centered `"panel"` — evaluated once at open
+   * and latched until close; a pin fixes it outright. @default "auto"
+   */
+  presentation?: ModalPresentation | "auto";
+
+  /**
+   * Allows the swipe-to-dismiss gesture (adapt sheet A-004). Opt-in only —
+   * Native Dialog's `isSwipeable` defaults `true`, this library does not
+   * change its existing dismiss strategy (action-list §2, 修正记录 19): the
+   * pan attaches only while `isSwipeable` *and* `isDismissable` *and* the
+   * resolved presentation is `"sheet"` *and* the input is touch. @default false
+   */
+  isSwipeable?: boolean;
+
   /** Accepted, no effect: NSH has no DOM attribute channel. */
   [key: `data-${string}`]: unknown;
 }
@@ -104,6 +133,14 @@ export interface ModalBackdropContextValue {
 
 /** `null` outside a `Modal.Backdrop`. */
 export const ModalBackdropContext = context<ModalBackdropContextValue | null>(null);
+
+/**
+ * The swipe's release velocity bound, in points per second (ResponderGestureState's
+ * `vy` unit): a downward flick dismisses even short of the half-card travel —
+ * same family as the sheet's `HANDLE_DRAG_VELOCITY` (0.4 pt/ms), declared
+ * locally per adapt sheet A-004 (§5 asks the controller about a shared home).
+ */
+const SWIPE_DISMISS_VELOCITY = 500;
 
 /**
  * A one-slot registry. The accessor travels inside an object so reading it
@@ -188,6 +225,79 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
     },
   });
 
+  const isDismissable = () => props.isDismissable ?? true;
+  const isKeyboardDismissDisabled = () => props.isKeyboardDismissDisabled ?? false;
+
+  const input = createInput();
+
+  // A-001 (seam ③): the carrier is decided by `createPresentation`, latched
+  // on the false→true edge of the effective open state — the same value
+  // `contextValue.isOpen` resolves to below, derived eagerly so the latch's
+  // first effect run never touches a context that is not built yet. The pin
+  // is the caller's `presentation` prop; the domain is the component's own
+  // two carriers (action-list §4: no `fullscreen` on Modal).
+  const presentation = createPresentation<ModalPresentation>({
+    pin: () => props.presentation,
+    isOpen: () => (ownsState() ? state.isOpen() : (parent?.isOpen() ?? false)),
+    allowed: () => ["panel", "sheet"],
+  });
+
+  // A-004 / A-005 (seam ②): the swipe-to-dismiss channel. The offset the
+  // Dialog translates by, the card height the release threshold judges
+  // `dy ≥ card/2` against, and the scroll position `shouldClaim` consults —
+  // all owned here, written by the parts below through `contextValue`.
+  const swipeOffset = signal(0);
+  const cardHeight = signal(0);
+  const scrollOffset = signal<Point>({ x: 0, y: 0 });
+  const atTop = computed(() => scrollOffset().y <= 0);
+
+  const pan = createPan({
+    // All four conditions gate the attachment (adapt sheet §2): under the
+    // default pointer environment — or without the explicit `isSwipeable`,
+    // or not dismissable, or carried as a panel — `panHandlers()` resolves
+    // to an empty object and no listener exists at all.
+    enabled: () =>
+      input() === "touch" &&
+      isDismissable() &&
+      props.isSwipeable === true &&
+      presentation() === "sheet",
+    // The first dominant move decides, with no displacement floor (the
+    // sheet-handoff unit measured a late claim granted into the void): only
+    // a downward pull while the scrolling element is back at its start edge
+    // is the swipe; upward and sideways travel stays the content's scroll.
+    shouldClaim: (_event, gesture) =>
+      gesture.dy > 0 && gesture.dy > Math.abs(gesture.dx) && atTop(),
+    onDrag: (_event, gesture) => {
+      swipeOffset.set(Math.max(0, gesture.dy));
+    },
+    onDragEnd: (_event, gesture, terminated) => {
+      if (terminated) {
+        swipeOffset.set(0);
+        return;
+      }
+
+      const height = cardHeight();
+      const dismisses =
+        (height > 0 && gesture.dy >= height / 2) ||
+        gesture.vy >= SWIPE_DISMISS_VELOCITY;
+
+      if (dismisses) {
+        // The release goes through `close()`, so the exit keeps the overlay's
+        // own presence path and `onOpenChange` semantics; the offset holds
+        // where the finger left it through the fade.
+        contextValue.close();
+      } else {
+        swipeOffset.set(0);
+      }
+    },
+  });
+
+  const swipe: ModalSwipe = {
+    panHandlers: pan.panHandlers,
+    offset: swipeOffset,
+    reportCardHeight: (height) => cardHeight.set(height),
+  };
+
   // HeroUI merges a second `modalVariants({variant})` over the root's slots;
   // here that is the same table with one axis replaced, so every part below
   // sees the merged slots without copying the state.
@@ -198,11 +308,21 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
   // Dialog below has to read — and close — the Backdrop's state, not the
   // Root's. Without a Root the base value is already the local state.
   const base: ModalContextValue = parent
-    ? parent.withOverrides({ variant: () => props.variant })
+    ? parent.withOverrides({
+        variant: () => props.variant,
+        presentation: () => presentation(),
+        swipe,
+        scrollAtTop: atTop,
+        reportScrollOffset: (offset) => scrollOffset.set(offset),
+      })
     : createModalContextValue({
         isOpen: state.isOpen,
         setOpen: state.setIsOpen,
         variant: () => props.variant,
+        presentation: () => presentation(),
+        swipe,
+        scrollAtTop: atTop,
+        reportScrollOffset: (offset) => scrollOffset.set(offset),
       });
 
   const contextValue: ModalContextValue =
@@ -212,9 +332,6 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
 
   const isOpen = contextValue.isOpen;
   const close = () => contextValue.close();
-
-  const isDismissable = () => props.isDismissable ?? true;
-  const isKeyboardDismissDisabled = () => props.isKeyboardDismissDisabled ?? false;
 
   // The entering phase the render values report. R-012's reduced-motion half
   // lands on the Dialog below; the exit has no counterpart here (port sheet §8),
@@ -264,8 +381,11 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
   // once instead of rebuilding the children forever.
   const outside = computed(() => scroll() === "outside");
 
+  // A-002: the sheet carrier docks to the bottom; `scroll="outside"` wins
+  // over the presentation and keeps `items-start`, because the scrolling
+  // semantics of that carrier may not be taken away (adapt sheet §8).
   const carrierClasses = computed(() => {
-    const layout = modalBackdropLayoutClasses(scroll());
+    const layout = modalBackdropLayoutClasses(scroll(), presentation());
 
     // R-029 puts the scrolling on this layer when the Container scrolls
     // outside; the inner viewport then has to hear drags. Otherwise the layer
@@ -295,7 +415,14 @@ export function ModalBackdrop(props: ModalBackdropProps): JSX.Element {
     };
 
     return outside() ? (
-      <Scroll class={scrollClasses.scroll} contentClass={scrollClasses.content}>
+      // A-005: the outside carrier is the scrolling element, so it feeds the
+      // same `atTop` the Body's inside `Scroll` reports into — the swipe's
+      // claim gate reads either indifferently.
+      <Scroll
+        class={scrollClasses.scroll}
+        contentClass={scrollClasses.content}
+        onScroll={(event) => scrollOffset.set(event.offset)}
+      >
         {content()}
       </Scroll>
     ) : (

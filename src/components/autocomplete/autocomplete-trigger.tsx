@@ -20,7 +20,11 @@ import {
   View,
 } from "nsh";
 
-import { isKeyboardPress, OverlayTriggerContext } from "../../primitives";
+import {
+  createInput,
+  isKeyboardPress,
+  OverlayTriggerContext,
+} from "../../primitives";
 import { renderChildren } from "../list-box/children";
 import {
   AutocompleteContext,
@@ -194,6 +198,11 @@ export function AutocompleteTrigger(
   // same resolved value through the trigger context.
   const isDisabled = () => local.isDisabled ?? autocomplete.isDisabled();
   const isOpen = autocomplete.isOpen;
+
+  // A-002: the `input` environment axis gates the hover channel — under touch
+  // there are no hover semantics, and web's sticky hover would otherwise pin
+  // `isHovered` (and the R-006 / R-011 fills it feeds) after a press.
+  const input = createInput();
 
   const hovered = signal(false);
   const pressed = signal(false);
@@ -373,6 +382,16 @@ export function AutocompleteTrigger(
    * ----------------------------------------------------------------------------------------- */
   const handleMouseEnter = (event: NshMouseEvent) => {
     local.onMouseEnter?.(event);
+
+    // A-002: the host mouse callback still forwards, but hover state and the
+    // `onHover*` callbacks resolve only under a pointer — a touch environment
+    // has no hover semantics, and web's sticky hover would otherwise pin the
+    // hover fills after a press (search-field A-002, list-box A-005 the same
+    // gating). `handleMouseLeave`'s symmetric writes stay: with `hovered`
+    // never set they no-op.
+    if (input() === "touch") {
+      return;
+    }
 
     if (isDisabled() || hovered()) {
       return;

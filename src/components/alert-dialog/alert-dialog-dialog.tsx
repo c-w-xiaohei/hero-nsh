@@ -1,4 +1,4 @@
-import type { JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
+import type { Bounds, JSX, StyleProp, ViewProps, ViewRef, ViewStyle } from "nsh";
 import { computed, split, View } from "nsh";
 
 import { AlertDialogContext } from "./alert-dialog-context";
@@ -8,7 +8,11 @@ import {
   createAlertDialogPartOrder,
 } from "./alert-dialog-part-order";
 import type { AlertDialogSlots } from "./alert-dialog.styles";
-import { alertDialogPlacementClasses, alertDialogVariants } from "./alert-dialog.styles";
+import {
+  alertDialogPlacementClasses,
+  alertDialogSheetDialogClasses,
+  alertDialogVariants,
+} from "./alert-dialog.styles";
 
 /**
  * The props of `AlertDialog.Dialog`: HeroUI's `AlertDialogDialogProps`, which
@@ -71,6 +75,7 @@ export function AlertDialogDialog(props: AlertDialogDialogProps): JSX.Element {
     "aria-label",
     "render",
     "slot",
+    "onLayout",
   ]);
 
   const context = AlertDialogContext();
@@ -80,10 +85,20 @@ export function AlertDialogDialog(props: AlertDialogDialogProps): JSX.Element {
   const slots = (): AlertDialogSlots => context?.slots() ?? alertDialogVariants();
   const placement = () => context?.placement() ?? "auto";
 
+  // A-003/A-004: the Backdrop's resolved presentation and its swipe channel.
+  // Outside a Backdrop both stand at the defaults (`"panel"`, `null`) and the
+  // spread below mounts nothing — the desktop paths are byte-identical.
+  const presentation = () => context?.presentation() ?? "panel";
+  const swipe = () => context?.swipe() ?? null;
+
   const close = () => context?.close();
 
   const classes = computed(() =>
-    [slots().dialog(), local.className]
+    [
+      slots().dialog(),
+      presentation() === "sheet" ? alertDialogSheetDialogClasses : undefined,
+      local.className,
+    ]
       .filter((part) => part !== undefined && part !== "")
       .join(" "),
   );
@@ -101,6 +116,23 @@ export function AlertDialogDialog(props: AlertDialogDialogProps): JSX.Element {
   // children, so the three parts register in the order they are written and
   // each asks for the part before it (port sheet §2, research 4.2).
   const partOrder = createAlertDialogPartOrder();
+
+  // A-004: the card's height is the half-height release threshold of the
+  // swipe-dismiss, so every layout reports it to the channel the Backdrop
+  // owns; the caller's `onLayout` runs after it, as before.
+  const handleLayout = (event: { bounds: Bounds }) => {
+    swipe()?.reportCardHeight(event.bounds.size.height);
+    local.onLayout?.(event);
+  };
+
+  // A-004: the drag offset the Backdrop's pan writes becomes the card's
+  // downward translate. At rest it is 0, which the style binds anyway so the
+  // release back to rest renders without a remount.
+  const dragStyle = (): ViewStyle | undefined => {
+    const channel = swipe();
+
+    return channel === null ? undefined : { translate: [0, channel.offset()] };
+  };
 
   const content = () => {
     const node = local.children;
@@ -120,6 +152,14 @@ export function AlertDialogDialog(props: AlertDialogDialogProps): JSX.Element {
         // names. `role` and `aria-label` are mapped above and are therefore not
         // in `rest`.
         {...viewProps(rest)}
+        // A-004: the swipe-dismiss responder spreads here; the `createPan`
+        // seam that produces it lives in `alert-dialog-backdrop.tsx` and
+        // crosses through the context's `swipe` channel. Under any gated
+        // configuration (pointer input, `isDismissable`/`isSwipeable` unset,
+        // or a panel presentation) `panHandlers()` resolves to `{}` and no
+        // listener exists — the gesture path is physically absent, not
+        // registered-and-ignored.
+        {...(swipe()?.panHandlers() ?? {})}
         ref={(node) => local.ref?.(node)}
         nativeID={local.id ?? local.nativeID}
         // HeroUI always writes `role="alertdialog"`. NSH's `AccessibilityRole`
@@ -129,7 +169,8 @@ export function AlertDialogDialog(props: AlertDialogDialogProps): JSX.Element {
         accessibilityLabel={local["aria-label"]}
         class={classes()}
         classList={classList()}
-        style={local.style}
+        style={[dragStyle(), local.style]}
+        onLayout={handleLayout}
       >
         {/*
           The provider exception in the common rules: the three spacing parts

@@ -9,6 +9,7 @@ import type {
   ViewStyle,
 } from "nsh";
 
+import { createInput } from "../../primitives/environment";
 import { themeToken } from "../../theme";
 import {
   FALLBACK_CHECKBOX_CONTEXT,
@@ -156,6 +157,8 @@ export function CheckboxIndicator(
     return typeof value === "function" && value.length >= 1;
   });
 
+  const input = createInput();
+
   const fieldRenderProps: CheckboxFieldRenderProps = {
     isSelected: ctx.isSelected,
     isIndeterminate: ctx.isIndeterminate,
@@ -205,7 +208,7 @@ export function CheckboxIndicator(
   // a caller's bordered custom indicator shows it.
   const classes = computed(() =>
     [
-      checkboxVariants({ variant: ctx.variant() }).indicator(),
+      checkboxVariants({ variant: ctx.variant(), input: input() }).indicator(),
       ctx.isSelected() || ctx.isIndeterminate() ? "border-accent-foreground" : "",
       local.className ?? "",
     ]

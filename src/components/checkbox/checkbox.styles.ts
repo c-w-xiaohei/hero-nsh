@@ -2,8 +2,6 @@ import type { VariantProps } from "tailwind-variants";
 
 import { tv } from "tailwind-variants";
 
-import { shadow } from "../../tokens/geometry";
-
 /**
  * Checkbox's variant table, mirroring `@heroui/styles` 3.2.7
  * `packages/styles/src/components/checkbox/checkbox.styles.ts` plus the
@@ -57,7 +55,11 @@ export const checkboxVariants = tv({
     // declaration of its own here either; the only visible pressed rule is
     // R-028's indeterminate background.
     control:
-      `relative inline-flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-md border-0 border-field-border bg-field ${shadow.field.both} outline-none cursor-pointer transition duration-200 ease-out motion-reduce:transition-none`,
+      // The two `shadow-[...]` classes are `shadow.field.both` of
+      // `src/tokens/geometry.ts` written out (as button/sheet do): a styles
+      // file imports only `tailwind-variants`, and the gate's class walker
+      // runs it under raw Node, which resolves no extensionless import.
+      `relative inline-flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-md border-0 border-field-border bg-field shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)] dark:shadow-[0_0_0_0_transparent_inset] outline-none cursor-pointer transition duration-200 ease-out motion-reduce:transition-none`,
     // R-032: `.checkbox__indicator` → `relative z-10 flex size-3
     // items-center justify-center`.
     // R-033: `.checkbox__indicator svg` → `size-full transform-gpu`; both
@@ -76,6 +78,17 @@ export const checkboxVariants = tv({
       // already produce (`shadow-none bg-default`, the hover border, the
       // accent fill), so the modifier itself carries no class.
       secondary: {},
+    },
+    // A-001: the `input` axis — `touch` gives the clickable row the 44 pt
+    // minimum visible height a hit target needs (the `hitSlop` half of the
+    // hit-area path lives in `createPressFeedback`, A-003). No `density`
+    // axis: row spacing and the square's size are content-driven, not a
+    // density preset's.
+    input: {
+      pointer: {},
+      touch: {
+        content: "min-h-11",
+      },
     },
   },
   defaultVariants: {
@@ -110,6 +123,13 @@ export const checkboxGroupVariants = tv({
       // carried to each item's Control by the group context (R-035,
       // R-038—R-040).
       secondary: "",
+    },
+    // A-001: the `input` axis on the group's own table is inert — the row's
+    // hit area belongs to each item's `checkboxVariants` — kept so every
+    // `checkbox*Variants` call site feeds the same variant arguments.
+    input: {
+      pointer: "",
+      touch: "",
     },
   },
   defaultVariants: {

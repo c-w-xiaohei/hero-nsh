@@ -1,6 +1,26 @@
-import { host, mount, signal, Text, View } from "nsh";
-import { Description, Label, ListBox } from "@heroui/react";
-import type { SelectionValue } from "@heroui/react";
+import { effect, host, mount, signal, Text, View } from "nsh";
+import type { JSX } from "nsh";
+import {
+  createListState,
+  createRowRegistry,
+  Description,
+  EnvironmentScope,
+  Label,
+  ListBox,
+  ListOwnerContext,
+  PressableFeedback,
+  PressableFeedbackContext,
+  toListItemData,
+  listItemDataGetters,
+} from "@heroui/react";
+import type {
+  ListOwner,
+  ListOwnerListControls,
+  ListState,
+  PressableFeedbackContextValue,
+  SelectionValue,
+} from "@heroui/react";
+import { ListBoxContext } from "../src/components/list-box/list-box-context";
 import { probe } from "@scenario/probe";
 
 /*
@@ -599,6 +619,786 @@ function DynamicReplace() {
   );
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * f-collection: the seam's own cases (sheet §2 A-009)
+ *
+ * `OwnerShim` plays a Select-like owner: it provides `ListOwnerContext`,
+ * captures the `ListState`/`ListOwnerListControls` the ListBox registers, and
+ * exposes `testID` buttons that drive the same controls a virtual-focus field
+ * would (`handleKeyDown` navigation, `focusKey`, `activateFocused`,
+ * `findItem`, `itemCount`, collection reads). It is the only headless-safe
+ * way to reach the keyboard paths — a headless run cannot give the root view
+ * focus, and the assertions test the seam, not view focus.
+ *
+ * `RegistryProbe` mounts inside a row, reads `rowRegistry` from the list
+ * context and probes `has(param.probekey)` — the mounted-presence half of the
+ * M-003 negative assertion.
+ * -----------------------------------------------------------------------------------------------*/
+
+function param(name: string): string {
+  return String(host.params[name] ?? "");
+}
+
+/** `find-<key>`, `focus-<key>`, … testIDs cannot hold `:`/`#`; sanitize once. */
+function safe(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function OwnerShim(props: {
+  children: () => JSX.Element;
+  mode: "none" | "single" | "multiple";
+  disabledKeys?: string[];
+  withFilter?: boolean;
+  onToggle: () => void;
+}) {
+  const filter = signal<string | undefined>(undefined);
+
+  let listState: ListState | undefined;
+  let listControls: ListOwnerListControls | undefined;
+
+  const owner: ListOwner = {
+    selectionMode: () => props.mode,
+    selectedKeys: () => undefined,
+    defaultSelectedKeys: () => undefined,
+    onSelectionChange,
+    allowDuplicateSelectionEvents: () => false,
+    disallowEmptySelection: () => false,
+    disabledKeys: () => props.disabledKeys,
+    shouldFocusOnHover: () => false,
+    shouldSelectOnPressUp: () => false,
+    escape: () => {},
+    closeOnSelection: () => false,
+    close: () => {},
+    isActive: () => true,
+    registerList: (state, controls) => {
+      listState = state;
+      listControls = controls;
+      return () => {};
+    },
+    filterText: props.withFilter ? () => filter() : undefined,
+  };
+
+  const sendKey = (key: string) => {
+    if (key === "focus") {
+      const keyParam = param("probekey");
+      listControls?.focusKey(keyParam);
+      probe("focusKey")(keyParam);
+      return;
+    }
+
+    if (key === "activate") {
+      listControls?.activateFocused?.();
+      probe("activate")("done");
+      return;
+    }
+
+    if (key === "find") {
+      const keyParam = param("probekey");
+      const item = listControls?.findItem(keyParam);
+      probe("findItem")({
+        key: item?.key ?? null,
+        textValue: item?.textValue() ?? null,
+        hasChildren: item?.children != null,
+      });
+      return;
+    }
+
+    if (key === "node") {
+      const keyParam = param("probekey");
+      const node = listState?.collection().getItem(keyParam);
+      probe("node")(
+        node
+          ? {
+              type: node.type,
+              key: node.key,
+              textValue: node.textValue,
+              disabled: node.disabled,
+            }
+          : null,
+      );
+      return;
+    }
+
+    if (key === "keys") {
+      probe("keys")([...(listState?.collection().getKeys() ?? [])]);
+      return;
+    }
+
+    if (key === "itemcount") {
+      probe("itemCount")(listControls?.itemCount?.() ?? -1);
+      return;
+    }
+
+    if (key === "focused") {
+      probe("focusedKey")(listControls?.focusedKey() ?? null);
+      return;
+    }
+
+    if (key === "toggle") {
+      props.onToggle();
+      probe("toggle")(param("toggle"));
+      return;
+    }
+
+    if (key === "filter") {
+      const next = filter() === undefined ? param("filter") : undefined;
+      filter.set(next);
+      probe("filterSet")(next ?? null);
+      return;
+    }
+
+    listControls?.handleKeyDown?.({ key });
+  };
+
+  const buttons = [
+    "keys",
+    "focused",
+    "activate",
+    "itemcount",
+    "toggle",
+    "filter",
+    "nav-down",
+    "nav-up",
+    "nav-pageup",
+    "nav-pagedown",
+    "nav-t",
+    "nav-d",
+    "nav-a",
+    "nav-c",
+    "nav-x",
+  ];
+
+  return (
+    <ListOwnerContext.Provider value={owner}>
+      <View class="w-64">
+        {props.children()}
+        {buttons.map((id) => (
+          <View
+            role="button"
+            testID={id}
+            onPress={() => sendKey(id.startsWith("nav-") ? id.slice(4) : id)}
+          >
+            <Text>{id}</Text>
+          </View>
+        ))}
+        {param("probekey") !== "" && (
+          <View
+            role="button"
+            testID={`find-${safe(param("probekey"))}`}
+            onPress={() => sendKey("find")}
+          >
+            <Text>find</Text>
+          </View>
+        )}
+        {param("probekey") !== "" && (
+          <View
+            role="button"
+            testID={`node-${safe(param("probekey"))}`}
+            onPress={() => sendKey("node")}
+          >
+            <Text>node</Text>
+          </View>
+        )}
+        {param("probekey") !== "" && (
+          <View
+            role="button"
+            testID={`focus-${safe(param("probekey"))}`}
+            onPress={() => sendKey("focus")}
+          >
+            <Text>focus</Text>
+          </View>
+        )}
+      </View>
+    </ListOwnerContext.Provider>
+  );
+}
+
+/** Mounted-presence probe: `probe("hasRow")` records `rowRegistry.has`. */
+function RegistryProbe() {
+  const list = ListBoxContext();
+
+  if (!list) {
+    return null;
+  }
+
+  return (
+    <View
+      role="button"
+      testID="hasrow"
+      class="h-2 w-2"
+      onPress={() => probe("hasRow")(list.rowRegistry.has(param("probekey")))}
+    />
+  );
+}
+
+const MOBILE_ITEMS = [
+  { id: "1", name: "Alpha" },
+  { id: "2", name: "Bravo" },
+  { id: "3", name: "Charlie" },
+  { id: "4", name: "Delta" },
+  { id: "5", name: "Echo" },
+];
+
+function MobileItemsList(props: { mode: "single" | "multiple" }) {
+  const hidden = signal<string[]>(
+    param("hide") === "" ? [] : [param("hide")],
+  );
+
+  return (
+    <OwnerShim
+      mode={props.mode}
+      onToggle={() => hidden.set(hidden().length ? [] : [param("toggle")])}
+    >
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode={props.mode}
+          items={MOBILE_ITEMS}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item, index) => (
+            <If when={!hidden().includes(item.id)}>
+              {() => (
+                <ListBox.Item
+                  id={item.id}
+                  textValue={item.name}
+                  aria-label={item.name}
+                >
+                  {index === 0
+                    ? [<Label>{item.name}</Label>, <RegistryProbe />]
+                    : [<Label>{item.name}</Label>]}
+                </ListBox.Item>
+              )}
+            </If>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileOverrideList() {
+  const hidden = signal<string[]>(
+    param("hide") === "" ? [] : [param("hide")],
+  );
+  const DATA = [
+    { id: "x" },
+    { id: "y", name: "Wye" },
+  ];
+
+  return (
+    <OwnerShim
+      mode="single"
+      onToggle={() => hidden.set(hidden().length ? [] : [param("toggle")])}
+    >
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="single"
+          items={DATA}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item, index) => (
+            <If when={!hidden().includes(item.id)}>
+              {() => (
+                <ListBox.Item
+                  id={item.id}
+                  textValue={item.id === "x" ? "Xray" : undefined}
+                  aria-label={item.id === "x" ? "Xray" : item.name}
+                >
+                  {index === 0
+                    ? [<Label>{item.id === "x" ? "Xray" : item.name}</Label>, <RegistryProbe />]
+                    : [<Label>{item.id === "x" ? "Xray" : item.name}</Label>]}
+                </ListBox.Item>
+              )}
+            </If>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileOrphanList() {
+  const DATA = [
+    { id: "1", name: "One" },
+    { id: "2", name: "Two" },
+  ];
+
+  return (
+    <OwnerShim mode="multiple" onToggle={() => {}}>
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="multiple"
+          items={DATA}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item) => (
+            <ListBox.Item
+              id={item.id === "1" ? "orphan" : item.id}
+              textValue={item.name}
+              aria-label={item.name}
+            >
+              <Label>{item.name}</Label>
+            </ListBox.Item>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileNoKeyList() {
+  const DATA = [{ name: "Plain A" }, { name: "Plain B" }];
+
+  return (
+    <OwnerShim mode="single" onToggle={() => {}}>
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="single"
+          items={DATA}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item) => (
+            <ListBox.Item textValue={item.name} aria-label={item.name}>
+              <Label>{item.name}</Label>
+            </ListBox.Item>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileSectionList() {
+  const DATA = [
+    {
+      name: "Fruits",
+      items: [
+        { id: "a", name: "Apple" },
+        { id: "b", name: "Banana" },
+      ],
+    },
+    {
+      name: "Veggies",
+      items: [
+        { id: "c", name: "Carrot" },
+        { id: "d", name: "Daikon" },
+      ],
+    },
+  ];
+
+  return (
+    <OwnerShim mode="single" onToggle={() => {}}>
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="single"
+          items={DATA}
+          onSelectionChange={onSelectionChange}
+        >
+          {(group) => (
+            <ListBox.Section aria-label={group.name} items={group.items}>
+              {(item) => (
+                <ListBox.Item
+                  id={item.id}
+                  textValue={item.name}
+                  aria-label={item.name}
+                >
+                  <Label>{item.name}</Label>
+                </ListBox.Item>
+              )}
+            </ListBox.Section>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileDisabledList() {
+  const DATA = [
+    { id: "1", name: "One", disabled: false },
+    { id: "2", name: "Two", disabled: false },
+    { id: "3", name: "Three", disabled: false },
+  ];
+
+  return (
+    <OwnerShim
+      mode="single"
+      disabledKeys={["2"]}
+      onToggle={() => {}}
+    >
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="single"
+          items={DATA}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item) => (
+            <ListBox.Item
+              id={item.id}
+              textValue={item.name}
+              aria-label={item.name}
+              isDisabled={item.id === "1"}
+            >
+              <Label>{item.name}</Label>
+            </ListBox.Item>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobileFilterList() {
+  return (
+    <OwnerShim
+      mode="single"
+      withFilter
+      onToggle={() => {}}
+    >
+      {() => (
+        <ListBox
+          aria-label="Options"
+          selectionMode="single"
+          items={MOBILE_ITEMS}
+          onSelectionChange={onSelectionChange}
+        >
+          {(item) => (
+            <ListBox.Item id={item.id} textValue={item.name} aria-label={item.name}>
+              <Label>{item.name}</Label>
+            </ListBox.Item>
+          )}
+        </ListBox>
+      )}
+    </OwnerShim>
+  );
+}
+
+function MobilePagedList() {
+  return (
+    <OwnerShim mode="single" onToggle={() => {}}>
+      {() => (
+        <View class="h-40 w-64">
+          <ListBox
+            aria-label="Options"
+            className="h-40 w-full"
+            selectionMode="single"
+            items={PAGED}
+            onSelectionChange={onSelectionChange}
+          >
+            {(item, index) => (
+              <If when={index < 3}>
+                <ListBox.Item
+                  id={item.id}
+                  textValue={item.name}
+                  aria-label={item.name}
+                  className="h-10"
+                >
+                  <Label>{item.name}</Label>
+                </ListBox.Item>
+              </If>
+            )}
+          </ListBox>
+        </View>
+      )}
+    </OwnerShim>
+  );
+}
+
+/** M-013: `toListItemData` normalization and the getters a state consumes. */
+function FDataProbe() {
+  const results = [
+    { id: "x" },
+    { key: "k" },
+    "plain",
+    { textValue: "OnlyText" },
+    { name: "ByName", items: [{ id: "in" }] },
+    { children: [{ id: "c1" }] },
+    undefined,
+    { label: "Lab" },
+    { id: "d1", isDisabled: true },
+    { id: "d2", disabled: true },
+  ].map((datum, index) => {
+    const n = toListItemData(datum, index);
+    return {
+      key: n.key,
+      textValue: n.textValue,
+      disabled: n.disabled,
+      children: n.children?.length ?? null,
+    };
+  });
+  probe("data")(results);
+
+  const g = listItemDataGetters();
+  const state = createListState({
+    dataSource: () => [
+      { id: "s1", name: "Sec", items: [{ id: "i1", name: "Inner" }] },
+      { id: "i2", name: "Outer", disabled: true },
+      "prim",
+    ],
+    getKey: () => g.getKey,
+    getTextValue: () => g.getTextValue,
+    getDisabled: () => g.getDisabled,
+    getSectionChildren: () => g.getSectionChildren,
+  });
+  probe("getters")(
+    [...state.collection()].map((n) => ({
+      type: n.type,
+      key: n.key,
+      textValue: n.textValue,
+      disabled: n.disabled,
+    })),
+  );
+  probe("import")({ data: true });
+
+  return <Text>f-data</Text>;
+}
+
+/** M-014: `createRowRegistry` register/get/has/overwrite/unregister. */
+function FRegistryProbe() {
+  const registry = createRowRegistry<{ key: string; mark: number }>();
+  const first = { key: "a", mark: 1 };
+  const unregisterFirst = registry.register(first);
+  const unregisterB = registry.register({ key: "b", mark: 2 });
+  registry.register({ key: "a", mark: 3 });
+  unregisterFirst();
+  const keysBefore = registry.keys().join(",");
+  const mark = registry.get("a")?.mark ?? -1;
+  unregisterB();
+  probe("registry")({
+    size: registry.size(),
+    keys: keysBefore,
+    keysAfter: registry.keys().join(","),
+    mark,
+    hasA: registry.has("a"),
+    hasB: registry.has("b"),
+  });
+  probe("import")({ registry: true });
+
+  return <Text>f-registry</Text>;
+}
+
+function FCollectionFixture() {
+  const which = param("which");
+
+  return which === "registry" ? <FRegistryProbe /> : <FDataProbe />;
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * mobile B(项) cases: the press-feedback seam assertions (sheet §2 A-008)
+ *
+ * `b-item` mounts one items-driven single-select list whose row carries the
+ * `events` sequence probe (down/up/press), the `layout` bounds probe (root
+ * and row), the hover probes (`onHoverStart`/`onHoverEnd`/`onHoverChange`/
+ * `onMouseEnter`/`onMouseLeave` under `hover=1`) and a `CtxProbe` child that
+ * samples `PressableFeedbackContext` — `ctx-env`/`ctx-state`/`ctx-pressed`/
+ * `ctx-channels`, the accordion/control-field convention.
+ *
+ * host.params: `scope` ("" = the host default pointer environment, "touch"
+ * through `EnvironmentScope`), `density` ("compact" mounts
+ * `EnvironmentScope density="compact"`), `narrow="1"` (a 24 pt wide row so
+ * the seam computes a non-empty hitSlop — the `min-h-11` cell already lifts
+ * the height under touch), `disabled="1"`, `hover="1"` (the row's hover
+ * probes plus the render-prop `hov` marker), `overlay="highlight"` (a
+ * caller-composed `<PressableFeedback.Highlight/>` inside the row — the
+ * M-006 composition exit).
+ * `b-action` is the `selectionMode="none"` baseline: `onAction` is the only
+ * activation output.
+ * -----------------------------------------------------------------------------------------------*/
+
+type LayoutEvent = {
+  bounds: {
+    origin: { x: number; y: number };
+    size: { width: number; height: number };
+  };
+};
+
+/** A full bounds box: parent-relative origin and size, for geometry probes. */
+function boxProbe(name: string) {
+  return (event: LayoutEvent) =>
+    probe("layout")({
+      name,
+      x: event.bounds.origin.x,
+      y: event.bounds.origin.y,
+      width: event.bounds.size.width,
+      height: event.bounds.size.height,
+    });
+}
+
+/** The live `PressableFeedbackContext` the `ctx-sample` button reads. */
+let rowCtx: PressableFeedbackContextValue | null = null;
+
+function CtxProbe() {
+  const ctx = PressableFeedbackContext();
+  const reportPressed = probe("ctx-pressed");
+  const reportState = probe("ctx-state");
+  const reportEnv = probe("ctx-env");
+
+  effect(() => {
+    rowCtx = ctx;
+  });
+
+  effect(() => {
+    reportEnv({
+      enabled: ctx.enabled(),
+      hitSlop: ctx.hitSlop() ?? null,
+    });
+  });
+
+  const sample = () => {
+    void ctx.pressed.getValue().then((pressed) => {
+      void ctx.scale.getValue().then((scale) => {
+        reportState({
+          seamPressed: ctx.isPressed(),
+          pressed,
+          scale,
+          origin: ctx.pressOrigin(),
+          hitSlop: ctx.hitSlop() ?? null,
+          bounds: ctx.bounds(),
+          enabled: ctx.enabled(),
+          allDisabled: ctx.isAllAnimationsDisabled(),
+        });
+      });
+    });
+  };
+
+  effect(() => {
+    const seam = ctx.isPressed();
+    reportPressed({ seam });
+    setTimeout(sample, 600);
+    setTimeout(sample, 1500);
+  });
+
+  return <Text>{ctx.isPressed() ? "seam-pressed" : "seam-idle"}</Text>;
+}
+
+/* On-demand channel read for the negative half: a gated press never raises
+ * the seam's `isPressed` edge, so `ctx-state` alone cannot prove the channels
+ * stayed at rest — `ctx-sample` samples them after the press instead. */
+function sampleChannels() {
+  const reportChannels = probe("ctx-channels");
+  const c = rowCtx;
+  if (c === null) {
+    return;
+  }
+  void c.pressed.getValue().then((pressed) => {
+    void c.scale.getValue().then((scale) => {
+      reportChannels({
+        seamPressed: c.isPressed(),
+        pressed,
+        scale,
+        origin: c.pressOrigin(),
+        hitSlop: c.hitSlop() ?? null,
+        enabled: c.enabled(),
+      });
+    });
+  });
+}
+
+function BItemCase() {
+  const narrow = param("narrow") === "1";
+  const disabled = param("disabled") === "1";
+  const hover = param("hover") === "1";
+  const overlay = param("overlay");
+
+  return (
+    <View class="w-64">
+      <ListBox
+        aria-label="Options"
+        selectionMode="single"
+        items={MOBILE_ITEMS.slice(0, 3)}
+        onSelectionChange={onSelectionChange}
+        onLayout={boxProbe("root")}
+      >
+        {(item) => (
+          <ListBox.Item
+            id={item.id}
+            textValue={item.name}
+            aria-label={item.name}
+            isDisabled={disabled}
+            style={narrow ? { width: 24 } : undefined}
+            onPressDown={() => probe("events")("down")}
+            onPressUp={() => probe("events")("up")}
+            onPress={() => probe("events")("press")}
+            onLayout={boxProbe(`row-${item.id}`)}
+            onHoverStart={hover ? () => probe("hover")("start") : undefined}
+            onHoverEnd={hover ? () => probe("hover")("end") : undefined}
+            onHoverChange={
+              hover ? (h) => probe("hover")({ kind: "change", value: h }) : undefined
+            }
+            onMouseEnter={hover ? () => probe("hover")("enter") : undefined}
+            onMouseLeave={hover ? () => probe("hover")("leave") : undefined}
+          >
+            {(values) => [
+              <View class="flex flex-row" onLayout={boxProbe(`pad-${item.id}`)}>
+                <Label>{item.name}</Label>
+                {hover ? (
+                  <Text>{values.isHovered() ? "hov" : ""}</Text>
+                ) : null}
+              </View>,
+              overlay === "highlight" ? (
+                <PressableFeedback.Highlight testID="overlay" />
+              ) : null,
+              <CtxProbe />,
+            ]}
+          </ListBox.Item>
+        )}
+      </ListBox>
+      <View testID="ctx-sample" role="button" class="p-2" onPress={sampleChannels}>
+        <Text>ctx-sample</Text>
+      </View>
+    </View>
+  );
+}
+
+function BActionCase() {
+  return (
+    <View class="w-64">
+      <ListBox
+        aria-label="File actions"
+        selectionMode="none"
+        items={MOBILE_ITEMS.slice(0, 2)}
+        onAction={probe("onAction")}
+        onSelectionChange={onSelectionChange}
+      >
+        {(item) => (
+          <ListBox.Item id={item.id} textValue={item.name} aria-label={item.name}>
+            <Label>{item.name}</Label>
+          </ListBox.Item>
+        )}
+      </ListBox>
+    </View>
+  );
+}
+
+/* The default environment is the desktop-parity half; `scope="touch"` is the
+ * injected mobile half and `density="compact"` the density preset (sheet
+ * A-008/M-007). It wraps `Fixture` at the Root — `props.children` captures
+ * its creation scope, so an `EnvironmentScope` built mid-tree inside
+ * `Fixture` could not reach the cases (the disclosure/accordion convention). */
+function Scoped(props: { children?: JSX.Element }) {
+  const scope = param("scope");
+  const density = param("density");
+
+  return scope === "touch" || scope === "pointer" || density === "compact" ? (
+    <EnvironmentScope
+      input={
+        scope === "touch" ? "touch" : scope === "pointer" ? "pointer" : undefined
+      }
+      density={density === "compact" ? "compact" : undefined}
+    >
+      {props.children}
+    </EnvironmentScope>
+  ) : (
+    <>{props.children}</>
+  );
+}
+
 function Fixture() {
   const name = String(host.params.case ?? "log");
   const disabledMapping = String(host.params.disabled ?? "mapped") !== "none";
@@ -758,7 +1558,75 @@ function Fixture() {
     return <DynamicReplace />;
   }
 
+  /* f-collection cases (sheet §2 A-009) and the B(项) `b-*` cases: every
+   * mobile-layer case lives here so `Scoped` at the Root wraps them all —
+   * `scope=touch` injects the touch environment, `density=compact` the
+   * preset; the seams read it identically. */
+  const mobile = (() => {
+    if (name === "m-items") {
+      return <MobileItemsList mode="single" />;
+    }
+
+    if (name === "m-multi") {
+      return <MobileItemsList mode="multiple" />;
+    }
+
+    if (name === "m-override") {
+      return <MobileOverrideList />;
+    }
+
+    if (name === "m-orphan") {
+      return <MobileOrphanList />;
+    }
+
+    if (name === "m-nokey") {
+      return <MobileNoKeyList />;
+    }
+
+    if (name === "m-section") {
+      return <MobileSectionList />;
+    }
+
+    if (name === "m-disabled") {
+      return <MobileDisabledList />;
+    }
+
+    if (name === "m-filter") {
+      return <MobileFilterList />;
+    }
+
+    if (name === "m-paged") {
+      return <MobilePagedList />;
+    }
+
+    if (name === "f-collection") {
+      return <FCollectionFixture />;
+    }
+
+    if (name === "b-item") {
+      return <BItemCase />;
+    }
+
+    if (name === "b-action") {
+      return <BActionCase />;
+    }
+
+    return undefined;
+  })();
+
+  if (mobile !== undefined) {
+    return mobile;
+  }
+
   return <PlainList mode="single" />;
 }
 
-mount(Fixture);
+function Root() {
+  return (
+    <Scoped>
+      <Fixture />
+    </Scoped>
+  );
+}
+
+mount(Root);

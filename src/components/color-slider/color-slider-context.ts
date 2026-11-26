@@ -1,6 +1,7 @@
 import type { Accessor, ViewRef } from "nsh";
 import { context } from "nsh";
 
+import type { PanHandlers } from "../../primitives/pan";
 import type { InteractionModalityState } from "../../primitives/create-interaction-modality";
 import type { Color } from "../color-swatch";
 import { parseColor } from "../color-swatch";
@@ -174,6 +175,24 @@ export interface ColorSliderContextValue {
 export const ColorSliderContext = context<ColorSliderContextValue | undefined>(
   undefined,
 );
+
+/**
+ * The observable surface of one part's `createPan` gesture (adapt sheet
+ * A-003 / A-004): the handler object the part spreads on its view plus the
+ * pan's claim flag. The context exists for the fixture's `CtxProbe` —
+ * `panHandlers()` resolving to an empty object under the default pointer
+ * environment is the only way a test can prove no listener mounted.
+ * `null` outside a Track's / Thumb's own subtree.
+ */
+export interface ColorSliderPan {
+  /** The responder props the part spreads on its view; `{}` while the pan is gated off. */
+  panHandlers: () => PanHandlers;
+
+  /** Whether the pan currently holds a claimed gesture. */
+  active: Accessor<boolean>;
+}
+
+export const ColorSliderPanContext = context<ColorSliderPan | null>(null);
 
 /** Type-only alias so `colorSliderVariants`'s slot shape stays in one place. */
 export type ColorSliderSlots = ReturnType<typeof colorSliderVariants>;
