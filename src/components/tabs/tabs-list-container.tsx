@@ -143,6 +143,10 @@ export function TabListContainer(props: TabListContainerProps): JSX.Element | nu
   const offset = signal({ x: 0, y: 0 });
   const viewport = signal<Size>({ width: 0, height: 0 });
   const visibility = signal<ScrollShadowVisibility>("none");
+  // The scroller's own content size, as it reports it. In RTL it can be wider
+  // than the list's layout bounds (NSH 0.7 reports what the screen actually
+  // scrolls), and `maxScroll` has to agree with the range the scroller allows.
+  const scrollerContent = signal<Size>({ width: 0, height: 0 });
 
   const content = computed<Size>(() => tabs.contentSize());
 
@@ -159,7 +163,8 @@ export function TabListContainer(props: TabListContainerProps): JSX.Element | nu
 
   const maxScroll = computed(() => {
     const vertical = isVertical();
-    const contentSize = content();
+    const reported = scrollerContent();
+    const contentSize = (vertical ? reported.height : reported.width) > 0 ? reported : content();
     const viewportSize = viewport();
 
     return Math.max(
@@ -205,9 +210,10 @@ export function TabListContainer(props: TabListContainerProps): JSX.Element | nu
    * edge in both directions, so a right-to-left list rests at `maxScroll`
    * showing the end of the content — where the logical start's mirrored
    * frames live — and scrolling toward the content's start lowers it toward
-   * 0 (measured: rest emits `offset.x` 244, `t1`'s mirrored bounds 472..520
-   * in view). The flip therefore applies to the delta, and the clamp stays
-   * `[0, maxScroll]` in both directions.
+   * 0. The flip therefore applies to the delta, and the clamp stays
+   * `[0, maxScroll]` in both directions. `maxScroll` uses the scroller's own
+   * content size: in RTL it reports 547 against the list's 524, so rest is
+   * 267, and the list bounds alone would clamp the step 23 pt short.
    * ----------------------------------------------------------------------------------------- */
   const scrollBy = (direction: 1 | -1) => {
     const vertical = isVertical();
@@ -379,6 +385,12 @@ export function TabListContainer(props: TabListContainerProps): JSX.Element | nu
         dir={dir()}
         className={tabs.slots().scroller()}
         onScroll={(event: ScrollEvent) => {
+          if (
+            scrollerContent().width !== event.contentSize.width ||
+            scrollerContent().height !== event.contentSize.height
+          ) {
+            scrollerContent.set(event.contentSize);
+          }
           if (offset().x !== event.offset.x || offset().y !== event.offset.y) {
             offset.set({ x: event.offset.x, y: event.offset.y });
           }

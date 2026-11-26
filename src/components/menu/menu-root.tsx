@@ -539,8 +539,15 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
   };
 
   // A pointer press gives the root no native focus, so the port focuses it for
-  // the arrows to keep working (macOS / web). That focus event is not keyboard
-  // focus: the flag keeps the pointer modality, as `:focus-visible` would.
+  // the arrows to keep working. On the web the press natively focuses the view;
+  // on macOS NSH 0.7 stops a press from focusing a control at all (nsh#2783),
+  // so the programmatic focus is the only way the arrows keep working there.
+  // iOS is not in `canFocusViews`: #2783 also drops the tap's focus there, and
+  // `ViewRef.focus()` only promises keyboard focus for views on macOS / web,
+  // so a pointer-opened menu on iOS has no arrow-key focus — a known gap for
+  // external-keyboard use, not a case this focus compensates for. That focus
+  // event is not keyboard focus either way: the flag keeps the pointer
+  // modality, as `:focus-visible` would.
   const canFocusViews = platform.os === "macos" || platform.os === "web";
   let pointerFocusPending = false;
 
@@ -811,8 +818,11 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
   // The collection's keys are bound only while the root has the focus, and
   // dropped on blur or unmount (createKeymapScope). These are the movement
   // keys, the only ones that auto-repeat; the activation keys bind in their own
-  // scope below. Space stays on the host press wherever the host sends one
-  // (macOS, the web), and is bound only on Windows, which sends none.
+  // scope below. Space stays on the host press on macOS and the web. Windows
+  // sends one too — `activate()` presses a focused control for unmodified
+  // Return or Space — but a focused control makes the keymap skip plain
+  // Return/Space bindings, so the Windows Space binding below is only a
+  // fallback for a focus that takes no presses.
   //
   // Keymap matches the modifiers exactly, so the Shift and Control forms of a
   // shortcut are separate bindings; each one forwards its own modifiers.
@@ -899,7 +909,8 @@ export function MenuRoot<T>(props: MenuRootProps<T>): JSX.Element {
   // host press carries no key identity. Return is bound on every platform, so
   // the activation entry learns its key; the unnamed host press then means
   // Space, which keeps its held-key pressed state (R-014) on macOS and the web.
-  // Windows reports no press for either key, so it binds Space as well.
+  // Windows presses the focused control for either key as well (`activate()`);
+  // its Space binding is the fallback for a focus that takes no presses.
   const activateWithKey = (
     keyName: MenuActivationKey,
     modifiers?: SelectionModifiers,

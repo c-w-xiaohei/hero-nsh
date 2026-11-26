@@ -14,9 +14,10 @@ import { type TabsKey, encodeTabKey } from "./tabs-key";
  * Aria Components' `TabPanel` with `children` narrowed to `ReactNode`.
  *
  * `id` is what pairs the panel with its tab (HeroUI documents it as required,
- * though React Aria's type makes it optional). NSH has no `tabpanel` role and
- * no cross-element references, so the panel is a `region` and a tab cannot name
- * it (port sheet §8).
+ * though React Aria's type makes it optional). The panel is a `tabpanel`
+ * (NSH 0.7's `AccessibilityRole`); a tab still cannot name it by id — NSH
+ * links elements with refs (`accessibilityControls`), not ids, and this port
+ * does not wire the tab to its panel (port sheet §8).
  */
 export interface TabPanelProps {
   /** The key of the tab this panel belongs to; without it the panel never shows. */
@@ -43,17 +44,18 @@ export interface TabPanelProps {
   /** NSH's accessible name, over `aria-label`. */
   accessibilityLabel?: string;
 
-  /** Accepted, no effect: NSH has no cross-element references. */
+  /** Accepted, no effect: NSH links elements by ref, not by id. */
   "aria-labelledby"?: string;
 
-  /** Accepted, no effect: NSH has no cross-element references. */
+  /** Accepted, no effect: NSH links elements by ref, not by id. */
   "aria-describedby"?: string;
 
   /**
-   * The panel's role: `region` unless the caller asks for `group`. NSH has no
-   * `tabpanel` (port sheet §8).
+   * The panel's role: `tabpanel` (the default since NSH 0.7 added it);
+   * `region` and `group` stay available for a caller that wants a landmark
+   * or a plain group instead (port sheet §8).
    */
-  role?: "region" | "group";
+  role?: "tabpanel" | "region" | "group";
 
   /** A DOM id upstream; maps to `nativeID`. */
   nativeID?: string;
@@ -154,10 +156,10 @@ export function TabPanel(props: TabPanelProps): JSX.Element | null {
         ref={(node) => local.ref?.(node)}
         nativeID={local.nativeID}
         testID={local.testID}
-        // R-047: the panel slot carries the box; the role is `region` (or the
-        // caller's `group`) because `AccessibilityRole` has no `tabpanel`
-        // (port sheet §8).
-        role={local.role ?? "region"}
+        // R-047: the panel slot carries the box; the role is `tabpanel` since
+        // NSH 0.7 (`AccessibilityRole` gained it), or the caller's `region` /
+        // `group` (port sheet §8).
+        role={local.role ?? "tabpanel"}
         accessibilityLabel={local["aria-label"] ?? local.accessibilityLabel}
         accessibilityElementsHidden={
           isSelected() ? local.accessibilityElementsHidden : true

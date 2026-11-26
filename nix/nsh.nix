@@ -13,20 +13,20 @@
 let
   inherit (pkgs) lib stdenvNoCC;
 
-  version = "0.6.0";
+  version = "0.7.1";
 
   releases = {
     x86_64-linux = {
       asset = "nsh-linux-x86_64.tar.gz";
-      hash = "sha256-GdNg643RuohHo7OtBggvbzcF6wSugXg1eoza0xiA8Nk=";
+      hash = "sha256-BEV606U8kbZu/O5TeWjFr3yQ3yXPYcGNURNezAUeIrM=";
     };
     aarch64-linux = {
       asset = "nsh-linux-arm64.tar.gz";
-      hash = "sha256-3GQmwVLqYAM3RRr8Ho6BUxgjMJlRvjXN49kZKO6qc3k=";
+      hash = "sha256-ARCZMpNCvJYckIneLHwczdYMAXe3fYEoR1aGbCCH67s=";
     };
     aarch64-darwin = {
       asset = "nsh-macos-arm64.tar.gz";
-      hash = "sha256-sqg3DItEymBZ0thmW0iwhHKk/uOVaBO5kiP0485Ukdk=";
+      hash = "sha256-KONJtZwLRulkAQyPhYp4r1200mAS0hPAPRXOKN3/BlA=";
     };
   };
 
@@ -47,7 +47,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     })
     (pkgs.fetchurl {
       url = "${releaseUrl}/nsh-web.tar.gz";
-      hash = "sha256-oalyzyDA0qLZzFT6stf9YHUEGyaSmIa/uNeOKZLDsyQ=";
+      hash = "sha256-qC8xAid1y4gmf6V1SGZcjafbpLYvBEpJRcFzl/8LmdY=";
     })
   ];
 

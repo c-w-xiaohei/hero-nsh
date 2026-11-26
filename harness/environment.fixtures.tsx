@@ -72,7 +72,7 @@ function pointerEvent(): PressEvent {
   return {
     position: { x: 4, y: 4 },
     pagePosition: { x: 40, y: 40 },
-    modifiers: { control: false, alt: false, shift: false, platform: false },
+    modifiers: { control: false, alt: false, shift: false, platform: false, altGraph: false },
     clickCount: 1,
   };
 }

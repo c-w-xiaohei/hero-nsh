@@ -329,7 +329,14 @@ export function Tab(props: TabProps): JSX.Element | null {
 
   // A pointer press focuses the tab programmatically, so the focus event that
   // follows must not switch the modality to the keyboard (upstream's
-  // `:focus-visible` would not paint for a mouse). The flag is raised by
+  // `:focus-visible` would not paint for a mouse). Since NSH 0.7 macOS no
+  // longer focuses a pressed control itself (nsh#2783), this programmatic
+  // focus is what keeps the arrow keys working there at all; on the web it
+  // mirrors the browser's own press-to-focus. iOS is different: #2783 drops
+  // the tap's focus there too, but `ViewRef.focus()` only promises view
+  // keyboard focus on macOS / web, so a pointer-pressed tab on iOS keeps no
+  // arrow-key focus — a known gap for external-keyboard use, not something
+  // this focus covers. The flag is raised by
   // `handlePressDown`, the only path that focuses from a pointer: writing it
   // here unconditionally would also swallow a `node.focus()` issued by keyboard
   // navigation, whose focus event is the only chance the receiving tab has to

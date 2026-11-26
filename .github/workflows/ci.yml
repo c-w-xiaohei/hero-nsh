@@ -28,7 +28,7 @@ permissions:
 # defaults to the latest release, whose generated `nsh` declarations change
 # between versions.
 env:
-  NSH_VERSION: v0.6.0
+  NSH_VERSION: v0.7.1
 
 concurrency:
   group: ci-${{ github.ref }}

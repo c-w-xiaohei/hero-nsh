@@ -40,6 +40,9 @@ test("T-005 supports selecting tabs via createTester", async () => {
   expect(app.shows("role:tab[Analytics]")).toBe(true);
   expect(app.shows("role:tab[Reports]")).toBe(true);
 
+  // NSH 0.7 gained the `tabpanel` role; the selected panel is the one mounted.
+  expect(app.count("role:tabpanel")).toBe(1);
+
   expect(panelText(app, "Overview panel")).toBe(true);
   expect(panelText(app, "Analytics panel")).toBe(false);
   expect(panelText(app, "Reports panel")).toBe(false);
@@ -51,6 +54,7 @@ test("T-005 supports selecting tabs via createTester", async () => {
   expect(selectionCalls(app)[0][0]).toBe("analytics");
   expect(panelText(app, "Overview panel")).toBe(false);
   expect(panelText(app, "Analytics panel")).toBe(true);
+  expect(app.count("role:tabpanel")).toBe(1);
 });
 
 // heroui/packages/react/tests/components/tabs/tabs.test.tsx:119

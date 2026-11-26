@@ -399,7 +399,7 @@ export function SwitchRoot(props: SwitchRootProps): JSX.Element {
   const labelPressEvent = (): PressEvent => ({
     position: { x: 0, y: 0 },
     pagePosition: { x: 0, y: 0 },
-    modifiers: { control: false, alt: false, shift: false, platform: false },
+    modifiers: { control: false, alt: false, shift: false, platform: false, altGraph: false },
     clickCount: 1,
   });
 

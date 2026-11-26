@@ -26,7 +26,7 @@ An app needs no `"tailwind"` block: the colors and `radius-field` come from the 
 
 ## Quick start
 
-Install NSH (0.6.0 or later):
+Install NSH (0.7.1 or later):
 
 ```sh
 curl -fsSL https://nsh.dev/install.sh | sh
@@ -69,11 +69,11 @@ mount(() => (
 
 ## Requirements
 
-- NSH 0.6.0 or later. NSH 0.6 reads the version an app is written for from `nsh.json`; declaring it turns a version
+- NSH 0.7.1 or later. NSH reads the version an app is written for from `nsh.json`; declaring it turns a version
   mismatch into one line instead of type errors:
 
 ```json
-{ "nsh": ">=0.6" }
+{ "nsh": ">=0.7" }
 ```
 
 - For the browser target, add its runtime once: `nsh component add web`.

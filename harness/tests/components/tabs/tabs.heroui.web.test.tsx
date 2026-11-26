@@ -42,6 +42,10 @@ test("T-006 supports keyboard selection via createTester", async () => {
 
   expect(panelText(app, "Overview panel")).toBe(true);
 
+  // NSH 0.7 gained the `tabpanel` role: the mounted panel is a `tabpanel` on
+  // the web host too (headless counterpart in T-005).
+  expect(app.count("role:tabpanel")).toBe(1);
+
   await app.keyboard.press("arrowright");
 
   expect(panelText(app, "Overview panel")).toBe(false);

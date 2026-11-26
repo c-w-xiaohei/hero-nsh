@@ -1106,6 +1106,7 @@ function SelectableItemCase() {
       alt: false,
       shift: false,
       platform: false,
+      altGraph: false,
       ...modifiers,
     },
     clickCount: 1,
@@ -1121,9 +1122,12 @@ function SelectableItemCase() {
       alt: false,
       shift: false,
       platform: false,
+      altGraph: false,
       ...modifiers,
     },
-    clickCount: 1,
+    // Keyboard and assistive-technology activations report no pointer clicks
+    // (NSH 0.7 aligns every platform with the DOM's `detail`).
+    clickCount: 0,
   });
 
   const pointerPress = (modifiers: Partial<PressEvent["modifiers"]> = {}) => {

@@ -94,7 +94,7 @@ function pressEvent(x = 10, y = 20): PressEvent {
   return {
     position: { x, y },
     pagePosition: { x: x + 40, y: y + 40 },
-    modifiers: { control: false, alt: false, shift: false, platform: false },
+    modifiers: { control: false, alt: false, shift: false, platform: false, altGraph: false },
     clickCount: 1,
   };
 }

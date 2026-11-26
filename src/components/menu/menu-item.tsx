@@ -691,8 +691,10 @@ export function MenuItemRoot<T>(props: MenuItemRootProps<T>): JSX.Element {
 
     if (!selectable.isDisabled()) {
       pointerPressed.set(true);
-      // macOS / web: give the root the focus so the arrows keep working after
-      // a click; elsewhere `focus()` does nothing (port sheet section 8).
+      // Web / macOS: give the root the focus so the arrows keep working after
+      // a click; since NSH 0.7 a macOS press no longer focuses a control
+      // itself (nsh#2783), so this call is what makes the arrows work there.
+      // Elsewhere `focus()` does nothing (port sheet section 8).
       list.focusRootFromPointer();
     }
 

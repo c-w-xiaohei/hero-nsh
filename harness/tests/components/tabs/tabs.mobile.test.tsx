@@ -29,7 +29,8 @@ import { panelText, selectionCalls, tab } from "../../testers/tabs";
  * scroll offsets. `offset = listcontainer.px + 4 − tab-t1.px` (t1's content
  * x is 4) and a tab's viewport-x is `tab.px − listcontainer.px + width/2`.
  * Verified geometry of the `mobile` case: contentSize 524×52, viewport
- * 280×52, maxScroll 244; tab centers on a 48 pt grid (t1=28 … t8=364,
+ * 280×52, maxScroll 244; under `rtl` the scroller reports 547×52 instead,
+ * so its maxScroll is 267; tab centers on a 48 pt grid (t1=28 … t8=364,
  * pxprobe=412, narrow=454); the touch centering offset for a selected tab
  * is `clamp(center − 140)`, the pointer minimal-visibility offset is
  * `scrollKeyIntoView`'s.
