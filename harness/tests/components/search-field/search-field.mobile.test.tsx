@@ -234,7 +234,7 @@ describe("search-field mobile", () => {
     expect(callsOf(touch, "onClear")).toHaveLength(1);
     expect(callsOf(touch, "onFocus").length).toBeGreaterThanOrEqual(1);
     expect(callsOf(touch, "onChange").at(-1)?.[0]).toBe("");
-    expect(touch.value(INPUT)).toBe("");
+    await touch.waitUntil(() => touch.value(INPUT) === "");
     expect(callsOf(touch, "onBlur")).toHaveLength(0);
 
     await touch.type(INPUT, "x");
@@ -274,7 +274,9 @@ describe("search-field mobile", () => {
       await app.keyboard.press("escape");
       await app.waitUntil(() => callsOf(app, "onClear").length === 1);
 
-      expect(app.value(INPUT)).toBe("");
+      // `onClear` records at the JS write; `app.value` reads the host input,
+      // where the value commit can land a change event later — wait for it.
+      await app.waitUntil(() => app.value(INPUT) === "");
       expect(callsOf(app, "onChange").at(-1)?.[0]).toBe("");
 
       // The value is empty now: the keymap scope is unbound, so a second
@@ -362,7 +364,8 @@ describe("search-field mobile", () => {
     expect(controlled.value(INPUT)).toBe("hero");
     await controlled.type(INPUT, "x");
     await controlled.waitUntil(() => callsOf(controlled, "onChange").length > 0);
-    expect(controlled.value(INPUT)).toBe("hero");
+    // The correction write-back has the same commit lag as the clear above.
+    await controlled.waitUntil(() => controlled.value(INPUT) === "hero");
     expect(callsOf(controlled, "onChange").at(-1)?.[0]).toBe("herox");
 
     // `isEmpty` flips false → true across the clear press — the render
@@ -373,7 +376,7 @@ describe("search-field mobile", () => {
 
     await empty.press(CLEAR);
     await empty.waitUntil(() => lastRootProps(empty).isEmpty === true);
-    expect(empty.value(INPUT)).toBe("");
+    await empty.waitUntil(() => empty.value(INPUT) === "");
 
     // The focus render props: typing moves `isFocusWithin` on the Group
     // and `isFocused` on the Input (the focus.split semantics).

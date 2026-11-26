@@ -128,7 +128,8 @@ function isSegmentFocused(app: App, side: string, type: string): boolean {
 }
 
 async function waitSegmentFocused(app: App, side: string, type: string): Promise<void> {
-  await app.waitUntil(() => isSegmentFocused(app, side, type));
+  // Tap → first responder → focus event → probe record can outlive 5 s on a loaded iOS host.
+  await app.waitUntil(() => isSegmentFocused(app, side, type), { timeout: 15_000 });
 }
 
 function keyboardTypes(app: App): KeyboardTypeEntry[] {
@@ -323,7 +324,8 @@ describe("date-range-picker mobile", () => {
     await app.press(START_MONTH);
     await waitSegmentFocused(app, "start", "month");
     await app.keyboard.press("backspace");
-    await app.waitUntil(() => lastRange(app)?.start.month === 1);
+    // Backspace → commit → onChange record can outlive 5 s on a loaded iOS host.
+    await app.waitUntil(() => lastRange(app)?.start.month === 1, { timeout: 15_000 });
     expect(lastRange(app)!.start).toEqual({ year: 2026, month: 1, day: 1 });
 
     await app.type(END_MONTH, "11");
