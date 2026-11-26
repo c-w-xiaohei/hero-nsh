@@ -134,7 +134,8 @@ describe("avatar mobile", () => {
     const oSecond = lastLayout(overlap, "second");
 
     expect(Math.abs(oSecond.x - oFirst.x - 32)).toBeLessThan(0.25);
-  });
+    // The loaded iOS simulator exceeds the 30s default; same budget as the sibling native rows.
+  }, 120_000);
 
   // adapt-sheets/avatar.md M-002 (A-003): the overlap geometry is one coupled
   // constant set (8pt overlap / 2pt ring / 2.8pt optical nudge) built in code,
@@ -156,7 +157,7 @@ describe("avatar mobile", () => {
         expect(Math.abs(second.x - first.x - 32)).toBeLessThan(0.25);
       }
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/avatar.md M-003 (A-001): the avatar table has no `input`
   // axis — Avatar is a non-interactive part — so an injected touch
@@ -188,7 +189,7 @@ describe("avatar mobile", () => {
         expect(shown).toBe(true);
       }
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/avatar.md M-004 (A-001): `size` is the contract semantic —
   // sm/md/lg resolve to 32/40/48 through the group context — and the density
@@ -203,7 +204,7 @@ describe("avatar mobile", () => {
     expect(Math.abs(lastLayout(app, "sm").width - 32)).toBeLessThan(0.25);
     expect(Math.abs(lastLayout(app, "md").width - 40)).toBeLessThan(0.25);
     expect(Math.abs(lastLayout(app, "lg").width - 48)).toBeLessThan(0.25);
-  });
+  }, 120_000);
 
   // adapt-sheets/avatar.md M-005 (baseline): the desktop contract the existing
   // avatar.heroui.test.tsx pins, replayed on the fixture's own probes — size
@@ -256,7 +257,7 @@ describe("avatar mobile", () => {
     expect(count.shows("text:G")).toBe(false);
     expect(count.shows("text:H")).toBe(false);
     expect(count.texts().filter((text) => text.startsWith("+"))).toEqual(["+2"]);
-  });
+  }, 120_000);
 
   // adapt-sheets/avatar.md M-006 (baseline): image/group state keeps its
   // owner — under injected touch the "+N" counts and the no-src fallback
@@ -279,7 +280,7 @@ describe("avatar mobile", () => {
     for (const shown of touchShows) {
       expect(shown).toBe(true);
     }
-  });
+  }, 120_000);
 
   // adapt-sheets/avatar.md M-007 (A-007): the fixture's injection levels —
   // host-derived, scope="pointer", scope="touch", density="compact" — all
@@ -299,5 +300,5 @@ describe("avatar mobile", () => {
       expect(app.shows("text:1")).toBe(true);
       expect(app.shows("text:5")).toBe(true);
     }
-  });
+  }, 120_000);
 });

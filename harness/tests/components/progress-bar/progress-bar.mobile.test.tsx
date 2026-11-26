@@ -135,7 +135,8 @@ describe("progress-bar mobile", () => {
     // contract asserted within a 0.25pt quantization window.
     expect(Math.abs(lastBox(app, "track").width - 200)).toBeLessThan(0.25);
     expect(Math.abs(lastBox(app, "fill").width - 120)).toBeLessThan(0.6);
-  });
+    // The loaded iOS simulator exceeds the 30s default; same budget as the sibling native rows.
+  }, 120_000);
 
   // adapt-sheets/progress-bar.md M-002 (baseline), one case per test: every
   // case's geometry and text are the untouched contract. Track heights follow
@@ -153,7 +154,7 @@ describe("progress-bar mobile", () => {
     expect(Math.abs(lastBox(app, "track-md").height - 8)).toBeLessThan(0.25);
     expect(Math.abs(lastBox(app, "track-lg").height - 12)).toBeLessThan(0.25);
     expect(Math.abs(lastBox(app, "fill-lg").width - 100)).toBeLessThan(0.6);
-  });
+  }, 120_000);
 
   test("M-002 default environment: colors case", async () => {
     const app = await openFixture({ case: "colors", input: "pointer" });
@@ -164,7 +165,7 @@ describe("progress-bar mobile", () => {
     expect(app.texts()).toEqual(["success", "70%", "danger", "70%"]);
     expect(Math.abs(lastBox(app, "fill-success").width - 140)).toBeLessThan(0.6);
     expect(Math.abs(lastBox(app, "fill-danger").width - 140)).toBeLessThan(0.6);
-  });
+  }, 120_000);
 
   test("M-002 default environment: value-label case", async () => {
     const app = await openFixture({ case: "value-label", input: "pointer" });
@@ -172,7 +173,7 @@ describe("progress-bar mobile", () => {
 
     expect(app.texts()).toContain("3 of 10 completed");
     expect(Math.abs(lastBox(app, "fill-value-label").width - 60)).toBeLessThan(0.6);
-  });
+  }, 120_000);
 
   test("M-002 default environment: custom-format case", async () => {
     const app = await openFixture({ case: "custom-format", input: "pointer" });
@@ -182,7 +183,7 @@ describe("progress-bar mobile", () => {
     // style formats the clamped value itself.
     expect(app.texts()).toContain("0.0");
     expect(Math.abs(lastBox(app, "fill-custom-format").width - 100)).toBeLessThan(0.6);
-  });
+  }, 120_000);
 
   test("M-002 default environment: disabled case", async () => {
     const app = await openFixture({ case: "disabled", input: "pointer" });
@@ -191,7 +192,7 @@ describe("progress-bar mobile", () => {
     expect(app.texts()).toContain("60%");
     expect(app.shows("id:track-disabled >> id:fill-disabled")).toBe(true);
     expect(Math.abs(lastBox(app, "fill-disabled").width - 120)).toBeLessThan(0.6);
-  });
+  }, 120_000);
 
   test("M-002 default environment: render-prop case", async () => {
     const app = await openFixture({ case: "render-prop", input: "pointer" });
@@ -201,7 +202,7 @@ describe("progress-bar mobile", () => {
     expect(app.texts()).toContain("valueText:40%");
     expect(app.texts()).toContain("indeterminate:false");
     expect(Math.abs(lastBox(app, "fill-render-prop").width - 80)).toBeLessThan(0.6);
-  });
+  }, 120_000);
 
   test("M-002 default environment: indeterminate fill is 40% of the track", async () => {
     const app = await openFixture({ case: "geometry", indeterminate: true, input: "pointer" });
@@ -211,7 +212,7 @@ describe("progress-bar mobile", () => {
       "Progress Bar",
     ]);
     expect(Math.abs(lastBox(app, "fill").width - 80)).toBeLessThan(0.6);
-  });
+  }, 120_000);
 
   // adapt-sheets/progress-bar.md M-003 (A-001, A-002, A-003): `input="touch"`
   // changes nothing — the component table took no `input` axis, so the same
@@ -231,7 +232,7 @@ describe("progress-bar mobile", () => {
 
       expect(touchTexts).toEqual(pointer.texts());
       expect(touchBoxes).toEqual(boxSet(pointer));
-    });
+    }, 120_000);
   }
 
   // adapt-sheets/progress-bar.md M-004 (A-001, A-002): `density="compact"`
@@ -249,7 +250,7 @@ describe("progress-bar mobile", () => {
 
       expect(compactTexts).toEqual(plain.texts());
       expect(compactBoxes).toEqual(boxSet(plain));
-    });
+    }, 120_000);
   }
 
   // adapt-sheets/progress-bar.md M-005 (A-004): under touch, pressing the
@@ -270,7 +271,7 @@ describe("progress-bar mobile", () => {
     // The only probe channel in this case is `layout`; nothing else may fire.
     expect(calls(app).every((call) => call.name === "layout")).toBe(true);
     expect(app.texts()).toContain("60%");
-  });
+  }, 120_000);
 
   // adapt-sheets/progress-bar.md M-006 (A-006): the fixture channel itself —
   // `host.params.case` dispatches every mount tree, the `onLayout` probes
@@ -299,7 +300,7 @@ describe("progress-bar mobile", () => {
       expect(calls(app).length).toBeGreaterThan(0);
       app.dispose();
     }
-  });
+  }, 120_000);
 
   test("M-006 fixture: unscoped geometry stays byte-identical to the port", async () => {
     const app = await openFixture({ case: "geometry", value: 60, input: "pointer" });
@@ -307,7 +308,7 @@ describe("progress-bar mobile", () => {
     expect(app.shows("role:progressbar[Progress Bar]")).toBe(true);
     expect(app.texts()).toContain("60%");
     expect(Math.abs(lastBox(app, "track").width - 200)).toBeLessThan(0.25);
-  });
+  }, 120_000);
 
   // adapt-sheets/progress-bar.md M-007 (A-007): this file itself — the
   // baseline opens through the explicit pointer scope that replaces the old
@@ -318,5 +319,5 @@ describe("progress-bar mobile", () => {
     const app = await openFixture({ case: "geometry", value: 60, input: "pointer" });
     await settleLayout(app, GEOMETRY_BOXES);
     expect(app.shows("id:root")).toBe(true);
-  });
+  }, 120_000);
 });

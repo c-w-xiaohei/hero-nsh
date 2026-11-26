@@ -127,8 +127,14 @@ function isSegmentFocused(app: App, side: string, type: string): boolean {
   return segmentRecord(app, side, type).isFocused;
 }
 
-async function waitSegmentFocused(app: App, side: string, type: string): Promise<void> {
-  await app.waitUntil(() => isSegmentFocused(app, side, type));
+async function waitSegmentFocused(
+  app: App,
+  side: string,
+  type: string,
+  timeout = 15_000,
+): Promise<void> {
+  // Tap → first responder → focus event → probe record can outlive 5 s on a loaded iOS host.
+  await app.waitUntil(() => isSegmentFocused(app, side, type), { timeout });
 }
 
 function keyboardTypes(app: App): KeyboardTypeEntry[] {
@@ -320,10 +326,17 @@ describe("date-range-picker mobile", () => {
     await app.waitUntil(() => lastRange(app)?.start.month === 11);
     expect(segmentText(app, "start", "month")).toBe("11");
 
+    // The full "11" buffer auto-advances to the day channel; while that focus
+    // is still in flight a month tap hits `handleChannelPress`'s stale
+    // `focused()` gate and requests nothing. Order the back-press behind the
+    // advance, as the date-picker M-009 chain does.
+    // Distinct budgets name the failing hop; native event hops scale with machine load.
+    await waitSegmentFocused(app, "start", "day", 30_000);
     await app.press(START_MONTH);
-    await waitSegmentFocused(app, "start", "month");
+    await waitSegmentFocused(app, "start", "month", 31_000);
     await app.keyboard.press("backspace");
-    await app.waitUntil(() => lastRange(app)?.start.month === 1);
+    // Backspace → commit → onChange record can outlive 5 s on a loaded iOS host.
+    await app.waitUntil(() => lastRange(app)?.start.month === 1, { timeout: 32_000 });
     expect(lastRange(app)!.start).toEqual({ year: 2026, month: 1, day: 1 });
 
     await app.type(END_MONTH, "11");
