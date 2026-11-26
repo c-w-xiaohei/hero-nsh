@@ -122,7 +122,11 @@ Shadows and easing curves are class strings (`src/tokens/geometry.ts`), not them
 
 ## Examples
 
-`examples/` holds five product pages and a component gallery. See [examples/README.md](examples/README.md).
+`examples/` holds the component gallery, a phone-first mobile demo, and five product pages
+(dashboard, login, orders, profile, settings). The published site builds all of them:
+[hero-nsh examples](https://c-w-xiaohei.github.io/hero-nsh/) — the gallery links each demo.
+
+See [examples/README.md](examples/README.md).
 
 ## License
 

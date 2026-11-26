@@ -1,7 +1,9 @@
 name: Pages
 
-# The gallery is a static site from `nsh package --target web`, served at
-# /hero-nsh/. Its assets are relative, so no base path is needed.
+# The site is a set of static apps from `nsh package --target web`, served at
+# /hero-nsh/: the catalogue and demos at the root, each product page and the
+# mobile demo under /demos/<name>/. Their assets are relative, so no base path
+# is needed.
 on:
   push:
     branches: [main]
@@ -36,13 +38,28 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Web runtime
         run: nsh component add web
-      - name: Build the gallery
+      - name: Build the site
         run: |
-          nsh package examples/demo/gallery.tsx --target web -o "$RUNNER_TEMP/pages"
-          mkdir -p "$RUNNER_TEMP/site"
-          # `nsh package` writes the app into a directory named after the app.
-          app=$(find "$RUNNER_TEMP/pages" -mindepth 1 -maxdepth 1 -type d | head -1)
-          cp -r "$app/." "$RUNNER_TEMP/site/"
+          set -euo pipefail
+          site="$RUNNER_TEMP/site"
+          mkdir -p "$site"
+          # `nsh package` writes the app into a directory named after the app;
+          # one output root per build keeps the names from colliding.
+          build() {
+            local key="$1" entry="$2" dest="$3" name="$4"
+            nsh package "$entry" --target web --name "$name" -o "$RUNNER_TEMP/build/$key"
+            local app
+            app=$(find "$RUNNER_TEMP/build/$key" -mindepth 1 -maxdepth 1 -type d | head -1)
+            mkdir -p "$dest"
+            cp -r "$app/." "$dest/"
+          }
+          build gallery examples/demo/gallery.tsx "$site" "Hero NSH"
+          build mobile examples/demo/mobile.tsx "$site/demos/mobile" "Hero NSH - Mobile"
+          build dashboard examples/demo/dashboard.tsx "$site/demos/dashboard" "Hero NSH - Dashboard"
+          build login examples/demo/login.tsx "$site/demos/login" "Hero NSH - Login"
+          build orders examples/demo/orders.tsx "$site/demos/orders" "Hero NSH - Orders"
+          build profile examples/demo/profile.tsx "$site/demos/profile" "Hero NSH - Profile"
+          build settings examples/demo/settings.tsx "$site/demos/settings" "Hero NSH - Settings"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

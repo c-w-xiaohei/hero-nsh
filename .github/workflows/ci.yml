@@ -127,6 +127,12 @@ jobs:
           # only restore the same key.
           save-nix-cache: 'true'
       - run: pnpm check
+      - name: Check the examples
+        run: |
+          set -euo pipefail
+          for entry in examples/demo/*.tsx; do
+            nsh check "$entry"
+          done
 
   headless:
     needs: plan

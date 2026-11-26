@@ -119,7 +119,11 @@ npx hero-nsh theme ./theme.json
 
 ## 示例
 
-`examples/` 里有五个产品页面和一个组件总览。见 [examples/README.md](examples/README.md)。
+`examples/` 里有组件总览、一个手机优先的移动端 demo，以及五个产品页面
+（dashboard、login、orders、profile、settings）。发布站点会把它们全部构建出来：
+[hero-nsh 示例](https://c-w-xiaohei.github.io/hero-nsh/)，组件总览页里有每个 demo 的入口。
+
+见 [examples/README.md](examples/README.md)。
 
 ## 许可证
 

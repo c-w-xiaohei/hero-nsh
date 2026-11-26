@@ -1,22 +1,29 @@
 # Examples
 
-Five standalone product pages and one component catalogue built with `hero-nsh`. Each product
-page mounts itself, keeps its own state, and has no navigation around it: open it, run it, copy
-what you need. `gallery.tsx` is the other way round: every export on one scrolling page, grouped
-by what it is for, which is the fastest way to see what the package draws.
+Five standalone product pages, a phone-first mobile demo, and one component catalogue built with
+`hero-nsh`. Each product page mounts itself, keeps its own state, and has no navigation around it:
+open it, run it, copy what you need. `mobile.tsx` is a small phone app that mounts
+`EnvironmentScope input="touch" width="compact"`, so its touch targets, sheets, swipe gestures and
+compact overlays run even in a desktop browser. `gallery.tsx` is the other way round: every export
+on one scrolling page, grouped by what it is for, which is the fastest way to see what the package
+draws; it also links the standalone apps.
+
+The published site builds all of them: <https://c-w-xiaohei.github.io/hero-nsh/>. The catalogue is
+at the root and each demo is under `/demos/<name>/`.
 
 A release installs only its host's runtime; run `nsh component add web` once before the commands below.
 
 | Page | Run it |
 |---|---|
-| `demo/gallery/index.tsx` | `nsh run examples/demo/gallery.tsx --target web` |
+| `demo/gallery.tsx` | `nsh run examples/demo/gallery.tsx --target web` |
+| `demo/mobile.tsx` | `nsh run examples/demo/mobile.tsx --target web` |
 | `demo/login.tsx` | `nsh run examples/demo/login.tsx --target web` |
 | `demo/settings.tsx` | `nsh run examples/demo/settings.tsx --target web` |
 | `demo/orders.tsx` | `nsh run examples/demo/orders.tsx --target web` |
 | `demo/dashboard.tsx` | `nsh run examples/demo/dashboard.tsx --target web` |
 | `demo/profile.tsx` | `nsh run examples/demo/profile.tsx --target web` |
 
-Type-check one page with `nsh check examples/demo/login.tsx`, or all five with
+Type-check one page with `nsh check examples/demo/login.tsx`, or every entry with
 `for f in examples/demo/*.tsx; do nsh check "$f"; done`.
 
 ## Why `demo/` carries its own configuration
@@ -34,7 +41,9 @@ app directory therefore holds the shared setup for every page:
 
 ## Coverage
 
-The five pages cover the components a product page normally composes. Four are not merged
-yet and live in `tmp/worktrees/`: `table`, `toast`, `tooltip` and `combo-box`. A few
+The five product pages cover the components a product page normally composes. The mobile demo
+adds the touch environment: 44 pt targets, press feedback, a snapping `Sheet`, a
+swipe-to-dismiss `Drawer`, compact overlays and a bottom navigation. Four components are not
+merged yet and live in `tmp/worktrees/`: `table`, `toast`, `tooltip` and `combo-box`. A few
 low-level parts (`ColorPicker`, `DateInputGroup`, `InputGroup`, `NumberField`) are exercised
 by the harness rather than these pages.
