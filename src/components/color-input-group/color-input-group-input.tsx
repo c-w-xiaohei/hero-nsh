@@ -218,7 +218,14 @@ export interface ColorInputGroupInputProps
   /** The HTML `"on"` / `"off"` string (an NSH boolean stays); `"off"` turns it off. */
   autoCorrect?: string | boolean;
 
-  /** The HTML attribute; only the values NSH knows reach the host. */
+  /**
+   * The HTML attribute; only the values NSH knows reach the host. Defaults
+   * to `"none"`: a color value is lowercase hex digits or format keywords,
+   * and the soft keyboard's sentence capitalization (NSH's host default
+   * since 0.7 types through it on iOS) corrupts it, while upstream never
+   * declares one because a desktop browser input does not autoshift
+   * (platform-driven deviation, port sheet §8).
+   */
   autoCapitalize?: string;
 
   /** The most characters the input accepts. */
@@ -428,7 +435,12 @@ export function ColorInputGroupInput(props: ColorInputGroupInputProps): JSX.Elem
     return read === undefined ? undefined : read !== "off" && read !== false;
   });
 
-  const autoCapitalize = computed(() => toAutoCapitalize(local.autoCapitalize));
+  // The caller's explicit value wins (the whitelist passes it through); an
+  // unknown string still drops to the host default, as before. Without one
+  // the color channel's own default applies: hex letters and format
+  // keywords are lowercase, so the soft keyboard's sentence capitalization
+  // has nothing to offer here and everything to corrupt.
+  const autoCapitalize = computed(() => toAutoCapitalize(local.autoCapitalize) ?? "none");
 
   // --- Local signals --------------------------------------------------------
   const hovered = signal(false);
