@@ -1,5 +1,23 @@
 # hero-nsh
 
+## 0.2.0
+
+### Minor Changes
+
+- 0b9a0c5: Require NSH 0.6 and migrate to it.
+  
+  - `onKeyDown` / `onKeyUp` are real view props now (nsh 0.6's `KeyEvent` channel); they reach `Input`, `View`-rooted fields and Radio instead of being dropped.
+  - Menu tells Enter from Space on web again (0.6 presses the focused control before the keymap).
+  - The inline code chip's padding is painted once after span padding started taking room (nsh#2141).
+  - `nsh.json` can declare `"nsh": ">=0.6"`; the README shows how.
+- c078955: Require NSH 0.7 and migrate to it.
+  
+  - `Tabs.Panel` is a real `tabpanel` now: NSH 0.7 added the role, so the panel no longer poses as a `region`, and screen readers say the user entered a tab's panel (a caller's `role` still wins when given).
+  - Press and key payloads carry `modifiers.altGraph` (nsh 0.7's `Modifiers`). Key events report the AltGr level on Windows; presses carry the field but always report `false` (only key events set it).
+  - Keyboard Enter / Space and assistive-technology activations report `clickCount: 0` on every platform, as the DOM's `detail` does; a press handler that counted clicks should test `>= 1`.
+  - A horizontal tab list pages by one full step again under `dir="rtl"`: NSH 0.7 reports the scroll view's real content width, and the chevron clamp now uses it instead of the list's narrower layout bounds.
+  - `nsh.json` can declare `"nsh": ">=0.7"`; the README shows how.
+
 ## 0.1.0
 
 ### Minor Changes
